@@ -8,7 +8,8 @@ For example, a prompt about fixing failing authentication tests might become
 in the tmux status bar. Naming runs in the background and never waits before
 Pi starts answering. When Pi finishes its work and waits for input, the title
 gets a `* ` prefix, for example `* fix auth tests`. The prefix disappears on
-your next prompt or when Pi starts another run.
+your next prompt or when Pi starts another run. When you quit Pi normally,
+the window name resets to `zsh`.
 
 ## Installation
 
@@ -55,7 +56,9 @@ The last title or status update wins; the marker does not aggregate whether
 other Pi panes in that window are busy.
 
 Renaming turns off tmux's automatic process-based naming for that window.
-The last task name remains after Pi exits. To restore automatic names:
+Graceful shutdown resets the name to `zsh`, including during reload. A forced
+kill cannot run cleanup and may leave the task name behind. To restore
+automatic process-based names instead:
 
 ```sh
 tmux set-window-option -t <window-id> automatic-rename on

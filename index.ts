@@ -104,11 +104,11 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		return refreshTitle(ctx, pane);
 	};
 
-	const reset = (ctx: ExtensionContext) => {
+	const reset = (ctx: ExtensionContext, title?: string) => {
 		cancel();
 		titleLifetime.abort();
 		titleLifetime = new AbortController();
-		baseTitle = undefined;
+		baseTitle = title;
 		return setWaiting(ctx, false);
 	};
 
@@ -194,5 +194,5 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	// agent_end/turn_end can precede retries, tool work, or queued continuations.
 	pi.on("agent_settled", (_event, ctx) => setWaiting(ctx, true));
 	pi.on("session_start", (_event, ctx) => reset(ctx));
-	pi.on("session_shutdown", (_event, ctx) => reset(ctx));
+	pi.on("session_shutdown", (_event, ctx) => reset(ctx, "zsh"));
 }

@@ -136,7 +136,9 @@ test("shutdown and session replacement cancel outstanding naming", async () => {
 		expect(f.requests[0].options.signal.aborted).toBe(true);
 		work.resolve(response("Late title"));
 		await settle();
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual(
+			event === "session_shutdown" ? [["rename-window", "-t", "@2", "zsh"]] : [],
+		);
 	}
 });
 
@@ -232,15 +234,53 @@ test("waiting status still works when the naming model is unavailable", async ()
 	expect(f.requests).toHaveLength(0);
 });
 
-test("session replacement and shutdown remove stale waiting markers", async () => {
+test("session replacement clears the marker and shutdown resets the title", async () => {
 	for (const event of ["session_start", "session_shutdown"]) {
 		const f = fixture();
 		f.input("Task");
 		await settle();
 		await f.emit("agent_settled");
 		await f.emit(event);
-		expect(f.state.title).toBe("fix auth tests");
+		expect(f.state.title).toBe(event === "session_shutdown" ? "zsh" : "fix auth tests");
 	}
+});
+
+test("shutdown resets a busy title and repeated cleanup makes no extra writes", async () => {
+	const f = fixture();
+	f.input("Task");
+	await settle();
+	await f.emit("session_shutdown");
+	expect(f.state.title).toBe("zsh");
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "@2", "zsh"]);
+	const writes = f.calls.filter((args) => args[0] === "rename-window").length;
+	await f.emit("session_shutdown");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toHaveLength(writes);
+});
+
+test("shutdown resolves the owning window after a pane move", async () => {
+	const f = fixture();
+	f.input("Task");
+	await settle();
+	f.state.window = "@3";
+	await f.emit("session_shutdown");
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "@3", "zsh"]);
+});
+
+test("shutdown waits for an in-flight marker write before resetting to zsh", async () => {
+	const gate = deferred();
+	const f = fixture(undefined, async (args) => {
+		if (args[0] === "rename-window" && args[3].startsWith(READY_PREFIX)) await gate.promise;
+	});
+	f.input("Task");
+	await settle();
+	const completed = f.emit("agent_settled");
+	await settle();
+	const shutdown = f.emit("session_shutdown");
+	gate.resolve(response(""));
+	await completed;
+	await shutdown;
+	expect(f.state.title).toBe("zsh");
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "@2", "zsh"]);
 });
 
 test("session startup preserves an unmarked custom window name", async () => {
@@ -257,10 +297,15 @@ test("status updates stay disabled outside interactive tmux", async () => {
 		(f.ctx as any).mode = mode;
 		f.emit("agent_start");
 		await f.emit("agent_settled");
+		await f.emit("session_shutdown");
 	}
 	(f.ctx as any).mode = "tui";
-	delete process.env.TMUX_PANE;
-	await f.emit("agent_settled");
+	for (const pane of [undefined, "bad-target"]) {
+		if (pane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = pane;
+		await f.emit("agent_settled");
+		await f.emit("session_shutdown");
+	}
 	await settle();
 	expect(f.calls).toEqual([]);
 });
