@@ -1,7 +1,7 @@
 {
   "name": "pi-tmux",
   "version": "0.1.0",
-  "description": "Name your tmux window from your latest Pi prompt with a short, lowercase AI summary.",
+  "description": "Name your tmux window from your current Pi task and active session history with a short, lowercase AI summary.",
   "type": "module",
   "license": "MIT",
   "repository": {

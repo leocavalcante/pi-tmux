@@ -1,10 +1,14 @@
 # pi-tmux
 
-Name your tmux window from your latest [Pi](https://pi.dev) prompt with a short,
-lowercase AI summary.
+Name your tmux window from your current [Pi](https://pi.dev) task and active
+session history with a short, lowercase AI summary.
 
 For example, a prompt about fixing failing authentication tests might become
-`fix auth tests`. Names are capped at 24 ASCII characters so they stay compact
+`fix auth tests`. Follow-ups such as `continue` or `yes, do it` use recent
+conversation history to keep the task recognizable. Resuming a session names
+the window without requiring a new prompt.
+
+Names are capped at 24 ASCII characters so they stay compact
 in the tmux status bar. Naming runs in the background and never waits before
 Pi starts answering. When Pi finishes its work and waits for input, the title
 gets a `* ` prefix, for example `* fix auth tests`. The prefix disappears on
@@ -34,25 +38,33 @@ local checkout.
 
 ## Behavior
 
-- Each non-empty interactive prompt starts a naming request.
+- Each non-empty interactive prompt requests a title using recent dialogue
+  from the active session branch plus the new prompt.
+- Startup, resume, fork, reload, and tree navigation request a title from the
+  active session context. Compaction refreshes it from the compacted context.
+- Final settlement refreshes the title when the assistant's text adds context.
+  Identical bounded context does not start another request.
+- Empty sessions preserve existing names. Abandoned branches, compacted
+  originals, and text removed by Pi context edits are not used.
 - Titles are forced to lowercase and clipped at a word boundary when possible.
 - `* ` marks a fully settled run, after tool work, retries, and queued
   continuations are finished. It does not mean the task succeeded.
 - The 24-character limit includes the marker. Waiting titles reserve two
   characters for `* `, leaving up to 22 for the task name.
 - The marker clears on new input, another run, session replacement, reload,
-  and graceful shutdown. Status updates make no additional model calls and
-  still work if the naming model is unavailable.
+  and graceful shutdown. Marker updates alone make no additional model calls
+  and still work if the naming model is unavailable.
 - The extension targets the window and session containing Pi's `TMUX_PANE`,
   even if you have switched focus elsewhere.
 - Session markers aggregate waiting Pi panes across all windows. A busy or
   exiting pane does not clear the marker while another pane is waiting.
   Session names are not summarized, lowercased, or clipped.
-- New input cancels the previous naming request. Session changes, reload, and
-  shutdown cancel outstanding work too.
+- Changed naming context cancels the previous request. Session changes, tree
+  navigation, reload, and shutdown cancel outstanding work too.
 - Reasoning and retries are disabled. Naming requests have a 15-second timeout
   and a 96-token output cap.
-- Print mode, RPC, and extension-injected messages do not rename windows.
+- Print mode and RPC do not rename windows. Extension-injected input does not
+  directly request a title; later refreshes can include resulting dialogue.
 - Naming failures keep the existing task name; waiting status can still
   update. At most one warning appears per extension load.
 
@@ -62,7 +74,8 @@ other Pi panes in that window are busy.
 
 Renaming turns off tmux's automatic process-based naming for that window.
 Quitting Pi gracefully resets the name to `zsh`. `/reload` and Pi session
-replacement preserve the task name while clearing that pane's waiting status.
+replacement clear that pane's waiting status, then refresh the task name from
+the active history. The existing name stays until a naming request succeeds.
 A forced kill cannot run cleanup and may leave the task name and waiting
 marker behind.
 Moving or closing a pane does not immediately refresh its former session's
@@ -75,10 +88,18 @@ tmux set-window-option -t <window-id> automatic-rename on
 
 ## Privacy and security
 
-The naming model receives the first 2,000 characters of your new prompt. It
-does not receive conversation history, images, or tool results. Provider
-billing, subscription limits, and data handling apply to these additional
-requests.
+The naming model receives up to 6,000 characters of task context:
+
+- The first 2,000 characters of your new prompt, when present.
+- Up to eight recent user, assistant, or branch-summary text entries, each
+  capped at 1,000 characters. Older entries are omitted to fit the total cap.
+- The latest active compaction summary, capped at 1,000 characters.
+
+Images, thinking blocks, tool calls, tool results, shell output, system prompts,
+and custom extension messages are excluded. Summaries and ordinary dialogue
+can still mention details from tool output. Provider billing, subscription
+limits, and data handling apply to these additional requests. A run can request
+a title on input and again at settlement when its context changes.
 
 The model is instructed not to include secrets or personal information in
 titles, but this is not a redaction guarantee. Do not put secrets into prompts.

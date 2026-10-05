@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { cleanTitle, formatTitle, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, type RunTmux } from "../index";
+import piTmux, { buildNamingContext, cleanTitle, formatTitle, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, type RunTmux } from "../index";
 
 let originalPane: string | undefined;
 beforeEach(() => {
@@ -25,8 +25,10 @@ function fixture(
 	const calls: string[][] = [];
 	const requests: { model: unknown; context: any; options: any }[] = [];
 	const warnings: string[] = [];
+	const messages: any[] = [];
 	const ctx = {
 		mode: "tui",
+		sessionManager: { buildSessionProjection: () => ({ messages }) },
 		ui: { notify: (text: string) => warnings.push(text) },
 		modelRegistry: {
 			find: (provider: string, id: string) => ({ provider, id }),
@@ -62,7 +64,7 @@ function fixture(
 	const input = (text: string, source = "interactive") => handlers.get("input")!({ text, source }, ctx);
 	const emit = (event: string, reason = event === "session_shutdown" ? "quit" : "startup") =>
 		handlers.get(event)?.({ type: event, reason }, ctx);
-	return { handlers, calls, requests, warnings, ctx, input, emit, state, load };
+	return { handlers, calls, requests, warnings, messages, ctx, input, emit, state, load };
 }
 
 async function settle() {
@@ -102,13 +104,13 @@ test("passes input through immediately and renames the owning window", async () 
 	expect(f.warnings).toEqual([]);
 });
 
-test("bounds prompt and output, disables reasoning and retries, sends no transcript", async () => {
+test("bounds prompt and output and disables reasoning and retries", async () => {
 	const f = fixture();
 	f.input("x".repeat(10_000));
 	await settle();
 	const request = f.requests[0];
 	expect(request.context.messages).toHaveLength(1);
-	expect(request.context.messages[0].content).toHaveLength(MAX_PROMPT_LENGTH);
+	expect(request.context.messages[0].content).toBe("user: " + "x".repeat(MAX_PROMPT_LENGTH));
 	expect(request.options).toMatchObject({ maxTokens: 96, reasoning: "off", maxRetries: 0, cacheRetention: "none" });
 });
 
@@ -467,6 +469,147 @@ test("status updates target the owning session after a pane move", async () => {
 	await f.emit("agent_settled");
 	expect(f.state.sessionTitle).toBe("* Destination Session");
 	expect(f.calls.filter((args) => args[0] === "set-option").at(-1)?.[9]).toBe("$3");
+});
+
+test("naming context includes text dialogue and summaries, but not tools, thinking, images, or custom messages", () => {
+	const context = buildNamingContext([
+		{ role: "compactionSummary", summary: "Fix registry routing" },
+		{ role: "user", content: [{ type: "text", text: "Inspect the proxy" }, { type: "image", data: "IMAGE_DATA" }] },
+		{ role: "assistant", content: [
+			{ type: "thinking", thinking: "PRIVATE_THINKING" },
+			{ type: "toolCall", name: "bash", arguments: { command: "PRIVATE_ARGUMENT" } },
+			{ type: "text", text: "The routing needs a fix" },
+		] },
+		{ role: "toolResult", content: [{ type: "text", text: "PRIVATE_TOOL_OUTPUT" }] },
+		{ role: "custom", content: "PRIVATE_CUSTOM_TEXT" },
+		{ role: "bashExecution", output: "PRIVATE_BASH_OUTPUT" },
+		{ role: "system", content: [{ type: "text", text: "PRIVATE_SYSTEM_PROMPT" }] },
+		{ role: "branchSummary", summary: "Proxy check complete" },
+	] as any, "continue");
+	expect(context).toBe([
+		"summary: Fix registry routing", "user: Inspect the proxy",
+		"assistant: The routing needs a fix", "branch summary: Proxy check complete", "user: continue",
+	].join("\n\n"));
+});
+
+test("naming context bounds history and prioritizes recent dialogue and the new prompt", () => {
+	const messages = Array.from({ length: 30 }, (_, i) => ({ role: "user", content: `task-${i}` }));
+	const context = buildNamingContext(messages as any, "continue");
+	expect(context.match(/task-\d+/g)).toHaveLength(MAX_HISTORY_MESSAGES);
+	expect(context).not.toContain("task-21");
+	expect(context).toContain("task-29");
+	expect(context.endsWith("user: continue")).toBe(true);
+
+	const large = buildNamingContext([
+		{ role: "compactionSummary", summary: "SUMMARY".repeat(2_000) },
+		...Array.from({ length: 30 }, (_, i) => ({ role: "user", content: `${i}:` + "x".repeat(10_000) })),
+	] as any, "NEW_PROMPT".repeat(1_000));
+	expect(large.length).toBeLessThanOrEqual(MAX_CONTEXT_LENGTH);
+	expect(large).toStartWith("summary: SUMMARY");
+	expect(large).toContain("user: 29:");
+	expect(large.endsWith("user: " + "NEW_PROMPT".repeat(1_000).slice(0, MAX_PROMPT_LENGTH))).toBe(true);
+});
+
+test("empty or non-text history does not start a naming request", async () => {
+	expect(buildNamingContext([])).toBe("");
+	expect(buildNamingContext([{ role: "compactionSummary", summary: " " }] as any)).toBe("");
+	const f = fixture();
+	f.messages.push({ role: "assistant", content: [{ type: "toolCall", name: "bash" }] });
+	await f.emit("session_start");
+	await f.emit("agent_settled");
+	expect(f.requests).toHaveLength(0);
+});
+
+test("brief follow-ups include the active conversation instead of only the new prompt", async () => {
+	const f = fixture();
+	f.messages.push(
+		{ role: "user", content: "Fix authentication tests" },
+		{ role: "assistant", content: [{ type: "text", text: "Should I update the fixtures?" }] },
+	);
+	f.input("yes, do it");
+	await settle();
+	expect(f.requests[0].context.messages[0].content).toBe([
+		"user: Fix authentication tests", "assistant: Should I update the fixtures?", "user: yes, do it",
+	].join("\n\n"));
+	expect(f.requests[0].context.systemPrompt).toContain("Prefer the latest task when the topic changes");
+});
+
+test("startup, resume, fork, and reload name from the active session projection without new input", async () => {
+	for (const reason of ["startup", "resume", "fork", "reload"]) {
+		const f = fixture();
+		f.messages.push({ role: "user", content: "Fix authentication tests" });
+		(f.ctx.sessionManager as any).getEntries = () => { throw new Error("Raw session history must not be read"); };
+		await f.emit("session_start", reason);
+		await settle();
+		expect(f.requests).toHaveLength(1);
+		expect(f.requests[0].context.messages[0].content).toBe("user: Fix authentication tests");
+		expect(f.state.title).toBe("fix auth tests");
+	}
+});
+
+test("tree navigation cancels an old summary and names only the newly active branch", async () => {
+	const old = deferred();
+	const f = fixture([old.promise, Promise.resolve(response("registry routing"))]);
+	f.messages.push({ role: "user", content: "Fix authentication tests" });
+	await f.emit("session_start");
+	f.messages.splice(0, f.messages.length, { role: "user", content: "Fix registry routing" });
+	await f.emit("session_tree");
+	await settle();
+	expect(f.requests[0].options.signal.aborted).toBe(true);
+	expect(f.requests[1].context.messages[0].content).toBe("user: Fix registry routing");
+	old.resolve(response("fix auth tests"));
+	await settle();
+	expect(f.state.title).toBe("registry routing");
+});
+
+test("compaction refreshes from the projected summary without resurrecting original messages", async () => {
+	const f = fixture();
+	f.messages.push(
+		{ role: "compactionSummary", summary: "Fix authentication tests; fixtures need updating" },
+		{ role: "user", content: "continue" },
+	);
+	await f.emit("session_compact");
+	await settle();
+	expect(f.requests[0].context.messages[0].content).toBe(
+		"summary: Fix authentication tests; fixtures need updating\n\nuser: continue",
+	);
+	expect(f.state.title).toBe("fix auth tests");
+});
+
+test("settlement refreshes the task from new assistant context while retaining the waiting marker", async () => {
+	const f = fixture([
+		Promise.resolve(response("auth tests")), Promise.resolve(response("auth fixtures")),
+	]);
+	f.input("Fix authentication tests");
+	await settle();
+	f.messages.push(
+		{ role: "user", content: "Fix authentication tests" },
+		{ role: "assistant", content: [{ type: "text", text: "Updated the stale authentication fixtures" }] },
+	);
+	await f.emit("agent_settled");
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	expect(f.requests[1].context.messages[0].content).toContain("assistant: Updated the stale authentication fixtures");
+	expect(f.state.title).toBe("* auth fixtures");
+	expect(f.state.sessionTitle).toBe("* My Session");
+	await f.emit("agent_settled");
+	expect(f.requests).toHaveLength(2);
+});
+
+test("persisting the same input and adding only tool work does not repeat a naming request", async () => {
+	const work = deferred();
+	const f = fixture([work.promise]);
+	f.input("Fix authentication tests");
+	f.messages.push(
+		{ role: "user", content: "Fix authentication tests" },
+		{ role: "toolResult", content: [{ type: "text", text: "Tool output" }] },
+	);
+	await f.emit("agent_settled");
+	expect(f.requests).toHaveLength(1);
+	expect(f.requests[0].options.signal.aborted).toBe(false);
+	work.resolve(response("auth tests"));
+	await settle();
+	expect(f.state.title).toBe("* auth tests");
 });
 
 test("tmux failures are contained and warn only once", async () => {
