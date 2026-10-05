@@ -5,6 +5,11 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 const execFileAsync = promisify(execFile);
 export const MAX_TITLE_LENGTH = 24;
 export const READY_PREFIX = "* ";
+export const WAITING_OPTION = "@pi-tmux-waiting";
+// tmux evaluates this on the server after the pane status write, so concurrent
+// Pi instances aggregate their status without a client-side read/rename race.
+export const SESSION_TITLE_FORMAT =
+	`#{?#{m:*1*,#{W:#{P:#{${WAITING_OPTION}}}}},${READY_PREFIX},}#{s/^\\* //:session_name}`;
 export const MAX_PROMPT_LENGTH = 2_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const PROVIDER = "openai-codex";
@@ -76,11 +81,19 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		titleQueue = titleQueue.then(async () => {
 			if (signal.aborted || revision !== titleRevision) return;
 			// Resolve at write time so a moved pane still names its own window.
-			const info = await tmux(["display-message", "-p", "-t", pane, "#{window_id}\t#{window_name}"], signal);
-			const separator = info.indexOf("\t");
-			const window = info.slice(0, separator);
-			const currentTitle = info.slice(separator + 1);
-			if (separator < 0 || !/^@\d+$/.test(window)) throw new Error("Invalid tmux window");
+			const info = await tmux(["display-message", "-p", "-t", pane, "#{session_id}\t#{window_id}\t#{window_name}"], signal);
+			const [session, window, ...titleParts] = info.split("\t");
+			const currentTitle = titleParts.join("\t");
+			if (!/^\$\d+$/.test(session) || !/^@\d+$/.test(window) || !titleParts.length) {
+				throw new Error("Invalid tmux target");
+			}
+			if (signal.aborted || revision !== titleRevision) return;
+			// Keep the user's session name intact. The session stays marked while
+			// any Pi pane is waiting, even when another pane starts work or exits.
+			await tmux([
+				"set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
+				";", "rename-session", "-t", session, SESSION_TITLE_FORMAT,
+			], signal);
 			if (signal.aborted || revision !== titleRevision) return;
 			// Leave a custom name alone unless we have a summary or a marker to update.
 			if (!baseTitle && !waiting && !currentTitle.startsWith(READY_PREFIX)) return;
@@ -91,7 +104,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			}
 		}).catch(() => {
 			if (!signal.aborted && revision === titleRevision) {
-				warnOnce(ctx, "tmux window status could not be updated. Check tmux.");
+				warnOnce(ctx, "tmux window/session status could not be updated. Check tmux.");
 			}
 		});
 		return titleQueue;
@@ -194,5 +207,6 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	// agent_end/turn_end can precede retries, tool work, or queued continuations.
 	pi.on("agent_settled", (_event, ctx) => setWaiting(ctx, true));
 	pi.on("session_start", (_event, ctx) => reset(ctx));
-	pi.on("session_shutdown", (_event, ctx) => reset(ctx, "zsh"));
+	// Reload and session replacement tear down extensions without exiting Pi.
+	pi.on("session_shutdown", (event, ctx) => reset(ctx, event.reason === "quit" ? "zsh" : undefined));
 }

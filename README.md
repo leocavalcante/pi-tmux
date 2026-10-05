@@ -8,8 +8,10 @@ For example, a prompt about fixing failing authentication tests might become
 in the tmux status bar. Naming runs in the background and never waits before
 Pi starts answering. When Pi finishes its work and waits for input, the title
 gets a `* ` prefix, for example `* fix auth tests`. The prefix disappears on
-your next prompt or when Pi starts another run. When you quit Pi normally,
-the window name resets to `zsh`.
+your next prompt or when Pi starts another run. The tmux session name also
+gets a `* ` prefix while any Pi pane in that session is waiting for input.
+Its existing name is otherwise preserved. When you quit Pi normally, the
+window name resets to `zsh` and that pane's session marker contribution clears.
 
 ## Installation
 
@@ -41,8 +43,11 @@ local checkout.
 - The marker clears on new input, another run, session replacement, reload,
   and graceful shutdown. Status updates make no additional model calls and
   still work if the naming model is unavailable.
-- The extension targets the window containing Pi's `TMUX_PANE`, even if you
-  have switched focus to another window.
+- The extension targets the window and session containing Pi's `TMUX_PANE`,
+  even if you have switched focus elsewhere.
+- Session markers aggregate waiting Pi panes across all windows. A busy or
+  exiting pane does not clear the marker while another pane is waiting.
+  Session names are not summarized, lowercased, or clipped.
 - New input cancels the previous naming request. Session changes, reload, and
   shutdown cancel outstanding work too.
 - Reasoning and retries are disabled. Naming requests have a 15-second timeout
@@ -56,8 +61,12 @@ The last title or status update wins; the marker does not aggregate whether
 other Pi panes in that window are busy.
 
 Renaming turns off tmux's automatic process-based naming for that window.
-Graceful shutdown resets the name to `zsh`, including during reload. A forced
-kill cannot run cleanup and may leave the task name behind. To restore
+Quitting Pi gracefully resets the name to `zsh`. `/reload` and Pi session
+replacement preserve the task name while clearing that pane's waiting status.
+A forced kill cannot run cleanup and may leave the task name and waiting
+marker behind.
+Moving or closing a pane does not immediately refresh its former session's
+marker; the next status update from Pi in that session refreshes it. To restore
 automatic process-based names instead:
 
 ```sh
@@ -96,7 +105,9 @@ bun test
 ```
 
 The tests use mock model responses and tmux commands. They make no API calls
-and do not rename real windows.
+and do not rename your windows or sessions. A tmux integration test uses a
+separate temporary server with no user configuration and skips if tmux is
+unavailable.
 
 Try the checkout in Pi without changing your settings:
 

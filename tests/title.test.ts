@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { cleanTitle, formatTitle, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, type RunTmux } from "../index";
+import piTmux, { cleanTitle, formatTitle, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, type RunTmux } from "../index";
 
 let originalPane: string | undefined;
 beforeEach(() => {
@@ -37,18 +37,32 @@ function fixture(
 			},
 		},
 	} as unknown as ExtensionContext;
-	const state = { window: "@2", title: "existing task" };
+	const state = {
+		window: "@2", title: "existing task", session: "$0", sessionTitle: "My Session",
+		waitingPanes: new Map<string, string>(),
+	};
 	const tmux: RunTmux = async (args, signal) => {
 		calls.push(args);
 		if (beforeCommand) await beforeCommand(args, signal);
-		if (args[0] === "display-message") return `${state.window}\t${state.title}`;
+		if (args[0] === "display-message") return `${state.session}\t${state.window}\t${state.title}`;
+		if (args[0] === "set-option") {
+			expect(args).toEqual([
+				"set-option", "-p", "-t", "%1", WAITING_OPTION, args[5],
+				";", "rename-session", "-t", state.session, SESSION_TITLE_FORMAT,
+			]);
+			state.waitingPanes.set(args[3], args[5]);
+			const anyWaiting = [...state.waitingPanes.values()].includes("1");
+			state.sessionTitle = (anyWaiting ? READY_PREFIX : "") + state.sessionTitle.replace(/^\* /, "");
+		}
 		if (args[0] === "rename-window") state.title = args[3];
 		return "";
 	};
-	piTmux({ on: (event: string, handler: Function) => handlers.set(event, handler) } as unknown as ExtensionAPI, tmux);
+	const load = () => piTmux({ on: (event: string, handler: Function) => handlers.set(event, handler) } as unknown as ExtensionAPI, tmux);
+	load();
 	const input = (text: string, source = "interactive") => handlers.get("input")!({ text, source }, ctx);
-	const emit = (event: string) => handlers.get(event)?.({ type: event }, ctx);
-	return { handlers, calls, requests, warnings, ctx, input, emit, state };
+	const emit = (event: string, reason = event === "session_shutdown" ? "quit" : "startup") =>
+		handlers.get(event)?.({ type: event, reason }, ctx);
+	return { handlers, calls, requests, warnings, ctx, input, emit, state, load };
 }
 
 async function settle() {
@@ -84,7 +98,7 @@ test("passes input through immediately and renames the owning window", async () 
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
 		["rename-window", "-t", "@2", "fix auth tests"],
 	]);
-	expect(f.calls[0]).toEqual(["display-message", "-p", "-t", "%1", "#{window_id}\t#{window_name}"]);
+	expect(f.calls[0]).toEqual(["display-message", "-p", "-t", "%1", "#{session_id}\t#{window_id}\t#{window_name}"]);
 	expect(f.warnings).toEqual([]);
 });
 
@@ -181,6 +195,7 @@ test("only final settlement marks waiting, without another model call", async ()
 	expect(f.state.title).toBe("fix auth tests");
 	await f.emit("agent_settled");
 	expect(f.state.title).toBe("* fix auth tests");
+	expect(f.state.sessionTitle).toBe("* My Session");
 	expect(f.requests).toHaveLength(1);
 	const writes = f.calls.filter((args) => args[0] === "rename-window").length;
 	await f.emit("agent_settled");
@@ -197,6 +212,7 @@ test("new input clears the marker before its slow summary arrives", async () => 
 	f.input("Next task");
 	await settle();
 	expect(f.state.title).toBe("fix auth tests");
+	expect(f.state.sessionTitle).toBe("My Session");
 	next.resolve(response("New task"));
 	await settle();
 	expect(f.state.title).toBe("new task");
@@ -210,6 +226,7 @@ test("internally started work clears the marker without a new naming request", a
 	f.emit("agent_start");
 	await settle();
 	expect(f.state.title).toBe("fix auth tests");
+	expect(f.state.sessionTitle).toBe("My Session");
 	expect(f.requests).toHaveLength(1);
 });
 
@@ -242,6 +259,53 @@ test("session replacement clears the marker and shutdown resets the title", asyn
 		await f.emit("agent_settled");
 		await f.emit(event);
 		expect(f.state.title).toBe(event === "session_shutdown" ? "zsh" : "fix auth tests");
+		expect(f.state.sessionTitle).toBe("My Session");
+		expect(f.state.waitingPanes.get("%1")).toBe("0");
+	}
+});
+
+test("reload preserves the task title across fresh extension runtimes, then quit resets it", async () => {
+	for (const waiting of [false, true]) {
+		const f = fixture();
+		f.input("Task");
+		await settle();
+		if (waiting) await f.emit("agent_settled");
+		await f.emit("session_shutdown", "reload");
+		f.load();
+		await f.emit("session_start", "reload");
+		expect(f.state.title).toBe("fix auth tests");
+		expect(f.state.sessionTitle).toBe("My Session");
+		expect(f.calls.filter((args) => args[0] === "rename-window" && args[3] === "zsh")).toEqual([]);
+		expect(f.requests).toHaveLength(1);
+		await f.emit("session_shutdown", "quit");
+		expect(f.state.title).toBe("zsh");
+	}
+});
+
+test("reload cancels pending naming without resetting the existing task title", async () => {
+	const work = deferred();
+	const f = fixture([work.promise]);
+	f.input("Task");
+	await settle();
+	await f.emit("session_shutdown", "reload");
+	expect(f.requests[0].options.signal.aborted).toBe(true);
+	f.load();
+	await f.emit("session_start", "reload");
+	work.resolve(response("Late title"));
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+});
+
+test("session replacement teardown preserves the title and clears waiting", async () => {
+	for (const reason of ["new", "resume", "fork"]) {
+		const f = fixture();
+		f.input("Task");
+		await settle();
+		await f.emit("agent_settled");
+		await f.emit("session_shutdown", reason);
+		expect(f.state.title).toBe("fix auth tests");
+		expect(f.state.sessionTitle).toBe("My Session");
 	}
 });
 
@@ -335,6 +399,7 @@ test("a slow marker write cannot overwrite newer input or its summary", async ()
 	await completed;
 	await settle();
 	expect(f.state.title).toBe("new task");
+	expect(f.state.sessionTitle).toBe("My Session");
 	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "@2", "new task"]);
 });
 
@@ -360,6 +425,48 @@ test("new input invalidates a ready update waiting on a slow window lookup", asy
 	expect(f.calls.filter((args) => args[0] === "rename-window" && args[3].startsWith(READY_PREFIX))).toEqual([]);
 	next.resolve(response("New task"));
 	await settle();
+});
+
+test("session markers preserve manual names without lowercasing or clipping", async () => {
+	const f = fixture();
+	const name = "My Café Session " + "X".repeat(40);
+	f.state.sessionTitle = name;
+	await f.emit("session_start");
+	expect(f.state.sessionTitle).toBe(name);
+	await f.emit("agent_settled");
+	await f.emit("agent_settled");
+	expect(f.state.sessionTitle).toBe(READY_PREFIX + name);
+	f.emit("agent_start");
+	await settle();
+	expect(f.state.sessionTitle).toBe(name);
+});
+
+test("a busy or exiting pane cannot clear another pane's session marker", async () => {
+	const f = fixture();
+	f.state.waitingPanes.set("%2", "1");
+	await f.emit("session_start");
+	expect(f.state.sessionTitle).toBe("* My Session");
+	await f.emit("agent_settled");
+	f.emit("agent_start");
+	await settle();
+	expect(f.state.sessionTitle).toBe("* My Session");
+	await f.emit("session_shutdown");
+	expect(f.state.sessionTitle).toBe("* My Session");
+	f.state.waitingPanes.set("%2", "0");
+	f.emit("agent_start");
+	await settle();
+	expect(f.state.sessionTitle).toBe("My Session");
+});
+
+test("status updates target the owning session after a pane move", async () => {
+	const f = fixture();
+	await f.emit("session_start");
+	f.state.session = "$3";
+	f.state.window = "@4";
+	f.state.sessionTitle = "Destination Session";
+	await f.emit("agent_settled");
+	expect(f.state.sessionTitle).toBe("* Destination Session");
+	expect(f.calls.filter((args) => args[0] === "set-option").at(-1)?.[9]).toBe("$3");
 });
 
 test("tmux failures are contained and warn only once", async () => {
