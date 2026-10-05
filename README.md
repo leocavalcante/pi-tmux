@@ -1,26 +1,29 @@
 # pi-tmux
 
-Name your tmux window from your current [Pi](https://pi.dev) task and active
-session history with a short, lowercase AI summary.
+A [Pi](https://pi.dev) extension that names your tmux window from the current
+task and active conversation history. It also marks windows and tmux sessions
+when Pi is waiting for input.
 
-For example, a prompt about fixing failing authentication tests might become
-`fix auth tests`. Follow-ups such as `continue` or `yes, do it` use recent
-conversation history to keep the task recognizable. Resuming a session names
-the window without requiring a new prompt.
+A prompt about fixing authentication tests might produce `fix auth tests`.
+Follow-ups such as `continue` or `yes, do it` use recent dialogue to keep the
+task recognizable. Resuming a Pi session restores a task title without a new
+prompt. Naming runs in the background and does not delay Pi's answer.
 
-Names are capped at 24 ASCII characters so they stay compact
-in the tmux status bar. Naming runs in the background and never waits before
-Pi starts answering. When Pi finishes its work and waits for input, the title
-gets a `* ` prefix, for example `* fix auth tests`. The prefix disappears on
-your next prompt or when Pi starts another run. The tmux session name also
-gets a `* ` prefix while any Pi pane in that session is waiting for input.
-Its existing name is otherwise preserved. When you quit Pi normally, the
-window name resets to `zsh` and that pane's session marker contribution clears.
+| State | Window name | tmux session name |
+| --- | --- | --- |
+| Pi is working | `fix auth tests` | Existing name |
+| Pi has settled and is waiting for input | `* fix auth tests` | `* ` plus the existing name |
+| Pi quits normally | `zsh` | Existing name, still prefixed if another Pi pane is waiting |
+
+Window titles are lowercase and limited to 24 ASCII characters, including the
+waiting prefix. tmux session names keep their original text and length. The
+waiting marker means Pi has stopped running, not that the task succeeded.
 
 ## Installation
 
-Requires tmux and Pi. Tested with Pi 1.0.3. Pi supplies the runtime dependencies;
-there is no build step.
+Run interactive Pi inside tmux, with `tmux` available on `PATH` and
+`TMUX_PANE` set by tmux. Tested with Pi 1.0.3. The package declares Node.js
+22.19 or newer; Pi supplies the runtime dependencies, with no build step.
 
 ```sh
 pi install git:github.com/leocavalcante/pi-tmux
@@ -30,11 +33,23 @@ Run `/reload` in Pi after installation. If you previously used the local
 `tmux-title` extension, remove that copy before loading this package to avoid
 running two naming requests for each prompt.
 
+To update an existing installation:
+
+```sh
+pi update git:github.com/leocavalcante/pi-tmux
+```
+
+Run `/reload` afterward.
+
+### Naming model
+
 The naming model is `openai-codex/gpt-6-luna`, using your existing Pi
 credentials. Authenticate with `/login` and make sure that model is available.
-This does not change the model used for your main conversation. To use a
-different provider or model, change `PROVIDER` and `MODEL` in `index.ts` in a
-local checkout.
+This does not change the model used for your main conversation.
+
+There are no extension commands, settings, or environment overrides for the
+naming model. To use another model, change `PROVIDER` and `MODEL` in `index.ts`
+and load that local checkout instead of the installed package.
 
 ## Behavior
 
@@ -44,8 +59,10 @@ local checkout.
   active session context. Compaction refreshes it from the compacted context.
 - Final settlement refreshes the title when the assistant's text adds context.
   Identical bounded context does not start another request.
-- Empty sessions preserve existing names. Abandoned branches, compacted
-  originals, and text removed by Pi context edits are not used.
+- An empty Pi session makes no naming request and preserves an unmarked custom
+  window name. Lifecycle events still update waiting markers.
+- Context comes from Pi's active session projection. Abandoned branches,
+  compacted originals, and text removed by Pi context edits are not used.
 - Titles are forced to lowercase and clipped at a word boundary when possible.
 - `* ` marks a fully settled run, after tool work, retries, and queued
   continuations are finished. It does not mean the task succeeded.
@@ -61,21 +78,26 @@ local checkout.
   Session names are not summarized, lowercased, or clipped.
 - Changed naming context cancels the previous request. Session changes, tree
   navigation, reload, and shutdown cancel outstanding work too.
-- Reasoning and retries are disabled. Naming requests have a 15-second timeout
-  and a 96-token output cap.
-- Print mode and RPC do not rename windows. Extension-injected input does not
-  directly request a title; later refreshes can include resulting dialogue.
+- Naming requests use SSE, with reasoning, retries, and cache retention
+  disabled. Requests have a 15-second timeout and a 96-token output cap.
+- Print, JSON, and RPC modes do not update tmux names or markers.
+  Extension-injected input does not directly request a title; later refreshes
+  can include resulting dialogue.
 - Naming failures keep the existing task name; waiting status can still
-  update. At most one warning appears per extension load.
+  update. At most one warning appears per extension load. Identical context
+  is not retried automatically after a failed naming request.
+
+### Shared panes and cleanup
 
 Multiple interactive Pi panes in one tmux window share its name and marker.
 The last title or status update wins; the marker does not aggregate whether
 other Pi panes in that window are busy.
 
 Renaming turns off tmux's automatic process-based naming for that window.
-Quitting Pi gracefully resets the name to `zsh`. `/reload` and Pi session
+Quitting Pi gracefully resets the name to `zsh`, regardless of your actual
+shell, and does not re-enable automatic naming. `/reload` and Pi session
 replacement clear that pane's waiting status, then refresh the task name from
-the active history. The existing name stays until a naming request succeeds.
+the active history. The existing task name stays until a naming request succeeds.
 A forced kill cannot run cleanup and may leave the task name and waiting
 marker behind.
 Moving or closing a pane does not immediately refresh its former session's
@@ -125,10 +147,16 @@ cd pi-tmux
 bun test
 ```
 
-The tests use mock model responses and tmux commands. They make no API calls
-and do not rename your windows or sessions. A tmux integration test uses a
-separate temporary server with no user configuration and skips if tmux is
-unavailable.
+- `index.ts` contains the extension, title formatting, context selection, and
+  tmux status updates.
+- `tests/title.test.ts` covers formatting, context bounds and exclusions,
+  naming cancellation, lifecycle events, waiting markers, and failures with
+  mock model responses and tmux commands.
+- `tests/session.test.ts` checks session-marker aggregation across windows and
+  panes against a separate temporary tmux server with no user configuration.
+  It skips if tmux is unavailable.
+
+The tests make no model API calls and do not rename your windows or sessions.
 
 Try the checkout in Pi without changing your settings:
 
