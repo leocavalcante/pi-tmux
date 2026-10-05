@@ -1,0 +1,25 @@
+{
+  "name": "pi-tmux",
+  "version": "0.1.0",
+  "description": "Name your tmux window from your latest Pi prompt with a short, lowercase AI summary.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leocavalcante/pi-tmux.git"
+  },
+  "keywords": ["pi-package", "pi", "tmux"],
+  "files": ["index.ts", "README.md", "LICENSE"],
+  "scripts": {
+    "test": "bun test tests/"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

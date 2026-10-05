@@ -1,0 +1,21 @@
+node_modules/
+*.tgz
+.DS_Store
+.env
+.env.*
+
+# Keep machine-local state, credentials, and execution logs out of Git.
+.pi/
+.npmrc
+.netrc
+**/auth.json
+**/credentials*.json
+**/*service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.jsonl
+*.log
