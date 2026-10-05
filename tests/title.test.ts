@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { cleanTitle, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, type RunTmux } from "../index";
+import piTmux, { cleanTitle, formatTitle, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, type RunTmux } from "../index";
 
 let originalPane: string | undefined;
 beforeEach(() => {
@@ -17,7 +17,10 @@ const response = (text: string, stopReason = "stop") => ({
 	stopReason,
 });
 
-function fixture(results: Promise<ReturnType<typeof response>>[] = [Promise.resolve(response("Fix auth tests"))]) {
+function fixture(
+	results: Promise<ReturnType<typeof response>>[] = [Promise.resolve(response("Fix auth tests"))],
+	beforeCommand?: (args: string[], signal: AbortSignal) => Promise<void>,
+) {
 	const handlers = new Map<string, Function>();
 	const calls: string[][] = [];
 	const requests: { model: unknown; context: any; options: any }[] = [];
@@ -34,17 +37,22 @@ function fixture(results: Promise<ReturnType<typeof response>>[] = [Promise.reso
 			},
 		},
 	} as unknown as ExtensionContext;
-	const tmux: RunTmux = async (args) => {
+	const state = { window: "@2", title: "existing task" };
+	const tmux: RunTmux = async (args, signal) => {
 		calls.push(args);
-		return args[0] === "display-message" ? "@2" : "";
+		if (beforeCommand) await beforeCommand(args, signal);
+		if (args[0] === "display-message") return `${state.window}\t${state.title}`;
+		if (args[0] === "rename-window") state.title = args[3];
+		return "";
 	};
 	piTmux({ on: (event: string, handler: Function) => handlers.set(event, handler) } as unknown as ExtensionAPI, tmux);
 	const input = (text: string, source = "interactive") => handlers.get("input")!({ text, source }, ctx);
-	return { handlers, calls, requests, warnings, ctx, input };
+	const emit = (event: string) => handlers.get(event)?.({ type: event }, ctx);
+	return { handlers, calls, requests, warnings, ctx, input, emit, state };
 }
 
 async function settle() {
-	for (let i = 0; i < 12; i++) await Promise.resolve();
+	for (let i = 0; i < 40; i++) await Promise.resolve();
 }
 
 function deferred() {
@@ -73,10 +81,10 @@ test("passes input through immediately and renames the owning window", async () 
 	expect(f.calls).toEqual([]);
 	await settle();
 	expect(f.requests[0].model).toEqual({ provider: "openai-codex", id: "gpt-6-luna" });
-	expect(f.calls).toEqual([
-		["display-message", "-p", "-t", "%1", "#{window_id}"],
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
 		["rename-window", "-t", "@2", "fix auth tests"],
 	]);
+	expect(f.calls[0]).toEqual(["display-message", "-p", "-t", "%1", "#{window_id}\t#{window_name}"]);
 	expect(f.warnings).toEqual([]);
 });
 
@@ -124,11 +132,11 @@ test("shutdown and session replacement cancel outstanding naming", async () => {
 		const work = deferred();
 		const f = fixture([work.promise]);
 		f.input("Task");
-		f.handlers.get(event)!();
+		await f.emit(event);
 		expect(f.requests[0].options.signal.aborted).toBe(true);
 		work.resolve(response("Late title"));
 		await settle();
-		expect(f.calls).toEqual([]);
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 	}
 });
 
@@ -140,7 +148,7 @@ test("missing model leaves the name alone and warns only once", async () => {
 	f.input("Second task");
 	await settle();
 	expect(f.requests).toEqual([]);
-	expect(f.calls).toEqual([]);
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 	expect(f.warnings).toHaveLength(1);
 });
 
@@ -149,7 +157,173 @@ test("empty or failed responses never become window names", async () => {
 		const f = fixture([Promise.resolve(result)]);
 		f.input("Task");
 		await settle();
-		expect(f.calls).toEqual([]);
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 		expect(f.warnings).toHaveLength(1);
 	}
+});
+
+test("ready marker fits within 24 cells and title text stays lowercase", () => {
+	expect(formatTitle("FIX API Tests", true)).toBe("* fix api tests");
+	expect(formatTitle("X".repeat(24), true)).toBe("* " + "x".repeat(22));
+	expect(formatTitle("X".repeat(24), false)).toBe("x".repeat(24));
+	expect(formatTitle("", true)).toBe("* pi");
+});
+
+test("only final settlement marks waiting, without another model call", async () => {
+	const f = fixture();
+	f.input("Task");
+	await settle();
+	f.emit("turn_end");
+	f.emit("agent_end");
+	await settle();
+	expect(f.state.title).toBe("fix auth tests");
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* fix auth tests");
+	expect(f.requests).toHaveLength(1);
+	const writes = f.calls.filter((args) => args[0] === "rename-window").length;
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* fix auth tests");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toHaveLength(writes);
+});
+
+test("new input clears the marker before its slow summary arrives", async () => {
+	const next = deferred();
+	const f = fixture([Promise.resolve(response("Fix auth tests")), next.promise]);
+	f.input("First task");
+	await settle();
+	await f.emit("agent_settled");
+	f.input("Next task");
+	await settle();
+	expect(f.state.title).toBe("fix auth tests");
+	next.resolve(response("New task"));
+	await settle();
+	expect(f.state.title).toBe("new task");
+});
+
+test("internally started work clears the marker without a new naming request", async () => {
+	const f = fixture();
+	f.input("Task");
+	await settle();
+	await f.emit("agent_settled");
+	f.emit("agent_start");
+	await settle();
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.requests).toHaveLength(1);
+});
+
+test("late naming result retains the settled marker", async () => {
+	const work = deferred();
+	const f = fixture([work.promise]);
+	f.input("Task");
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* existing task");
+	work.resolve(response("Fix auth tests"));
+	await settle();
+	expect(f.state.title).toBe("* fix auth tests");
+});
+
+test("waiting status still works when the naming model is unavailable", async () => {
+	const f = fixture();
+	(f.ctx.modelRegistry as any).find = () => undefined;
+	f.input("Task");
+	await settle();
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* existing task");
+	expect(f.requests).toHaveLength(0);
+});
+
+test("session replacement and shutdown remove stale waiting markers", async () => {
+	for (const event of ["session_start", "session_shutdown"]) {
+		const f = fixture();
+		f.input("Task");
+		await settle();
+		await f.emit("agent_settled");
+		await f.emit(event);
+		expect(f.state.title).toBe("fix auth tests");
+	}
+});
+
+test("session startup preserves an unmarked custom window name", async () => {
+	const f = fixture();
+	f.state.title = "Custom Manual Name";
+	await f.emit("session_start");
+	expect(f.state.title).toBe("Custom Manual Name");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+});
+
+test("status updates stay disabled outside interactive tmux", async () => {
+	const f = fixture();
+	for (const mode of ["text", "rpc", "json"]) {
+		(f.ctx as any).mode = mode;
+		f.emit("agent_start");
+		await f.emit("agent_settled");
+	}
+	(f.ctx as any).mode = "tui";
+	delete process.env.TMUX_PANE;
+	await f.emit("agent_settled");
+	await settle();
+	expect(f.calls).toEqual([]);
+});
+
+test("status updates resolve the window again after a pane move", async () => {
+	const f = fixture();
+	f.input("Task");
+	await settle();
+	f.state.window = "@3";
+	await f.emit("agent_settled");
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "@3", "* fix auth tests"]);
+});
+
+test("a slow marker write cannot overwrite newer input or its summary", async () => {
+	const gate = deferred();
+	const f = fixture(
+		[Promise.resolve(response("Fix auth tests")), Promise.resolve(response("New task"))],
+		async (args) => { if (args[0] === "rename-window" && args[3].startsWith(READY_PREFIX)) await gate.promise; },
+	);
+	f.input("First task");
+	await settle();
+	const completed = f.emit("agent_settled");
+	await settle();
+	f.input("Next task");
+	await settle();
+	gate.resolve(response(""));
+	await completed;
+	await settle();
+	expect(f.state.title).toBe("new task");
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "@2", "new task"]);
+});
+
+test("new input invalidates a ready update waiting on a slow window lookup", async () => {
+	const gate = deferred();
+	const next = deferred();
+	let holdLookup = false;
+	const f = fixture(
+		[Promise.resolve(response("Fix auth tests")), next.promise],
+		async (args) => { if (holdLookup && args[0] === "display-message") await gate.promise; },
+	);
+	f.input("First task");
+	await settle();
+	holdLookup = true;
+	const completed = f.emit("agent_settled");
+	await settle();
+	f.input("Next task");
+	holdLookup = false;
+	gate.resolve(response(""));
+	await completed;
+	await settle();
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.calls.filter((args) => args[0] === "rename-window" && args[3].startsWith(READY_PREFIX))).toEqual([]);
+	next.resolve(response("New task"));
+	await settle();
+});
+
+test("tmux failures are contained and warn only once", async () => {
+	const f = fixture([], async () => { throw new Error("Synthetic tmux failure"); });
+	await f.emit("agent_settled");
+	f.emit("agent_start");
+	await settle();
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("existing task");
+	expect(f.warnings).toHaveLength(1);
+	expect(f.requests).toHaveLength(0);
 });

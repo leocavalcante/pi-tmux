@@ -6,7 +6,9 @@ lowercase AI summary.
 For example, a prompt about fixing failing authentication tests might become
 `fix auth tests`. Names are capped at 24 ASCII characters so they stay compact
 in the tmux status bar. Naming runs in the background and never waits before
-Pi starts answering.
+Pi starts answering. When Pi finishes its work and waits for input, the title
+gets a `* ` prefix, for example `* fix auth tests`. The prefix disappears on
+your next prompt or when Pi starts another run.
 
 ## Installation
 
@@ -31,6 +33,13 @@ local checkout.
 
 - Each non-empty interactive prompt starts a naming request.
 - Titles are forced to lowercase and clipped at a word boundary when possible.
+- `* ` marks a fully settled run, after tool work, retries, and queued
+  continuations are finished. It does not mean the task succeeded.
+- The 24-character limit includes the marker. Waiting titles reserve two
+  characters for `* `, leaving up to 22 for the task name.
+- The marker clears on new input, another run, session replacement, reload,
+  and graceful shutdown. Status updates make no additional model calls and
+  still work if the naming model is unavailable.
 - The extension targets the window containing Pi's `TMUX_PANE`, even if you
   have switched focus to another window.
 - New input cancels the previous naming request. Session changes, reload, and
@@ -38,11 +47,12 @@ local checkout.
 - Reasoning and retries are disabled. Naming requests have a 15-second timeout
   and a 96-token output cap.
 - Print mode, RPC, and extension-injected messages do not rename windows.
-- Failures leave the existing name unchanged. At most one warning appears per
-  extension load.
+- Naming failures keep the existing task name; waiting status can still
+  update. At most one warning appears per extension load.
 
-Multiple interactive Pi panes in one tmux window share its name. The last
-completed naming request across those panes wins.
+Multiple interactive Pi panes in one tmux window share its name and marker.
+The last title or status update wins; the marker does not aggregate whether
+other Pi panes in that window are busy.
 
 Renaming turns off tmux's automatic process-based naming for that window.
 The last task name remains after Pi exits. To restore automatic names:
