@@ -92,6 +92,12 @@ cancels any outstanding naming request, and preserves the current waiting
 status. The bare command returns without waiting for the model. An empty
 session makes no request. AI naming must be enabled, with no manual pin active.
 
+Type `/tmux-title ` to see argument suggestions in Pi's editor. Completion
+filters `status`, `sync`, `set <name>`, and `auto` as you type. Choosing `set`
+inserts `set ` so you can enter the name, not a literal `<name>` placeholder.
+Completion does not read dialogue or task names, make AI or tmux requests,
+or replace text after `set `.
+
 ### Pin a manual title
 
 ```text

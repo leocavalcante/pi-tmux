@@ -432,6 +432,18 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 
 	pi.registerCommand("tmux-title", {
 		description: "Refresh, pin with set <name>, resume with auto, inspect status, or sync without AI",
+		getArgumentCompletions: (prefix) => {
+			const token = prefix.trimStart();
+			// Complete only the subcommand, never free-form title text or extra args.
+			if (/\s/.test(token)) return null;
+			const items = [
+				{ value: "status", label: "status", description: "Show read-only title diagnostics" },
+				{ value: "sync", label: "sync", description: "Reapply titles and markers without AI" },
+				{ value: "set ", label: "set <name>", description: "Pin a manual title" },
+				{ value: "auto", label: "auto", description: "Resume automatic naming" },
+			].filter((item) => item.value.startsWith(token));
+			return items.length ? items : null;
+		},
 		handler: async (args, ctx) => {
 			const command = args.trim();
 			const set = /^set(?:\s+([\s\S]*))?$/.exec(command);

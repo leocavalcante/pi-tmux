@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { getEventListeners } from "node:events";
+import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, STATUS_INFO_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
 
@@ -28,7 +29,7 @@ function fixture(
 	beforeCommand?: (args: string[], signal: AbortSignal, renderedTitle?: string) => Promise<void>,
 ) {
 	const handlers = new Map<string, Function>();
-	const commands = new Map<string, { handler: Function }>();
+	const commands = new Map<string, { handler: Function; getArgumentCompletions?: Function }>();
 	const notices: string[] = [];
 	const calls: string[][] = [];
 	const writes: string[] = [];
@@ -96,7 +97,7 @@ function fixture(
 	};
 	const load = () => piTmux({
 		on: (event: string, handler: Function) => handlers.set(event, handler),
-		registerCommand: (name: string, command: { handler: Function }) => commands.set(name, command),
+		registerCommand: (name: string, command: { handler: Function; getArgumentCompletions?: Function }) => commands.set(name, command),
 	} as unknown as ExtensionAPI, tmux);
 	load();
 	const input = (text: string, source = "interactive") => handlers.get("input")!({ text, source }, ctx);
@@ -104,6 +105,7 @@ function fixture(
 		handlers.get(event)?.({ type: event, reason }, ctx);
 	return { handlers, calls, writes, requests, warnings, notices, messages, ctx, input, emit, state, load,
 		refresh: (args = "") => commands.get("tmux-title")!.handler(args, ctx),
+		complete: (prefix = "") => commands.get("tmux-title")!.getArgumentCompletions!(prefix),
 	};
 }
 
@@ -1144,6 +1146,112 @@ test("invalid configuration disables naming, warns once, and never echoes its va
 	expect(f.warnings[0]).toContain("PI_TMUX_MODEL");
 	expect(f.warnings[0]).not.toContain(process.env.PI_TMUX_MODEL);
 	expect(f.state.title).toBe("* existing task");
+});
+
+test.each([
+	{ prefix: "", values: ["status", "sync", "set ", "auto"] },
+	{ prefix: "s", values: ["status", "sync", "set "] },
+	{ prefix: "st", values: ["status"] },
+	{ prefix: "sy", values: ["sync"] },
+	{ prefix: "se", values: ["set "] },
+	{ prefix: "a", values: ["auto"] },
+	{ prefix: "status", values: ["status"] },
+	{ prefix: "sync", values: ["sync"] },
+	{ prefix: "set", values: ["set "] },
+	{ prefix: "auto", values: ["auto"] },
+	{ prefix: " \ts", values: ["status", "sync", "set "] },
+	{ prefix: " \t", values: ["status", "sync", "set ", "auto"] },
+])("argument completion matches only supported subcommands: %j", ({ prefix, values }) => {
+	const f = fixture();
+	const items = f.complete(prefix);
+	expect(items.map((item: any) => item.value)).toEqual(values);
+	expect(items.every((item: any) => item.label && item.description)).toBe(true);
+	expect(f.calls).toEqual([]);
+	expect(f.requests).toEqual([]);
+});
+
+test.each(["unknown", "S", "set ", "set private title", "set\n", "set\tname", "status ", "status extra", "sync extra", "auto extra", "set café", "\u001b"])("argument completion leaves free-form titles and invalid prefixes alone: %j", (prefix) => {
+	const f = fixture();
+	expect(f.complete(prefix)).toBeNull();
+	expect(f.calls).toEqual([]);
+	expect(f.requests).toEqual([]);
+});
+
+test("argument completion needs no context, credentials, tmux target, or valid naming config", () => {
+	process.env.PI_TMUX_MODEL = "synthetic invalid configuration";
+	delete process.env.TMUX_PANE;
+	const f = fixture();
+	Object.defineProperty(f.ctx, "sessionManager", { get: () => { throw new Error("Must not access dialogue"); } });
+	Object.defineProperty(f.ctx, "modelRegistry", { get: () => { throw new Error("Must not access models or auth"); } });
+	expect(f.complete("s")).toHaveLength(3);
+	expect(f.complete("set synthetic private title")).toBeNull();
+	expect(f.notices).toEqual([]);
+	expect(f.warnings).toEqual([]);
+	expect(f.calls).toEqual([]);
+	expect(f.requests).toEqual([]);
+});
+
+test("argument completion preserves pending naming and never includes task text", async () => {
+	const work = deferred();
+	const f = fixture([work.promise]);
+	f.input("synthetic private task text");
+	await settle();
+	const before = f.calls.length;
+	expect(JSON.stringify(f.complete())).not.toContain("synthetic private task text");
+	expect(f.calls).toHaveLength(before);
+	expect(f.requests).toHaveLength(1);
+	expect(f.requests[0].options.signal.aborted).toBe(false);
+	work.resolve(response("current task"));
+	await settle();
+	expect(f.state.title).toBe("current task");
+});
+
+test("argument completion preserves pins and returns independent suggestion objects", async () => {
+	const f = fixture();
+	await f.refresh("set synthetic private pin");
+	const before = f.calls.length;
+	const items = f.complete();
+	expect(JSON.stringify(items)).not.toContain("synthetic private pin");
+	items[0].value = "corrupted";
+	items[0].description = "corrupted";
+	items.push({ value: "extra", label: "extra" });
+	expect(f.complete().map((item: any) => item.value)).toEqual(["status", "sync", "set ", "auto"]);
+	expect(f.complete()[0].description).toBe("Show read-only title diagnostics");
+	expect(f.calls).toHaveLength(before);
+	expect(f.state.title).toBe("synthetic private pin");
+	f.input("another task");
+	await settle();
+	expect(f.requests).toEqual([]);
+	expect(f.state.title).toBe("synthetic private pin");
+});
+
+test.each([
+	{ prefix: "st", value: "status", expected: "/tmux-title status" },
+	{ prefix: "sy", value: "sync", expected: "/tmux-title sync" },
+	{ prefix: "se", value: "set ", expected: "/tmux-title set " },
+	{ prefix: "a", value: "auto", expected: "/tmux-title auto" },
+	{ prefix: "  se", value: "set ", expected: "/tmux-title set " },
+])("Pi's completion provider inserts a runnable argument without a literal placeholder: %j", async ({ prefix, value, expected }) => {
+	const f = fixture();
+	const provider = new CombinedAutocompleteProvider([{ name: "tmux-title", getArgumentCompletions: f.complete }], process.cwd());
+	const line = "/tmux-title " + prefix;
+	const suggestions = await provider.getSuggestions([line], 0, line.length, { force: false });
+	expect(suggestions).not.toBeNull();
+	const item = suggestions!.items.find((entry) => entry.value === value)!;
+	const result = provider.applyCompletion([line], 0, line.length, item, suggestions!.prefix);
+	expect(result.lines).toEqual([expected]);
+	expect(result.cursorCol).toBe(expected.length);
+	expect(result.lines[0]).not.toContain("<name>");
+	expect(f.calls).toEqual([]);
+	expect(f.requests).toEqual([]);
+});
+
+test("Pi's provider does not replace a partially entered manual title", async () => {
+	const f = fixture();
+	const provider = new CombinedAutocompleteProvider([{ name: "tmux-title", getArgumentCompletions: f.complete }], process.cwd());
+	const line = "/tmux-title set a custom title";
+	expect(await provider.getSuggestions([line], 0, line.length, { force: false })).toBeNull();
+	expect(f.calls).toEqual([]);
 });
 
 test("manual refresh retries identical failed context and retains waiting status", async () => {
