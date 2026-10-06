@@ -113,6 +113,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	let generation = 0;
 	let warned = false;
 	let baseTitle: string | undefined;
+	let manualTitle = false;
 	let candidateTitle: string | undefined;
 	let lastNamingContext: string | undefined;
 	let waiting = false;
@@ -205,6 +206,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		titleLifetime.abort();
 		titleLifetime = new AbortController();
 		baseTitle = title;
+		manualTitle = false;
 		lastNamingContext = undefined;
 		return setWaiting(ctx, false);
 	};
@@ -279,7 +281,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 
 	const requestTitle = (ctx: ExtensionContext, prompt = "", force = false) => {
 		const pane = getPane(ctx);
-		if (!pane) return false;
+		if (!pane || manualTitle) return false;
 		if (invalidModelSetting) {
 			warnOnce(ctx, "Invalid PI_TMUX_MODEL. Set provider/model or off, then /reload. Naming is disabled; waiting markers still work.");
 		}
@@ -304,14 +306,37 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	};
 
 	pi.registerCommand("tmux-title", {
-		description: "Refresh the tmux title from active session context, retrying failed naming",
+		description: "Refresh the tmux title, pin it with set <name>, or resume automatic naming with auto",
 		handler: async (args, ctx) => {
-			if (args.trim()) {
-				ctx.ui.notify("Usage: /tmux-title", "warning");
+			const command = args.trim();
+			const set = /^set(?:\s+([\s\S]*))?$/.exec(command);
+			if (command && command !== "auto" && !set) {
+				ctx.ui.notify("Usage: /tmux-title [set <name> | auto]", "warning");
 				return;
 			}
-			if (!getPane(ctx)) {
+			const pane = getPane(ctx);
+			if (!pane) {
 				ctx.ui.notify("Title refresh requires interactive Pi inside tmux.", "warning");
+				return;
+			}
+			if (set) {
+				const title = cleanTitle(set[1] ?? "");
+				if (!title) {
+					ctx.ui.notify("Provide a title containing letters or numbers: /tmux-title set <name>", "warning");
+					return;
+				}
+				warned = false;
+				cancel();
+				manualTitle = true;
+				baseTitle = title;
+				lastNamingContext = undefined;
+				await refreshTitle(ctx, pane);
+				ctx.ui.notify("Manual title pinned. Use /tmux-title auto to resume automatic naming.", "info");
+				return;
+			}
+			if (command === "auto") manualTitle = false;
+			if (manualTitle) {
+				ctx.ui.notify("Manual title is pinned. Use /tmux-title auto to resume automatic naming.", "info");
 				return;
 			}
 			// Explicit retries can report a new failure after the one-time warning.

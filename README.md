@@ -22,7 +22,7 @@ waiting marker means Pi has stopped running, not that the task succeeded.
 ## Installation
 
 Run interactive Pi inside tmux, with `tmux` available on `PATH` and
-`TMUX_PANE` set by tmux. Tested with Pi 1.0.3. The package declares Node.js
+`TMUX_PANE` set by tmux. Tested with Pi 1.0.4. The package declares Node.js
 22.19 or newer; Pi supplies the runtime dependencies, with no build step.
 
 ```sh
@@ -67,20 +67,41 @@ PI_TMUX_MODEL=off pi
 ```
 
 Status-only mode still formats waiting window names and resets them to `zsh`
-on graceful quit.
+on graceful quit. You can set a manual title without enabling AI naming.
 
 ### Retry a title
 
 Run `/tmux-title` inside interactive Pi in tmux to refresh from the active
 session context. It retries even when the context matches a failed request,
 cancels any outstanding naming request, and preserves the current waiting
-status. The command takes no arguments and returns without waiting for the
-model. An empty session makes no request. Naming must be enabled.
+status. The bare command returns without waiting for the model. An empty
+session makes no request. AI naming must be enabled, with no manual pin active.
+
+### Pin a manual title
+
+```text
+/tmux-title set fix auth tests
+/tmux-title auto
+```
+
+`set <name>` pins a title for this Pi pane and cancels outstanding AI naming.
+New input, settlement, and compaction keep the pinned text while waiting
+markers still update. The extension does not collect naming context or make
+naming requests while the pin is active. Manual titles use the same lowercase,
+ASCII, and length rules as generated titles, and work with `PI_TMUX_MODEL=off`.
+Empty names and names containing no letters or numbers are rejected.
+
+`auto` releases the pin and requests a title from the active context. It respects
+`PI_TMUX_MODEL=off` and does not clear the current waiting marker. The manual
+title stays until a new name succeeds. Pins are in-memory, not saved to Pi
+history. Session replacement, tree navigation, reload, and quit release them.
+A bare `/tmux-title` leaves an active pin alone.
 
 ## Behavior
 
-- Each non-empty interactive prompt requests a title using recent dialogue
-  from the active session branch plus the new prompt.
+- With AI naming enabled and no manual pin, each non-empty interactive prompt
+  requests a title using recent dialogue from the active session branch plus
+  the new prompt.
 - Startup, resume, fork, reload, and tree navigation request a title from the
   active session context. Compaction refreshes it from the compacted context.
 - Final settlement refreshes the title when the assistant's text adds context.
@@ -158,7 +179,8 @@ can still mention details from tool output. Provider billing, subscription
 limits, and data handling apply to these additional requests. A run can request
 a title on input and again at settlement when its context changes. Each
 `/tmux-title` retry also makes a request when naming context is available.
-`PI_TMUX_MODEL=off` prevents all of these naming requests.
+`PI_TMUX_MODEL=off` or an active manual pin prevents these naming requests.
+Manual title commands do not send the title or dialogue to a model.
 
 The model is instructed not to include secrets or personal information in
 titles, but this is not a redaction guarantee. Do not put secrets into prompts.
@@ -188,8 +210,8 @@ bun test
   tmux status updates.
 - `tests/title.test.ts` covers formatting, context bounds and exclusions,
   naming cancellation, model configuration, status-only mode, explicit retries,
-  lifecycle events, waiting markers, and failures with
-  mock model responses and tmux commands.
+  manual pins, lifecycle events, waiting markers, and failures with mock model
+  responses and tmux commands.
 - `tests/session.test.ts` checks session-marker aggregation across windows and
   panes against a separate temporary tmux server with no user configuration.
   It skips if tmux is unavailable.

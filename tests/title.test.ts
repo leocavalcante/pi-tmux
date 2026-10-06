@@ -981,6 +981,143 @@ test("manual refresh permits a new warning after a previous naming failure", asy
 	expect(f.warnings).toHaveLength(2);
 });
 
+test("manual titles remain pinned through input, settlement, compaction, and refresh", async () => {
+	const f = fixture([]);
+	await f.refresh('set "Fix café # auth"');
+	(f.ctx.sessionManager as any).buildSessionProjection = () => { throw new Error("Pinned titles must not collect naming context"); };
+	expect(f.state.title).toBe("fix cafe auth");
+	f.input("Another task");
+	await f.emit("agent_settled");
+	await f.emit("session_compact");
+	await f.refresh();
+	expect(f.state.title).toBe("* fix cafe auth");
+	expect(f.requests).toHaveLength(0);
+	expect(f.warnings).toHaveLength(0);
+	f.emit("agent_start");
+	await settle();
+	expect(f.state.title).toBe("fix cafe auth");
+});
+
+test("pinning a title cancels pending AI work without losing waiting status", async () => {
+	const work = deferred();
+	const f = fixture([work.promise]);
+	f.input("Task");
+	await f.emit("agent_settled");
+	await f.refresh("set -manual title");
+	expect(f.requests[0].options.signal.aborted).toBe(true);
+	work.resolve(response("late ai title"));
+	await settle();
+	expect(f.state.title).toBe("* -manual title");
+	expect(f.state.sessionTitle).toBe("* My Session");
+});
+
+test.each([1, 2])("pinning a title discards completed AI output at slow lookup %i", async (lookup) => {
+	const work = deferred();
+	const gate = deferred();
+	let hold = false;
+	let lookups = 0;
+	const f = fixture([work.promise], async (args) => {
+		if (hold && args[0] === "display-message" && ++lookups === lookup) await gate.promise;
+	});
+	f.input("Task");
+	await settle();
+	hold = true;
+	work.resolve(response("discarded ai title"));
+	await settle();
+	const pinned = f.refresh("set manual title");
+	hold = false;
+	gate.resolve(response(""));
+	await pinned;
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* manual title");
+	expect(f.calls.filter((args) => args[0] === "rename-window").some((args) => args.at(-1)?.includes("discarded"))).toBe(false);
+});
+
+test("auto resumes naming from identical context and preserves waiting status", async () => {
+	const f = fixture([Promise.resolve(response("ai title")), Promise.resolve(response("resumed title"))]);
+	f.messages.push({ role: "user", content: "Task" });
+	await f.emit("session_start");
+	await settle();
+	await f.emit("agent_settled");
+	await f.refresh("set manual title");
+	await f.refresh("auto");
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	expect(f.state.title).toBe("* resumed title");
+	await f.emit("agent_settled");
+	expect(f.requests).toHaveLength(2);
+});
+
+test("manual titles work with AI disabled, and auto respects that setting", async () => {
+	process.env.PI_TMUX_MODEL = "off";
+	const f = fixture([]);
+	await f.refresh("set " + "X".repeat(30));
+	expect(f.state.title).toBe("x".repeat(24));
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* " + "x".repeat(22));
+	await f.refresh("auto");
+	expect(f.state.title).toBe("* " + "x".repeat(22));
+	expect(f.requests).toHaveLength(0);
+	await f.emit("session_shutdown");
+	expect(f.state.title).toBe("zsh");
+});
+
+test("invalid manual titles do not cancel pending naming or change the window", async () => {
+	const work = deferred();
+	const f = fixture([work.promise]);
+	f.input("Task");
+	await settle();
+	for (const args of ["set", "set ---", "set #[]", "unknown command"]) await f.refresh(args);
+	expect(f.requests[0].options.signal.aborted).toBe(false);
+	expect(f.state.title).toBe("existing task");
+	expect(f.warnings).toHaveLength(4);
+	work.resolve(response("ai title"));
+	await settle();
+	expect(f.state.title).toBe("ai title");
+});
+
+test("session replacement, tree navigation, and reload release manual pins", async () => {
+	for (const event of ["session_start", "session_tree"]) {
+		const f = fixture();
+		await f.refresh("set manual title");
+		f.messages.push({ role: "user", content: "Task" });
+		await f.emit(event);
+		await settle();
+		expect(f.state.title).toBe("fix auth tests");
+		expect(f.requests).toHaveLength(1);
+	}
+	const f = fixture();
+	await f.refresh("set manual title");
+	await f.emit("session_shutdown", "reload");
+	f.load();
+	f.messages.push({ role: "user", content: "Task" });
+	await f.emit("session_start", "reload");
+	await settle();
+	expect(f.state.title).toBe("fix auth tests");
+});
+
+test("manual title retries can report a new tmux failure", async () => {
+	const f = fixture([], async () => { throw new Error("Synthetic tmux failure"); });
+	await f.refresh("set first manual title");
+	await f.refresh("set second manual title");
+	expect(f.warnings).toHaveLength(2);
+	expect(f.requests).toHaveLength(0);
+});
+
+test("manual title commands cannot write to tmux outside interactive mode", async () => {
+	const f = fixture();
+	for (const mode of ["rpc", "json", "text"]) {
+		(f.ctx as any).mode = mode;
+		await f.refresh("set manual title");
+		await f.refresh("auto");
+	}
+	(f.ctx as any).mode = "tui";
+	delete process.env.TMUX_PANE;
+	await f.refresh("set manual title");
+	expect(f.calls).toHaveLength(0);
+	expect(f.requests).toHaveLength(0);
+});
+
 test("tmux failures are contained and warn only once", async () => {
 	const f = fixture([], async () => { throw new Error("Synthetic tmux failure"); });
 	await f.emit("agent_settled");
