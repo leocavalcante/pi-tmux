@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { SESSION_TITLE_FORMAT, WAITING_OPTION, type RunTmux } from "../index";
+import piTmux, { SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, type RunTmux } from "../index";
 
 const hasTmux = Bun.which("tmux") !== null;
 let originalModel: string | undefined;
@@ -178,6 +178,102 @@ test.skipIf(!hasTmux)("the real tmux adapter preserves empty window names", asyn
 	}
 });
 
+test.skipIf(!hasTmux).each([false, true])("quitting one Pi preserves a live sibling's task title, sibling waiting=%j", async (waiting) => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).trim();
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Owners", "/bin/sleep 60");
+		const sibling = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		const warnings: string[] = [];
+		const ctx = { mode: "tui", ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } } } as unknown as ExtensionContext;
+		const peer = (target: string) => {
+			const handlers = new Map<string, Function>();
+			const commands = new Map<string, Function>();
+			piTmux(mockPi(handlers, commands), async (args) => tmux(...args));
+			return {
+				emit: async (event: string) => {
+					process.env.TMUX_PANE = target;
+					await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+					await new Promise<void>((resolve) => setImmediate(resolve));
+				},
+				pin: async (title: string) => {
+					process.env.TMUX_PANE = target;
+					await commands.get("tmux-title")!("set " + title, ctx);
+				},
+			};
+		};
+		const first = peer(pane);
+		const second = peer(sibling);
+		await first.emit("session_start");
+		await second.emit("session_start");
+		await first.pin("first task");
+		await second.pin("peer task");
+		if (waiting) await second.emit("agent_settled");
+		await first.emit("session_shutdown");
+		expect(tmux("display-message", "-p", "-t", sibling, "#{window_name}")).toBe(waiting ? "* peer task" : "peer task");
+		expect(tmux("show-options", "-p", "-v", "-t", pane, ACTIVE_OPTION)).toBe("0");
+		expect(tmux("show-options", "-p", "-v", "-t", sibling, ACTIVE_OPTION)).toBe("1");
+		await second.emit("session_shutdown");
+		expect(tmux("display-message", "-p", "-t", sibling, "#{window_name}")).toBe("zsh");
+		expect(tmux("display-message", "-p", "-t", sibling, "#{session_name}")).toBe("Owners");
+		expect(warnings).toEqual([]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
+test.skipIf(!hasTmux).each([
+	{ activeAtExecution: false, waitingAtExecution: false },
+	{ activeAtExecution: true, waitingAtExecution: false },
+	{ activeAtExecution: true, waitingAtExecution: true },
+])("quit re-evaluates ownership and preserves the latest literal title, status at execution=%j", async ({ activeAtExecution, waitingAtExecution }) => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "LateOwner", "-n", "before", "/bin/sleep 60");
+		const sibling = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		tmux("set-option", "-p", "-t", sibling, ACTIVE_OPTION, activeAtExecution ? "0" : "1");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		let quitting = false;
+		const latestTitle = "literal #{session_id}, -peer ";
+		piTmux(mockPi(handlers), async (args) => {
+			if (quitting && args[0] === "rename-window") {
+				quitting = false;
+				tmux("set-option", "-p", "-t", sibling, ACTIVE_OPTION, activeAtExecution ? "1" : "0");
+				tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, waitingAtExecution ? "1" : "0");
+				tmux("rename-window", "-t", sibling, "--", latestTitle.replaceAll("#", "##"));
+			}
+			return tmux(...args);
+		});
+		const warnings: string[] = [];
+		const ctx = { mode: "tui", ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
+		await handlers.get("session_start")!({ type: "session_start" }, ctx);
+		quitting = true;
+		await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, ctx);
+		const expectedTitle = activeAtExecution ? (waitingAtExecution ? "* " + latestTitle.slice(0, 22) : latestTitle) : "zsh";
+		expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe(expectedTitle);
+		expect(tmux("show-options", "-p", "-v", "-t", pane, ACTIVE_OPTION)).toBe("0");
+		expect(warnings).toEqual([]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
 test.skipIf(!hasTmux)("window markers aggregate only their own waiting panes", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");
@@ -212,7 +308,7 @@ test.skipIf(!hasTmux)("window markers aggregate only their own waiting panes", a
 		expect(title()).toBe("* shared task");
 		expect(sessionTitle()).toBe("* Shared");
 		await emit("session_shutdown");
-		expect(title()).toBe("* zsh");
+		expect(title()).toBe("* shared task");
 		expect(sessionTitle()).toBe("* Shared");
 
 		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "0");

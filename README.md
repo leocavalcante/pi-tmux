@@ -13,12 +13,13 @@ prompt. Naming runs in the background and does not delay Pi's answer.
 | --- | --- | --- |
 | Pi is working alone in its window | `fix auth tests` | Existing name |
 | Pi has settled and is waiting for input | `* fix auth tests` | `* ` plus the existing name |
-| Pi quits normally | `zsh`, or `* zsh` if another pane in the window is waiting | Existing name, still prefixed if another Pi pane is waiting |
+| Pi quits, another Pi remains in the window | Current task title, marked if a remaining pane is waiting | Existing name, still prefixed if another Pi pane is waiting |
+| Last Pi in a window quits normally | `zsh` | Existing name, still prefixed if a Pi pane in another window is waiting |
 
-Window titles are lowercase and limited to 24 ASCII characters, including the
-waiting prefix. tmux session names keep their original text and length. The
-waiting marker means at least one Pi pane has stopped running, not that the
-task succeeded. A window stays marked while any Pi pane in that window waits.
+Generated and pinned task titles are lowercase and limited to 24 ASCII
+characters, including the waiting prefix. tmux session names keep their
+original text and length. The waiting marker means at least one Pi pane has
+stopped running, not that the task succeeded. A window stays marked while any Pi pane in that window waits.
 A session stays marked while any Pi pane across its windows waits.
 
 ## Installation
@@ -41,7 +42,9 @@ To update an existing installation:
 pi update git:github.com/leocavalcante/pi-tmux
 ```
 
-Run `/reload` afterward.
+Run `/reload` in each running Pi instance afterward so busy panes register
+window ownership. Waiting panes from older runtimes are still recognized from
+their waiting flags.
 
 ### Naming model
 
@@ -68,8 +71,9 @@ For waiting markers without any naming requests or dialogue collection:
 PI_TMUX_MODEL=off pi
 ```
 
-Status-only mode still formats waiting window names and resets them to `zsh`
-on graceful quit. You can set a manual title without enabling AI naming.
+Status-only mode still formats waiting window names. The last Pi in a window
+resets its name to `zsh` on graceful quit. You can set a manual title without
+enabling AI naming.
 
 ### Retry a title
 
@@ -150,22 +154,34 @@ A bare `/tmux-title` leaves an active pin alone.
 ### Shared panes and cleanup
 
 Multiple interactive Pi panes in one tmux window share its task title. The
-most recent task-title update wins, including manual pins and quit's `zsh`.
-The waiting marker aggregates all Pi panes in that window independently of
+most recent task-title update wins, including manual pins. Quitting one Pi
+keeps the current shared task title while another Pi remains in that window,
+whether it is busy or waiting. Cleanup chooses ownership and reads the latest
+shared title on the tmux server, so a peer that starts or renames after lookup
+is protected too. A peer in a different window does not prevent `zsh` cleanup.
+The waiting marker aggregates all Pi panes in its window independently of
 which pane last named it. A waiting pane in a different window marks the
 session but not this window.
 
 Renaming turns off tmux's automatic process-based naming for that window.
-Quitting Pi gracefully resets the name to `zsh`, regardless of your actual
-shell, and does not re-enable automatic naming. `/reload` and Pi session
-replacement clear that pane's waiting status, then refresh the task name from
-the active history. The existing task name stays until a naming request succeeds.
-A forced kill cannot run cleanup and may leave the task name and waiting
-marker behind.
+The last Pi to quit gracefully resets the name to `zsh`, regardless of your
+actual shell, and does not re-enable automatic naming. `/reload` and Pi session
+replacement keep ownership registered, clear that pane's waiting status, then
+refresh the task name from the active history. The existing task name stays
+until a naming request succeeds.
+
+A forced kill cannot run cleanup and may leave task names, waiting flags, or
+ownership flags behind. If Pi has stopped but its pane remains, clear only that
+pane's stale flags before relying on another Pi's next status update:
+
+```sh
+tmux set-option -p -t <pane-id> @pi-tmux-active 0
+tmux set-option -p -t <pane-id> @pi-tmux-waiting 0
+```
+
 Moving or closing a pane does not immediately refresh its former window or
 session marker. The next status update from Pi in that window or session
-refreshes it. To restore
-automatic process-based names instead:
+refreshes it. To restore automatic process-based names instead:
 
 ```sh
 tmux set-window-option -t <window-id> automatic-rename on
@@ -221,9 +237,10 @@ bun test
   naming cancellation, model configuration, status-only mode, explicit retries,
   manual pins, lifecycle events, waiting markers, and failures with mock model
   responses and tmux commands.
-- `tests/session.test.ts` checks window and session aggregation, concurrent
-  status changes at rename time, and pane moves against a separate temporary
-  tmux server with no user configuration. It skips if tmux is unavailable.
+- `tests/session.test.ts` checks window and session aggregation, shared-window
+  ownership, concurrent status and ownership changes at rename time, and pane
+  moves against a separate temporary tmux server with no user configuration.
+  It skips if tmux is unavailable.
 
 The tests make no model API calls and do not rename your windows or sessions.
 

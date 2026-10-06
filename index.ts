@@ -6,11 +6,14 @@ const execFileAsync = promisify(execFile);
 export const MAX_TITLE_LENGTH = 24;
 export const READY_PREFIX = "* ";
 export const WAITING_OPTION = "@pi-tmux-waiting";
+export const ACTIVE_OPTION = "@pi-tmux-active";
 // tmux evaluates this on the server after the pane status write, so concurrent
 // Pi instances aggregate their status without a client-side read/rename race.
 export const SESSION_TITLE_FORMAT =
 	`#{?#{m:*1*,#{W:#{P:#{${WAITING_OPTION}}}}},${READY_PREFIX},}#{s/^\\* //:session_name}`;
 export const WINDOW_WAITING_FORMAT = `#{m:*1*,#{P:#{${WAITING_OPTION}}}}`;
+// Waiting flags also recognize idle peers loaded before active tracking existed.
+export const WINDOW_ACTIVE_FORMAT = `#{m:*1*,#{P:#{${ACTIVE_OPTION}}#{${WAITING_OPTION}}}}`;
 export const WINDOW_INFO_FORMAT = `#{session_id}\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
 export const MAX_PROMPT_LENGTH = 2_000;
 export const MAX_CONTEXT_LENGTH = 6_000;
@@ -60,6 +63,12 @@ export function formatTitle(title: string, waiting: boolean): string {
 export function buildWindowTitleFormat(title: string): string {
 	return `#{?${WINDOW_WAITING_FORMAT},${formatTitle(title, true)},${formatTitle(title, false)}}`;
 }
+
+const CURRENT_TASK_FORMAT = "#{s/^\\* //:window_name}";
+const SHARED_TASK_TITLE_FORMAT = `#{?${WINDOW_WAITING_FORMAT},${READY_PREFIX}#{=22:${CURRENT_TASK_FORMAT}},${CURRENT_TASK_FORMAT}}`;
+// A sibling may start, quit, or rename the window after our last lookup. Decide
+// ownership at execution time and preserve its latest title, not our snapshot.
+export const QUIT_TITLE_FORMAT = `#{?${WINDOW_ACTIVE_FORMAT},${SHARED_TASK_TITLE_FORMAT},${buildWindowTitleFormat("zsh")}}`;
 
 // Use Pi's active projection so abandoned branches, compacted originals, and
 // text removed by context edits never leak back into the naming request.
@@ -127,6 +136,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	let candidateTitle: string | undefined;
 	let lastNamingContext: string | undefined;
 	let waiting = false;
+	let active = true;
 	let titleRevision = 0;
 	let titleLifetime = new AbortController();
 	let titleQueue: Promise<void> = Promise.resolve();
@@ -177,6 +187,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			// Target the pane for both renames: it can move after the lookup.
 			await tmux([
 				"set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
+				";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
 				";", "rename-session", "-t", pane, SESSION_TITLE_FORMAT,
 			], signal);
 			if (!isCurrent()) return;
@@ -195,7 +206,8 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			if (title !== currentTitle) {
 				// Rename the pane's current window, aggregating its current statuses on
 				// the server rather than trusting the earlier client-side snapshot.
-				await tmux(["rename-window", "-t", pane, "--", buildWindowTitleFormat(taskTitle)], signal);
+				const format = !active && baseTitle === "zsh" ? QUIT_TITLE_FORMAT : buildWindowTitleFormat(taskTitle);
+				await tmux(["rename-window", "-t", pane, "--", format], signal);
 			}
 		}).catch(() => {
 			if (isCurrent()) {
@@ -212,11 +224,12 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		return refreshTitle(ctx, pane);
 	};
 
-	const reset = (ctx: ExtensionContext, title?: string) => {
+	const reset = (ctx: ExtensionContext, title?: string, alive = true) => {
 		cancel();
 		titleLifetime.abort();
 		titleLifetime = new AbortController();
 		baseTitle = title;
+		active = alive;
 		manualTitle = false;
 		lastNamingContext = undefined;
 		return setWaiting(ctx, false);
@@ -381,5 +394,5 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	pi.on("session_tree", (_event, ctx) => restoreTitle(ctx));
 	pi.on("session_compact", (_event, ctx) => { requestTitle(ctx); });
 	// Reload and session replacement tear down extensions without exiting Pi.
-	pi.on("session_shutdown", (event, ctx) => reset(ctx, event.reason === "quit" ? "zsh" : undefined));
+	pi.on("session_shutdown", (event, ctx) => reset(ctx, event.reason === "quit" ? "zsh" : undefined, event.reason !== "quit"));
 }

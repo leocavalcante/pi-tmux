@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, type RunTmux } from "../index";
+import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
 
 let originalPane: string | undefined;
 let originalModel: string | undefined;
@@ -50,10 +50,17 @@ function fixture(
 	const state = {
 		window: "@2", title: "existing task", session: "$0", sessionTitle: "My Session",
 		waitingPanes: new Map<string, string>(),
+		activePanes: new Map<string, string>(),
 		otherWindowPanes: new Set<string>(),
 	};
 	const windowWaiting = () => [...state.waitingPanes].some(([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane));
 	const renderTitle = (format: string) => {
+		if (format === QUIT_TITLE_FORMAT) {
+			const hasPeer = [...state.activePanes, ...state.waitingPanes].some(([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane));
+			if (!hasPeer) return formatTitle("zsh", windowWaiting());
+			const title = state.title.replace(/^\* /, "");
+			return windowWaiting() ? READY_PREFIX + title.slice(0, 22) : title;
+		}
 		const prefix = `#{?${WINDOW_WAITING_FORMAT},`;
 		expect(format).toStartWith(prefix);
 		expect(format).toEndWith("}");
@@ -67,9 +74,11 @@ function fixture(
 		if (args[0] === "set-option") {
 			expect(args).toEqual([
 				"set-option", "-p", "-t", "%1", WAITING_OPTION, args[5],
+				";", "set-option", "-p", "-t", "%1", ACTIVE_OPTION, args[12],
 				";", "rename-session", "-t", "%1", SESSION_TITLE_FORMAT,
 			]);
 			state.waitingPanes.set(args[3], args[5]);
+			state.activePanes.set(args[10], args[12]);
 			const anyWaiting = [...state.waitingPanes.values()].includes("1");
 			state.sessionTitle = (anyWaiting ? READY_PREFIX : "") + state.sessionTitle.replace(/^\* /, "");
 		}
@@ -98,6 +107,7 @@ async function settle() {
 }
 
 const renameCommand = (title: string) => ["rename-window", "-t", "%1", "--", buildWindowTitleFormat(title)];
+const quitCommand = () => ["rename-window", "-t", "%1", "--", QUIT_TITLE_FORMAT];
 
 function deferred() {
 	let resolve!: (result: ReturnType<typeof response>) => void;
@@ -192,7 +202,7 @@ test("shutdown and session replacement cancel outstanding naming", async () => {
 		work.resolve(response("Late title"));
 		await settle();
 		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual(
-			event === "session_shutdown" ? [renameCommand("zsh")] : [],
+			event === "session_shutdown" ? [quitCommand()] : [],
 		);
 	}
 });
@@ -355,7 +365,7 @@ test("reload preserves the task title across fresh extension runtimes, then quit
 		await f.emit("session_start", "reload");
 		expect(f.state.title).toBe("fix auth tests");
 		expect(f.state.sessionTitle).toBe("My Session");
-		expect(f.calls.filter((args) => args[0] === "rename-window" && args[4] === buildWindowTitleFormat("zsh"))).toEqual([]);
+		expect(f.calls.filter((args) => args[0] === "rename-window" && args[4] === QUIT_TITLE_FORMAT)).toEqual([]);
 		expect(f.requests).toHaveLength(1);
 		await f.emit("session_shutdown", "quit");
 		expect(f.state.title).toBe("zsh");
@@ -389,13 +399,65 @@ test("session replacement teardown preserves the title and clears waiting", asyn
 	}
 });
 
+test("quitting clears its own marker without resetting a live busy peer's title", async () => {
+	const f = fixture();
+	f.input("Task");
+	await settle();
+	f.state.activePanes.set("%2", "1");
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* fix auth tests");
+	await f.emit("session_shutdown");
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.state.activePanes.get("%1")).toBe("0");
+	expect(f.state.waitingPanes.get("%1")).toBe("0");
+	expect(f.state.sessionTitle).toBe("My Session");
+	f.state.activePanes.set("%2", "0");
+	await f.emit("session_shutdown");
+	expect(f.state.title).toBe("zsh");
+});
+
+test("active peers in a different window do not prevent quit cleanup", async () => {
+	const f = fixture();
+	f.input("Task");
+	await settle();
+	f.state.activePanes.set("%2", "1");
+	f.state.otherWindowPanes.add("%2");
+	await f.emit("session_shutdown");
+	expect(f.state.title).toBe("zsh");
+	expect(f.state.activePanes.get("%2")).toBe("1");
+});
+
+test("reload and session replacement preserve ownership until Pi quits", async () => {
+	for (const reason of ["reload", "new", "resume", "fork"]) {
+		const f = fixture([]);
+		await f.emit("session_start");
+		expect(f.state.activePanes.get("%1")).toBe("1");
+		await f.emit("session_shutdown", reason);
+		expect(f.state.activePanes.get("%1")).toBe("1");
+		f.load();
+		await f.emit("session_start", reason);
+		expect(f.state.activePanes.get("%1")).toBe("1");
+		await f.emit("session_shutdown", "quit");
+		expect(f.state.activePanes.get("%1")).toBe("0");
+	}
+});
+
+test("pinning zsh is a task-title update, not quit cleanup", async () => {
+	const f = fixture([]);
+	f.state.activePanes.set("%2", "1");
+	await f.refresh("set zsh");
+	expect(f.state.title).toBe("zsh");
+	expect(f.state.activePanes.get("%1")).toBe("1");
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildWindowTitleFormat("zsh")]);
+});
+
 test("shutdown resets a busy title and repeated cleanup makes no extra writes", async () => {
 	const f = fixture();
 	f.input("Task");
 	await settle();
 	await f.emit("session_shutdown");
 	expect(f.state.title).toBe("zsh");
-	expect(f.calls.at(-1)).toEqual(renameCommand("zsh"));
+	expect(f.calls.at(-1)).toEqual(quitCommand());
 	const writes = f.calls.filter((args) => args[0] === "rename-window").length;
 	await f.emit("session_shutdown");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toHaveLength(writes);
@@ -407,7 +469,7 @@ test("shutdown resolves the owning window after a pane move", async () => {
 	await settle();
 	f.state.window = "@3";
 	await f.emit("session_shutdown");
-	expect(f.calls.at(-1)).toEqual(renameCommand("zsh"));
+	expect(f.calls.at(-1)).toEqual(quitCommand());
 });
 
 test("shutdown waits for an in-flight marker write before resetting to zsh", async () => {
@@ -424,7 +486,7 @@ test("shutdown waits for an in-flight marker write before resetting to zsh", asy
 	await completed;
 	await shutdown;
 	expect(f.state.title).toBe("zsh");
-	expect(f.calls.at(-1)).toEqual(renameCommand("zsh"));
+	expect(f.calls.at(-1)).toEqual(quitCommand());
 });
 
 test("session startup preserves an unmarked custom window name", async () => {
@@ -536,7 +598,7 @@ test("a busy or exiting pane cannot clear another pane's window or session marke
 	expect(f.state.title).toBe("* existing task");
 	expect(f.state.sessionTitle).toBe("* My Session");
 	await f.emit("session_shutdown");
-	expect(f.state.title).toBe("* zsh");
+	expect(f.state.title).toBe("* existing task");
 	expect(f.state.sessionTitle).toBe("* My Session");
 	f.state.waitingPanes.set("%2", "0");
 	f.emit("agent_start");
@@ -553,7 +615,7 @@ test("status updates target the owning session after a pane move", async () => {
 	f.state.sessionTitle = "Destination Session";
 	await f.emit("agent_settled");
 	expect(f.state.sessionTitle).toBe("* Destination Session");
-	expect(f.calls.filter((args) => args[0] === "set-option").at(-1)?.[9]).toBe("%1");
+	expect(f.calls.filter((args) => args[0] === "set-option").at(-1)?.[16]).toBe("%1");
 });
 
 test("naming context includes text dialogue and summaries, but not tools, thinking, images, or custom messages", () => {
