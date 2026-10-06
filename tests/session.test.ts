@@ -17,9 +17,9 @@ afterEach(() => {
 	else process.env.PI_TMUX_MODEL = originalModel;
 });
 
-const mockPi = (handlers: Map<string, Function>) => ({
+const mockPi = (handlers: Map<string, Function>, commands?: Map<string, Function>) => ({
 	on: (event: string, handler: Function) => handlers.set(event, handler),
-	registerCommand: () => {},
+	registerCommand: (name: string, command: { handler: Function }) => commands?.set(name, command.handler),
 }) as unknown as ExtensionAPI;
 
 test.skipIf(!hasTmux).each([
@@ -98,6 +98,132 @@ test.skipIf(!hasTmux)("leading-hyphen titles remain literal when clearing a wait
 		await handlers.get("session_start")!({ type: "session_start", reason: "reload" }, ctx);
 		expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("-fix auth");
 		expect(tmux("display-message", "-p", "-t", pane, "#{session_name}")).toBe("LiteralTitle");
+		expect(warnings).toEqual([]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
+test.skipIf(!hasTmux).each([false, true])("window renames re-evaluate sibling status at execution time, initially waiting=%j", async (initialWaiting) => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).trim();
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Concurrent", "-n", "initial", "/bin/sleep 60");
+		const sibling = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, initialWaiting ? "1" : "0");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		const commands = new Map<string, Function>();
+		let flip = true;
+		piTmux(mockPi(handlers, commands), async (args) => {
+			if (flip && args[0] === "rename-window") {
+				flip = false;
+				tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, initialWaiting ? "0" : "1");
+			}
+			return tmux(...args);
+		});
+		const warnings: string[] = [];
+		const ctx = { mode: "tui", ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } } } as unknown as ExtensionContext;
+		await commands.get("tmux-title")!("set " + "x".repeat(24), ctx);
+		const title = tmux("display-message", "-p", "-t", pane, "#{window_name}");
+		expect(title).toBe(initialWaiting ? "x".repeat(24) : "* " + "x".repeat(22));
+		expect(title.length).toBe(24);
+		expect(warnings).toEqual([]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
+test.skipIf(!hasTmux)("the real tmux adapter preserves empty window names", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalTmux = process.env.TMUX;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).trim();
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "EmptyTitle", "/bin/sleep 60");
+		tmux("rename-window", "-t", pane, "--", "");
+		process.env.TMUX_PANE = pane;
+		process.env.TMUX = tmux("display-message", "-p", "-t", pane, "#{socket_path},#{pid},0");
+		const handlers = new Map<string, Function>();
+		piTmux(mockPi(handlers));
+		const warnings: string[] = [];
+		const ctx = { mode: "tui", ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
+		await handlers.get("session_start")!({ type: "session_start" }, ctx);
+		expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("");
+		expect(warnings).toEqual([]);
+		await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
+		expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("* pi");
+		await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, ctx);
+		expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("zsh");
+		expect(warnings).toEqual([]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalTmux === undefined) delete process.env.TMUX;
+		else process.env.TMUX = originalTmux;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
+test.skipIf(!hasTmux)("window markers aggregate only their own waiting panes", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).trim();
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Shared", "-n", "shared task", "/bin/sleep 60");
+		const sibling = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		const session = tmux("display-message", "-p", "-t", pane, "#{session_id}");
+		const otherWindow = tmux("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", session, "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		piTmux(mockPi(handlers), async (args) => tmux(...args));
+		const warnings: string[] = [];
+		const ctx = { mode: "tui", ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
+		const emit = async (event: string) => {
+			await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+			// agent_start intentionally schedules its status write without awaiting it.
+			await new Promise<void>((resolve) => setImmediate(resolve));
+		};
+		const title = () => tmux("display-message", "-p", "-t", pane, "#{window_name}");
+		const sessionTitle = () => tmux("display-message", "-p", "-t", pane, "#{session_name}");
+
+		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "1");
+		await emit("session_start");
+		expect(title()).toBe("* shared task");
+		await emit("agent_settled");
+		await emit("agent_start");
+		expect(title()).toBe("* shared task");
+		expect(sessionTitle()).toBe("* Shared");
+		await emit("session_shutdown");
+		expect(title()).toBe("* zsh");
+		expect(sessionTitle()).toBe("* Shared");
+
+		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "0");
+		tmux("set-option", "-p", "-t", otherWindow, WAITING_OPTION, "1");
+		await emit("agent_start");
+		expect(title()).toBe("zsh");
+		expect(sessionTitle()).toBe("* Shared");
+		tmux("set-option", "-p", "-t", otherWindow, WAITING_OPTION, "0");
+		await emit("agent_start");
+		expect(title()).toBe("zsh");
+		expect(sessionTitle()).toBe("Shared");
 		expect(warnings).toEqual([]);
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;

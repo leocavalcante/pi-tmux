@@ -10,6 +10,8 @@ export const WAITING_OPTION = "@pi-tmux-waiting";
 // Pi instances aggregate their status without a client-side read/rename race.
 export const SESSION_TITLE_FORMAT =
 	`#{?#{m:*1*,#{W:#{P:#{${WAITING_OPTION}}}}},${READY_PREFIX},}#{s/^\\* //:session_name}`;
+export const WINDOW_WAITING_FORMAT = `#{m:*1*,#{P:#{${WAITING_OPTION}}}}`;
+export const WINDOW_INFO_FORMAT = `#{session_id}\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
 export const MAX_PROMPT_LENGTH = 2_000;
 export const MAX_CONTEXT_LENGTH = 6_000;
 export const MAX_HISTORY_MESSAGES = 8;
@@ -51,6 +53,12 @@ export function cleanTitle(text: string, maxLength = MAX_TITLE_LENGTH): string {
 export function formatTitle(title: string, waiting: boolean): string {
 	const prefix = waiting ? READY_PREFIX : "";
 	return prefix + (cleanTitle(title, MAX_TITLE_LENGTH - prefix.length) || "pi");
+}
+
+// Both branches contain only sanitized title text. tmux chooses the prefix at
+// execution time, so another pane's status cannot be lost during a slow rename.
+export function buildWindowTitleFormat(title: string): string {
+	return `#{?${WINDOW_WAITING_FORMAT},${formatTitle(title, true)},${formatTitle(title, false)}}`;
 }
 
 // Use Pi's active projection so abandoned branches, compacted originals, and
@@ -98,7 +106,9 @@ const runTmux: RunTmux = async (args, signal) => {
 		timeout: 2_000,
 		maxBuffer: 4_096,
 	});
-	return stdout.trim();
+	// Remove the command's line terminator, not tabs or spaces in window names.
+	// In particular, a trailing tab is the empty title field in WINDOW_INFO_FORMAT.
+	return stdout.replace(/\r?\n$/, "");
 };
 
 export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
@@ -140,12 +150,12 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	};
 
 	const readWindowTitle = async (pane: string, signal: AbortSignal) => {
-		const info = await tmux(["display-message", "-p", "-t", pane, "#{session_id}\t#{window_id}\t#{window_name}"], signal);
-		const [session, window, ...titleParts] = info.split("\t");
-		if (!/^\$\d+$/.test(session) || !/^@\d+$/.test(window) || !titleParts.length) {
+		const info = await tmux(["display-message", "-p", "-t", pane, WINDOW_INFO_FORMAT], signal);
+		const [session, window, windowWaiting, ...titleParts] = info.split("\t");
+		if (!/^\$\d+$/.test(session) || !/^@\d+$/.test(window) || !/^[01]$/.test(windowWaiting) || !titleParts.length) {
 			throw new Error("Invalid tmux target");
 		}
-		return titleParts.join("\t");
+		return { title: titleParts.join("\t"), waiting: windowWaiting === "1" };
 	};
 
 	const refreshTitle = (ctx: ExtensionContext, pane: string, requestGeneration?: number) => {
@@ -172,19 +182,20 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			if (!isCurrent()) return;
 			// A move during the marker write can change both the fallback title
 			// and whether the destination needs a rename (including quit's zsh).
-			const currentTitle = await readWindowTitle(pane, signal);
+			const { title: currentTitle, waiting: windowWaiting } = await readWindowTitle(pane, signal);
 			if (!isCurrent()) return;
 			// Adopt model output only at the guarded write boundary. Until then,
 			// cancellation can discard it without changing future status-only writes.
 			baseTitle = candidateTitle ?? baseTitle;
 			candidateTitle = undefined;
 			// Leave a custom name alone unless we have a summary or a marker to update.
-			if (!baseTitle && !waiting && !currentTitle.startsWith(READY_PREFIX)) return;
-			const title = formatTitle(baseTitle ?? currentTitle.replace(/^\* /, ""), waiting);
+			if (!baseTitle && !windowWaiting && !currentTitle.startsWith(READY_PREFIX)) return;
+			const taskTitle = baseTitle ?? currentTitle.replace(/^\* /, "");
+			const title = formatTitle(taskTitle, windowWaiting);
 			if (title !== currentTitle) {
-				// rename-window disables automatic-rename only for its current window.
-				// Keep leading hyphens in titles from being parsed as tmux options.
-				await tmux(["rename-window", "-t", pane, "--", title], signal);
+				// Rename the pane's current window, aggregating its current statuses on
+				// the server rather than trusting the earlier client-side snapshot.
+				await tmux(["rename-window", "-t", pane, "--", buildWindowTitleFormat(taskTitle)], signal);
 			}
 		}).catch(() => {
 			if (isCurrent()) {

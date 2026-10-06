@@ -11,13 +11,15 @@ prompt. Naming runs in the background and does not delay Pi's answer.
 
 | State | Window name | tmux session name |
 | --- | --- | --- |
-| Pi is working | `fix auth tests` | Existing name |
+| Pi is working alone in its window | `fix auth tests` | Existing name |
 | Pi has settled and is waiting for input | `* fix auth tests` | `* ` plus the existing name |
-| Pi quits normally | `zsh` | Existing name, still prefixed if another Pi pane is waiting |
+| Pi quits normally | `zsh`, or `* zsh` if another pane in the window is waiting | Existing name, still prefixed if another Pi pane is waiting |
 
 Window titles are lowercase and limited to 24 ASCII characters, including the
 waiting prefix. tmux session names keep their original text and length. The
-waiting marker means Pi has stopped running, not that the task succeeded.
+waiting marker means at least one Pi pane has stopped running, not that the
+task succeeded. A window stays marked while any Pi pane in that window waits.
+A session stays marked while any Pi pane across its windows waits.
 
 ## Installation
 
@@ -115,16 +117,19 @@ A bare `/tmux-title` leaves an active pin alone.
   continuations are finished. It does not mean the task succeeded.
 - The 24-character limit includes the marker. Waiting titles reserve two
   characters for `* `, leaving up to 22 for the task name.
-- The marker clears on new input, another run, session replacement, reload,
-  and graceful shutdown. Marker updates alone make no additional model calls
-  and still work if the naming model is unavailable.
+- New input, another run, session replacement, reload, and graceful shutdown
+  clear that pane's waiting flag. Window and session markers remain while
+  another pane in their scope is waiting. Marker updates make no additional
+  model calls and still work if the naming model is unavailable.
 - The extension targets the window and session containing Pi's `TMUX_PANE`,
   even if you have switched focus elsewhere. Renames use the pane ID so a
   move after the title lookup does not rename its former window or session.
   After marker writes, the window title is read again so a move during that
   update does not copy the source title or incorrectly skip quit cleanup.
-- Session markers aggregate waiting Pi panes across all windows. A busy or
-  exiting pane does not clear the marker while another pane is waiting.
+- Window markers aggregate waiting Pi panes in that window. Session markers
+  aggregate waiting Pi panes across all windows. A busy or exiting pane cannot
+  clear another pane's marker. Window renames choose the prefix and its length
+  budget on the tmux server, even if another pane changed status after lookup.
   Session names are not summarized, lowercased, or clipped.
 - Changed naming context cancels the previous request, including when a
   refresh finds no remaining naming text after context edits. It also discards
@@ -144,9 +149,11 @@ A bare `/tmux-title` leaves an active pin alone.
 
 ### Shared panes and cleanup
 
-Multiple interactive Pi panes in one tmux window share its name and marker.
-The last title or status update wins; the marker does not aggregate whether
-other Pi panes in that window are busy.
+Multiple interactive Pi panes in one tmux window share its task title. The
+most recent task-title update wins, including manual pins and quit's `zsh`.
+The waiting marker aggregates all Pi panes in that window independently of
+which pane last named it. A waiting pane in a different window marks the
+session but not this window.
 
 Renaming turns off tmux's automatic process-based naming for that window.
 Quitting Pi gracefully resets the name to `zsh`, regardless of your actual
@@ -155,8 +162,9 @@ replacement clear that pane's waiting status, then refresh the task name from
 the active history. The existing task name stays until a naming request succeeds.
 A forced kill cannot run cleanup and may leave the task name and waiting
 marker behind.
-Moving or closing a pane does not immediately refresh its former session's
-marker; the next status update from Pi in that session refreshes it. To restore
+Moving or closing a pane does not immediately refresh its former window or
+session marker. The next status update from Pi in that window or session
+refreshes it. To restore
 automatic process-based names instead:
 
 ```sh
@@ -189,8 +197,9 @@ session-persistence plugins.
 
 This extension does not write prompts, responses, or credentials to files,
 and it does not print provider error payloads. Authentication is resolved by
-Pi. tmux runs with argument arrays, not interpolated shell commands; generated
-names cannot become shell commands, tmux options, or tmux format expressions.
+Pi. tmux runs with argument arrays, not interpolated shell commands. Title
+text is sanitized before insertion into fixed tmux formats; it cannot inject
+shell commands, tmux options, or additional format expressions.
 
 Like other Pi extensions, it runs with the same OS permissions as Pi. This
 repository contains source and synthetic tests only. Keep credentials,
@@ -212,9 +221,9 @@ bun test
   naming cancellation, model configuration, status-only mode, explicit retries,
   manual pins, lifecycle events, waiting markers, and failures with mock model
   responses and tmux commands.
-- `tests/session.test.ts` checks session-marker aggregation across windows and
-  panes against a separate temporary tmux server with no user configuration.
-  It skips if tmux is unavailable.
+- `tests/session.test.ts` checks window and session aggregation, concurrent
+  status changes at rename time, and pane moves against a separate temporary
+  tmux server with no user configuration. It skips if tmux is unavailable.
 
 The tests make no model API calls and do not rename your windows or sessions.
 
