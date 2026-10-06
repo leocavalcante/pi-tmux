@@ -20,6 +20,8 @@ export const MAX_CONTEXT_LENGTH = 6_000;
 export const MAX_HISTORY_MESSAGES = 8;
 const MAX_HISTORY_TEXT_LENGTH = 1_000;
 const REQUEST_TIMEOUT_MS = 15_000;
+const MAX_FORMER_TARGETS = 8;
+const MAX_LOCATION_PASSES = 4;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 // Split at the first slash: routed model IDs can themselves contain slashes.
@@ -66,6 +68,7 @@ export function buildWindowTitleFormat(title: string): string {
 
 const CURRENT_TASK_FORMAT = "#{s/^\\* //:window_name}";
 const SHARED_TASK_TITLE_FORMAT = `#{?${WINDOW_WAITING_FORMAT},${READY_PREFIX}#{=22:${CURRENT_TASK_FORMAT}},${CURRENT_TASK_FORMAT}}`;
+const WINDOW_REPAIR_NEEDED_FORMAT = `#{!=:#{window_name},${SHARED_TASK_TITLE_FORMAT}}`;
 // A sibling may start, quit, or rename the window after our last lookup. Decide
 // ownership at execution time and preserve its latest title, not our snapshot.
 export const QUIT_TITLE_FORMAT = `#{?${WINDOW_ACTIVE_FORMAT},${SHARED_TASK_TITLE_FORMAT},${buildWindowTitleFormat("zsh")}}`;
@@ -140,6 +143,10 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	let titleRevision = 0;
 	let titleLifetime = new AbortController();
 	let titleQueue: Promise<void> = Promise.resolve();
+	// Retain locations across lifecycle resets so interrupted move repairs can finish.
+	let lastLocation: { session: string; window: string } | undefined;
+	const formerWindows = new Set<string>();
+	const formerSessions = new Set<string>();
 
 	const cancel = () => {
 		generation++;
@@ -159,13 +166,62 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		ctx.ui.notify(message, "warning");
 	};
 
-	const readWindowTitle = async (pane: string, signal: AbortSignal) => {
-		const info = await tmux(["display-message", "-p", "-t", pane, WINDOW_INFO_FORMAT], signal);
+	const readWindowTitle = async (target: string, signal: AbortSignal) => {
+		const info = await tmux(["display-message", "-p", "-t", target, WINDOW_INFO_FORMAT], signal);
 		const [session, window, windowWaiting, ...titleParts] = info.split("\t");
 		if (!/^\$\d+$/.test(session) || !/^@\d+$/.test(window) || !/^[01]$/.test(windowWaiting) || !titleParts.length) {
 			throw new Error("Invalid tmux target");
 		}
-		return { title: titleParts.join("\t"), waiting: windowWaiting === "1" };
+		return { session, window, title: titleParts.join("\t"), waiting: windowWaiting === "1" };
+	};
+
+	const rememberLocation = (location: { session: string; window: string }) => {
+		const queue = (targets: Set<string>, target: string) => {
+			targets.add(target);
+			if (targets.size > MAX_FORMER_TARGETS) targets.delete(targets.values().next().value!);
+		};
+		if (lastLocation && lastLocation.window !== location.window) queue(formerWindows, lastLocation.window);
+		if (lastLocation && lastLocation.session !== location.session) queue(formerSessions, lastLocation.session);
+		formerWindows.delete(location.window);
+		formerSessions.delete(location.session);
+		lastLocation = { session: location.session, window: location.window };
+	};
+
+	const targetDisappeared = (error: unknown, target: string) => {
+		const stderr = error && typeof error === "object" && "stderr" in error ? error.stderr : undefined;
+		const message = Buffer.isBuffer(stderr) ? stderr.toString("utf8") : typeof stderr === "string" ? stderr : "";
+		return message.trim() === `can't find ${target.startsWith("@") ? "window" : "session"}: ${target}`;
+	};
+
+	const repairFormerLocations = async (signal: AbortSignal, isCurrent: () => boolean) => {
+		for (const window of [...formerWindows]) {
+			if (!isCurrent()) return;
+			try {
+				// -F evaluates a format, not a shell command. Only validated numeric
+				// IDs enter this fixed tmux command; title text is expanded at rename.
+				// Skip unchanged names on the server, preserving automatic-rename even
+				// if a custom unmarked name replaced the stale marker after lookup.
+				await tmux([
+					"if-shell", "-F", "-t", window, WINDOW_REPAIR_NEEDED_FORMAT,
+					`rename-window -t ${window} -- '${SHARED_TASK_TITLE_FORMAT}'`,
+				], signal);
+			} catch (error) {
+				// Forget vanished windows, but retry transient failures on the next update.
+				if (!targetDisappeared(error, window)) continue;
+			}
+			if (!isCurrent()) return;
+			formerWindows.delete(window);
+		}
+		for (const session of [...formerSessions]) {
+			if (!isCurrent()) return;
+			try {
+				await tmux(["rename-session", "-t", session, SESSION_TITLE_FORMAT], signal);
+			} catch (error) {
+				if (!targetDisappeared(error, session)) continue;
+			}
+			if (!isCurrent()) return;
+			formerSessions.delete(session);
+		}
 	};
 
 	const refreshTitle = (ctx: ExtensionContext, pane: string, requestGeneration?: number) => {
@@ -180,21 +236,37 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		titleQueue = titleQueue.then(async () => {
 			if (!isCurrent()) return;
 			// Validate the pane's current window before updating its status.
-			await readWindowTitle(pane, signal);
+			let current = await readWindowTitle(pane, signal);
 			if (!isCurrent()) return;
-			// Keep the user's session name intact. The session stays marked while
-			// any Pi pane is waiting, even when another pane starts work or exits.
-			// Target the pane for both renames: it can move after the lookup.
-			await tmux([
-				"set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
-				";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
-				";", "rename-session", "-t", pane, SESSION_TITLE_FORMAT,
-			], signal);
-			if (!isCurrent()) return;
-			// A move during the marker write can change both the fallback title
-			// and whether the destination needs a rename (including quit's zsh).
-			const { title: currentTitle, waiting: windowWaiting } = await readWindowTitle(pane, signal);
-			if (!isCurrent()) return;
+			rememberLocation(current);
+			// A pane can move again during marker writes or former-location repair.
+			// Refresh the new session and drain new targets, but bound repeated moves.
+			for (let pass = 0; pass < MAX_LOCATION_PASSES; pass++) {
+				const before = current;
+				// Keep the user's session name intact, aggregating waiting panes on
+				// the server. Target the pane so writes follow moves after lookup.
+				await tmux([
+					"set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
+					";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
+					";", "rename-session", "-t", pane, SESSION_TITLE_FORMAT,
+				], signal);
+				if (!isCurrent()) return;
+				// Resolve the fallback title and destination after the marker write.
+				current = await readWindowTitle(pane, signal);
+				if (!isCurrent()) return;
+				rememberLocation(current);
+				const afterWrite = current;
+				if (formerWindows.size || formerSessions.size) {
+					await repairFormerLocations(signal, isCurrent);
+					if (!isCurrent()) return;
+					current = await readWindowTitle(pane, signal);
+					if (!isCurrent()) return;
+					rememberLocation(current);
+				}
+				if (before.window === current.window && before.session === current.session
+					&& afterWrite.window === current.window && afterWrite.session === current.session) break;
+			}
+			const { title: currentTitle, waiting: windowWaiting } = current;
 			// Adopt model output only at the guarded write boundary. Until then,
 			// cancellation can discard it without changing future status-only writes.
 			baseTitle = candidateTitle ?? baseTitle;

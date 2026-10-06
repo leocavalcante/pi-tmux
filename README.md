@@ -188,9 +188,19 @@ tmux set-option -p -t <pane-id> @pi-tmux-active 0
 tmux set-option -p -t <pane-id> @pi-tmux-waiting 0
 ```
 
-Moving or closing a pane does not immediately refresh its former window or
-session marker. The next status update from Pi in that window or session
-refreshes it. To restore automatic process-based names instead:
+Pane moves do not trigger an immediate update. The moved Pi's next status
+update also refreshes its most recently observed former window and session
+markers. Repair uses each window's latest task text and respects other panes'
+waiting flags. Unmarked custom window names and their automatic-rename setting
+stay unchanged. Vanished targets are ignored; transient failures are retried
+on later status updates. Tracking is in memory, limited to eight former windows
+and eight sessions. If the pane keeps moving during repair, each update makes
+at most four passes; remaining repairs wait for a later update. No tmux hooks
+are installed.
+
+Closing a pane without a graceful Pi shutdown cannot run repair. A Pi remaining
+in the former location must refresh it. To restore automatic process-based
+names instead:
 
 ```sh
 tmux set-window-option -t <window-id> automatic-rename on
@@ -222,9 +232,12 @@ session-persistence plugins.
 
 This extension does not write prompts, responses, or credentials to files,
 and it does not print provider error payloads. Authentication is resolved by
-Pi. tmux runs with argument arrays, not interpolated shell commands. Title
-text is sanitized before insertion into fixed tmux formats; it cannot inject
-shell commands, tmux options, or additional format expressions.
+Pi. tmux runs with argument arrays, not interpolated shell commands. Generated
+and pinned titles are sanitized before insertion into fixed tmux formats.
+Existing shared titles come from format variables after command parsing.
+Marker repair uses `if-shell -F` to evaluate a format without invoking a shell.
+Title text cannot inject shell commands, tmux options, or additional format
+expressions.
 
 Like other Pi extensions, it runs with the same OS permissions as Pi. This
 repository contains source and synthetic tests only. Keep credentials,
@@ -252,6 +265,10 @@ npm test
   ownership, concurrent status and ownership changes at rename time, and pane
   moves against a separate temporary tmux server with no user configuration.
   It skips if tmux is unavailable.
+- `tests/move.test.ts` checks former-location marker repair, remaining peers,
+  custom names, vanished targets, repeated moves, retries, and superseded repairs
+  on isolated tmux servers. Those checks skip if tmux is unavailable; the queue
+  and stabilization bounds also have a mock-only regression.
 
 Development tests require Bun and tmux. GitHub Actions runs the type check,
 tests, and package-content check on Linux with Node.js 22 and 24 and Bun 1.4.2.
