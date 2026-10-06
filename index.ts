@@ -272,7 +272,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				{
 					signal: controller.signal,
 					maxTokens: 96,
-					reasoning: "off",
+					reasoning: undefined,
 					cacheRetention: "none",
 					transport: "sse",
 					timeoutMs: REQUEST_TIMEOUT_MS,

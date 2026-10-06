@@ -160,7 +160,7 @@ test("bounds prompt and output and disables reasoning and retries", async () => 
 	const request = f.requests[0];
 	expect(request.context.messages).toHaveLength(1);
 	expect(request.context.messages[0].content).toBe("user: " + "x".repeat(MAX_PROMPT_LENGTH));
-	expect(request.options).toMatchObject({ maxTokens: 96, reasoning: "off", maxRetries: 0, cacheRetention: "none" });
+	expect(request.options).toMatchObject({ maxTokens: 96, reasoning: undefined, maxRetries: 0, cacheRetention: "none" });
 });
 
 test("ignores print/RPC, injected messages, empty input, and non-tmux sessions", async () => {

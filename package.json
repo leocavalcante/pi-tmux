@@ -1,9 +1,13 @@
 {
-  "name": "pi-tmux",
+  "name": "@leocavalcante/pi-tmux",
   "version": "0.1.0",
   "description": "Name your tmux window from your current Pi task and active session history with a short, lowercase AI summary.",
   "type": "module",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/leocavalcante/pi-tmux.git"
@@ -11,7 +15,13 @@
   "keywords": ["pi-package", "pi", "tmux"],
   "files": ["index.ts", "README.md", "LICENSE"],
   "scripts": {
+    "check": "tsc -p tsconfig.json",
     "test": "bun test tests/"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.0.4",
+    "@types/node": "22.19.19",
+    "typescript": "5.9.3"
   },
   "engines": {
     "node": ">=22.19.0"
