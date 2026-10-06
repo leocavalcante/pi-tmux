@@ -15,6 +15,7 @@ type Fixture = {
 	emit: (event: string, reason?: string) => Promise<void>;
 	pin: (title: string) => Promise<void>;
 	status: () => Promise<string>;
+	sync: () => Promise<string>;
 };
 
 async function withServer(run: (fixture: Fixture) => Promise<void>) {
@@ -41,6 +42,7 @@ async function withServer(run: (fixture: Fixture) => Promise<void>) {
 		},
 		pin: async (title) => { await commands.get("tmux-title")!("set " + title, ctx); },
 		status: async () => { await commands.get("tmux-title")!("status", ctx); return notices.at(-1)!; },
+		sync: async () => { await commands.get("tmux-title")!("sync", ctx); return notices.at(-1)!; },
 	};
 	const tmux: RunTmux = async (args, signal) => {
 		fixture.calls.push(args);
@@ -196,6 +198,54 @@ test.skipIf(!hasTmux).each(["window", "session"])("transient former-%s repair fa
 		expect(f.calls.filter(isRepair)).toHaveLength(2);
 		expect(f.tmux("display-message", "-p", "-t", anchor, "#{window_name}")).toBe("move task");
 		expect(f.tmux("display-message", "-p", "-t", source, "#{session_name}")).toBe("Source");
+		expect(f.warnings).toEqual([]);
+	});
+});
+
+test.skipIf(!hasTmux).each([
+	{ sameSession: true, peerWaiting: false },
+	{ sameSession: false, peerWaiting: false },
+	{ sameSession: false, peerWaiting: true },
+])("sync observes pane moves and repairs markers without another lifecycle event: %j", async ({ sameSession, peerWaiting }) => {
+	await withServer(async (f) => {
+		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Source", "/bin/sleep 60");
+		const source = f.tmux("display-message", "-p", "-t", pane, "#{session_id}");
+		const anchor = f.tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		const destination = sameSession
+			? f.tmux("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", source, "/bin/sleep 60")
+			: f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Destination", "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		await f.pin("move task");
+		await f.emit("agent_settled");
+		if (peerWaiting) f.tmux("set-option", "-p", "-t", anchor, WAITING_OPTION, "1");
+		f.tmux("join-pane", "-d", "-s", pane, "-t", destination);
+		expect(await f.sync()).toBe("tmux title and waiting markers synchronized.");
+		expect(f.tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("* move task");
+		expect(f.tmux("display-message", "-p", "-t", anchor, "#{window_name}")).toBe(peerWaiting ? "* move task" : "move task");
+		expect(f.tmux("display-message", "-p", "-t", source, "#{session_name}")).toBe(sameSession || peerWaiting ? "* Source" : "Source");
+		expect(f.warnings).toEqual([]);
+	});
+});
+
+test.skipIf(!hasTmux)("sync reports retained transient repairs instead of claiming complete success", async () => {
+	await withServer(async (f) => {
+		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Source", "/bin/sleep 60");
+		const oldWindow = f.tmux("display-message", "-p", "-t", pane, "#{window_id}");
+		const anchor = f.tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		const destination = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Destination", "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		await f.pin("move task");
+		await f.emit("agent_settled");
+		f.tmux("join-pane", "-d", "-s", pane, "-t", destination);
+		f.beforeCommand = async (args) => {
+			if (args[0] === "if-shell" && args[3] === oldWindow) throw new Error("Synthetic transient failure");
+		};
+		expect(await f.sync()).toBe("Current tmux status synchronized; some former-location repairs remain queued.");
+		expect(await f.status()).toContain("Pending move repairs: windows 1, sessions 0");
+		f.beforeCommand = undefined;
+		expect(await f.sync()).toBe("tmux title and waiting markers synchronized.");
+		expect(f.tmux("display-message", "-p", "-t", anchor, "#{window_name}")).toBe("move task");
+		expect(await f.status()).toContain("Pending move repairs: windows 0, sessions 0");
 		expect(f.warnings).toEqual([]);
 	});
 });

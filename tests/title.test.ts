@@ -1214,6 +1214,219 @@ test("session replacement, tree navigation, and reload release manual pins", asy
 	expect(f.state.title).toBe("fix auth tests");
 });
 
+test.each(["display-message", "set-option", "rename-window"])("manual title failure at %s does not report success and sync retries the retained pin", async (stage) => {
+	let failed = false;
+	const f = fixture(undefined, async (args) => {
+		if (!failed && args[0] === stage) { failed = true; throw new Error("Synthetic tmux failure"); }
+	});
+	await f.refresh("set retained pin");
+	expect(failed).toBe(true);
+	expect(f.notices).toEqual([]);
+	expect(f.warnings).toHaveLength(1);
+	await f.refresh("status");
+	expect(f.notices.at(-1)).toContain("Title mode: manual");
+	await f.refresh("sync");
+	expect(f.state.title).toBe("retained pin");
+	expect(f.notices.at(-1)).toBe("tmux title and waiting markers synchronized.");
+	expect(f.requests).toEqual([]);
+});
+
+test.each(["different title", "same title", "reload"])("superseded manual commands do not send stale confirmations: %s", async (replacement) => {
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => { release = resolve; });
+	let held = false;
+	const f = fixture(undefined, async (args) => {
+		if (!held && args[0] === "display-message") { held = true; await gate; }
+	});
+	const older = f.refresh("set same title");
+	await settle();
+	const newer = replacement === "reload" ? f.emit("session_shutdown", "reload") : f.refresh("set " + replacement);
+	release();
+	await older;
+	await newer;
+	expect(f.notices).toHaveLength(replacement === "reload" ? 0 : 1);
+	if (replacement !== "reload") expect(f.state.title).toBe(replacement);
+	expect(f.warnings).toEqual([]);
+});
+
+test("manual commands superseded during a rename only confirm the newer pin", async () => {
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => { release = resolve; });
+	let held = false;
+	const f = fixture(undefined, async (args) => {
+		if (!held && args[0] === "rename-window") { held = true; await gate; }
+	});
+	const older = f.refresh("set first pin");
+	await settle();
+	expect(held).toBe(true);
+	const newer = f.refresh("set second pin");
+	release();
+	await older;
+	await newer;
+	expect(f.writes).toEqual(["first pin", "second pin"]);
+	expect(f.notices).toHaveLength(1);
+	expect(f.state.title).toBe("second pin");
+});
+
+test.each(["set", "sync"])("%s confirmation rechecks the revision after the completed update resolves", async (command) => {
+	let statusStarted = false;
+	let racing = false;
+	const f = fixture(undefined, async (args) => {
+		if (!racing || args[0] !== "rename-window") return;
+		// Cross the driver, write, queue catch, and result continuations, then
+		// supersede the completed update before the command can confirm it.
+		const schedule = (remaining: number) => queueMicrotask(() => {
+			if (remaining > 1) schedule(remaining - 1);
+			else { statusStarted = true; void f.emit("agent_start"); }
+		});
+		schedule(5);
+	});
+	if (command === "sync") {
+		await f.refresh("set race pin");
+		f.notices.length = 0;
+		f.calls.length = 0;
+		f.state.title = "external replacement";
+	}
+	racing = true;
+	await f.refresh(command === "set" ? "set race pin" : "sync");
+	await settle();
+	expect(statusStarted).toBe(true);
+	expect(f.state.title).toBe("race pin");
+	expect(f.calls.filter((args) => args[0] === "set-option")).toHaveLength(2);
+	expect(f.notices).toEqual([]);
+});
+
+test.each([undefined, "off", "example invalid setting"])("sync makes no model, credential or projection calls: %j", async (setting) => {
+	if (setting === undefined) delete process.env.PI_TMUX_MODEL;
+	else process.env.PI_TMUX_MODEL = setting;
+	const f = fixture();
+	Object.defineProperty(f.ctx, "sessionManager", { get: () => { throw new Error("Must not collect dialogue"); } });
+	Object.defineProperty(f.ctx, "modelRegistry", { get: () => { throw new Error("Must not access auth or models"); } });
+	f.state.title = "Custom Café Title";
+	await f.refresh("sync");
+	expect(f.state.title).toBe("Custom Café Title");
+	expect(f.writes).toEqual([]);
+	expect(f.requests).toEqual([]);
+	expect(f.state.activePanes.get("%1")).toBe("1");
+	expect(f.notices).toEqual(["tmux title and waiting markers synchronized."]);
+	expect(f.warnings).toEqual([]);
+});
+
+test("sync reapplies a pin and preserves local waiting and peer flags", async () => {
+	const f = fixture();
+	await f.refresh("set pinned task");
+	await f.emit("agent_settled");
+	f.state.waitingPanes.set("%2", "1");
+	f.state.waitingPanes.set("%3", "1");
+	f.state.otherWindowPanes.add("%3");
+	f.state.title = "external replacement";
+	await f.refresh("sync");
+	expect(f.state.title).toBe("* pinned task");
+	expect(f.state.waitingPanes).toEqual(new Map([["%1", "1"], ["%2", "1"], ["%3", "1"]]));
+	await f.refresh("status");
+	expect(f.notices.at(-1)).toContain("Title mode: manual");
+	expect(f.notices.at(-1)).toContain("Local waiting: yes");
+	expect(f.requests).toEqual([]);
+});
+
+test("sync leaves pending naming alive and its later result can update the title", async () => {
+	const work = deferred();
+	const f = fixture([work.promise]);
+	f.input("synthetic task");
+	await settle();
+	await f.refresh("sync");
+	expect(f.requests).toHaveLength(1);
+	expect(f.requests[0].options.signal.aborted).toBe(false);
+	work.resolve(response("late ai title"));
+	await settle();
+	expect(f.state.title).toBe("late ai title");
+});
+
+test("sync can apply a completed current candidate without another naming request", async () => {
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => { release = resolve; });
+	let held = false;
+	const f = fixture(undefined, async (args) => {
+		if (!held && args[0] === "display-message") { held = true; await gate; }
+	});
+	f.input("synthetic task");
+	await settle();
+	const sync = f.refresh("sync");
+	release();
+	await sync;
+	await settle();
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.requests).toHaveLength(1);
+	expect(f.notices).toEqual(["tmux title and waiting markers synchronized."]);
+});
+
+test("sync failures never report success and explicit repeats can warn again", async () => {
+	const f = fixture(undefined, async () => { throw new Error("Synthetic private error details"); });
+	await f.refresh("sync");
+	await f.refresh("sync");
+	expect(f.notices).toEqual([]);
+	expect(f.warnings).toHaveLength(2);
+	expect(f.warnings.join("\n")).not.toContain("Synthetic private error details");
+});
+
+test.each(["new status", "reload"])("superseded sync commands do not confirm stale updates: %s", async (replacement) => {
+	process.env.PI_TMUX_MODEL = "off";
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => { release = resolve; });
+	let held = false;
+	const f = fixture(undefined, async (args) => {
+		if (!held && args[0] === "set-option") { held = true; await gate; }
+	});
+	const sync = f.refresh("sync");
+	await settle();
+	const next = replacement === "reload" ? f.emit("session_shutdown", "reload") : f.emit("agent_settled");
+	release();
+	await sync;
+	await next;
+	expect(f.notices).toEqual([]);
+	expect(f.warnings).toEqual([]);
+});
+
+test("sync does not report success when continuous moves exhaust its stabilization bound", async () => {
+	let reads = 0;
+	const f = fixture(undefined, async (args) => {
+		if (args[0] === "display-message") f.state.window = `@${++reads}`;
+	});
+	await f.refresh("sync");
+	expect(f.calls.filter((args) => args[0] === "set-option")).toHaveLength(4);
+	expect(f.notices).toEqual([]);
+	expect(f.requests).toEqual([]);
+});
+
+test("sync does not change automatic title mode", async () => {
+	const f = fixture();
+	await f.refresh("sync");
+	f.input("a new task");
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	expect(f.state.title).toBe("fix auth tests");
+});
+
+test.each(["print", "json", "rpc"])("sync cannot write in %s mode", async (mode) => {
+	const f = fixture();
+	(f.ctx as any).mode = mode;
+	await f.refresh("sync");
+	expect(f.calls).toEqual([]);
+	expect(f.requests).toEqual([]);
+});
+
+test("sync rejects invalid targets and trailing arguments but set sync remains a title", async () => {
+	const f = fixture();
+	await f.refresh("sync extra");
+	expect(f.calls).toEqual([]);
+	process.env.TMUX_PANE = "%1; unsafe";
+	await f.refresh("sync");
+	expect(f.calls).toEqual([]);
+	process.env.TMUX_PANE = "%1";
+	await f.refresh("set sync");
+	expect(f.state.title).toBe("sync");
+});
+
 test("manual title retries can report a new tmux failure", async () => {
 	const f = fixture([], async () => { throw new Error("Synthetic tmux failure"); });
 	await f.refresh("set first manual title");

@@ -230,6 +230,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	const refreshTitle = (ctx: ExtensionContext, pane: string, requestGeneration?: number) => {
 		const revision = ++titleRevision;
 		const signal = titleLifetime.signal;
+		let updated = false;
 		// Compaction can supersede naming after its model result has completed,
 		// while a queued tmux lookup is still pending. Status-only writes remain
 		// independent of naming generations.
@@ -244,6 +245,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			rememberLocation(current);
 			// A pane can move again during marker writes or former-location repair.
 			// Refresh the new session and drain new targets, but bound repeated moves.
+			let stable = false;
 			for (let pass = 0; pass < MAX_LOCATION_PASSES; pass++) {
 				const before = current;
 				// Keep the user's session name intact, aggregating waiting panes on
@@ -267,7 +269,10 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 					rememberLocation(current);
 				}
 				if (before.window === current.window && before.session === current.session
-					&& afterWrite.window === current.window && afterWrite.session === current.session) break;
+					&& afterWrite.window === current.window && afterWrite.session === current.session) {
+					stable = true;
+					break;
+				}
 			}
 			const { title: currentTitle, waiting: windowWaiting } = current;
 			// Adopt model output only at the guarded write boundary. Until then,
@@ -275,7 +280,10 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			baseTitle = candidateTitle ?? baseTitle;
 			candidateTitle = undefined;
 			// Leave a custom name alone unless we have a summary or a marker to update.
-			if (!baseTitle && !windowWaiting && !currentTitle.startsWith(READY_PREFIX)) return;
+			if (!baseTitle && !windowWaiting && !currentTitle.startsWith(READY_PREFIX)) {
+				updated = isCurrent() && stable;
+				return;
+			}
 			const taskTitle = baseTitle ?? currentTitle.replace(/^\* /, "");
 			const title = formatTitle(taskTitle, windowWaiting);
 			if (title !== currentTitle) {
@@ -284,19 +292,21 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				const format = !active && baseTitle === "zsh" ? QUIT_TITLE_FORMAT : buildWindowTitleFormat(taskTitle);
 				await tmux(["rename-window", "-t", pane, "--", format], signal);
 			}
+			updated = isCurrent() && stable;
 		}).catch(() => {
 			if (isCurrent()) {
 				warnOnce(ctx, "tmux window/session status could not be updated. Check tmux.");
 			}
 		});
-		return titleQueue;
+		return titleQueue.then(() => updated);
 	};
 
 	const setWaiting = (ctx: ExtensionContext, value: boolean) => {
 		const pane = getPane(ctx);
 		if (!pane) return;
 		waiting = value;
-		return refreshTitle(ctx, pane);
+		// Lifecycle notifications keep their Promise<void> contract.
+		return refreshTitle(ctx, pane).then(() => {});
 	};
 
 	const reset = (ctx: ExtensionContext, title?: string, alive = true) => {
@@ -405,12 +415,12 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	};
 
 	pi.registerCommand("tmux-title", {
-		description: "Refresh the tmux title, pin with set <name>, resume with auto, or inspect status",
+		description: "Refresh, pin with set <name>, resume with auto, inspect status, or sync without AI",
 		handler: async (args, ctx) => {
 			const command = args.trim();
 			const set = /^set(?:\s+([\s\S]*))?$/.exec(command);
-			if (command && command !== "auto" && command !== "status" && !set) {
-				ctx.ui.notify("Usage: /tmux-title [set <name> | auto | status]", "warning");
+			if (command && !["auto", "status", "sync"].includes(command) && !set) {
+				ctx.ui.notify("Usage: /tmux-title [set <name> | auto | status | sync]", "warning");
 				return;
 			}
 			const pane = getPane(ctx);
@@ -443,6 +453,18 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				}
 				return;
 			}
+			if (command === "sync") {
+				const signal = titleLifetime.signal;
+				warned = false;
+				const update = refreshTitle(ctx, pane);
+				const revision = titleRevision;
+				if (await update && !signal.aborted && revision === titleRevision) {
+					ctx.ui.notify(formerWindows.size || formerSessions.size
+						? "Current tmux status synchronized; some former-location repairs remain queued."
+						: "tmux title and waiting markers synchronized.", "info");
+				}
+				return;
+			}
 			if (set) {
 				const title = cleanTitle(set[1] ?? "");
 				if (!title) {
@@ -454,8 +476,14 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				manualTitle = true;
 				baseTitle = title;
 				lastNamingContext = undefined;
-				await refreshTitle(ctx, pane);
-				ctx.ui.notify("Manual title pinned. Use /tmux-title auto to resume automatic naming.", "info");
+				const signal = titleLifetime.signal;
+				const commandGeneration = generation;
+				const update = refreshTitle(ctx, pane);
+				const revision = titleRevision;
+				if (await update && !signal.aborted && revision === titleRevision && manualTitle
+					&& baseTitle === title && generation === commandGeneration) {
+					ctx.ui.notify("Manual title pinned. Use /tmux-title auto to resume automatic naming.", "info");
+				}
 				return;
 			}
 			if (command === "auto") manualTitle = false;

@@ -104,7 +104,9 @@ New input, settlement, and compaction keep the pinned text while waiting
 markers still update. The extension does not collect naming context or make
 naming requests while the pin is active. Manual titles use the same lowercase,
 ASCII, and length rules as generated titles, and work with `PI_TMUX_MODEL=off`.
-Empty names and names containing no letters or numbers are rejected.
+Empty names and names containing no letters or numbers are rejected. If a
+tmux update fails, the pin stays active but the command warns instead of
+confirming success. Repeat `set <name>` or use `sync` to retry.
 
 `auto` releases the pin and requests a title from the active context. It respects
 `PI_TMUX_MODEL=off` and does not clear the current waiting marker. The manual
@@ -123,6 +125,25 @@ flags, pins, or pending naming work. It omits names, model-setting values, and
 provider errors. `AI naming: configured` means the setting is valid, not that
 the model or its credentials are available. Snapshot values may change while
 Pi is working; run the command again for a fresh reading.
+
+### Synchronize without AI
+
+Run `/tmux-title sync` to reapply this pane's task title and waiting/ownership
+flags, and retry former-location repairs. Use it after moving a pane or when
+tmux has recovered from a failed update. It works with AI naming off, missing
+credentials, or an invalid naming setting.
+
+Sync collects no dialogue and does not access models or credentials. It keeps
+the title mode, local waiting state, and pending naming request unchanged.
+A completed, current naming result can be applied; a pending result can still
+update the title later. Like other title updates, sync can replace a peer's
+task title in a shared window. Without a task title, an unmarked custom name
+stays intact.
+
+Success messages only confirm current, successful updates. Failed updates warn;
+superseded, disposed, or continuously moving updates do not announce success.
+If some former-location repairs remain queued, sync reports that separately.
+Repeat the command to retry them.
 
 ## Behavior
 
@@ -202,7 +223,7 @@ tmux set-option -p -t <pane-id> @pi-tmux-waiting 0
 
 Pane moves do not trigger an immediate update. The moved Pi's next status
 update also refreshes its most recently observed former window and session
-markers. Repair uses each window's latest task text and respects other panes'
+markers. `/tmux-title sync` performs this update on demand without an AI request. Repair uses each window's latest task text and respects other panes'
 waiting flags. Unmarked custom window names and their automatic-rename setting
 stay unchanged. Vanished targets are ignored; transient failures are retried
 on later status updates. Tracking is in memory, limited to eight former windows
@@ -271,14 +292,15 @@ npm test
   tmux status updates.
 - `tests/title.test.ts` covers formatting, context bounds and exclusions,
   naming cancellation, model configuration, status-only mode, explicit retries,
-  manual pins, read-only diagnostics, lifecycle events, waiting markers, and
+  manual pins, read-only diagnostics, model-free sync, truthful confirmations,
+  lifecycle events, waiting markers, and
   failures with mock model responses and tmux commands.
 - `tests/session.test.ts` checks window and session aggregation, shared-window
   ownership, concurrent status and ownership changes at rename time, and pane
   moves against a separate temporary tmux server with no user configuration.
   It skips if tmux is unavailable.
 - `tests/move.test.ts` checks former-location marker repair, remaining peers,
-  custom names, vanished targets, repeated moves, retries, and superseded repairs
+  custom names, vanished targets, repeated moves, explicit sync retries, and superseded repairs
   on isolated tmux servers. Those checks skip if tmux is unavailable; the queue
   and stabilization bounds also have a mock-only regression.
 - `tests/status.test.ts` verifies read-only diagnostic snapshots and waiting-flag
