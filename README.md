@@ -112,6 +112,18 @@ title stays until a new name succeeds. Pins are in-memory, not saved to Pi
 history. Session replacement, tree navigation, reload, and quit release them.
 A bare `/tmux-title` leaves an active pin alone.
 
+### Inspect title status
+
+Run `/tmux-title status` for a read-only snapshot of the title mode, naming
+configuration, pending naming work, and local waiting state. It shows pane,
+window, and session IDs, their waiting flags, and queued former-location repairs.
+
+Status makes no AI requests, collects no dialogue, and does not change titles,
+flags, pins, or pending naming work. It omits names, model-setting values, and
+provider errors. `AI naming: configured` means the setting is valid, not that
+the model or its credentials are available. Snapshot values may change while
+Pi is working; run the command again for a fresh reading.
+
 ## Behavior
 
 - With AI naming enabled and no manual pin, each non-empty interactive prompt
@@ -259,8 +271,8 @@ npm test
   tmux status updates.
 - `tests/title.test.ts` covers formatting, context bounds and exclusions,
   naming cancellation, model configuration, status-only mode, explicit retries,
-  manual pins, lifecycle events, waiting markers, and failures with mock model
-  responses and tmux commands.
+  manual pins, read-only diagnostics, lifecycle events, waiting markers, and
+  failures with mock model responses and tmux commands.
 - `tests/session.test.ts` checks window and session aggregation, shared-window
   ownership, concurrent status and ownership changes at rename time, and pane
   moves against a separate temporary tmux server with no user configuration.
@@ -269,6 +281,8 @@ npm test
   custom names, vanished targets, repeated moves, retries, and superseded repairs
   on isolated tmux servers. Those checks skip if tmux is unavailable; the queue
   and stabilization bounds also have a mock-only regression.
+- `tests/status.test.ts` verifies read-only diagnostic snapshots and waiting-flag
+  aggregation on an isolated tmux server. It skips if tmux is unavailable.
 
 Development tests require Bun and tmux. GitHub Actions runs the type check,
 tests, and package-content check on Linux with Node.js 22 and 24 and Bun 1.4.2.

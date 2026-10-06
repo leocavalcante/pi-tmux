@@ -9,12 +9,15 @@ export const WAITING_OPTION = "@pi-tmux-waiting";
 export const ACTIVE_OPTION = "@pi-tmux-active";
 // tmux evaluates this on the server after the pane status write, so concurrent
 // Pi instances aggregate their status without a client-side read/rename race.
+export const SESSION_WAITING_FORMAT = `#{m:*1*,#{W:#{P:#{${WAITING_OPTION}}}}}`;
 export const SESSION_TITLE_FORMAT =
-	`#{?#{m:*1*,#{W:#{P:#{${WAITING_OPTION}}}}},${READY_PREFIX},}#{s/^\\* //:session_name}`;
+	`#{?${SESSION_WAITING_FORMAT},${READY_PREFIX},}#{s/^\\* //:session_name}`;
 export const WINDOW_WAITING_FORMAT = `#{m:*1*,#{P:#{${WAITING_OPTION}}}}`;
 // Waiting flags also recognize idle peers loaded before active tracking existed.
 export const WINDOW_ACTIVE_FORMAT = `#{m:*1*,#{P:#{${ACTIVE_OPTION}}#{${WAITING_OPTION}}}}`;
 export const WINDOW_INFO_FORMAT = `#{session_id}\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
+// Diagnostics omit names and dialogue, reading all flags in one server snapshot.
+export const STATUS_INFO_FORMAT = `#{session_id}\t#{window_id}\t#{?#{m:*1*,#{${WAITING_OPTION}}},1,0}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{?${SESSION_WAITING_FORMAT},1,0}`;
 export const MAX_PROMPT_LENGTH = 2_000;
 export const MAX_CONTEXT_LENGTH = 6_000;
 export const MAX_HISTORY_MESSAGES = 8;
@@ -402,17 +405,42 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	};
 
 	pi.registerCommand("tmux-title", {
-		description: "Refresh the tmux title, pin it with set <name>, or resume automatic naming with auto",
+		description: "Refresh the tmux title, pin with set <name>, resume with auto, or inspect status",
 		handler: async (args, ctx) => {
 			const command = args.trim();
 			const set = /^set(?:\s+([\s\S]*))?$/.exec(command);
-			if (command && command !== "auto" && !set) {
-				ctx.ui.notify("Usage: /tmux-title [set <name> | auto]", "warning");
+			if (command && command !== "auto" && command !== "status" && !set) {
+				ctx.ui.notify("Usage: /tmux-title [set <name> | auto | status]", "warning");
 				return;
 			}
 			const pane = getPane(ctx);
 			if (!pane) {
-				ctx.ui.notify("Title refresh requires interactive Pi inside tmux.", "warning");
+				ctx.ui.notify("Title commands require interactive Pi inside tmux.", "warning");
+				return;
+			}
+			if (command === "status") {
+				const signal = titleLifetime.signal;
+				try {
+					const info = await tmux(["display-message", "-p", "-t", pane, STATUS_INFO_FORMAT], signal);
+					if (signal.aborted) return;
+					const fields = info.split("\t");
+					const [session, window, paneWaiting, windowWaiting, sessionWaiting] = fields;
+					if (fields.length !== 5 || !/^\$\d+$/.test(session) || !/^@\d+$/.test(window)
+						|| !fields.slice(2).every((value) => /^[01]$/.test(value))) throw new Error("Invalid tmux status");
+					const yesNo = (value: string) => value === "1" ? "yes" : "no";
+					ctx.ui.notify([
+						"tmux title status",
+						`Title mode: ${manualTitle ? "manual" : "automatic"}`,
+						`AI naming: ${invalidModelSetting ? "invalid configuration" : namingModel ? "configured" : "off"}`,
+						`Naming request: ${pending ? "pending" : candidateTitle ? "ready to apply" : "idle"}`,
+						`Local waiting: ${waiting ? "yes" : "no"}`,
+						`Targets: pane ${pane}, window ${window}, session ${session}`,
+						`Waiting flags: pane ${yesNo(paneWaiting)}, window ${yesNo(windowWaiting)}, session ${yesNo(sessionWaiting)}`,
+						`Pending move repairs: windows ${formerWindows.size}, sessions ${formerSessions.size}`,
+					].join("\n"), "info");
+				} catch {
+					if (!signal.aborted) ctx.ui.notify("tmux status could not be read. Check tmux.", "warning");
+				}
 				return;
 			}
 			if (set) {

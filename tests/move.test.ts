@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { WAITING_OPTION, type RunTmux } from "../index";
+import piTmux, { STATUS_INFO_FORMAT, WAITING_OPTION, type RunTmux } from "../index";
 
 const hasTmux = Bun.which("tmux") !== null;
 type Fixture = {
@@ -14,6 +14,7 @@ type Fixture = {
 	beforeCommand?: (args: string[], signal: AbortSignal) => Promise<void>;
 	emit: (event: string, reason?: string) => Promise<void>;
 	pin: (title: string) => Promise<void>;
+	status: () => Promise<string>;
 };
 
 async function withServer(run: (fixture: Fixture) => Promise<void>) {
@@ -24,9 +25,10 @@ async function withServer(run: (fixture: Fixture) => Promise<void>) {
 	const handlers = new Map<string, Function>();
 	const commands = new Map<string, Function>();
 	const warnings: string[] = [];
+	const notices: string[] = [];
 	const ctx = {
 		mode: "tui",
-		ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
+		ui: { notify: (text: string, level: string) => (level === "warning" ? warnings : notices).push(text) },
 	} as unknown as ExtensionContext;
 	const fixture: Fixture = {
 		tmux: (...args) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
@@ -38,6 +40,7 @@ async function withServer(run: (fixture: Fixture) => Promise<void>) {
 			await new Promise<void>((resolve) => setImmediate(resolve));
 		},
 		pin: async (title) => { await commands.get("tmux-title")!("set " + title, ctx); },
+		status: async () => { await commands.get("tmux-title")!("status", ctx); return notices.at(-1)!; },
 	};
 	const tmux: RunTmux = async (args, signal) => {
 		fixture.calls.push(args);
@@ -193,6 +196,34 @@ test.skipIf(!hasTmux).each(["window", "session"])("transient former-%s repair fa
 		expect(f.calls.filter(isRepair)).toHaveLength(2);
 		expect(f.tmux("display-message", "-p", "-t", anchor, "#{window_name}")).toBe("move task");
 		expect(f.tmux("display-message", "-p", "-t", source, "#{session_name}")).toBe("Source");
+		expect(f.warnings).toEqual([]);
+	});
+});
+
+test.skipIf(!hasTmux)("status reports queued move repairs without consuming them", async () => {
+	await withServer(async (f) => {
+		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Source", "/bin/sleep 60");
+		const source = f.tmux("display-message", "-p", "-t", pane, "#{session_id}");
+		const oldWindow = f.tmux("display-message", "-p", "-t", pane, "#{window_id}");
+		const anchor = f.tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		const destination = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Destination", "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		await f.pin("move task");
+		await f.emit("agent_settled");
+		f.tmux("join-pane", "-d", "-s", pane, "-t", destination);
+		f.beforeCommand = async (args) => {
+			if ((args[0] === "if-shell" && args[3] === oldWindow)
+				|| (args[0] === "rename-session" && args[2] === source)) throw new Error("Synthetic transient failure");
+		};
+		await f.emit("agent_settled");
+		const beforeStatus = f.calls.length;
+		expect(await f.status()).toContain("Pending move repairs: windows 1, sessions 1");
+		expect(f.calls.slice(beforeStatus)).toEqual([["display-message", "-p", "-t", pane, STATUS_INFO_FORMAT]]);
+		f.beforeCommand = undefined;
+		await f.emit("agent_settled");
+		expect(f.tmux("display-message", "-p", "-t", anchor, "#{window_name}")).toBe("move task");
+		expect(f.tmux("display-message", "-p", "-t", source, "#{session_name}")).toBe("Source");
+		expect(await f.status()).toContain("Pending move repairs: windows 0, sessions 0");
 		expect(f.warnings).toEqual([]);
 	});
 });

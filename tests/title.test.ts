@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
+import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, STATUS_INFO_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
 
 let originalPane: string | undefined;
 let originalModel: string | undefined;
@@ -49,6 +49,7 @@ function fixture(
 	} as unknown as ExtensionContext;
 	const state = {
 		window: "@2", title: "existing task", session: "$0", sessionTitle: "My Session",
+		statusInfo: undefined as string | undefined,
 		waitingPanes: new Map<string, string>(),
 		activePanes: new Map<string, string>(),
 		otherWindowPanes: new Set<string>(),
@@ -70,6 +71,9 @@ function fixture(
 	const tmux: RunTmux = async (args, signal) => {
 		calls.push(args);
 		if (beforeCommand) await beforeCommand(args, signal, args[0] === "rename-window" ? renderTitle(args[4]) : undefined);
+		if (args[0] === "display-message" && args[4] === STATUS_INFO_FORMAT) {
+			return state.statusInfo ?? `${state.session}\t${state.window}\t${state.waitingPanes.get("%1") === "1" ? "1" : "0"}\t${windowWaiting() ? "1" : "0"}\t${[...state.waitingPanes.values()].includes("1") ? "1" : "0"}`;
+		}
 		if (args[0] === "display-message") return `${state.session}\t${state.window}\t${windowWaiting() ? "1" : "0"}\t${state.title}`;
 		if (args[0] === "set-option") {
 			expect(args).toEqual([
@@ -1230,6 +1234,181 @@ test("manual title commands cannot write to tmux outside interactive mode", asyn
 	await f.refresh("set manual title");
 	expect(f.calls).toHaveLength(0);
 	expect(f.requests).toHaveLength(0);
+});
+
+test.each([
+	{ setting: undefined, expected: "configured" },
+	{ setting: "off", expected: "off" },
+	{ setting: "example invalid configuration", expected: "invalid configuration" },
+	{ setting: "router/vendor/example-model", expected: "configured" },
+])("status is read-only and reports configuration without dialogue or registry access: %j", async ({ setting, expected }) => {
+	if (setting === undefined) delete process.env.PI_TMUX_MODEL;
+	else process.env.PI_TMUX_MODEL = setting;
+	const f = fixture();
+	Object.defineProperty(f.ctx, "sessionManager", { get: () => { throw new Error("Must not collect dialogue"); } });
+	Object.defineProperty(f.ctx, "modelRegistry", { get: () => { throw new Error("Must not access credentials or models"); } });
+	f.state.title = "synthetic private title";
+	f.state.sessionTitle = "synthetic private session name";
+	await f.refresh("status");
+	expect(f.calls).toEqual([["display-message", "-p", "-t", "%1", STATUS_INFO_FORMAT]]);
+	expect(f.requests).toEqual([]);
+	expect(f.writes).toEqual([]);
+	expect(f.state.waitingPanes.size).toBe(0);
+	expect(f.state.activePanes.size).toBe(0);
+	expect(f.notices[0]).toContain("AI naming: " + expected);
+	expect(f.notices[0]).toContain("Targets: pane %1, window @2, session $0");
+	expect(f.notices[0]).toContain("Pending move repairs: windows 0, sessions 0");
+	expect(f.notices[0]).not.toContain(f.state.title);
+	expect(f.notices[0]).not.toContain(f.state.sessionTitle);
+	if (setting && setting !== "off") expect(f.notices[0]).not.toContain(setting);
+	expect(f.warnings).toEqual([]);
+});
+
+test.each([
+	{ pane: false, peer: false, elsewhere: false, flags: "pane no, window no, session no" },
+	{ pane: true, peer: false, elsewhere: false, flags: "pane yes, window yes, session yes" },
+	{ pane: false, peer: true, elsewhere: false, flags: "pane no, window yes, session yes" },
+	{ pane: false, peer: false, elsewhere: true, flags: "pane no, window no, session yes" },
+])("status reports server waiting flags separately from local state: %j", async ({ pane, peer, elsewhere, flags }) => {
+	const f = fixture();
+	f.state.waitingPanes.set("%1", pane ? "1" : "0");
+	f.state.waitingPanes.set("%2", peer ? "1" : "0");
+	f.state.waitingPanes.set("%3", elsewhere ? "1" : "0");
+	f.state.otherWindowPanes.add("%3");
+	await f.refresh("status");
+	expect(f.notices[0]).toContain("Waiting flags: " + flags);
+	expect(f.notices[0]).toContain("Local waiting: no");
+	expect(f.calls).toHaveLength(1);
+	expect(f.writes).toEqual([]);
+});
+
+test("status preserves manual pins and waiting state", async () => {
+	const f = fixture();
+	await f.refresh("set pinned task");
+	await f.emit("agent_settled");
+	const previousWrites = [...f.writes];
+	const previousCalls = f.calls.length;
+	await f.refresh("status");
+	expect(f.notices.at(-1)).toContain("Title mode: manual");
+	expect(f.notices.at(-1)).toContain("Local waiting: yes");
+	expect(f.notices.at(-1)).toContain("Waiting flags: pane yes, window yes, session yes");
+	expect(f.writes).toEqual(previousWrites);
+	expect(f.calls.slice(previousCalls)).toEqual([["display-message", "-p", "-t", "%1", STATUS_INFO_FORMAT]]);
+	f.input("another task");
+	await settle();
+	expect(f.state.title).toBe("pinned task");
+	expect(f.requests).toHaveLength(0);
+});
+
+test("status does not cancel or wait for a pending naming request", async () => {
+	const pending = deferred();
+	const f = fixture([pending.promise]);
+	f.input("synthetic task");
+	await settle();
+	await f.refresh("status");
+	expect(f.notices.at(-1)).toContain("Naming request: pending");
+	expect(f.requests).toHaveLength(1);
+	expect(f.requests[0].options.signal.aborted).toBe(false);
+	pending.resolve(response("completed task"));
+	await settle();
+	expect(f.state.title).toBe("completed task");
+});
+
+test("status reports completed model output waiting to be applied without changing it", async () => {
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => { release = resolve; });
+	let held = false;
+	const f = fixture(undefined, async (args) => {
+		if (!held && args[0] === "display-message" && args[4] === WINDOW_INFO_FORMAT) {
+			held = true;
+			await gate;
+		}
+	});
+	f.input("synthetic task");
+	await settle();
+	try {
+		expect(held).toBe(true);
+		await f.refresh("status");
+		expect(f.notices.at(-1)).toContain("Naming request: ready to apply");
+		expect(f.writes).toEqual([]);
+	} finally { release(); }
+	await settle();
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.requests).toHaveLength(1);
+});
+
+test.each([
+	"$0\t@2\t2\t0\t0", "$0\t@2\t0\tx\t0", "$0\t@2\t0\t0\t9",
+	"home\t@2\t0\t0\t0", "$0\t-t\t0\t0\t0", "$0\t@2\t0\t0",
+	"$0\t@2\t0\t0\t0\textra",
+])("invalid status snapshots are contained without exposing their contents: %j", async (info) => {
+	const f = fixture();
+	f.state.statusInfo = info;
+	await f.refresh("status");
+	expect(f.notices).toEqual([]);
+	expect(f.warnings).toEqual(["tmux status could not be read. Check tmux."]);
+	expect(f.calls).toHaveLength(1);
+	expect(f.requests).toHaveLength(0);
+	expect(f.writes).toEqual([]);
+});
+
+test("status failures do not consume or reset the automatic warning budget", async () => {
+	const f = fixture(undefined, async () => { throw new Error("synthetic private error details"); });
+	await f.refresh("status");
+	expect(f.warnings).toEqual(["tmux status could not be read. Check tmux."]);
+	await f.emit("agent_settled");
+	const warnings = f.warnings.length;
+	expect(warnings).toBe(2);
+	await f.refresh("status");
+	expect(f.warnings).toHaveLength(warnings + 1);
+	await f.emit("agent_settled");
+	expect(f.warnings).toHaveLength(warnings + 1);
+	expect(f.warnings.join("\n")).not.toContain("synthetic private error details");
+});
+
+test("reload cancels a pending status snapshot without notifying the disposed runtime", async () => {
+	process.env.PI_TMUX_MODEL = "off";
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => { release = resolve; });
+	let statusSignal: AbortSignal | undefined;
+	const f = fixture(undefined, async (args, signal) => {
+		if (args[4] === STATUS_INFO_FORMAT) { statusSignal = signal; await gate; }
+	});
+	const status = f.refresh("status");
+	await settle();
+	await f.emit("session_shutdown", "reload");
+	expect(statusSignal?.aborted).toBe(true);
+	release();
+	await status;
+	expect(f.notices).toEqual([]);
+	expect(f.warnings).toEqual([]);
+});
+
+test.each(["print", "json", "rpc"])("status cannot query tmux in %s mode", async (mode) => {
+	const f = fixture();
+	(f.ctx as any).mode = mode;
+	await f.refresh("status");
+	expect(f.calls).toEqual([]);
+	expect(f.requests).toEqual([]);
+	expect(f.warnings[0]).toContain("interactive Pi inside tmux");
+});
+
+test.each([undefined, "@2", "%1; unsafe"])("status rejects a missing or invalid pane ID: %j", async (pane) => {
+	const f = fixture();
+	if (pane === undefined) delete process.env.TMUX_PANE;
+	else process.env.TMUX_PANE = pane;
+	await f.refresh("status");
+	expect(f.calls).toEqual([]);
+	expect(f.warnings[0]).toContain("interactive Pi inside tmux");
+});
+
+test("status does not accept trailing arguments or reserve set status as a command", async () => {
+	const f = fixture();
+	await f.refresh("status extra");
+	expect(f.calls).toEqual([]);
+	expect(f.warnings[0]).toContain("auto | status");
+	await f.refresh("set status");
+	expect(f.state.title).toBe("status");
 });
 
 test("tmux failures are contained and warn only once", async () => {
