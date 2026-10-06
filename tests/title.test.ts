@@ -1,15 +1,20 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { buildNamingContext, cleanTitle, formatTitle, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, type RunTmux } from "../index";
+import piTmux, { buildNamingContext, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, type RunTmux } from "../index";
 
 let originalPane: string | undefined;
+let originalModel: string | undefined;
 beforeEach(() => {
 	originalPane = process.env.TMUX_PANE;
+	originalModel = process.env.PI_TMUX_MODEL;
 	process.env.TMUX_PANE = "%1";
+	delete process.env.PI_TMUX_MODEL;
 });
 afterEach(() => {
 	if (originalPane === undefined) delete process.env.TMUX_PANE;
 	else process.env.TMUX_PANE = originalPane;
+	if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+	else process.env.PI_TMUX_MODEL = originalModel;
 });
 
 const response = (text: string, stopReason = "stop") => ({
@@ -22,6 +27,8 @@ function fixture(
 	beforeCommand?: (args: string[], signal: AbortSignal) => Promise<void>,
 ) {
 	const handlers = new Map<string, Function>();
+	const commands = new Map<string, { handler: Function }>();
+	const notices: string[] = [];
 	const calls: string[][] = [];
 	const requests: { model: unknown; context: any; options: any }[] = [];
 	const warnings: string[] = [];
@@ -29,7 +36,7 @@ function fixture(
 	const ctx = {
 		mode: "tui",
 		sessionManager: { buildSessionProjection: () => ({ messages }) },
-		ui: { notify: (text: string) => warnings.push(text) },
+		ui: { notify: (text: string, level: string) => (level === "warning" ? warnings : notices).push(text) },
 		modelRegistry: {
 			find: (provider: string, id: string) => ({ provider, id }),
 			hasConfiguredAuth: () => true,
@@ -50,21 +57,29 @@ function fixture(
 		if (args[0] === "set-option") {
 			expect(args).toEqual([
 				"set-option", "-p", "-t", "%1", WAITING_OPTION, args[5],
-				";", "rename-session", "-t", state.session, SESSION_TITLE_FORMAT,
+				";", "rename-session", "-t", "%1", SESSION_TITLE_FORMAT,
 			]);
 			state.waitingPanes.set(args[3], args[5]);
 			const anyWaiting = [...state.waitingPanes.values()].includes("1");
 			state.sessionTitle = (anyWaiting ? READY_PREFIX : "") + state.sessionTitle.replace(/^\* /, "");
 		}
-		if (args[0] === "rename-window") state.title = args[3];
+		if (args[0] === "rename-window") {
+			expect(args.slice(0, 4)).toEqual(["rename-window", "-t", "%1", "--"]);
+			state.title = args[4];
+		}
 		return "";
 	};
-	const load = () => piTmux({ on: (event: string, handler: Function) => handlers.set(event, handler) } as unknown as ExtensionAPI, tmux);
+	const load = () => piTmux({
+		on: (event: string, handler: Function) => handlers.set(event, handler),
+		registerCommand: (name: string, command: { handler: Function }) => commands.set(name, command),
+	} as unknown as ExtensionAPI, tmux);
 	load();
 	const input = (text: string, source = "interactive") => handlers.get("input")!({ text, source }, ctx);
 	const emit = (event: string, reason = event === "session_shutdown" ? "quit" : "startup") =>
 		handlers.get(event)?.({ type: event, reason }, ctx);
-	return { handlers, calls, requests, warnings, messages, ctx, input, emit, state, load };
+	return { handlers, calls, requests, warnings, notices, messages, ctx, input, emit, state, load,
+		refresh: (args = "") => commands.get("tmux-title")!.handler(args, ctx),
+	};
 }
 
 async function settle() {
@@ -98,9 +113,20 @@ test("passes input through immediately and renames the owning window", async () 
 	await settle();
 	expect(f.requests[0].model).toEqual({ provider: "openai-codex", id: "gpt-6-luna" });
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
-		["rename-window", "-t", "@2", "fix auth tests"],
+		["rename-window", "-t", "%1", "--", "fix auth tests"],
 	]);
 	expect(f.calls[0]).toEqual(["display-message", "-p", "-t", "%1", "#{session_id}\t#{window_id}\t#{window_name}"]);
+	expect(f.warnings).toEqual([]);
+});
+
+test.each(["-fix auth", "-t", "-a"])("model title %s is passed as a literal tmux argument", async (title) => {
+	const f = fixture([Promise.resolve(response(title))]);
+	f.input("Synthetic task");
+	await settle();
+	expect(f.state.title).toBe(title);
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
+		["rename-window", "-t", "%1", "--", title],
+	]);
 	expect(f.warnings).toEqual([]);
 });
 
@@ -140,7 +166,7 @@ test("superseding input aborts old work and an old result cannot overwrite the n
 	await settle();
 	old.resolve(response("Old task"));
 	await settle();
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([["rename-window", "-t", "@2", "new task"]]);
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([["rename-window", "-t", "%1", "--", "new task"]]);
 });
 
 test("shutdown and session replacement cancel outstanding naming", async () => {
@@ -153,7 +179,7 @@ test("shutdown and session replacement cancel outstanding naming", async () => {
 		work.resolve(response("Late title"));
 		await settle();
 		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual(
-			event === "session_shutdown" ? [["rename-window", "-t", "@2", "zsh"]] : [],
+			event === "session_shutdown" ? [["rename-window", "-t", "%1", "--", "zsh"]] : [],
 		);
 	}
 });
@@ -236,7 +262,11 @@ test("late naming result retains the settled marker", async () => {
 	const work = deferred();
 	const f = fixture([work.promise]);
 	f.input("Task");
+	// Pi persists the submitted prompt before the run settles.
+	f.messages.push({ role: "user", content: "Task" });
 	await f.emit("agent_settled");
+	expect(f.requests[0].options.signal.aborted).toBe(false);
+	expect(f.requests).toHaveLength(1);
 	expect(f.state.title).toBe("* existing task");
 	work.resolve(response("Fix auth tests"));
 	await settle();
@@ -277,7 +307,7 @@ test("reload preserves the task title across fresh extension runtimes, then quit
 		await f.emit("session_start", "reload");
 		expect(f.state.title).toBe("fix auth tests");
 		expect(f.state.sessionTitle).toBe("My Session");
-		expect(f.calls.filter((args) => args[0] === "rename-window" && args[3] === "zsh")).toEqual([]);
+		expect(f.calls.filter((args) => args[0] === "rename-window" && args[4] === "zsh")).toEqual([]);
 		expect(f.requests).toHaveLength(1);
 		await f.emit("session_shutdown", "quit");
 		expect(f.state.title).toBe("zsh");
@@ -317,7 +347,7 @@ test("shutdown resets a busy title and repeated cleanup makes no extra writes", 
 	await settle();
 	await f.emit("session_shutdown");
 	expect(f.state.title).toBe("zsh");
-	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "@2", "zsh"]);
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", "zsh"]);
 	const writes = f.calls.filter((args) => args[0] === "rename-window").length;
 	await f.emit("session_shutdown");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toHaveLength(writes);
@@ -329,13 +359,13 @@ test("shutdown resolves the owning window after a pane move", async () => {
 	await settle();
 	f.state.window = "@3";
 	await f.emit("session_shutdown");
-	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "@3", "zsh"]);
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", "zsh"]);
 });
 
 test("shutdown waits for an in-flight marker write before resetting to zsh", async () => {
 	const gate = deferred();
 	const f = fixture(undefined, async (args) => {
-		if (args[0] === "rename-window" && args[3].startsWith(READY_PREFIX)) await gate.promise;
+		if (args[0] === "rename-window" && args[4].startsWith(READY_PREFIX)) await gate.promise;
 	});
 	f.input("Task");
 	await settle();
@@ -346,7 +376,7 @@ test("shutdown waits for an in-flight marker write before resetting to zsh", asy
 	await completed;
 	await shutdown;
 	expect(f.state.title).toBe("zsh");
-	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "@2", "zsh"]);
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", "zsh"]);
 });
 
 test("session startup preserves an unmarked custom window name", async () => {
@@ -382,14 +412,14 @@ test("status updates resolve the window again after a pane move", async () => {
 	await settle();
 	f.state.window = "@3";
 	await f.emit("agent_settled");
-	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "@3", "* fix auth tests"]);
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", "* fix auth tests"]);
 });
 
 test("a slow marker write cannot overwrite newer input or its summary", async () => {
 	const gate = deferred();
 	const f = fixture(
 		[Promise.resolve(response("Fix auth tests")), Promise.resolve(response("New task"))],
-		async (args) => { if (args[0] === "rename-window" && args[3].startsWith(READY_PREFIX)) await gate.promise; },
+		async (args) => { if (args[0] === "rename-window" && args[4].startsWith(READY_PREFIX)) await gate.promise; },
 	);
 	f.input("First task");
 	await settle();
@@ -402,16 +432,19 @@ test("a slow marker write cannot overwrite newer input or its summary", async ()
 	await settle();
 	expect(f.state.title).toBe("new task");
 	expect(f.state.sessionTitle).toBe("My Session");
-	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "@2", "new task"]);
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", "new task"]);
 });
 
-test("new input invalidates a ready update waiting on a slow window lookup", async () => {
+test.each([1, 2])("new input invalidates a ready update waiting on slow window lookup %i", async (lookupToHold) => {
 	const gate = deferred();
 	const next = deferred();
 	let holdLookup = false;
+	let lookups = 0;
 	const f = fixture(
 		[Promise.resolve(response("Fix auth tests")), next.promise],
-		async (args) => { if (holdLookup && args[0] === "display-message") await gate.promise; },
+		async (args) => {
+			if (holdLookup && args[0] === "display-message" && ++lookups === lookupToHold) await gate.promise;
+		},
 	);
 	f.input("First task");
 	await settle();
@@ -424,7 +457,7 @@ test("new input invalidates a ready update waiting on a slow window lookup", asy
 	await completed;
 	await settle();
 	expect(f.state.title).toBe("fix auth tests");
-	expect(f.calls.filter((args) => args[0] === "rename-window" && args[3].startsWith(READY_PREFIX))).toEqual([]);
+	expect(f.calls.filter((args) => args[0] === "rename-window" && args[4].startsWith(READY_PREFIX))).toEqual([]);
 	next.resolve(response("New task"));
 	await settle();
 });
@@ -468,7 +501,7 @@ test("status updates target the owning session after a pane move", async () => {
 	f.state.sessionTitle = "Destination Session";
 	await f.emit("agent_settled");
 	expect(f.state.sessionTitle).toBe("* Destination Session");
-	expect(f.calls.filter((args) => args[0] === "set-option").at(-1)?.[9]).toBe("$3");
+	expect(f.calls.filter((args) => args[0] === "set-option").at(-1)?.[9]).toBe("%1");
 });
 
 test("naming context includes text dialogue and summaries, but not tools, thinking, images, or custom messages", () => {
@@ -508,6 +541,154 @@ test("naming context bounds history and prioritizes recent dialogue and the new 
 	expect(large).toStartWith("summary: SUMMARY");
 	expect(large).toContain("user: 29:");
 	expect(large.endsWith("user: " + "NEW_PROMPT".repeat(1_000).slice(0, MAX_PROMPT_LENGTH))).toBe(true);
+});
+
+test("empty projected context cancels stale naming without preventing a later request", async () => {
+	for (const event of ["session_compact", "agent_settled"]) {
+		for (const staleResult of [response("Removed task"), response("Synthetic error", "error")]) {
+			const old = deferred();
+			const f = fixture([old.promise, Promise.resolve(response("Fresh task"))]);
+			f.messages.push({ role: "user", content: "Original task" });
+			await f.emit("session_start");
+			// Context edits can omit all dialogue while retaining non-text entries.
+			f.messages.splice(0, f.messages.length, { role: "toolResult", content: [{ type: "text", text: "Excluded output" }] });
+			await f.emit(event);
+			expect(f.requests[0].options.signal.aborted).toBe(true);
+			expect(f.requests).toHaveLength(1);
+			old.resolve(staleResult);
+			await settle();
+			expect(f.state.title).toBe(event === "agent_settled" ? "* existing task" : "existing task");
+			expect(f.warnings).toEqual([]);
+			expect(f.calls.some((args) => args[0] === "rename-window" && args[4].includes("removed"))).toBe(false);
+
+			// Returning to the original context must not be deduplicated away.
+			f.messages.push({ role: "user", content: "Original task" });
+			await f.emit("session_compact");
+			await settle();
+			expect(f.requests).toHaveLength(2);
+			expect(f.state.title).toBe(event === "agent_settled" ? "* fresh task" : "fresh task");
+		}
+	}
+});
+
+test.each([1, 2])("compaction invalidates a completed naming result at slow title lookup %i", async (lookupToHold) => {
+	for (const empty of [false, true]) {
+		for (const failLookup of [false, true]) {
+			const old = deferred();
+			const next = deferred();
+			const gate = deferred();
+			let holdLookup = false;
+			let lookups = 0;
+			const f = fixture([old.promise, next.promise], async (args) => {
+				if (holdLookup && args[0] === "display-message" && ++lookups === lookupToHold) {
+					await gate.promise;
+					if (failLookup) throw new Error("Synthetic stale lookup failure");
+				}
+			});
+			f.messages.push({ role: "user", content: "Original task" });
+			await f.emit("session_start");
+			holdLookup = true;
+			old.resolve(response("Removed task"));
+			await settle();
+			expect(lookups).toBe(lookupToHold);
+			// The model has completed, but its tmux update is still in flight.
+			f.messages.splice(0, f.messages.length, ...(empty ? [] : [{ role: "user", content: "Fresh task" }]));
+			await f.emit("session_compact");
+			holdLookup = false;
+			gate.resolve(response(""));
+			await settle();
+			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+			expect(f.state.title).toBe("existing task");
+			expect(f.warnings).toEqual([]);
+
+			if (empty) {
+				f.messages.push({ role: "user", content: "Fresh task" });
+				await f.emit("session_compact");
+			}
+			next.resolve(response("Fresh task"));
+			await settle();
+			expect(f.state.title).toBe("fresh task");
+			expect(f.warnings).toEqual([]);
+			// Status-only updates must still work after stale naming is discarded.
+			await f.emit("agent_settled");
+			expect(f.state.title).toBe("* fresh task");
+		}
+	}
+});
+
+test.each([1, 2])("status updates do not resurrect a superseded candidate at slow lookup %i", async (lookupToHold) => {
+	for (const committed of [false, true]) {
+		for (const empty of [false, true]) {
+			const old = deferred();
+			const next = deferred();
+			const gate = deferred();
+			let holdLookup = false;
+			let lookups = 0;
+			const f = fixture([
+				...(committed ? [Promise.resolve(response("Previous task"))] : []), old.promise, next.promise,
+			], async (args) => {
+				if (holdLookup && args[0] === "display-message" && ++lookups === lookupToHold) await gate.promise;
+			});
+			if (committed) {
+				f.input("Previous task");
+				await settle();
+			}
+			const previousTitle = committed ? "previous task" : "existing task";
+			f.messages.push({ role: "user", content: "Original task" });
+			await f.emit("session_compact");
+			holdLookup = true;
+			old.resolve(response("Removed task"));
+			await settle();
+			expect(lookups).toBe(lookupToHold);
+			f.messages.splice(0, f.messages.length, ...(empty ? [] : [{ role: "user", content: "Fresh task" }]));
+			await f.emit("session_compact");
+			holdLookup = false;
+			gate.resolve(response(""));
+			await settle();
+			expect(f.state.title).toBe(previousTitle);
+
+			// A status-only refresh must retain the applied title, not the discarded candidate.
+			f.emit("agent_start");
+			await settle();
+			expect(f.state.title).toBe(previousTitle);
+			await f.emit("agent_settled");
+			expect(f.state.title).toBe("* " + previousTitle);
+			expect(f.calls.some((args) => args[0] === "rename-window" && args[4].includes("removed"))).toBe(false);
+			if (empty) {
+				f.messages.push({ role: "user", content: "Fresh task" });
+				await f.emit("session_compact");
+			}
+			next.resolve(response("Fresh task"));
+			await settle();
+			expect(f.state.title).toBe("* fresh task");
+			expect(f.warnings).toEqual([]);
+		}
+	}
+});
+
+test.each([1, 2])("a status revision still adopts a current candidate at slow lookup %i", async (lookupToHold) => {
+	const work = deferred();
+	const gate = deferred();
+	let holdLookup = false;
+	let lookups = 0;
+	const f = fixture([work.promise], async (args) => {
+		if (holdLookup && args[0] === "display-message" && ++lookups === lookupToHold) await gate.promise;
+	});
+	f.messages.push({ role: "user", content: "Current task" });
+	await f.emit("session_start");
+	holdLookup = true;
+	work.resolve(response("Current task"));
+	await settle();
+	expect(lookups).toBe(lookupToHold);
+	f.emit("agent_start");
+	holdLookup = false;
+	gate.resolve(response(""));
+	await settle();
+	expect(f.state.title).toBe("current task");
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* current task");
+	expect(f.requests).toHaveLength(1);
+	expect(f.warnings).toEqual([]);
 });
 
 test("empty or non-text history does not start a naming request", async () => {
@@ -610,6 +791,194 @@ test("persisting the same input and adding only tool work does not repeat a nami
 	work.resolve(response("auth tests"));
 	await settle();
 	expect(f.state.title).toBe("* auth tests");
+});
+
+test("parses naming models and rejects malformed configuration", () => {
+	for (const value of [undefined, "", "  "]) {
+		expect(parseNamingModel(value)).toEqual({ provider: "openai-codex", id: "gpt-6-luna" });
+	}
+	expect(parseNamingModel(" anthropic/claude-sonnet-4-5 ")).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5" });
+	expect(parseNamingModel("openrouter/vendor/model")).toEqual({ provider: "openrouter", id: "vendor/model" });
+	expect(parseNamingModel(" OFF ")).toBeNull();
+	for (const value of ["model", "/model", "provider/", "bad provider/model", "provider/a\nb", "provider/" + "x".repeat(300)]) {
+		expect(() => parseNamingModel(value)).toThrow();
+	}
+});
+
+test("uses the configured naming model without changing the main model", async () => {
+	process.env.PI_TMUX_MODEL = "openrouter/vendor/model";
+	const f = fixture();
+	f.input("Task");
+	await settle();
+	expect(f.requests[0].model).toEqual({ provider: "openrouter", id: "vendor/model" });
+	expect(f.state.title).toBe("fix auth tests");
+});
+
+test("model configuration changes take effect only on extension reload", async () => {
+	process.env.PI_TMUX_MODEL = "custom/first";
+	const f = fixture();
+	process.env.PI_TMUX_MODEL = "off";
+	f.input("Task");
+	await settle();
+	expect(f.requests[0].model).toEqual({ provider: "custom", id: "first" });
+	await f.emit("session_shutdown", "reload");
+	f.load();
+	f.messages.push({ role: "user", content: "Task" });
+	await f.emit("session_start", "reload");
+	await f.emit("agent_settled");
+	expect(f.requests).toHaveLength(1);
+	expect(f.state.title).toBe("* fix auth tests");
+});
+
+test("unavailable configured models do not fall back to the default", async () => {
+	process.env.PI_TMUX_MODEL = "custom/missing";
+	const f = fixture();
+	const lookups: string[][] = [];
+	(f.ctx.modelRegistry as any).find = (provider: string, id: string) => {
+		lookups.push([provider, id]);
+		return undefined;
+	};
+	f.input("Task");
+	await settle();
+	expect(lookups).toEqual([["custom", "missing"]]);
+	expect(f.requests).toHaveLength(0);
+	expect(f.warnings).toHaveLength(1);
+});
+
+test("status-only mode makes no model or projection calls and keeps lifecycle markers", async () => {
+	process.env.PI_TMUX_MODEL = "off";
+	const f = fixture();
+	(f.ctx.sessionManager as any).buildSessionProjection = () => { throw new Error("Must not collect naming context"); };
+	await f.emit("session_start");
+	f.input("Task");
+	await f.emit("session_compact");
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* existing task");
+	expect(f.state.sessionTitle).toBe("* My Session");
+	await f.refresh();
+	f.emit("agent_start");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	await f.emit("session_shutdown");
+	expect(f.state.title).toBe("zsh");
+	expect(f.requests).toHaveLength(0);
+	expect(f.warnings).toHaveLength(0);
+	expect(f.notices.join(" ")).toContain("disabled");
+});
+
+test("invalid configuration disables naming, warns once, and never echoes its value", async () => {
+	process.env.PI_TMUX_MODEL = "invalid synthetic value";
+	const f = fixture();
+	await f.emit("session_start");
+	f.input("Task");
+	await f.emit("agent_settled");
+	expect(f.requests).toHaveLength(0);
+	expect(f.warnings).toHaveLength(1);
+	expect(f.warnings[0]).toContain("PI_TMUX_MODEL");
+	expect(f.warnings[0]).not.toContain(process.env.PI_TMUX_MODEL);
+	expect(f.state.title).toBe("* existing task");
+});
+
+test("manual refresh retries identical failed context and retains waiting status", async () => {
+	const f = fixture([Promise.resolve(response("", "error")), Promise.resolve(response("recovered task"))]);
+	f.messages.push({ role: "user", content: "Task" });
+	await f.emit("session_start");
+	await settle();
+	await f.emit("agent_settled");
+	expect(f.requests).toHaveLength(1);
+	expect(f.warnings).toHaveLength(1);
+	await f.refresh();
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	expect(f.state.title).toBe("* recovered task");
+	expect(f.state.sessionTitle).toBe("* My Session");
+	await f.emit("agent_settled");
+	expect(f.requests).toHaveLength(2);
+});
+
+test("manual refresh cancels pending naming and does not wait for the replacement result", async () => {
+	const old = deferred();
+	const next = deferred();
+	const f = fixture([old.promise, next.promise]);
+	f.messages.push({ role: "user", content: "Task" });
+	await f.emit("session_start");
+	await f.refresh();
+	expect(f.requests).toHaveLength(2);
+	expect(f.requests[0].options.signal.aborted).toBe(true);
+	old.resolve(response("old task"));
+	next.resolve(response("new task"));
+	await settle();
+	expect(f.state.title).toBe("new task");
+});
+
+test.each([1, 2])("manual retry discards a completed candidate at slow lookup %i", async (lookup) => {
+	const old = deferred();
+	const next = deferred();
+	const gate = deferred();
+	let hold = false;
+	let lookups = 0;
+	const f = fixture([old.promise, next.promise], async (args) => {
+		if (hold && args[0] === "display-message" && ++lookups === lookup) await gate.promise;
+	});
+	f.messages.push({ role: "user", content: "Task" });
+	await f.emit("session_start");
+	hold = true;
+	old.resolve(response("discarded task"));
+	await settle();
+	await f.refresh();
+	const settled = f.emit("agent_settled");
+	hold = false;
+	gate.resolve(response(""));
+	await settled;
+	expect(f.requests).toHaveLength(2);
+	expect(f.state.title).toBe("* existing task");
+	next.resolve(response("retry task"));
+	await settle();
+	expect(f.state.title).toBe("* retry task");
+	expect(f.calls.filter((args) => args[0] === "rename-window").some((args) => args.at(-1)?.includes("discarded"))).toBe(false);
+});
+
+test("manual refresh rejects arguments, empty context, and noninteractive targets", async () => {
+	const f = fixture();
+	await f.refresh("unexpected args");
+	await f.refresh();
+	f.messages.push({ role: "user", content: "Task" });
+	for (const mode of ["rpc", "json", "text"]) {
+		(f.ctx as any).mode = mode;
+		await f.refresh();
+	}
+	(f.ctx as any).mode = "tui";
+	delete process.env.TMUX_PANE;
+	await f.refresh();
+	await settle();
+	expect(f.requests).toHaveLength(0);
+	expect(f.calls).toHaveLength(0);
+});
+
+test("manual refresh with empty context cancels work for removed dialogue", async () => {
+	const work = deferred();
+	const f = fixture([work.promise]);
+	f.messages.push({ role: "user", content: "Task" });
+	await f.emit("session_start");
+	f.messages.length = 0;
+	await f.refresh();
+	expect(f.requests[0].options.signal.aborted).toBe(true);
+	work.resolve(response("removed task"));
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.requests).toHaveLength(1);
+	expect(f.notices.join(" ")).toContain("No text");
+});
+
+test("manual refresh permits a new warning after a previous naming failure", async () => {
+	const f = fixture();
+	(f.ctx.modelRegistry as any).find = () => undefined;
+	f.messages.push({ role: "user", content: "Task" });
+	await f.emit("session_start");
+	await settle();
+	await f.refresh();
+	await settle();
+	expect(f.warnings).toHaveLength(2);
 });
 
 test("tmux failures are contained and warn only once", async () => {

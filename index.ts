@@ -15,8 +15,22 @@ export const MAX_CONTEXT_LENGTH = 6_000;
 export const MAX_HISTORY_MESSAGES = 8;
 const MAX_HISTORY_TEXT_LENGTH = 1_000;
 const REQUEST_TIMEOUT_MS = 15_000;
-const PROVIDER = "openai-codex";
-const MODEL = "gpt-6-luna";
+const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
+
+// Split at the first slash: routed model IDs can themselves contain slashes.
+// An invalid setting must not silently send dialogue to the default provider.
+export function parseNamingModel(value?: string): { provider: string; id: string } | null {
+	const setting = value?.trim();
+	if (!setting) return { ...DEFAULT_NAMING_MODEL };
+	if (setting.toLowerCase() === "off") return null;
+	const slash = setting.indexOf("/");
+	const provider = setting.slice(0, slash);
+	const id = setting.slice(slash + 1);
+	if (slash < 1 || !/^[a-zA-Z0-9_-]+$/.test(provider) || !/^[\x21-\x7e]+$/.test(id) || setting.length > 256) {
+		throw new Error("PI_TMUX_MODEL must be provider/model or off");
+	}
+	return { provider, id };
+}
 
 // ASCII keeps the character cap equal to the status bar's display width.
 export function cleanTitle(text: string, maxLength = MAX_TITLE_LENGTH): string {
@@ -88,10 +102,18 @@ const runTmux: RunTmux = async (args, signal) => {
 };
 
 export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
+	let namingModel: ReturnType<typeof parseNamingModel> = null;
+	let invalidModelSetting = false;
+	try {
+		namingModel = parseNamingModel(process.env.PI_TMUX_MODEL);
+	} catch {
+		invalidModelSetting = true;
+	}
 	let pending: AbortController | undefined;
 	let generation = 0;
 	let warned = false;
 	let baseTitle: string | undefined;
+	let candidateTitle: string | undefined;
 	let lastNamingContext: string | undefined;
 	let waiting = false;
 	let titleRevision = 0;
@@ -102,6 +124,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		generation++;
 		pending?.abort();
 		pending = undefined;
+		candidateTitle = undefined;
 	};
 
 	const getPane = (ctx: ExtensionContext) => {
@@ -115,36 +138,55 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		ctx.ui.notify(message, "warning");
 	};
 
-	const refreshTitle = (ctx: ExtensionContext, pane: string) => {
+	const readWindowTitle = async (pane: string, signal: AbortSignal) => {
+		const info = await tmux(["display-message", "-p", "-t", pane, "#{session_id}\t#{window_id}\t#{window_name}"], signal);
+		const [session, window, ...titleParts] = info.split("\t");
+		if (!/^\$\d+$/.test(session) || !/^@\d+$/.test(window) || !titleParts.length) {
+			throw new Error("Invalid tmux target");
+		}
+		return titleParts.join("\t");
+	};
+
+	const refreshTitle = (ctx: ExtensionContext, pane: string, requestGeneration?: number) => {
 		const revision = ++titleRevision;
 		const signal = titleLifetime.signal;
+		// Compaction can supersede naming after its model result has completed,
+		// while a queued tmux lookup is still pending. Status-only writes remain
+		// independent of naming generations.
+		const isCurrent = () => !signal.aborted && revision === titleRevision
+			&& (requestGeneration === undefined || requestGeneration === generation);
 		// Serialize writes so a slow rename cannot overwrite a newer status.
 		titleQueue = titleQueue.then(async () => {
-			if (signal.aborted || revision !== titleRevision) return;
-			// Resolve at write time so a moved pane still names its own window.
-			const info = await tmux(["display-message", "-p", "-t", pane, "#{session_id}\t#{window_id}\t#{window_name}"], signal);
-			const [session, window, ...titleParts] = info.split("\t");
-			const currentTitle = titleParts.join("\t");
-			if (!/^\$\d+$/.test(session) || !/^@\d+$/.test(window) || !titleParts.length) {
-				throw new Error("Invalid tmux target");
-			}
-			if (signal.aborted || revision !== titleRevision) return;
+			if (!isCurrent()) return;
+			// Validate the pane's current window before updating its status.
+			await readWindowTitle(pane, signal);
+			if (!isCurrent()) return;
 			// Keep the user's session name intact. The session stays marked while
 			// any Pi pane is waiting, even when another pane starts work or exits.
+			// Target the pane for both renames: it can move after the lookup.
 			await tmux([
 				"set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
-				";", "rename-session", "-t", session, SESSION_TITLE_FORMAT,
+				";", "rename-session", "-t", pane, SESSION_TITLE_FORMAT,
 			], signal);
-			if (signal.aborted || revision !== titleRevision) return;
+			if (!isCurrent()) return;
+			// A move during the marker write can change both the fallback title
+			// and whether the destination needs a rename (including quit's zsh).
+			const currentTitle = await readWindowTitle(pane, signal);
+			if (!isCurrent()) return;
+			// Adopt model output only at the guarded write boundary. Until then,
+			// cancellation can discard it without changing future status-only writes.
+			baseTitle = candidateTitle ?? baseTitle;
+			candidateTitle = undefined;
 			// Leave a custom name alone unless we have a summary or a marker to update.
 			if (!baseTitle && !waiting && !currentTitle.startsWith(READY_PREFIX)) return;
 			const title = formatTitle(baseTitle ?? currentTitle.replace(/^\* /, ""), waiting);
 			if (title !== currentTitle) {
-				// rename-window disables automatic-rename only for this window.
-				await tmux(["rename-window", "-t", window, title], signal);
+				// rename-window disables automatic-rename only for its current window.
+				// Keep leading hyphens in titles from being parsed as tmux options.
+				await tmux(["rename-window", "-t", pane, "--", title], signal);
 			}
 		}).catch(() => {
-			if (!signal.aborted && revision === titleRevision) {
+			if (isCurrent()) {
 				warnOnce(ctx, "tmux window/session status could not be updated. Check tmux.");
 			}
 		});
@@ -177,7 +219,8 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 		timeout.unref();
 		try {
-			const model = ctx.modelRegistry.find(PROVIDER, MODEL);
+			if (!namingModel) return;
+			const model = ctx.modelRegistry.find(namingModel.provider, namingModel.id);
 			if (!model || !ctx.modelRegistry.hasConfiguredAuth(model)) {
 				throw new Error("Naming model unavailable");
 			}
@@ -222,29 +265,36 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			);
 			if (!title) throw new Error("Naming request returned no title");
 
-			baseTitle = title;
+			candidateTitle = title;
 			// A late summary must retain the latest busy/waiting status.
-			void refreshTitle(ctx, pane);
+			void refreshTitle(ctx, pane, requestGeneration);
 		} catch {
 			if (requestGeneration !== generation) return;
-			warnOnce(ctx, `tmux title could not be updated. Check ${PROVIDER}/${MODEL} and tmux.`);
+			warnOnce(ctx, "tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.");
 		} finally {
 			clearTimeout(timeout);
 			if (pending === controller) pending = undefined;
 		}
 	};
 
-	const requestTitle = (ctx: ExtensionContext, prompt = "") => {
+	const requestTitle = (ctx: ExtensionContext, prompt = "", force = false) => {
 		const pane = getPane(ctx);
-		if (!pane) return;
+		if (!pane) return false;
+		if (invalidModelSetting) {
+			warnOnce(ctx, "Invalid PI_TMUX_MODEL. Set provider/model or off, then /reload. Naming is disabled; waiting markers still work.");
+		}
+		if (!namingModel) return false;
 		const text = buildNamingContext(ctx.sessionManager.buildSessionProjection().messages, prompt);
-		if (!text || text === lastNamingContext) return;
+		if (!force && text === lastNamingContext) return false;
+		// Empty projected context still supersedes work based on removed dialogue.
 		cancel();
 		lastNamingContext = text;
+		if (!text) return false;
 		const controller = new AbortController();
 		pending = controller;
 		// Do not await: naming must never delay the agent's response.
 		void nameWindow(text, pane, ctx, controller, generation);
+		return true;
 	};
 
 	const restoreTitle = (ctx: ExtensionContext) => {
@@ -252,6 +302,30 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		requestTitle(ctx);
 		return status;
 	};
+
+	pi.registerCommand("tmux-title", {
+		description: "Refresh the tmux title from active session context, retrying failed naming",
+		handler: async (args, ctx) => {
+			if (args.trim()) {
+				ctx.ui.notify("Usage: /tmux-title", "warning");
+				return;
+			}
+			if (!getPane(ctx)) {
+				ctx.ui.notify("Title refresh requires interactive Pi inside tmux.", "warning");
+				return;
+			}
+			// Explicit retries can report a new failure after the one-time warning.
+			warned = false;
+			if (!namingModel) {
+				if (invalidModelSetting) requestTitle(ctx);
+				else ctx.ui.notify("AI naming is disabled by PI_TMUX_MODEL=off; waiting markers still work.", "info");
+				return;
+			}
+			ctx.ui.notify(requestTitle(ctx, "", true)
+				? "Requested a tmux title refresh."
+				: "No text in the active session to name.", "info");
+		},
+	});
 
 	pi.on("input", (event, ctx) => {
 		if (event.source !== "interactive" || !getPane(ctx) || !event.text.trim()) return { action: "continue" };

@@ -43,13 +43,39 @@ Run `/reload` afterward.
 
 ### Naming model
 
-The naming model is `openai-codex/gpt-6-luna`, using your existing Pi
+The default naming model is `openai-codex/gpt-6-luna`, using your existing Pi
 credentials. Authenticate with `/login` and make sure that model is available.
 This does not change the model used for your main conversation.
 
-There are no extension commands, settings, or environment overrides for the
-naming model. To use another model, change `PROVIDER` and `MODEL` in `index.ts`
-and load that local checkout instead of the installed package.
+Set `PI_TMUX_MODEL` before starting Pi to use another registered model:
+
+```sh
+PI_TMUX_MODEL=anthropic/claude-sonnet-4-5 pi
+```
+
+Use `provider/model` as listed by Pi. Model IDs can contain additional slashes,
+such as `openrouter/vendor/model`. An unset or blank setting uses the default.
+The extension reads this setting when it loads. Changes to a parent shell's
+exports require restarting Pi; `/reload` rereads Pi's own process environment.
+An invalid setting disables naming and warns without falling back to another
+provider. A missing model or missing credentials also does not trigger fallback.
+
+For waiting markers without any naming requests or dialogue collection:
+
+```sh
+PI_TMUX_MODEL=off pi
+```
+
+Status-only mode still formats waiting window names and resets them to `zsh`
+on graceful quit.
+
+### Retry a title
+
+Run `/tmux-title` inside interactive Pi in tmux to refresh from the active
+session context. It retries even when the context matches a failed request,
+cancels any outstanding naming request, and preserves the current waiting
+status. The command takes no arguments and returns without waiting for the
+model. An empty session makes no request. Naming must be enabled.
 
 ## Behavior
 
@@ -72,20 +98,28 @@ and load that local checkout instead of the installed package.
   and graceful shutdown. Marker updates alone make no additional model calls
   and still work if the naming model is unavailable.
 - The extension targets the window and session containing Pi's `TMUX_PANE`,
-  even if you have switched focus elsewhere.
+  even if you have switched focus elsewhere. Renames use the pane ID so a
+  move after the title lookup does not rename its former window or session.
+  After marker writes, the window title is read again so a move during that
+  update does not copy the source title or incorrectly skip quit cleanup.
 - Session markers aggregate waiting Pi panes across all windows. A busy or
   exiting pane does not clear the marker while another pane is waiting.
   Session names are not summarized, lowercased, or clipped.
-- Changed naming context cancels the previous request. Session changes, tree
-  navigation, reload, and shutdown cancel outstanding work too.
+- Changed naming context cancels the previous request, including when a
+  refresh finds no remaining naming text after context edits. It also discards
+  queued title updates from superseded requests at tmux command boundaries.
+  Later status updates keep the previously applied title rather than reusing a
+  discarded model result. Session changes, tree navigation, reload, and shutdown
+  cancel outstanding work too.
 - Naming requests use SSE, with reasoning, retries, and cache retention
   disabled. Requests have a 15-second timeout and a 96-token output cap.
 - Print, JSON, and RPC modes do not update tmux names or markers.
   Extension-injected input does not directly request a title; later refreshes
   can include resulting dialogue.
 - Naming failures keep the existing task name; waiting status can still
-  update. At most one warning appears per extension load. Identical context
-  is not retried automatically after a failed naming request.
+  update. At most one automatic warning appears per extension load. Identical
+  context is not retried automatically after a failed naming request.
+  `/tmux-title` allows another warning if the explicit retry fails.
 
 ### Shared panes and cleanup
 
@@ -110,7 +144,8 @@ tmux set-window-option -t <window-id> automatic-rename on
 
 ## Privacy and security
 
-The naming model receives up to 6,000 characters of task context:
+With AI naming enabled, the configured naming model receives up to 6,000
+characters of task context:
 
 - The first 2,000 characters of your new prompt, when present.
 - Up to eight recent user, assistant, or branch-summary text entries, each
@@ -121,7 +156,9 @@ Images, thinking blocks, tool calls, tool results, shell output, system prompts,
 and custom extension messages are excluded. Summaries and ordinary dialogue
 can still mention details from tool output. Provider billing, subscription
 limits, and data handling apply to these additional requests. A run can request
-a title on input and again at settlement when its context changes.
+a title on input and again at settlement when its context changes. Each
+`/tmux-title` retry also makes a request when naming context is available.
+`PI_TMUX_MODEL=off` prevents all of these naming requests.
 
 The model is instructed not to include secrets or personal information in
 titles, but this is not a redaction guarantee. Do not put secrets into prompts.
@@ -131,7 +168,7 @@ session-persistence plugins.
 This extension does not write prompts, responses, or credentials to files,
 and it does not print provider error payloads. Authentication is resolved by
 Pi. tmux runs with argument arrays, not interpolated shell commands; generated
-names cannot become shell commands or tmux format expressions.
+names cannot become shell commands, tmux options, or tmux format expressions.
 
 Like other Pi extensions, it runs with the same OS permissions as Pi. This
 repository contains source and synthetic tests only. Keep credentials,
@@ -150,7 +187,8 @@ bun test
 - `index.ts` contains the extension, title formatting, context selection, and
   tmux status updates.
 - `tests/title.test.ts` covers formatting, context bounds and exclusions,
-  naming cancellation, lifecycle events, waiting markers, and failures with
+  naming cancellation, model configuration, status-only mode, explicit retries,
+  lifecycle events, waiting markers, and failures with
   mock model responses and tmux commands.
 - `tests/session.test.ts` checks session-marker aggregation across windows and
   panes against a separate temporary tmux server with no user configuration.
