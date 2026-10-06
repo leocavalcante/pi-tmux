@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { getEventListeners } from "node:events";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, STATUS_INFO_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
 
@@ -119,6 +120,28 @@ function deferred() {
 	return { promise, resolve };
 }
 
+async function withNamingTimers(run: (timers: { handle: ReturnType<typeof setTimeout>; fire: () => void }[], cleared: Set<unknown>) => Promise<void>) {
+	const nativeSet = globalThis.setTimeout;
+	const nativeClear = globalThis.clearTimeout;
+	const timers: { handle: ReturnType<typeof setTimeout>; fire: () => void }[] = [];
+	const cleared = new Set<unknown>();
+	const set = spyOn(globalThis, "setTimeout").mockImplementation((callback: any, delay?: number, ...args: any[]) => {
+		const handle = nativeSet(callback, delay, ...args);
+		if (delay === 15_000) timers.push({ handle, fire: () => callback(...args) });
+		return handle;
+	});
+	const clear = spyOn(globalThis, "clearTimeout").mockImplementation((handle) => {
+		cleared.add(handle);
+		nativeClear(handle);
+	});
+	try { await run(timers, cleared); }
+	finally {
+		set.mockRestore();
+		clear.mockRestore();
+		for (const { handle } of timers) nativeClear(handle);
+	}
+}
+
 test("cleans markup, accents, controls, and tmux formatting characters", () => {
 	expect(cleanTitle('"Fix café\n# auth"\u001b')).toBe("fix cafe auth");
 	expect(cleanTitle("Fix auth tests")).toBe("fix auth tests");
@@ -209,6 +232,132 @@ test("shutdown and session replacement cancel outstanding naming", async () => {
 			event === "session_shutdown" ? [quitCommand()] : [],
 		);
 	}
+});
+
+test("deadline settles pending naming even when the provider never settles", async () => {
+	await withNamingTimers(async (timers, cleared) => {
+		const f = fixture([new Promise(() => {})]);
+		f.input("synthetic task");
+		await settle();
+		expect(timers).toHaveLength(1);
+		expect(timers[0].handle.hasRef()).toBe(false);
+		timers[0].fire();
+		await settle();
+		expect(f.requests[0].options.signal.aborted).toBe(true);
+		expect(cleared.has(timers[0].handle)).toBe(true);
+		expect(getEventListeners(f.requests[0].options.signal, "abort")).toHaveLength(0);
+		await f.refresh("status");
+		expect(f.notices.at(-1)).toContain("Naming request: idle");
+		expect(f.warnings).toHaveLength(1);
+		expect(f.state.title).toBe("existing task");
+		await f.emit("agent_settled");
+		expect(f.state.title).toBe("* existing task");
+		expect(f.requests).toHaveLength(1);
+	});
+});
+
+test.each(["resolve", "reject"])("late provider %s after timeout is consumed without changing the title or warning again", async (completion) => {
+	await withNamingTimers(async (timers) => {
+		let resolve!: (value: ReturnType<typeof response>) => void;
+		let reject!: (error: Error) => void;
+		const work = new Promise<ReturnType<typeof response>>((done, fail) => { resolve = done; reject = fail; });
+		const f = fixture([work]);
+		f.input("synthetic task");
+		await settle();
+		timers[0].fire();
+		await settle();
+		expect(f.warnings).toHaveLength(1);
+		if (completion === "resolve") resolve(response("stale late title"));
+		else reject(new Error("Synthetic private provider error"));
+		await settle();
+		expect(f.warnings).toHaveLength(1);
+		expect(f.warnings.join("\n")).not.toContain("Synthetic private provider error");
+		expect(f.state.title).toBe("existing task");
+	});
+});
+
+test("a retry after timeout works and late cleanup cannot clear a newer pending request", async () => {
+	await withNamingTimers(async (timers, cleared) => {
+		const old = deferred();
+		const fresh = deferred();
+		const f = fixture([old.promise, fresh.promise]);
+		f.input("synthetic task");
+		await settle();
+		f.messages.push({ role: "user", content: "synthetic task" });
+		timers[0].fire();
+		await settle();
+		await f.refresh();
+		expect(f.requests).toHaveLength(2);
+		expect(cleared.has(timers[0].handle)).toBe(true);
+		expect(cleared.has(timers[1].handle)).toBe(false);
+		old.resolve(response("stale title"));
+		await settle();
+		await f.refresh("status");
+		expect(f.notices.at(-1)).toContain("Naming request: pending");
+		fresh.resolve(response("fresh title"));
+		await settle();
+		expect(f.state.title).toBe("fresh title");
+		expect(cleared.has(timers[1].handle)).toBe(true);
+		expect(getEventListeners(f.requests[1].options.signal, "abort")).toHaveLength(0);
+	});
+});
+
+test.each(["new input", "manual pin", "reload", "quit", "session tree"])("%s releases naming timers and listeners even when the provider hangs", async (cancellation) => {
+	await withNamingTimers(async (timers, cleared) => {
+		const work = deferred();
+		const f = fixture([work.promise, new Promise(() => {})]);
+		f.input("synthetic task");
+		await settle();
+		if (cancellation === "new input") f.input("another task");
+		else if (cancellation === "manual pin") await f.refresh("set pinned task");
+		else if (cancellation === "session tree") await f.emit("session_tree");
+		else await f.emit("session_shutdown", cancellation);
+		await settle();
+		expect(cleared.has(timers[0].handle)).toBe(true);
+		expect(getEventListeners(f.requests[0].options.signal, "abort")).toHaveLength(0);
+		expect(f.warnings).toEqual([]);
+		work.resolve(response("stale title"));
+		await settle();
+		expect(f.state.title).not.toBe("stale title");
+		expect(f.warnings).toEqual([]);
+		await f.emit("session_shutdown", "quit");
+	});
+});
+
+test.each(["success", "rejection", "promise rejection", "stream throw", "result throw", "unavailable"])("naming %s clears the timer and abort listener", async (completion) => {
+	await withNamingTimers(async (timers, cleared) => {
+		const work = deferred();
+		const f = fixture([work.promise]);
+		if (completion === "promise rejection") (f.ctx.modelRegistry as any).streamSimple = () => ({ result: () => Promise.reject(new Error("Synthetic provider rejection")) });
+		if (completion === "stream throw") (f.ctx.modelRegistry as any).streamSimple = () => { throw new Error("Synthetic stream failure"); };
+		if (completion === "result throw") (f.ctx.modelRegistry as any).streamSimple = () => ({ result: () => { throw new Error("Synthetic result failure"); } });
+		if (completion === "unavailable") (f.ctx.modelRegistry as any).find = () => undefined;
+		f.input("synthetic task");
+		await settle();
+		if (completion === "success") work.resolve(response("fresh title"));
+		if (completion === "rejection") work.resolve(response("", "error"));
+		await settle();
+		expect(cleared.has(timers[0].handle)).toBe(true);
+		if (f.requests[0]) expect(getEventListeners(f.requests[0].options.signal, "abort")).toHaveLength(0);
+		await f.refresh("status");
+		expect(f.notices.at(-1)).toContain("Naming request: idle");
+		expect(f.warnings).toHaveLength(completion === "success" ? 0 : 1);
+	});
+});
+
+test("cancellation during model lookup prevents starting a provider and releases its timer", async () => {
+	await withNamingTimers(async (timers, cleared) => {
+		const f = fixture();
+		(f.ctx.modelRegistry as any).find = () => {
+			void f.emit("session_shutdown", "reload");
+			return { provider: "synthetic", id: "synthetic" };
+		};
+		f.input("synthetic task");
+		await settle();
+		expect(f.requests).toEqual([]);
+		expect(cleared.has(timers[0].handle)).toBe(true);
+		expect(f.warnings).toEqual([]);
+	});
 });
 
 test("missing model leaves the name alone and warns only once", async () => {

@@ -126,6 +126,22 @@ const runTmux: RunTmux = async (args, signal) => {
 	return stdout.replace(/\r?\n$/, "");
 };
 
+// Stop waiting even when a provider ignores its signal. The attached rejection
+// handler also consumes late provider failures after timeout or cancellation.
+function abortableResult<T>(start: () => Promise<T>, signal: AbortSignal): Promise<T> {
+	let onAbort!: () => void;
+	return new Promise<T>((resolve, reject) => {
+		onAbort = () => reject(new Error("Naming request aborted"));
+		signal.addEventListener("abort", onAbort, { once: true });
+		if (signal.aborted) { onAbort(); return; }
+		try {
+			start().then(resolve, reject);
+		} catch (error) {
+			reject(error);
+		}
+	}).finally(() => signal.removeEventListener("abort", onAbort));
+}
+
 export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	let namingModel: ReturnType<typeof parseNamingModel> = null;
 	let invalidModelSetting = false;
@@ -335,7 +351,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			if (!model || !ctx.modelRegistry.hasConfiguredAuth(model)) {
 				throw new Error("Naming model unavailable");
 			}
-			const response = await ctx.modelRegistry.streamSimple(
+			const response = await abortableResult(() => ctx.modelRegistry.streamSimple(
 				model,
 				{
 					systemPrompt: [
@@ -363,7 +379,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 					timeoutMs: REQUEST_TIMEOUT_MS,
 					maxRetries: 0,
 				},
-			).result();
+			).result(), controller.signal);
 			if (controller.signal.aborted || requestGeneration !== generation) return;
 			if (response.stopReason === "error" || response.stopReason === "aborted") {
 				throw new Error("Naming request failed");

@@ -185,6 +185,11 @@ Repeat the command to retry them.
   cancel outstanding work too.
 - Naming requests use SSE, with reasoning, retries, and cache retention
   disabled. Requests have a 15-second timeout and a 96-token output cap.
+  The extension stops waiting at the deadline even if a provider ignores
+  cancellation. It clears its pending state, timer, and abort listener, and
+  ignores late results or failures. A provider that ignores aborts may still
+  keep its underlying request alive. Cancellation from new input or lifecycle
+  changes releases the extension's timer and listener without waiting for it.
 - Print, JSON, and RPC modes do not update tmux names or markers.
   Extension-injected input does not directly request a title; later refreshes
   can include resulting dialogue.
@@ -223,7 +228,8 @@ tmux set-option -p -t <pane-id> @pi-tmux-waiting 0
 
 Pane moves do not trigger an immediate update. The moved Pi's next status
 update also refreshes its most recently observed former window and session
-markers. `/tmux-title sync` performs this update on demand without an AI request. Repair uses each window's latest task text and respects other panes'
+markers. `/tmux-title sync` performs this update on demand without an AI
+request. Repair uses each window's latest task text and respects other panes'
 waiting flags. Unmarked custom window names and their automatic-rename setting
 stay unchanged. Vanished targets are ignored; transient failures are retried
 on later status updates. Tracking is in memory, limited to eight former windows
