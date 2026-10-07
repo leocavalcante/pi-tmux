@@ -79,31 +79,40 @@ export const QUIT_TITLE_FORMAT = `#{?${WINDOW_ACTIVE_FORMAT},${SHARED_TASK_TITLE
 // Use Pi's active projection so abandoned branches, compacted originals, and
 // text removed by context edits never leak back into the naming request.
 export function buildNamingContext(messages: SessionProjection["messages"], prompt = ""): string {
+	// Walk backward so text from history older than the retained window is never
+	// copied into temporary strings. The latest compaction summary is independent
+	// of the dialogue limit, so keep scanning for it even after finding 8 entries.
 	const history: string[] = [];
 	let summary = "";
-	for (const message of messages) {
+	let foundSummary = false;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i];
 		if (message.role === "compactionSummary") {
-			const text = message.summary.trim();
-			summary = text ? `summary: ${text.slice(0, MAX_HISTORY_TEXT_LENGTH)}` : "";
-			continue;
+			if (!foundSummary) {
+				const text = message.summary.trim();
+				summary = text ? `summary: ${text.slice(0, MAX_HISTORY_TEXT_LENGTH)}` : "";
+				foundSummary = true;
+			}
+		} else if (history.length < MAX_HISTORY_MESSAGES) {
+			if (message.role === "branchSummary") {
+				const text = message.summary.trim();
+				if (text) history.push(`branch summary: ${text.slice(0, MAX_HISTORY_TEXT_LENGTH)}`);
+			} else if (message.role === "user" || message.role === "assistant") {
+				const text = (typeof message.content === "string" ? message.content : message.content
+					.filter((block) => block.type === "text")
+					.map((block) => block.text).join("\n")).trim();
+				if (text) history.push(`${message.role}: ${text.slice(0, MAX_HISTORY_TEXT_LENGTH)}`);
+			}
 		}
-		if (message.role === "branchSummary") {
-			const text = message.summary.trim();
-			if (text) history.push(`branch summary: ${text.slice(0, MAX_HISTORY_TEXT_LENGTH)}`);
-			continue;
-		}
-		if (message.role !== "user" && message.role !== "assistant") continue;
-		const text = (typeof message.content === "string" ? message.content : message.content
-			.filter((block) => block.type === "text")
-			.map((block) => block.text).join("\n")).trim();
-		if (text) history.push(`${message.role}: ${text.slice(0, MAX_HISTORY_TEXT_LENGTH)}`);
+		if (foundSummary && history.length >= MAX_HISTORY_MESSAGES) break;
 	}
 
 	const latest = prompt.trim().slice(0, MAX_PROMPT_LENGTH);
 	const parts = latest ? [`user: ${latest}`] : [];
 	let remaining = MAX_CONTEXT_LENGTH - parts.join("\n\n").length - (summary ? summary.length + 2 : 0);
-	// Prefer recent dialogue without allowing one long response to fill the budget.
-	for (const text of history.slice(-MAX_HISTORY_MESSAGES).reverse()) {
+	// The backward scan already selected recent entries, newest first. Prepending
+	// them preserves chronological context while prioritizing the latest dialogue.
+	for (const text of history) {
 		const separator = parts.length ? 2 : 0;
 		if (text.length + separator > remaining) break;
 		parts.unshift(text);

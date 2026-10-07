@@ -812,6 +812,26 @@ test("naming context bounds history and prioritizes recent dialogue and the new 
 	expect(large.endsWith("user: " + "NEW_PROMPT".repeat(1_000).slice(0, MAX_PROMPT_LENGTH))).toBe(true);
 });
 
+test("naming context does not read text from history older than its retained window", () => {
+	let readDiscardedContent = false;
+	const discarded = { role: "user" } as any;
+	Object.defineProperty(discarded, "content", {
+		get() {
+			readDiscardedContent = true;
+			throw new Error("Discarded history should not be copied");
+		},
+	});
+	const recent = Array.from({ length: MAX_HISTORY_MESSAGES }, (_, i) => ({
+		role: "user", content: `recent-${i}`,
+	}));
+
+	const context = buildNamingContext([discarded, ...recent] as any);
+	expect(context).toContain("recent-0");
+	expect(context).toContain(`recent-${MAX_HISTORY_MESSAGES - 1}`);
+	expect(context).not.toContain("Discarded");
+	expect(readDiscardedContent).toBe(false);
+});
+
 test("empty projected context cancels stale naming without preventing a later request", async () => {
 	for (const event of ["session_compact", "agent_settled"]) {
 		for (const staleResult of [response("Removed task"), response("Synthetic error", "error")]) {
