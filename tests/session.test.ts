@@ -248,7 +248,7 @@ test.skipIf(!hasTmux).each([
 		process.env.TMUX_PANE = pane;
 		const handlers = new Map<string, Function>();
 		let quitting = false;
-		const latestTitle = "literal #{session_id}, -peer ";
+		const latestTitle = "literal #{session_id}, Café\u2003-peer  ";
 		piTmux(mockPi(handlers), async (args) => {
 			if (quitting && args[0] === "rename-window") {
 				quitting = false;
@@ -333,9 +333,9 @@ test.skipIf(!hasTmux)("tmux aggregates waiting panes across windows and preserve
 	const socket = join(directory, "socket");
 	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
 		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
-	}).trim();
+	}).replace(/\r?\n$/, "");
 	try {
-		const name = "My Café Session " + "X".repeat(40) + " #{session_id}";
+		const name = "My\u2003Café Session " + "X".repeat(40) + " #{session_id}  ";
 		const session = tmux("new-session", "-d", "-P", "-F", "#{session_id}", "-s", name.replaceAll("#", "##"), "/bin/sleep 60");
 		const firstPane = tmux("display-message", "-p", "-t", session, "#{pane_id}");
 		const secondPane = tmux("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", session, "/bin/sleep 60");
