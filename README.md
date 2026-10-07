@@ -318,9 +318,11 @@ npm test
 - `tests/status.test.ts` verifies read-only diagnostic snapshots and waiting-flag
   aggregation on an isolated tmux server. It skips if tmux is unavailable.
 
-Development tests require Bun and tmux. GitHub Actions runs the type check,
-tests, and package-content check on Linux with Node.js 22 and 24 and Bun 1.4.2.
-The tests make no model API calls and do not rename your windows or sessions.
+Development tests require Bun. The tmux integration tests use separate temporary
+servers and skip automatically when `tmux` is unavailable; install tmux to run
+that integration coverage. GitHub Actions runs the type check, tests, and
+package-content check on Linux with Node.js 22 and 24 and Bun 1.4.2. The tests
+make no model API calls and do not rename your windows or sessions.
 
 Try the checkout in Pi without changing your settings:
 
