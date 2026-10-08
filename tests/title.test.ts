@@ -222,9 +222,25 @@ test("bounds prompt and output and disables reasoning and retries", async () => 
 	expect(request.options).toMatchObject({ maxTokens: 96, reasoning: undefined, maxRetries: 0, cacheRetention: "none" });
 });
 
+test("input skips trimming a bounded prompt's unneeded suffix", async () => {
+	const f = fixture();
+	const trim = spyOn(String.prototype, "trim").mockImplementation(() => {
+		throw new Error("The input gate must not scan the prompt suffix");
+	});
+	try {
+		expect(f.input("Task" + " ".repeat(100_000))).toEqual({ action: "continue" });
+	} finally {
+		trim.mockRestore();
+	}
+	await settle();
+	expect(f.requests[0].context.messages[0].content).toBe("user: Task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([renameCommand("fix auth tests")]);
+});
+
 test("ignores print/RPC, injected messages, empty input, and non-tmux sessions", async () => {
 	const f = fixture();
 	f.input("", "interactive");
+	f.input("\u00a0\ufeff \n\t", "interactive");
 	f.input("Injected task", "extension");
 	f.input("RPC task", "rpc");
 	(f.ctx as any).mode = "text";

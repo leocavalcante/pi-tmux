@@ -95,6 +95,7 @@ const WINDOW_REPAIR_NEEDED_FORMAT = `#{!=:#{window_name},${SHARED_TASK_TITLE_FOR
 export const QUIT_TITLE_FORMAT = `#{?${WINDOW_ACTIVE_FORMAT},${SHARED_TASK_TITLE_FORMAT},${buildWindowTitleFormat("zsh")}}`;
 
 const WHITESPACE = /\s/;
+const HAS_NON_WHITESPACE = /\S/;
 
 // Keep only the bounded prefix while trimming, rather than joining all text
 // blocks from a large message before slicing it. Once the retained prefix is
@@ -698,7 +699,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	});
 
 	pi.on("input", (event, ctx) => {
-		if (event.source !== "interactive" || !getPane(ctx) || !event.text.trim()) return { action: "continue" };
+		if (event.source !== "interactive" || !getPane(ctx) || !HAS_NON_WHITESPACE.test(event.text)) return { action: "continue" };
 		void setWaiting(ctx, false);
 		requestTitle(ctx, event.text);
 		return { action: "continue" };
