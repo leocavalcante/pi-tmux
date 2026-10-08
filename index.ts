@@ -300,24 +300,30 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				}
 			}
 			const { title: currentTitle, waiting: windowWaiting } = current;
-			// Adopt model output only at the guarded write boundary. Until then,
-			// cancellation can discard it without changing future status-only writes.
-			baseTitle = candidateTitle ?? baseTitle;
-			candidateTitle = undefined;
+			// Keep model output provisional until its tmux update succeeds. A failed
+			// or superseded write must not affect later status-only title decisions.
+			const candidate = candidateTitle;
 			// Leave a custom name alone unless we have a summary or a marker to update.
-			if (!baseTitle && !windowWaiting && !currentTitle.startsWith(READY_PREFIX)) {
+			if (!candidate && !baseTitle && !windowWaiting && !currentTitle.startsWith(READY_PREFIX)) {
 				updated = isCurrent() && stable;
 				return;
 			}
-			const taskTitle = baseTitle ?? currentTitle.replace(/^\* /, "");
+			const taskTitle = candidate ?? baseTitle ?? currentTitle.replace(/^\* /, "");
 			const title = formatTitle(taskTitle, windowWaiting);
 			if (title !== currentTitle) {
 				// Rename the pane's current window, aggregating its current statuses on
 				// the server rather than trusting the earlier client-side snapshot.
-				const format = !active && baseTitle === "zsh" ? QUIT_TITLE_FORMAT : buildWindowTitleFormat(taskTitle);
+				const format = !active && taskTitle === "zsh" ? QUIT_TITLE_FORMAT : buildWindowTitleFormat(taskTitle);
 				await tmux(["rename-window", "-t", pane, "--", format], signal);
 			}
-			updated = isCurrent() && stable;
+			if (!isCurrent()) return;
+			// Preserve a current candidate after failures so /tmux-title sync can
+			// retry it; commit only after a successful, still-current update.
+			if (candidate !== undefined && candidateTitle === candidate) {
+				baseTitle = candidate;
+				candidateTitle = undefined;
+			}
+			updated = stable;
 		}).catch(() => {
 			if (isCurrent()) {
 				warnOnce(ctx, "tmux window/session status could not be updated. Check tmux.");

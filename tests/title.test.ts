@@ -860,6 +860,32 @@ test("empty projected context cancels stale naming without preventing a later re
 	}
 });
 
+test("a cancelled naming result that fails during rename is not reused by later status updates", async () => {
+	const gate = deferred();
+	let held = false;
+	const f = fixture([Promise.resolve(response("Removed task"))], async (args) => {
+		if (!held && args[0] === "rename-window") {
+			held = true;
+			await gate.promise;
+			throw new Error("Synthetic stale rename failure");
+		}
+	});
+	f.input("Original task");
+	await settle();
+	expect(held).toBe(true);
+
+	f.messages.length = 0;
+	await f.emit("session_compact");
+	gate.resolve(response(""));
+	await settle();
+	await f.emit("agent_start");
+	await settle();
+
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window" && args[4].includes("removed task"))).toHaveLength(1);
+	expect(f.warnings).toEqual([]);
+});
+
 test.each([1, 2])("compaction invalidates a completed naming result at slow title lookup %i", async (lookupToHold) => {
 	for (const empty of [false, true]) {
 		for (const failLookup of [false, true]) {
@@ -978,6 +1004,25 @@ test.each([1, 2])("a status revision still adopts a current candidate at slow lo
 	expect(f.state.title).toBe("* current task");
 	expect(f.requests).toHaveLength(1);
 	expect(f.warnings).toEqual([]);
+});
+
+test("a failed current naming rename remains available for a later sync retry", async () => {
+	let fail = true;
+	const f = fixture([Promise.resolve(response("Current task"))], async (args) => {
+		if (fail && args[0] === "rename-window" && args[4].includes("current task")) {
+			fail = false;
+			throw new Error("Synthetic transient rename failure");
+		}
+	});
+	f.input("Task");
+	await settle();
+	await f.refresh("status");
+	expect(f.notices.at(-1)).toContain("Naming request: ready to apply");
+	await f.refresh("sync");
+
+	expect(f.state.title).toBe("current task");
+	expect(f.requests).toHaveLength(1);
+	expect(f.warnings).toHaveLength(1);
 });
 
 test("empty or non-text history does not start a naming request", async () => {
