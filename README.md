@@ -317,6 +317,8 @@ npm test
   and stabilization bounds also have a mock-only regression.
 - `tests/status.test.ts` verifies read-only diagnostic snapshots and waiting-flag
   aggregation on an isolated tmux server. It skips if tmux is unavailable.
+- `tests/package.test.ts` checks that the Pi extension entrypoint is pack-listed
+  and loads after TypeScript erasure without a runtime SDK dependency.
 
 Development tests require Bun. The tmux integration tests use separate temporary
 servers and skip automatically when `tmux` is unavailable; install tmux to run
