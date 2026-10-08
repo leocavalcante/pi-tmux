@@ -325,6 +325,8 @@ npm test
 - `tests/session.test.ts` checks window and session aggregation, shared-window
   ownership, concurrent status and ownership changes at rename time, and pane
   moves against a separate temporary tmux server with no user configuration.
+  Its command wrapper strips only the final line ending so trailing spaces in
+  literal tmux names remain observable in assertions.
   It skips if tmux is unavailable.
 - `tests/move.test.ts` checks former-location marker repair, remaining peers,
   custom names, vanished targets, repeated moves, explicit sync retries, superseded repairs,

@@ -54,7 +54,7 @@ test.skipIf(!hasTmux).each([
 	const originalPane = process.env.TMUX_PANE;
 	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
 		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
-	}).trim();
+	}).replace(/\r?\n$/, "");
 	try {
 		const source = tmux("new-session", "-d", "-P", "-F", "#{session_id}", "-s", "Source", "-n", sourceTitle, "/bin/sleep 60");
 		const pane = tmux("display-message", "-p", "-t", source, "#{pane_id}");
@@ -103,7 +103,7 @@ test.skipIf(!hasTmux)("leading-hyphen titles remain literal when clearing a wait
 	const originalPane = process.env.TMUX_PANE;
 	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
 		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
-	}).trim();
+	}).replace(/\r?\n$/, "");
 	try {
 		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "LiteralTitle", "-n", "-fix auth", "/bin/sleep 60");
 		process.env.TMUX_PANE = pane;
@@ -134,7 +134,7 @@ test.skipIf(!hasTmux).each([false, true])("window renames re-evaluate sibling st
 	const originalPane = process.env.TMUX_PANE;
 	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
 		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
-	}).trim();
+	}).replace(/\r?\n$/, "");
 	try {
 		process.env.PI_TMUX_MODEL = "off";
 		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Concurrent", "-n", "initial", "/bin/sleep 60");
@@ -172,7 +172,7 @@ test.skipIf(!hasTmux)("the real tmux adapter preserves empty window names", asyn
 	const originalTmux = process.env.TMUX;
 	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
 		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
-	}).trim();
+	}).replace(/\r?\n$/, "");
 	try {
 		process.env.PI_TMUX_MODEL = "off";
 		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "EmptyTitle", "/bin/sleep 60");
@@ -206,7 +206,7 @@ test.skipIf(!hasTmux).each([false, true])("quitting one Pi preserves a live sibl
 	const originalPane = process.env.TMUX_PANE;
 	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
 		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
-	}).trim();
+	}).replace(/\r?\n$/, "");
 	try {
 		process.env.PI_TMUX_MODEL = "off";
 		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Owners", "/bin/sleep 60");
@@ -236,8 +236,10 @@ test.skipIf(!hasTmux).each([false, true])("quitting one Pi preserves a live sibl
 		await first.pin("first task");
 		await second.pin("peer task");
 		if (waiting) await second.emit("agent_settled");
+		// The surviving owner's literal title must survive quit cleanup byte-for-byte.
+		tmux("rename-window", "-t", sibling, "--", "peer task  ");
 		await first.emit("session_shutdown");
-		expect(tmux("display-message", "-p", "-t", sibling, "#{window_name}")).toBe(waiting ? "* peer task" : "peer task");
+		expect(tmux("display-message", "-p", "-t", sibling, "#{window_name}")).toBe(waiting ? "* peer task  " : "peer task  ");
 		expect(tmux("show-options", "-p", "-v", "-t", pane, ACTIVE_OPTION)).toBe("0");
 		expect(tmux("show-options", "-p", "-v", "-t", sibling, ACTIVE_OPTION)).toBe("1");
 		await second.emit("session_shutdown");
@@ -302,7 +304,7 @@ test.skipIf(!hasTmux)("window markers aggregate only their own waiting panes", a
 	const originalPane = process.env.TMUX_PANE;
 	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
 		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
-	}).trim();
+	}).replace(/\r?\n$/, "");
 	try {
 		process.env.PI_TMUX_MODEL = "off";
 		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "* Important", "-n", "shared task", "/bin/sleep 60");
