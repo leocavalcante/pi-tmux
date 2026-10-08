@@ -158,6 +158,19 @@ test("caps names at 24 ASCII cells, preferably on a word boundary", () => {
 	expect(cleanTitle("x".repeat(24))).toHaveLength(MAX_TITLE_LENGTH);
 });
 
+test("accepts an empty window-name field and supplies the waiting fallback", async () => {
+	const f = fixture();
+	f.state.title = "";
+	await f.emit("session_start");
+	expect(f.state.title).toBe("");
+	expect(f.writes).toEqual([]);
+	expect(f.warnings).toEqual([]);
+
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* pi");
+	expect(f.warnings).toEqual([]);
+});
+
 test("passes input through immediately and renames the owning window", async () => {
 	const f = fixture();
 	expect(f.input("Fix the failing authentication tests")).toEqual({ action: "continue" });

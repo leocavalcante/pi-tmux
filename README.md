@@ -303,10 +303,10 @@ npm test
 - `index.ts` contains the extension, title formatting, context selection, and
   tmux status updates.
 - `tests/title.test.ts` covers formatting, context bounds and exclusions,
-  naming cancellation, model configuration, status-only mode, explicit retries,
-  manual pins, read-only diagnostics, model-free sync, truthful confirmations,
-  lifecycle events, waiting markers, and
-  failures with mock model responses and tmux commands.
+  naming cancellation, model configuration, empty window-name fields, status-only
+  mode, explicit retries, manual pins, read-only diagnostics, model-free sync,
+  truthful confirmations, lifecycle events, waiting markers, and failures with
+  mock model responses and tmux commands.
 - `tests/session.test.ts` checks window and session aggregation, shared-window
   ownership, concurrent status and ownership changes at rename time, and pane
   moves against a separate temporary tmux server with no user configuration.
@@ -322,9 +322,12 @@ npm test
 
 Development tests require Bun. The tmux integration tests use separate temporary
 servers and skip automatically when `tmux` is unavailable; install tmux to run
-that integration coverage. GitHub Actions runs the type check, tests, and
-package-content check on Linux with Node.js 22 and 24 and Bun 1.4.2. The tests
-make no model API calls and do not rename your windows or sessions.
+that integration coverage. The integration fixtures use Unix paths (`/dev/null`
+and `/bin/sleep`), so run them on a Unix-like host such as Linux, macOS, or WSL.
+Mock-only tests, including empty window-name parsing, do not need tmux. GitHub
+Actions runs the type check, tests, and package-content check on Linux with
+Node.js 22 and 24 and Bun 1.4.2. The tests make no model API calls and do not
+rename your windows or sessions.
 
 Try the checkout in Pi without changing your settings:
 
