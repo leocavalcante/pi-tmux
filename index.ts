@@ -10,12 +10,30 @@ export const ACTIVE_OPTION = "@pi-tmux-active";
 // tmux evaluates this on the server after the pane status write, so concurrent
 // Pi instances aggregate their status without a client-side read/rename race.
 export const SESSION_WAITING_FORMAT = `#{m:*1*,#{W:#{P:#{${WAITING_OPTION}}}}}`;
+// Preserve the original format for RunTmux adapters that return legacy target
+// fields; capable tmux servers use the stored-base format below.
 export const SESSION_TITLE_FORMAT =
 	`#{?${SESSION_WAITING_FORMAT},${READY_PREFIX},}#{s/^\\* //:session_name}`;
+const SESSION_BASE_NAME_OPTION = "@pi-tmux-session-base-name";
+const SESSION_TITLE_MARKED_OPTION = "@pi-tmux-session-title-marked";
+const SESSION_BASE_NAME_VALUE_FORMAT = `#{${SESSION_BASE_NAME_OPTION}}`;
+const SESSION_NAME_IS_BASE_FORMAT = `#{==:#{session_name},${SESSION_BASE_NAME_VALUE_FORMAT}}`;
+const SESSION_NAME_IS_MARKED_BASE_FORMAT =
+	`#{==:#{session_name},${READY_PREFIX}${SESSION_BASE_NAME_VALUE_FORMAT}}`;
+// The transitional state lets concurrent Pi updates safely overlap the rename.
+// The steady state also detects user renames that happen to begin with `* `.
+const SESSION_BASE_NAME_UPDATE_FORMAT =
+	`#{?#{==:#{${SESSION_TITLE_MARKED_OPTION}},transition},#{?${SESSION_NAME_IS_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},#{?${SESSION_NAME_IS_MARKED_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},#{session_name}}},#{?#{==:#{${SESSION_TITLE_MARKED_OPTION}},marked},#{?${SESSION_NAME_IS_MARKED_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},#{session_name}},#{?${SESSION_NAME_IS_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},#{session_name}}}}`;
+const SESSION_BASE_NAME_TITLE_FORMAT =
+	`#{?${SESSION_WAITING_FORMAT},${READY_PREFIX}${SESSION_BASE_NAME_VALUE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT}}`;
+const SESSION_TITLE_MARKED_VALUE_FORMAT =
+	`#{?${SESSION_NAME_IS_MARKED_BASE_FORMAT},marked,unmarked}`;
 export const WINDOW_WAITING_FORMAT = `#{m:*1*,#{P:#{${WAITING_OPTION}}}}`;
 // Waiting flags also recognize idle peers loaded before active tracking existed.
 export const WINDOW_ACTIVE_FORMAT = `#{m:*1*,#{P:#{${ACTIVE_OPTION}}#{${WAITING_OPTION}}}}`;
-export const WINDOW_INFO_FORMAT = `#{session_id}\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
+// The fixed suffix advertises support for the session-name base option without
+// changing the tab-delimited title field or breaking legacy injected adapters.
+export const WINDOW_INFO_FORMAT = `#{session_id}:1\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
 // Diagnostics omit names and dialogue, reading all flags in one server snapshot.
 export const STATUS_INFO_FORMAT = `#{session_id}\t#{window_id}\t#{?#{m:*1*,#{${WAITING_OPTION}}},1,0}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{?${SESSION_WAITING_FORMAT},1,0}`;
 export const MAX_PROMPT_LENGTH = 2_000;
@@ -196,14 +214,22 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 
 	const readWindowTitle = async (target: string, signal: AbortSignal) => {
 		const info = await tmux(["display-message", "-p", "-t", target, WINDOW_INFO_FORMAT], signal);
-		const [session, window, windowWaiting, ...titleParts] = info.split("\t");
-		if (!/^\$\d+$/.test(session) || !/^@\d+$/.test(window) || !/^[01]$/.test(windowWaiting) || !titleParts.length) {
+		const [sessionField, window, windowWaiting, ...titleParts] = info.split("\t");
+		const sessionMetadata = /^(\$\d+):1$/.exec(sessionField);
+		const legacySession = /^(\$\d+)$/.exec(sessionField);
+		const session = sessionMetadata?.[1] ?? legacySession?.[1];
+		if (!session || !/^@\d+$/.test(window) || !/^[01]$/.test(windowWaiting) || !titleParts.length) {
 			throw new Error("Invalid tmux target");
 		}
-		return { session, window, title: titleParts.join("\t"), waiting: windowWaiting === "1" };
+		return {
+			session, window, title: titleParts.join("\t"), waiting: windowWaiting === "1",
+			sessionMetadataAvailable: sessionMetadata !== null,
+		};
 	};
 
-	const rememberLocation = (location: { session: string; window: string }) => {
+	const trackedSessions = new Set<string>();
+	const rememberLocation = (location: { session: string; window: string; sessionMetadataAvailable?: boolean }) => {
+		if (location.sessionMetadataAvailable) trackedSessions.add(location.session);
 		const queue = (targets: Set<string>, target: string) => {
 			targets.add(target);
 			if (targets.size > MAX_FORMER_TARGETS) targets.delete(targets.values().next().value!);
@@ -243,12 +269,26 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		for (const session of [...formerSessions]) {
 			if (!isCurrent()) return;
 			try {
-				await tmux(["rename-session", "-t", session, SESSION_TITLE_FORMAT], signal);
+				if (trackedSessions.has(session)) {
+					await tmux([
+						"set-option", "-F", "-t", session, SESSION_BASE_NAME_OPTION, SESSION_BASE_NAME_UPDATE_FORMAT,
+						";", "set-option", "-t", session, SESSION_TITLE_MARKED_OPTION, "transition",
+					], signal);
+					// Keep rename-session as its own command for existing RunTmux wrappers
+					// that identify former-location repairs by the top-level command.
+					await tmux(["rename-session", "-t", session, SESSION_BASE_NAME_TITLE_FORMAT], signal);
+					await tmux([
+						"set-option", "-F", "-t", session, SESSION_TITLE_MARKED_OPTION, SESSION_TITLE_MARKED_VALUE_FORMAT,
+					], signal);
+				} else {
+					await tmux(["rename-session", "-t", session, SESSION_TITLE_FORMAT], signal);
+				}
 			} catch (error) {
 				if (!targetDisappeared(error, session)) continue;
 			}
 			if (!isCurrent()) return;
 			formerSessions.delete(session);
+			trackedSessions.delete(session);
 		}
 	};
 
@@ -275,11 +315,23 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				const before = current;
 				// Keep the user's session name intact, aggregating waiting panes on
 				// the server. Target the pane so writes follow moves after lookup.
-				await tmux([
-					"set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
-					";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
-					";", "rename-session", "-t", pane, SESSION_TITLE_FORMAT,
-				], signal);
+				if (current.sessionMetadataAvailable || trackedSessions.has(current.session)) {
+					trackedSessions.add(current.session);
+					await tmux([
+						"set-option", "-F", "-t", pane, SESSION_BASE_NAME_OPTION, SESSION_BASE_NAME_UPDATE_FORMAT,
+						";", "set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
+						";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
+						";", "set-option", "-t", pane, SESSION_TITLE_MARKED_OPTION, "transition",
+						";", "rename-session", "-t", pane, SESSION_BASE_NAME_TITLE_FORMAT,
+						";", "set-option", "-F", "-t", pane, SESSION_TITLE_MARKED_OPTION, SESSION_TITLE_MARKED_VALUE_FORMAT,
+					], signal);
+				} else {
+					await tmux([
+						"set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
+						";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
+						";", "rename-session", "-t", pane, SESSION_TITLE_FORMAT,
+					], signal);
+				}
 				if (!isCurrent()) return;
 				// Resolve the fallback title and destination after the marker write.
 				current = await readWindowTitle(pane, signal);

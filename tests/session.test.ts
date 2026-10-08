@@ -283,7 +283,7 @@ test.skipIf(!hasTmux)("window markers aggregate only their own waiting panes", a
 	}).trim();
 	try {
 		process.env.PI_TMUX_MODEL = "off";
-		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Shared", "-n", "shared task", "/bin/sleep 60");
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "* Important", "-n", "shared task", "/bin/sleep 60");
 		const sibling = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
 		const session = tmux("display-message", "-p", "-t", pane, "#{session_id}");
 		const otherWindow = tmux("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", session, "/bin/sleep 60");
@@ -300,26 +300,52 @@ test.skipIf(!hasTmux)("window markers aggregate only their own waiting panes", a
 		const title = () => tmux("display-message", "-p", "-t", pane, "#{window_name}");
 		const sessionTitle = () => tmux("display-message", "-p", "-t", pane, "#{session_name}");
 
-		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "1");
 		await emit("session_start");
+		expect(title()).toBe("shared task");
+		expect(sessionTitle()).toBe("* Important");
+		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "1");
+		await emit("agent_start");
 		expect(title()).toBe("* shared task");
+		expect(sessionTitle()).toBe("* * Important");
 		await emit("agent_settled");
 		await emit("agent_start");
 		expect(title()).toBe("* shared task");
-		expect(sessionTitle()).toBe("* Shared");
+		expect(sessionTitle()).toBe("* * Important");
+		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "0");
+		await emit("agent_start");
+		expect(sessionTitle()).toBe("* Important");
+		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "1");
+		await emit("agent_start");
+		expect(sessionTitle()).toBe("* * Important");
+		tmux("rename-session", "-t", pane, "--", "* Renamed");
+		await emit("agent_start");
+		expect(sessionTitle()).toBe("* * Renamed");
 		await emit("session_shutdown");
 		expect(title()).toBe("* shared task");
-		expect(sessionTitle()).toBe("* Shared");
+		expect(sessionTitle()).toBe("* * Renamed");
 
 		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "0");
 		tmux("set-option", "-p", "-t", otherWindow, WAITING_OPTION, "1");
 		await emit("agent_start");
 		expect(title()).toBe("zsh");
-		expect(sessionTitle()).toBe("* Shared");
+		expect(sessionTitle()).toBe("* * Renamed");
 		tmux("set-option", "-p", "-t", otherWindow, WAITING_OPTION, "0");
 		await emit("agent_start");
 		expect(title()).toBe("zsh");
-		expect(sessionTitle()).toBe("Shared");
+		expect(sessionTitle()).toBe("* Renamed");
+
+		// Even a manual name that looks exactly like a marker of the prior base
+		// is literal while the recorded session state is unmarked.
+		tmux("rename-session", "-t", pane, "--", "* * Renamed");
+		await emit("agent_start");
+		expect(sessionTitle()).toBe("* * Renamed");
+		expect(tmux("show-options", "-v", "-t", pane, "@pi-tmux-session-base-name")).toBe("* * Renamed");
+		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "1");
+		await emit("agent_start");
+		expect(sessionTitle()).toBe("* * * Renamed");
+		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "0");
+		await emit("agent_start");
+		expect(sessionTitle()).toBe("* * Renamed");
 		expect(warnings).toEqual([]);
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;

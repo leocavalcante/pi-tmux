@@ -7,6 +7,10 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import piTmux, { STATUS_INFO_FORMAT, WAITING_OPTION, type RunTmux } from "../index";
 
 const hasTmux = Bun.which("tmux") !== null;
+const sessionRenameTarget = (args: string[]) => {
+	const command = args.indexOf("rename-session");
+	return command < 0 ? undefined : args[command + 2];
+};
 type Fixture = {
 	tmux: (...args: string[]) => string;
 	calls: string[][];
@@ -150,7 +154,7 @@ test.skipIf(!hasTmux).each(["window", "session"])("a further move during former-
 		let moved = false;
 		f.beforeCommand = async (args) => {
 			const repair = phase === "window" ? args[0] === "if-shell" && args[3] === sourceWindow
-				: args[0] === "rename-session" && args[2] === source;
+				: sessionRenameTarget(args) === source;
 			if (!moved && repair) {
 				moved = true;
 				f.tmux("rename-window", "-t", middle, "--", "* intermediate task");
@@ -181,7 +185,7 @@ test.skipIf(!hasTmux).each(["window", "session"])("transient former-%s repair fa
 		await f.emit("agent_settled");
 		f.tmux("join-pane", "-d", "-s", pane, "-t", destination);
 		const isRepair = (args: string[]) => phase === "window" ? args[0] === "if-shell" && args[3] === oldWindow
-			: args[0] === "rename-session" && args[2] === source;
+			: sessionRenameTarget(args) === source;
 		let failed = false;
 		f.beforeCommand = async (args) => {
 			if (!failed && isRepair(args)) {
@@ -263,7 +267,7 @@ test.skipIf(!hasTmux)("status reports queued move repairs without consuming them
 		f.tmux("join-pane", "-d", "-s", pane, "-t", destination);
 		f.beforeCommand = async (args) => {
 			if ((args[0] === "if-shell" && args[3] === oldWindow)
-				|| (args[0] === "rename-session" && args[2] === source)) throw new Error("Synthetic transient failure");
+				|| sessionRenameTarget(args) === source) throw new Error("Synthetic transient failure");
 		};
 		await f.emit("agent_settled");
 		const beforeStatus = f.calls.length;
@@ -397,7 +401,9 @@ test("continuous moves and transient failures keep stabilization and repair queu
 				location++;
 				return `$${location}\t@${location}\t0\tcustom name`;
 			}
-			if (args[0] === "if-shell" || args[0] === "rename-session") throw new Error("Synthetic transient failure");
+			if (args[0] === "if-shell" || (sessionRenameTarget(args) && sessionRenameTarget(args) !== "%901")) {
+				throw new Error("Synthetic transient failure");
+			}
 			return "";
 		});
 		const ctx = { mode: "tui", ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
@@ -405,10 +411,10 @@ test("continuous moves and transient failures keep stabilization and repair queu
 		const firstCalls = calls.length;
 		await handlers.get("session_start")!({ type: "session_start", reason: "reload" }, ctx);
 		const secondCalls = calls.slice(firstCalls);
-		expect(calls.filter((args) => args[0] === "set-option")).toHaveLength(8);
+		expect(calls.filter((args) => args[0] === "set-option" && args[3] === "%901")).toHaveLength(8);
 		expect(calls.filter((args) => args[0] === "display-message")).toHaveLength(18);
 		expect(secondCalls.filter((args) => args[0] === "if-shell")).toHaveLength(32);
-		expect(secondCalls.filter((args) => args[0] === "rename-session")).toHaveLength(32);
+		expect(secondCalls.filter((args) => sessionRenameTarget(args) !== undefined && sessionRenameTarget(args) !== "%901")).toHaveLength(32);
 		expect(warnings).toEqual([]);
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;

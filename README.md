@@ -182,7 +182,14 @@ Repeat the command to retry them.
   aggregate waiting Pi panes across all windows. A busy or exiting pane cannot
   clear another pane's marker. Window renames choose the prefix and its length
   budget on the tmux server, even if another pane changed status after lookup.
-  Session names are not summarized, lowercased, or clipped.
+  Session names are not summarized, lowercased, or clipped. A literal leading
+  `* ` is preserved, with the waiting marker added separately. The extension
+  keeps each session's unmarked name in the namespaced
+  `@pi-tmux-session-base-name` tmux session option so it can distinguish a
+  literal prefix from its marker across status updates. On first seeing a
+  session with no stored base, the extension preserves its displayed name;
+  an old waiting marker left by an earlier version may therefore appear twice
+  on a later waiting update rather than risking loss of a literal prefix.
 - Changed naming context cancels the previous request, including when a
   refresh finds no remaining naming text after context edits. It also discards
   queued title updates from superseded requests at tmux command boundaries.
