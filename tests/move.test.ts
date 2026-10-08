@@ -176,10 +176,11 @@ test.skipIf(!hasTmux)("a guarded title rename skipped by a server restart is not
 	});
 });
 
-test.skipIf(!hasTmux).each(movingCases)("moving a waiting pane repairs its former markers: %j", async ({ sameSession, peerWaiting, otherWindowWaiting }) => {
+test.skipIf(!hasTmux).each(movingCases)("moving a waiting pane preserves literal session names and repairs former markers: %j", async ({ sameSession, peerWaiting, otherWindowWaiting }) => {
 	await withServer(async (f) => {
-		const sourceName = "My Café Session " + "X".repeat(40) + " #{session_id}";
-		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", sourceName.replaceAll("#", "##"), "/bin/sleep 60");
+		const requestedSourceName = 'My "Café" Session \\\\ ' + "X".repeat(40) + " \\ #{session_id}\u2003  ";
+		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", requestedSourceName.replaceAll("#", "##"), "/bin/sleep 60");
+		const sourceName = f.tmux("display-message", "-p", "-t", pane, "#{session_name}");
 		const source = f.tmux("display-message", "-p", "-t", pane, "#{session_id}");
 		const anchor = f.tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
 		f.tmux("set-option", "-p", "-t", anchor, WAITING_OPTION, peerWaiting ? "1" : "0");

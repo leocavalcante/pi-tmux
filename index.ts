@@ -17,13 +17,17 @@ export const SESSION_TITLE_FORMAT =
 const SESSION_BASE_NAME_OPTION = "@pi-tmux-session-base-name";
 const SESSION_TITLE_MARKED_OPTION = "@pi-tmux-session-title-marked";
 const SESSION_BASE_NAME_VALUE_FORMAT = `#{${SESSION_BASE_NAME_OPTION}}`;
-const SESSION_NAME_IS_BASE_FORMAT = `#{==:#{session_name},${SESSION_BASE_NAME_VALUE_FORMAT}}`;
+// Nested tmux format expansion doubles literal backslashes in `session_name`.
+// Decode that formatted value only; the stored base option is already literal.
+const unescapeNestedTmuxFormatValue = (format: string) => String.raw`#{s/\\\\/\\/g:${format}}`;
+const SESSION_NAME_IS_BASE_FORMAT = `#{==:${unescapeNestedTmuxFormatValue("#{session_name}")},${SESSION_BASE_NAME_VALUE_FORMAT}}`;
 const SESSION_NAME_IS_MARKED_BASE_FORMAT =
-	`#{==:#{session_name},${READY_PREFIX}${SESSION_BASE_NAME_VALUE_FORMAT}}`;
+	`#{==:${unescapeNestedTmuxFormatValue("#{session_name}")},${READY_PREFIX}${SESSION_BASE_NAME_VALUE_FORMAT}}`;
 // The transitional state lets concurrent Pi updates safely overlap the rename.
 // The steady state also detects user renames that happen to begin with `* `.
+const SESSION_NAME_LITERAL_FORMAT = unescapeNestedTmuxFormatValue("#{session_name}");
 const SESSION_BASE_NAME_UPDATE_FORMAT =
-	`#{?#{==:#{${SESSION_TITLE_MARKED_OPTION}},transition},#{?${SESSION_NAME_IS_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},#{?${SESSION_NAME_IS_MARKED_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},#{session_name}}},#{?#{==:#{${SESSION_TITLE_MARKED_OPTION}},marked},#{?${SESSION_NAME_IS_MARKED_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},#{session_name}},#{?${SESSION_NAME_IS_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},#{session_name}}}}`;
+	`#{?#{==:#{${SESSION_TITLE_MARKED_OPTION}},transition},#{?${SESSION_NAME_IS_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},#{?${SESSION_NAME_IS_MARKED_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},${SESSION_NAME_LITERAL_FORMAT}}},#{?#{==:#{${SESSION_TITLE_MARKED_OPTION}},marked},#{?${SESSION_NAME_IS_MARKED_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},${SESSION_NAME_LITERAL_FORMAT}},#{?${SESSION_NAME_IS_BASE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT},${SESSION_NAME_LITERAL_FORMAT}}}}`;
 const SESSION_BASE_NAME_TITLE_FORMAT =
 	`#{?${SESSION_WAITING_FORMAT},${READY_PREFIX}${SESSION_BASE_NAME_VALUE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT}}`;
 const SESSION_TITLE_MARKED_VALUE_FORMAT =
