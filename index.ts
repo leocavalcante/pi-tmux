@@ -451,8 +451,20 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			if (title !== currentTitle) {
 				// Rename the pane's current window, aggregating its current statuses on
 				// the server rather than trusting the earlier client-side snapshot.
+				const renameLocation = current;
 				const format = !active && taskTitle === "zsh" ? QUIT_TITLE_FORMAT : buildWindowTitleFormat(taskTitle);
 				await writeOnServer(current.server ?? lastLocation?.server, ["rename-window", "-t", pane, "--", format], signal);
+				if (!isCurrent()) return;
+				// A guarded write can succeed as a tmux command while its PID condition
+				// skips the rename after a server restart. Confirm the server identity
+				// before treating the candidate or an explicit pin as applied.
+				if (renameLocation.server && tmux.supportsServerPidGuard) {
+					current = await readWindowTitle(pane, signal);
+					if (!isCurrent()) return;
+					rememberLocation(current);
+					if (!isCurrent()) return;
+					if (current.window !== renameLocation.window || current.session !== renameLocation.session) stable = false;
+				}
 			}
 			if (!isCurrent()) return;
 			// Preserve a current candidate after failures so /tmux-title sync can

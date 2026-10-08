@@ -42,6 +42,7 @@ type Fixture = {
 	calls: string[][];
 	rawCalls: string[][];
 	warnings: string[];
+	notices: string[];
 	beforeCommand?: (args: string[], signal: AbortSignal) => Promise<void>;
 	emit: (event: string, reason?: string) => Promise<void>;
 	pin: (title: string) => Promise<void>;
@@ -66,7 +67,7 @@ async function withServer(run: (fixture: Fixture) => Promise<void>) {
 		tmux: (...args) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
 			encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
 		}).replace(/\r?\n$/, ""),
-		calls: [], rawCalls: [], warnings,
+		calls: [], rawCalls: [], warnings, notices,
 		emit: async (event, reason = "quit") => {
 			await handlers.get(event)!({ type: event, reason }, ctx);
 			await new Promise<void>((resolve) => setImmediate(resolve));
@@ -141,6 +142,39 @@ const movingCases = [
 	{ sameSession: false, peerWaiting: false, otherWindowWaiting: true },
 	{ sameSession: true, peerWaiting: false, otherWindowWaiting: false },
 ];
+
+test.skipIf(!hasTmux)("a guarded title rename skipped by a server restart is not reported as applied", async () => {
+	await withServer(async (f) => {
+		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Old Server", "-n", "old title", "/bin/sleep 60");
+		const [oldSession, oldWindow, oldServer] = f.tmux(
+			"display-message", "-p", "-t", pane, "#{session_id}\t#{window_id}\t#{pid}",
+		).split("\t");
+		process.env.TMUX_PANE = pane;
+		let restarted = false;
+		f.beforeCommand = async (args) => {
+			if (restarted || args[0] !== "rename-window") return;
+			restarted = true;
+			f.tmux("kill-server");
+			const replacementPane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Replacement", "-n", "untouched", "/bin/sleep 60");
+			const [session, window, server] = f.tmux(
+				"display-message", "-p", "-t", replacementPane, "#{session_id}\t#{window_id}\t#{pid}",
+			).split("\t");
+			expect(replacementPane).toBe(pane);
+			expect([session, window]).toEqual([oldSession, oldWindow]);
+			expect(server).not.toBe(oldServer);
+		};
+
+		await f.pin("requested title");
+		expect(restarted).toBe(true);
+		expect(f.tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("untouched");
+		expect(f.notices).toEqual([]);
+		expect(f.warnings).toEqual([]);
+
+		const afterDetection = f.rawCalls.length;
+		await f.emit("agent_settled");
+		expect(f.rawCalls.slice(afterDetection)).toEqual([]);
+	});
+});
 
 test.skipIf(!hasTmux).each(movingCases)("moving a waiting pane repairs its former markers: %j", async ({ sameSession, peerWaiting, otherWindowWaiting }) => {
 	await withServer(async (f) => {
