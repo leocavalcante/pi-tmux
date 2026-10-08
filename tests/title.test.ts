@@ -152,6 +152,10 @@ test("cleans markup, accents, controls, and tmux formatting characters", () => {
 	expect(cleanTitle("---")).toBe("");
 });
 
+test("removes combining marks from Unicode blocks beyond the basic diacritics range", () => {
+	expect(cleanTitle("Fix e\u1ab0mail tests")).toBe("fix email tests");
+});
+
 test("caps names at 24 ASCII cells, preferably on a word boundary", () => {
 	expect(cleanTitle("Investigate authentication failures")).toBe("investigate");
 	expect(cleanTitle("x".repeat(80))).toHaveLength(MAX_TITLE_LENGTH);

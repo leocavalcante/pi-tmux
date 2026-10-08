@@ -68,7 +68,7 @@ export function parseNamingModel(value?: string): { provider: string; id: string
 export function cleanTitle(text: string, maxLength = MAX_TITLE_LENGTH): string {
 	const title = text
 		.normalize("NFKD")
-		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/\p{M}/gu, "")
 		.replace(/[^a-zA-Z0-9 ._-]/g, " ")
 		.replace(/\s+/g, " ")
 		.trim()
