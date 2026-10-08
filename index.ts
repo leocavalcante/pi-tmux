@@ -98,8 +98,7 @@ const WHITESPACE = /\s/;
 
 // Keep only the bounded prefix while trimming, rather than joining all text
 // blocks from a large message before slicing it. Once the retained prefix is
-// full, only inspect further characters if its last character is whitespace;
-// otherwise a suffix cannot affect the result.
+// full, no suffix can change that prefix or its trailing trim.
 function boundedText(content: unknown, maxLength: number): string {
 	let text = "";
 	let leading = true;
@@ -113,27 +112,23 @@ function boundedText(content: unknown, maxLength: number): string {
 		if (text.length < maxLength) {
 			const count = Math.min(maxLength - text.length, part.length - index);
 			text += part.slice(index, index + count);
-			index += count;
 		}
-		if (text.length === maxLength) {
-			if (!WHITESPACE.test(text[text.length - 1])) return true;
-			for (; index < part.length; index++) {
-				if (!WHITESPACE.test(part[index])) return true;
-			}
-		}
-		return false;
+		return text.length === maxLength;
 	};
 
-	if (typeof content === "string") return append(content) ? text : text.trimEnd();
+	if (typeof content === "string") {
+		append(content);
+		return text.trimEnd();
+	}
 	if (Array.isArray(content)) {
 		let foundText = false;
 		for (const candidate of content as unknown[]) {
 			if (!candidate || typeof candidate !== "object") continue;
 			const block = candidate as { type?: unknown; text?: unknown };
 			if (block.type !== "text") continue;
-			if (foundText && append("\n")) return text;
+			if (foundText && append("\n")) return text.trimEnd();
 			foundText = true;
-			if (typeof block.text === "string" && append(block.text)) return text;
+			if (typeof block.text === "string" && append(block.text)) return text.trimEnd();
 		}
 	}
 	return text.trimEnd();

@@ -898,6 +898,24 @@ test("naming context stops before later blocks when the exact bound ends in non-
 	expect(readUnneededText).toBe(false);
 });
 
+test("naming context stops at a whitespace-ending bound without scanning later blocks", () => {
+	let readUnneededText = false;
+	const laterBlock = { type: "text" } as any;
+	Object.defineProperty(laterBlock, "text", {
+		get() {
+			readUnneededText = true;
+			throw new Error("Text beyond the bounded prefix should not be read");
+		},
+	});
+	const context = buildNamingContext([{
+		role: "user",
+		content: [{ type: "text", text: "x".repeat(999) + " " }, laterBlock],
+	}] as any);
+
+	expect(context).toBe("user: " + "x".repeat(999));
+	expect(readUnneededText).toBe(false);
+});
+
 test("bounded naming text preserves Unicode trimming and text-block separators", () => {
 	const context = buildNamingContext([
 		{ role: "compactionSummary", summary: "\u00a0\ufeffDeploy safely\u00a0 " + " ".repeat(1_200) },
