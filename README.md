@@ -304,6 +304,11 @@ the staged diff and scanning for secrets.
 
 ## Development
 
+Development commands use Node.js 22.19 or newer and npm for dependencies and
+checks; tests run on Bun 1.4.2. `npm test` delegates to `bun test` and does not
+fall back to Node's test runner. Install Bun using the [Bun installation
+guide](https://bun.sh/docs/installation).
+
 ```sh
 git clone https://github.com/leocavalcante/pi-tmux.git
 cd pi-tmux
@@ -338,14 +343,13 @@ npm test
 - `tests/package.test.ts` checks that the Pi extension entrypoint is pack-listed
   and loads after TypeScript erasure without a runtime SDK dependency.
 
-Development tests require Bun. The tmux integration tests use separate temporary
-servers and skip automatically when `tmux` is unavailable; install tmux to run
-that integration coverage. The integration fixtures use Unix paths (`/dev/null`
-and `/bin/sleep`), so run them on a Unix-like host such as Linux, macOS, or WSL.
-Mock-only tests, including empty window-name parsing, do not need tmux. GitHub
-Actions runs the type check, tests, and package-content check on Linux with
-Node.js 22 and 24 and Bun 1.4.2. The tests make no model API calls and do not
-rename your windows or sessions.
+Tmux integration tests use separate temporary servers and skip automatically
+when `tmux` is unavailable; install tmux to run that integration coverage. The
+fixtures use Unix paths (`/dev/null` and `/bin/sleep`), so run them on a
+Unix-like host such as Linux, macOS, or WSL. Mock-only tests, including empty
+window-name parsing, do not need tmux. GitHub Actions runs the type check, tests,
+and package-content check on Linux with Node.js 22 and 24 and Bun 1.4.2. Tests
+make no model API calls and do not rename your windows or sessions.
 
 Try the checkout in Pi without changing your settings:
 
