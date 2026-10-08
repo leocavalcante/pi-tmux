@@ -1,24 +1,51 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { basename, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const manifestUrl = new URL("../package.json", import.meta.url);
-const manifest = JSON.parse(readFileSync(manifestUrl, "utf8"));
+function readPackedMember(archive: string, member: string): string {
+	return execFileSync("tar", ["-xOzf", archive, member], {
+		encoding: "utf8",
+		maxBuffer: 4 * 1024 * 1024,
+	});
+}
 
-test("the published Pi entrypoint imports without runtime SDK dependencies and runs its status-only lifecycle", async () => {
-	const [entrypoint] = manifest.pi.extensions as string[];
-	expect(entrypoint).toBe("./index.ts");
-	expect(manifest.files).toContain(entrypoint.replace(/^\.\//, ""));
-
-	const source = readFileSync(new URL(entrypoint, manifestUrl), "utf8");
-	const javascript = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
+test("the packed Pi entrypoint imports without runtime SDK dependencies and runs its status-only lifecycle", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-package-"));
-	const modulePath = join(directory, "index.mjs");
 	const originalPane = process.env.TMUX_PANE;
 	const originalModel = process.env.PI_TMUX_MODEL;
 	try {
+		const repository = fileURLToPath(new URL("..", import.meta.url));
+		const packedResults = JSON.parse(execFileSync("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", directory], {
+			cwd: repository,
+			encoding: "utf8",
+		})) as Array<{ filename?: unknown }>;
+		const filename = packedResults[0]?.filename;
+		if (typeof filename !== "string" || basename(filename) !== filename || !filename.endsWith(".tgz")) {
+			throw new Error("npm pack returned an invalid archive filename");
+		}
+		const archive = join(directory, filename);
+		const packageDirectory = join(directory, "package");
+		mkdirSync(packageDirectory);
+
+		const packedManifestPath = join(packageDirectory, "package.json");
+		writeFileSync(packedManifestPath, readPackedMember(archive, "package/package.json"));
+		const manifest = JSON.parse(readFileSync(packedManifestPath, "utf8"));
+		const entrypoints = manifest.pi?.extensions;
+		const entrypoint: unknown = Array.isArray(entrypoints) ? entrypoints[0] : undefined;
+		expect(entrypoint).toBe("./index.ts");
+		if (entrypoint !== "./index.ts") throw new Error("Unexpected packed Pi entrypoint");
+		expect(manifest.files).toContain(entrypoint.replace(/^\.\//, ""));
+
+		// Use the fixed, validated package path instead of allowing a manifest path
+		// to direct archive extraction outside this temporary directory.
+		const packedEntrypoint = join(packageDirectory, "index.ts");
+		writeFileSync(packedEntrypoint, readPackedMember(archive, "package/index.ts"));
+		const source = readFileSync(packedEntrypoint, "utf8");
+		const javascript = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
+		const modulePath = join(packageDirectory, "index.mjs");
 		writeFileSync(modulePath, javascript);
 		const extension = await import(pathToFileURL(modulePath).href);
 		expect(typeof extension.default).toBe("function");
