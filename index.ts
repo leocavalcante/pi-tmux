@@ -318,8 +318,17 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			targets.add(target);
 			if (targets.size > MAX_FORMER_TARGETS) targets.delete(targets.values().next().value!);
 		};
+		const queueFormerSession = (target: string) => {
+			formerSessions.add(target);
+			if (formerSessions.size > MAX_FORMER_TARGETS) {
+				const evicted = formerSessions.values().next().value!;
+				formerSessions.delete(evicted);
+				// Keep metadata for a session that has become current again.
+				if (evicted !== location.session) trackedSessions.delete(evicted);
+			}
+		};
 		if (lastLocation && lastLocation.window !== location.window) queue(formerWindows, lastLocation.window);
-		if (lastLocation && lastLocation.session !== location.session) queue(formerSessions, lastLocation.session);
+		if (lastLocation && lastLocation.session !== location.session) queueFormerSession(lastLocation.session);
 		formerWindows.delete(location.window);
 		formerSessions.delete(location.session);
 		lastLocation = {

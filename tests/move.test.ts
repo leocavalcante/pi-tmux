@@ -523,3 +523,57 @@ test("continuous moves and transient failures keep stabilization and repair queu
 		else process.env.PI_TMUX_MODEL = originalModel;
 	}
 });
+
+test("tracked session metadata stays bounded when former-session repairs keep failing", async () => {
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const originalHas = Set.prototype.has;
+	const handlers = new Map<string, Function>();
+	const checkedSizes: number[] = [];
+	const commands: string[][] = [];
+	let currentSession = 0;
+	try {
+		process.env.TMUX_PANE = "%901";
+		process.env.PI_TMUX_MODEL = "off";
+		Set.prototype.has = function (value) {
+			if (typeof value === "string" && /^\$\d+$/.test(value)) checkedSizes.push(this.size);
+			return originalHas.call(this, value);
+		};
+		piTmux({
+			on: (event: string, handler: Function) => handlers.set(event, handler),
+			registerCommand: () => {},
+		} as unknown as ExtensionAPI, async (args) => {
+			commands.push(args);
+			if (args[0] === "display-message") return `\u0024${currentSession}:1:123\t@${currentSession}\t0\tcustom name`;
+			if (args[0] === "rename-session" && /^\$\d+$/.test(args[2])) {
+				throw new Error("Synthetic persistent former-session repair failure");
+			}
+			return "";
+		});
+		const ctx = { mode: "tui", ui: { notify: () => {} } } as unknown as ExtensionContext;
+		for (currentSession = 1; currentSession <= 32; currentSession++) {
+			await handlers.get("session_start")!({ type: "session_start", reason: "reload" }, ctx);
+		}
+
+		expect(checkedSizes.length).toBeGreaterThan(0);
+		// Eight queued former sessions plus the current session are the complete
+		// set of session metadata that can still affect a future repair.
+		expect(Math.max(...checkedSizes)).toBeLessThanOrEqual(9);
+
+		// Returning to the oldest queued session before a new move must retain its
+		// stored-base-name support when it becomes a former session again.
+		commands.length = 0;
+		currentSession = 24;
+		await handlers.get("session_start")!({ type: "session_start", reason: "reload" }, ctx);
+		currentSession = 33;
+		await handlers.get("session_start")!({ type: "session_start", reason: "reload" }, ctx);
+		expect(commands.some((args) => args[0] === "set-option" && args[1] === "-F" && args[3] === "$24")).toBe(true);
+		expect(Math.max(...checkedSizes)).toBeLessThanOrEqual(9);
+	} finally {
+		Set.prototype.has = originalHas;
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+	}
+});
