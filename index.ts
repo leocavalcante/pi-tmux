@@ -98,8 +98,12 @@ const WINDOW_REPAIR_NEEDED_FORMAT = `#{!=:#{window_name},${SHARED_TASK_TITLE_FOR
 // ownership at execution time and preserve its latest title, not our snapshot.
 export const QUIT_TITLE_FORMAT = `#{?${WINDOW_ACTIVE_FORMAT},${SHARED_TASK_TITLE_FORMAT},${buildWindowTitleFormat("zsh")}}`;
 
-const WHITESPACE = /\s/;
-const HAS_NON_WHITESPACE = /\S/;
+const WHITESPACE = /[\s\p{White_Space}]/u;
+const HAS_NON_WHITESPACE = /[^\s\p{White_Space}]/u;
+
+function trimTrailingWhitespace(text: string): string {
+	return text.replace(/[\s\p{White_Space}]+$/u, "");
+}
 
 // Keep only the bounded prefix while trimming, rather than joining all text
 // blocks from a large message before slicing it. Once the retained prefix is
@@ -123,7 +127,7 @@ function boundedText(content: unknown, maxLength: number): string {
 
 	if (typeof content === "string") {
 		append(content);
-		return text.trimEnd();
+		return trimTrailingWhitespace(text);
 	}
 	if (Array.isArray(content)) {
 		let foundText = false;
@@ -131,12 +135,12 @@ function boundedText(content: unknown, maxLength: number): string {
 			if (!candidate || typeof candidate !== "object") continue;
 			const block = candidate as { type?: unknown; text?: unknown };
 			if (block.type !== "text") continue;
-			if (foundText && append("\n")) return text.trimEnd();
+			if (foundText && append("\n")) return trimTrailingWhitespace(text);
 			foundText = true;
-			if (typeof block.text === "string" && append(block.text)) return text.trimEnd();
+			if (typeof block.text === "string" && append(block.text)) return trimTrailingWhitespace(text);
 		}
 	}
-	return text.trimEnd();
+	return trimTrailingWhitespace(text);
 }
 
 // Use Pi's active projection so abandoned branches, compacted originals, and

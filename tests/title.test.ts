@@ -948,6 +948,19 @@ test("bounded naming text preserves Unicode trimming and text-block separators",
 	expect(context).toBe("summary: Deploy safely\n\nuser: Fix\n auth tests\n\nuser: continue");
 });
 
+test("Unicode NEL whitespace is ignored at input and trimmed from naming context", async () => {
+	const f = fixture();
+	f.input("\u0085");
+	await settle();
+	expect(f.requests).toEqual([]);
+	expect(f.calls).toEqual([]);
+
+	const context = buildNamingContext([
+		{ role: "user", content: "\u0085task\u0085" },
+	] as any, "\u0085continue\u0085");
+	expect(context).toBe("user: task\n\nuser: continue");
+});
+
 test("empty projected context cancels stale naming without preventing a later request", async () => {
 	for (const event of ["session_compact", "agent_settled"]) {
 		for (const staleResult of [response("Removed task"), response("Synthetic error", "error")]) {
