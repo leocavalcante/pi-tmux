@@ -177,7 +177,12 @@ Repeat the command to retry them.
   even if you have switched focus elsewhere. Renames use the pane ID so a
   move after the title lookup does not rename its former window or session.
   After marker writes, the window title is read again so a move during that
-  update does not copy the source title or incorrectly skip quit cleanup.
+  update does not copy the source title or incorrectly skip quit cleanup. Each
+  write batch also checks the server PID from its lookup on the tmux server; a
+  restart between lookup and write therefore cannot apply cached numeric IDs to
+  a replacement server. If a later lookup detects a new server, this extension
+  instance cancels naming and stops writing because `TMUX_PANE` may now refer to
+  an unrelated pane that reused the old ID.
 - Window markers aggregate waiting Pi panes in that window. Session markers
   aggregate waiting Pi panes across all windows. A busy or exiting pane cannot
   clear another pane's marker. Window renames choose the prefix and its length
@@ -308,7 +313,10 @@ npm test
 ```
 
 - `index.ts` contains the extension, title formatting, context selection, and
-  tmux status updates.
+  tmux status updates. The window snapshot is tab-delimited and its last field
+  can be empty; preserve its trailing tab and remove only tmux's line terminator.
+  Injected `RunTmux` adapters retain flat command arrays by default; adapters that
+  support the server-PID guard can opt in with `supportsServerPidGuard = true`.
 - `tests/title.test.ts` covers formatting, context bounds and exclusions,
   naming cancellation, model configuration, empty window-name fields, status-only
   mode, explicit retries, manual pins, read-only diagnostics, model-free sync,
@@ -319,9 +327,10 @@ npm test
   moves against a separate temporary tmux server with no user configuration.
   It skips if tmux is unavailable.
 - `tests/move.test.ts` checks former-location marker repair, remaining peers,
-  custom names, vanished targets, repeated moves, explicit sync retries, and superseded repairs
-  on isolated tmux servers. Those checks skip if tmux is unavailable; the queue
-  and stabilization bounds also have a mock-only regression.
+  custom names, vanished targets, repeated moves, explicit sync retries, superseded repairs,
+  and a server restart between lookup and write with reused numeric IDs on isolated
+  tmux servers. Those checks skip if tmux is unavailable; the queue and stabilization
+  bounds also have a mock-only regression.
 - `tests/status.test.ts` verifies read-only diagnostic snapshots and waiting-flag
   aggregation on an isolated tmux server. It skips if tmux is unavailable.
 - `tests/package.test.ts` checks that the Pi extension entrypoint is pack-listed

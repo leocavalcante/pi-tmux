@@ -171,6 +171,23 @@ test("accepts an empty window-name field and supplies the waiting fallback", asy
 	expect(f.warnings).toEqual([]);
 });
 
+test("an empty server-PID field remains compatible with older tmux adapters", async () => {
+	const handlers = new Map<string, Function>();
+	const calls: string[][] = [];
+	const warnings: string[] = [];
+	piTmux({ on: (event: string, handler: Function) => handlers.set(event, handler), registerCommand: () => {} } as unknown as ExtensionAPI,
+		async (args) => {
+			calls.push(args);
+			return args[0] === "display-message" ? "$0:1:\t@2\t0\tcustom name" : "";
+		});
+	const ctx = { mode: "tui", sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+		ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
+	await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, ctx);
+	expect(calls[0]).toEqual(["display-message", "-p", "-t", "%1", WINDOW_INFO_FORMAT]);
+	expect(calls[1][0]).toBe("set-option");
+	expect(warnings).toEqual([]);
+});
+
 test("passes input through immediately and renames the owning window", async () => {
 	const f = fixture();
 	expect(f.input("Fix the failing authentication tests")).toEqual({ action: "continue" });

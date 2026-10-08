@@ -31,9 +31,9 @@ const SESSION_TITLE_MARKED_VALUE_FORMAT =
 export const WINDOW_WAITING_FORMAT = `#{m:*1*,#{P:#{${WAITING_OPTION}}}}`;
 // Waiting flags also recognize idle peers loaded before active tracking existed.
 export const WINDOW_ACTIVE_FORMAT = `#{m:*1*,#{P:#{${ACTIVE_OPTION}}#{${WAITING_OPTION}}}}`;
-// The fixed suffix advertises support for the session-name base option without
-// changing the tab-delimited title field or breaking legacy injected adapters.
-export const WINDOW_INFO_FORMAT = `#{session_id}:1\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
+// The fixed suffix advertises session-name base-option support; the PID scopes
+// numeric tmux IDs to the server process that produced this snapshot.
+export const WINDOW_INFO_FORMAT = `#{session_id}:1:#{pid}\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
 // Diagnostics omit names and dialogue, reading all flags in one server snapshot.
 export const STATUS_INFO_FORMAT = `#{session_id}\t#{window_id}\t#{?#{m:*1*,#{${WAITING_OPTION}}},1,0}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{?${SESSION_WAITING_FORMAT},1,0}`;
 export const MAX_PROMPT_LENGTH = 2_000;
@@ -183,7 +183,10 @@ export function buildNamingContext(messages: SessionProjection["messages"], prom
 	return parts.join("\n\n");
 }
 
-export type RunTmux = (args: string[], signal: AbortSignal) => Promise<string>;
+export type RunTmux = ((args: string[], signal: AbortSignal) => Promise<string>) & {
+	// Adapters can opt into receiving the built-in server-PID if-shell wrapper.
+	supportsServerPidGuard?: boolean;
+};
 
 const runTmux: RunTmux = async (args, signal) => {
 	const { stdout } = await execFileAsync("tmux", args, {
@@ -195,6 +198,18 @@ const runTmux: RunTmux = async (args, signal) => {
 	// In particular, a trailing tab is the empty title field in WINDOW_INFO_FORMAT.
 	return stdout.replace(/\r?\n$/, "");
 };
+runTmux.supportsServerPidGuard = true;
+
+// if-shell compares the server PID and executes the complete write batch only
+// on the server that supplied the preceding lookup. A client-side check alone
+// cannot protect reused numeric targets if tmux restarts before the next call.
+function quoteTmuxCommandArgument(value: string): string {
+	return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+function tmuxCommandString(args: string[]): string {
+	return args.map((value) => value === ";" ? ";" : quoteTmuxCommandArgument(value)).join(" ");
+}
 
 // Stop waiting even when a provider ignores its signal. The attached rejection
 // handler also consumes late provider failures after timeout or cancellation.
@@ -233,7 +248,8 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	let titleLifetime = new AbortController();
 	let titleQueue: Promise<void> = Promise.resolve();
 	// Retain locations across lifecycle resets so interrupted move repairs can finish.
-	let lastLocation: { session: string; window: string } | undefined;
+	let lastLocation: { session: string; window: string; server?: string } | undefined;
+	let serverIdentityChanged = false;
 	const formerWindows = new Set<string>();
 	const formerSessions = new Set<string>();
 
@@ -258,7 +274,8 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	const readWindowTitle = async (target: string, signal: AbortSignal) => {
 		const info = await tmux(["display-message", "-p", "-t", target, WINDOW_INFO_FORMAT], signal);
 		const [sessionField, window, windowWaiting, ...titleParts] = info.split("\t");
-		const sessionMetadata = /^(\$\d+):1$/.exec(sessionField);
+		// Keep an empty PID valid for older tmux servers and injected adapters.
+		const sessionMetadata = /^(\$\d+):1(?::(\d*))?$/.exec(sessionField);
 		const legacySession = /^(\$\d+)$/.exec(sessionField);
 		const session = sessionMetadata?.[1] ?? legacySession?.[1];
 		if (!session || !/^@\d+$/.test(window) || !/^[01]$/.test(windowWaiting) || !titleParts.length) {
@@ -267,11 +284,35 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		return {
 			session, window, title: titleParts.join("\t"), waiting: windowWaiting === "1",
 			sessionMetadataAvailable: sessionMetadata !== null,
+			server: sessionMetadata?.[2] || undefined,
 		};
 	};
 
 	const trackedSessions = new Set<string>();
-	const rememberLocation = (location: { session: string; window: string; sessionMetadataAvailable?: boolean }) => {
+	const writeOnServer = (server: string | undefined, args: string[], signal: AbortSignal) => {
+		if (!server || !tmux.supportsServerPidGuard) return tmux(args, signal);
+		return tmux(["if-shell", "-F", `#{==:#{pid},${server}}`, tmuxCommandString(args)], signal);
+	};
+	const rememberLocation = (location: {
+		session: string; window: string; sessionMetadataAvailable?: boolean; server?: string;
+	}) => {
+		// Once the server changes, the inherited TMUX_PANE could name an unrelated
+		// reused pane. Discard cached IDs and stop writes rather than claim ownership.
+		if (lastLocation?.server && location.server && lastLocation.server !== location.server) {
+			serverIdentityChanged = true;
+			formerWindows.clear();
+			formerSessions.clear();
+			trackedSessions.clear();
+			lastLocation = undefined;
+			baseTitle = undefined;
+			manualTitle = false;
+			lastNamingContext = undefined;
+			cancel();
+			titleRevision++;
+			titleLifetime.abort();
+			titleLifetime = new AbortController();
+			return;
+		}
 		if (location.sessionMetadataAvailable) trackedSessions.add(location.session);
 		const queue = (targets: Set<string>, target: string) => {
 			targets.add(target);
@@ -281,7 +322,11 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		if (lastLocation && lastLocation.session !== location.session) queue(formerSessions, lastLocation.session);
 		formerWindows.delete(location.window);
 		formerSessions.delete(location.session);
-		lastLocation = { session: location.session, window: location.window };
+		lastLocation = {
+			session: location.session,
+			window: location.window,
+			server: location.server ?? lastLocation?.server,
+		};
 	};
 
 	const targetDisappeared = (error: unknown, target: string) => {
@@ -290,7 +335,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		return message.trim() === `can't find ${target.startsWith("@") ? "window" : "session"}: ${target}`;
 	};
 
-	const repairFormerLocations = async (signal: AbortSignal, isCurrent: () => boolean) => {
+	const repairFormerLocations = async (server: string | undefined, signal: AbortSignal, isCurrent: () => boolean) => {
 		for (const window of [...formerWindows]) {
 			if (!isCurrent()) return;
 			try {
@@ -298,7 +343,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				// IDs enter this fixed tmux command; title text is expanded at rename.
 				// Skip unchanged names on the server, preserving automatic-rename even
 				// if a custom unmarked name replaced the stale marker after lookup.
-				await tmux([
+				await writeOnServer(server, [
 					"if-shell", "-F", "-t", window, WINDOW_REPAIR_NEEDED_FORMAT,
 					`rename-window -t ${window} -- '${SHARED_TASK_TITLE_FORMAT}'`,
 				], signal);
@@ -313,18 +358,18 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			if (!isCurrent()) return;
 			try {
 				if (trackedSessions.has(session)) {
-					await tmux([
+					await writeOnServer(server, [
 						"set-option", "-F", "-t", session, SESSION_BASE_NAME_OPTION, SESSION_BASE_NAME_UPDATE_FORMAT,
 						";", "set-option", "-t", session, SESSION_TITLE_MARKED_OPTION, "transition",
 					], signal);
 					// Keep rename-session as its own command for existing RunTmux wrappers
 					// that identify former-location repairs by the top-level command.
-					await tmux(["rename-session", "-t", session, SESSION_BASE_NAME_TITLE_FORMAT], signal);
-					await tmux([
+					await writeOnServer(server, ["rename-session", "-t", session, SESSION_BASE_NAME_TITLE_FORMAT], signal);
+					await writeOnServer(server, [
 						"set-option", "-F", "-t", session, SESSION_TITLE_MARKED_OPTION, SESSION_TITLE_MARKED_VALUE_FORMAT,
 					], signal);
 				} else {
-					await tmux(["rename-session", "-t", session, SESSION_TITLE_FORMAT], signal);
+					await writeOnServer(server, ["rename-session", "-t", session, SESSION_TITLE_FORMAT], signal);
 				}
 			} catch (error) {
 				if (!targetDisappeared(error, session)) continue;
@@ -342,7 +387,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		// Compaction can supersede naming after its model result has completed,
 		// while a queued tmux lookup is still pending. Status-only writes remain
 		// independent of naming generations.
-		const isCurrent = () => !signal.aborted && revision === titleRevision
+		const isCurrent = () => !serverIdentityChanged && !signal.aborted && revision === titleRevision
 			&& (requestGeneration === undefined || requestGeneration === generation);
 		// Serialize writes so a slow rename cannot overwrite a newer status.
 		titleQueue = titleQueue.then(async () => {
@@ -351,6 +396,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			let current = await readWindowTitle(pane, signal);
 			if (!isCurrent()) return;
 			rememberLocation(current);
+			if (!isCurrent()) return;
 			// A pane can move again during marker writes or former-location repair.
 			// Refresh the new session and drain new targets, but bound repeated moves.
 			let stable = false;
@@ -360,7 +406,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				// the server. Target the pane so writes follow moves after lookup.
 				if (current.sessionMetadataAvailable || trackedSessions.has(current.session)) {
 					trackedSessions.add(current.session);
-					await tmux([
+					await writeOnServer(current.server ?? lastLocation?.server, [
 						"set-option", "-F", "-t", pane, SESSION_BASE_NAME_OPTION, SESSION_BASE_NAME_UPDATE_FORMAT,
 						";", "set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
 						";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
@@ -369,7 +415,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 						";", "set-option", "-F", "-t", pane, SESSION_TITLE_MARKED_OPTION, SESSION_TITLE_MARKED_VALUE_FORMAT,
 					], signal);
 				} else {
-					await tmux([
+					await writeOnServer(current.server ?? lastLocation?.server, [
 						"set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
 						";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
 						";", "rename-session", "-t", pane, SESSION_TITLE_FORMAT,
@@ -380,13 +426,15 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				current = await readWindowTitle(pane, signal);
 				if (!isCurrent()) return;
 				rememberLocation(current);
+				if (!isCurrent()) return;
 				const afterWrite = current;
 				if (formerWindows.size || formerSessions.size) {
-					await repairFormerLocations(signal, isCurrent);
+					await repairFormerLocations(current.server ?? lastLocation?.server, signal, isCurrent);
 					if (!isCurrent()) return;
 					current = await readWindowTitle(pane, signal);
 					if (!isCurrent()) return;
 					rememberLocation(current);
+					if (!isCurrent()) return;
 				}
 				if (before.window === current.window && before.session === current.session
 					&& afterWrite.window === current.window && afterWrite.session === current.session) {
@@ -409,7 +457,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				// Rename the pane's current window, aggregating its current statuses on
 				// the server rather than trusting the earlier client-side snapshot.
 				const format = !active && taskTitle === "zsh" ? QUIT_TITLE_FORMAT : buildWindowTitleFormat(taskTitle);
-				await tmux(["rename-window", "-t", pane, "--", format], signal);
+				await writeOnServer(current.server ?? lastLocation?.server, ["rename-window", "-t", pane, "--", format], signal);
 			}
 			if (!isCurrent()) return;
 			// Preserve a current candidate after failures so /tmux-title sync can
@@ -516,7 +564,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 
 	const requestTitle = (ctx: ExtensionContext, prompt = "", force = false) => {
 		const pane = getPane(ctx);
-		if (!pane || manualTitle) return false;
+		if (!pane || manualTitle || serverIdentityChanged) return false;
 		if (invalidModelSetting) {
 			warnOnce(ctx, "Invalid PI_TMUX_MODEL. Set provider/model or off, then /reload. Naming is disabled; waiting markers still work.");
 		}

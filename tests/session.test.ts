@@ -22,6 +22,28 @@ const mockPi = (handlers: Map<string, Function>, commands?: Map<string, Function
 	registerCommand: (name: string, command: { handler: Function }) => commands?.set(name, command.handler),
 }) as unknown as ExtensionAPI;
 
+function observedCommand(args: string[]): string[] {
+	if (args[0] !== "if-shell" || args[1] !== "-F" || !/^#\{==:#\{pid\},\d+\}$/.test(args[2])) return args;
+	const result: string[] = [];
+	const command = args[3];
+	for (let index = 0; index < command.length;) {
+		while (/\s/.test(command[index] ?? "")) index++;
+		if (index >= command.length) break;
+		if (command[index] === ";") { result.push(";"); index++; continue; }
+		expect(command[index]).toBe('"');
+		index++;
+		let value = "";
+		while (index < command.length && command[index] !== '"') {
+			if (command[index] === "\\") index++;
+			value += command[index++];
+		}
+		expect(command[index]).toBe('"');
+		index++;
+		result.push(value);
+	}
+	return result;
+}
+
 test.skipIf(!hasTmux).each([
 	{ sourceTitle: "existing task", destinationTitle: "existing task", event: "agent_settled", expectedTitle: "* existing task" },
 	{ sourceTitle: "existing task", destinationTitle: "destination task", event: "agent_settled", expectedTitle: "* destination task" },
@@ -123,7 +145,7 @@ test.skipIf(!hasTmux).each([false, true])("window renames re-evaluate sibling st
 		const commands = new Map<string, Function>();
 		let flip = true;
 		piTmux(mockPi(handlers, commands), async (args) => {
-			if (flip && args[0] === "rename-window") {
+			if (flip && observedCommand(args)[0] === "rename-window") {
 				flip = false;
 				tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, initialWaiting ? "0" : "1");
 			}
@@ -250,7 +272,7 @@ test.skipIf(!hasTmux).each([
 		let quitting = false;
 		const latestTitle = "literal #{session_id}, Café\u2003-peer  ";
 		piTmux(mockPi(handlers), async (args) => {
-			if (quitting && args[0] === "rename-window") {
+			if (quitting && observedCommand(args)[0] === "rename-window") {
 				quitting = false;
 				tmux("set-option", "-p", "-t", sibling, ACTIVE_OPTION, activeAtExecution ? "1" : "0");
 				tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, waitingAtExecution ? "1" : "0");

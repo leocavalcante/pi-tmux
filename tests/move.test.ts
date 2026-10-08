@@ -11,9 +11,36 @@ const sessionRenameTarget = (args: string[]) => {
 	const command = args.indexOf("rename-session");
 	return command < 0 ? undefined : args[command + 2];
 };
+
+function parseTmuxCommand(command: string): string[] {
+	const args: string[] = [];
+	for (let index = 0; index < command.length;) {
+		while (/\s/.test(command[index] ?? "")) index++;
+		if (index >= command.length) break;
+		if (command[index] === ";") { args.push(";"); index++; continue; }
+		expect(command[index]).toBe('"');
+		index++;
+		let value = "";
+		while (index < command.length && command[index] !== '"') {
+			if (command[index] === "\\") index++;
+			value += command[index++];
+		}
+		expect(command[index]).toBe('"');
+		index++;
+		args.push(value);
+	}
+	return args;
+}
+
+function observedCommand(args: string[]): string[] {
+	if (args[0] !== "if-shell" || args[1] !== "-F" || !/^#\{==:#\{pid\},\d+\}$/.test(args[2])) return args;
+	return parseTmuxCommand(args[3]);
+}
+
 type Fixture = {
 	tmux: (...args: string[]) => string;
 	calls: string[][];
+	rawCalls: string[][];
 	warnings: string[];
 	beforeCommand?: (args: string[], signal: AbortSignal) => Promise<void>;
 	emit: (event: string, reason?: string) => Promise<void>;
@@ -39,7 +66,7 @@ async function withServer(run: (fixture: Fixture) => Promise<void>) {
 		tmux: (...args) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
 			encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
 		}).replace(/\r?\n$/, ""),
-		calls: [], warnings,
+		calls: [], rawCalls: [], warnings,
 		emit: async (event, reason = "quit") => {
 			await handlers.get(event)!({ type: event, reason }, ctx);
 			await new Promise<void>((resolve) => setImmediate(resolve));
@@ -49,10 +76,13 @@ async function withServer(run: (fixture: Fixture) => Promise<void>) {
 		sync: async () => { await commands.get("tmux-title")!("sync", ctx); return notices.at(-1)!; },
 	};
 	const tmux: RunTmux = async (args, signal) => {
-		fixture.calls.push(args);
-		await fixture.beforeCommand?.(args, signal);
+		fixture.rawCalls.push(args);
+		const observed = observedCommand(args);
+		fixture.calls.push(observed);
+		await fixture.beforeCommand?.(observed, signal);
 		return fixture.tmux(...args);
 	};
+	tmux.supportsServerPidGuard = true;
 	try {
 		process.env.PI_TMUX_MODEL = "off";
 		piTmux({
@@ -69,6 +99,41 @@ async function withServer(run: (fixture: Fixture) => Promise<void>) {
 		rmSync(directory, { recursive: true, force: true });
 	}
 }
+
+test.skipIf(!hasTmux)("a server restart after lookup cannot apply the pending batch to reused IDs", async () => {
+	await withServer(async (f) => {
+		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Old Server", "-n", "old title", "/bin/sleep 60");
+		const [oldSession, oldWindow, oldServer] = f.tmux(
+			"display-message", "-p", "-t", pane, "#{session_id}\t#{window_id}\t#{pid}",
+		).split("\t");
+		process.env.TMUX_PANE = pane;
+		let restarted = false;
+		f.beforeCommand = async (args) => {
+			if (restarted || args[0] !== "set-option") return;
+			restarted = true;
+			f.tmux("kill-server");
+			const replacementPane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Replacement", "-n", "untouched", "/bin/sleep 60");
+			const [session, window, server] = f.tmux(
+				"display-message", "-p", "-t", replacementPane, "#{session_id}\t#{window_id}\t#{pid}",
+			).split("\t");
+			expect(replacementPane).toBe(pane);
+			expect([session, window]).toEqual([oldSession, oldWindow]);
+			expect(server).not.toBe(oldServer);
+		};
+
+		await f.emit("session_start");
+		expect(restarted).toBe(true);
+		expect(f.tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("untouched");
+		expect(f.tmux("display-message", "-p", "-t", pane, "#{session_name}")).toBe("Replacement");
+		const guardedWrite = f.rawCalls.find((args) => args[0] === "if-shell");
+		expect(guardedWrite?.[2]).toBe(`#{==:#{pid},${oldServer}}`);
+
+		const afterDetection = f.rawCalls.length;
+		await f.emit("agent_settled");
+		expect(f.rawCalls.slice(afterDetection).filter((args) => args[0] !== "display-message")).toEqual([]);
+		expect(f.warnings).toEqual([]);
+	});
+});
 
 const movingCases = [
 	{ sameSession: false, peerWaiting: false, otherWindowWaiting: false },
