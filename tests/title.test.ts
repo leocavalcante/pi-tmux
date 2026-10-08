@@ -393,15 +393,18 @@ test.each(["success", "rejection", "promise rejection", "stream throw", "result 
 	});
 });
 
-test("cancellation during model lookup prevents starting a provider and releases its timer", async () => {
+test("cancellation during model lookup skips credential checks and provider startup", async () => {
 	await withNamingTimers(async (timers, cleared) => {
 		const f = fixture();
+		let authChecks = 0;
+		(f.ctx.modelRegistry as any).hasConfiguredAuth = () => { authChecks++; return true; };
 		(f.ctx.modelRegistry as any).find = () => {
 			void f.emit("session_shutdown", "reload");
 			return { provider: "synthetic", id: "synthetic" };
 		};
 		f.input("synthetic task");
 		await settle();
+		expect(authChecks).toBe(0);
 		expect(f.requests).toEqual([]);
 		expect(cleared.has(timers[0].handle)).toBe(true);
 		expect(f.warnings).toEqual([]);

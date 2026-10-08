@@ -518,6 +518,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		try {
 			if (!namingModel) return;
 			const model = ctx.modelRegistry.find(namingModel.provider, namingModel.id);
+			if (controller.signal.aborted || requestGeneration !== generation) return;
 			if (!model || !ctx.modelRegistry.hasConfiguredAuth(model)) {
 				throw new Error("Naming model unavailable");
 			}
