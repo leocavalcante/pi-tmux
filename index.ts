@@ -94,6 +94,51 @@ const WINDOW_REPAIR_NEEDED_FORMAT = `#{!=:#{window_name},${SHARED_TASK_TITLE_FOR
 // ownership at execution time and preserve its latest title, not our snapshot.
 export const QUIT_TITLE_FORMAT = `#{?${WINDOW_ACTIVE_FORMAT},${SHARED_TASK_TITLE_FORMAT},${buildWindowTitleFormat("zsh")}}`;
 
+const WHITESPACE = /\s/;
+
+// Keep only the bounded prefix while trimming, rather than joining all text
+// blocks from a large message before slicing it. Once the retained prefix is
+// full, only inspect further characters if its last character is whitespace;
+// otherwise a suffix cannot affect the result.
+function boundedText(content: unknown, maxLength: number): string {
+	let text = "";
+	let leading = true;
+	const append = (part: string): boolean => {
+		let index = 0;
+		while (leading && index < part.length) {
+			if (!WHITESPACE.test(part[index])) leading = false;
+			else index++;
+		}
+		if (index === part.length) return false;
+		if (text.length < maxLength) {
+			const count = Math.min(maxLength - text.length, part.length - index);
+			text += part.slice(index, index + count);
+			index += count;
+		}
+		if (text.length === maxLength) {
+			if (!WHITESPACE.test(text[text.length - 1])) return true;
+			for (; index < part.length; index++) {
+				if (!WHITESPACE.test(part[index])) return true;
+			}
+		}
+		return false;
+	};
+
+	if (typeof content === "string") return append(content) ? text : text.trimEnd();
+	if (Array.isArray(content)) {
+		let foundText = false;
+		for (const candidate of content as unknown[]) {
+			if (!candidate || typeof candidate !== "object") continue;
+			const block = candidate as { type?: unknown; text?: unknown };
+			if (block.type !== "text") continue;
+			if (foundText && append("\n")) return text;
+			foundText = true;
+			if (typeof block.text === "string" && append(block.text)) return text;
+		}
+	}
+	return text.trimEnd();
+}
+
 // Use Pi's active projection so abandoned branches, compacted originals, and
 // text removed by context edits never leak back into the naming request.
 export function buildNamingContext(messages: SessionProjection["messages"], prompt = ""): string {
@@ -107,25 +152,23 @@ export function buildNamingContext(messages: SessionProjection["messages"], prom
 		const message = messages[i];
 		if (message.role === "compactionSummary") {
 			if (!foundSummary) {
-				const text = message.summary.trim();
-				summary = text ? `summary: ${text.slice(0, MAX_HISTORY_TEXT_LENGTH)}` : "";
+				const text = boundedText(message.summary, MAX_HISTORY_TEXT_LENGTH);
+				summary = text ? `summary: ${text}` : "";
 				foundSummary = true;
 			}
 		} else if (history.length < MAX_HISTORY_MESSAGES) {
 			if (message.role === "branchSummary") {
-				const text = message.summary.trim();
-				if (text) history.push(`branch summary: ${text.slice(0, MAX_HISTORY_TEXT_LENGTH)}`);
+				const text = boundedText(message.summary, MAX_HISTORY_TEXT_LENGTH);
+				if (text) history.push(`branch summary: ${text}`);
 			} else if (message.role === "user" || message.role === "assistant") {
-				const text = (typeof message.content === "string" ? message.content : message.content
-					.filter((block) => block.type === "text")
-					.map((block) => block.text).join("\n")).trim();
-				if (text) history.push(`${message.role}: ${text.slice(0, MAX_HISTORY_TEXT_LENGTH)}`);
+				const text = boundedText(message.content, MAX_HISTORY_TEXT_LENGTH);
+				if (text) history.push(`${message.role}: ${text}`);
 			}
 		}
 		if (foundSummary && history.length >= MAX_HISTORY_MESSAGES) break;
 	}
 
-	const latest = prompt.trim().slice(0, MAX_PROMPT_LENGTH);
+	const latest = boundedText(prompt, MAX_PROMPT_LENGTH);
 	const parts = latest ? [`user: ${latest}`] : [];
 	let remaining = MAX_CONTEXT_LENGTH - parts.join("\n\n").length - (summary ? summary.length + 2 : 0);
 	// The backward scan already selected recent entries, newest first. Prepending

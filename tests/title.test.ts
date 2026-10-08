@@ -845,6 +845,51 @@ test("naming context does not read text from history older than its retained win
 	expect(readDiscardedContent).toBe(false);
 });
 
+test("naming context stops reading text after its per-entry bound", () => {
+	let readUnneededText = false;
+	const laterBlock = { type: "text" } as any;
+	Object.defineProperty(laterBlock, "text", {
+		get() {
+			readUnneededText = true;
+			throw new Error("Text beyond the bounded prefix should not be read");
+		},
+	});
+	const context = buildNamingContext([{
+		role: "user",
+		content: [{ type: "text", text: "x".repeat(1_001) }, laterBlock],
+	}] as any);
+
+	expect(context).toBe("user: " + "x".repeat(1_000));
+	expect(readUnneededText).toBe(false);
+});
+
+test("naming context stops before later blocks when the exact bound ends in non-whitespace", () => {
+	let readUnneededText = false;
+	const laterBlock = { type: "text" } as any;
+	Object.defineProperty(laterBlock, "text", {
+		get() {
+			readUnneededText = true;
+			throw new Error("Text beyond the bounded prefix should not be read");
+		},
+	});
+	const context = buildNamingContext([{
+		role: "user",
+		content: [{ type: "text", text: "x".repeat(1_000) }, laterBlock],
+	}] as any);
+
+	expect(context).toBe("user: " + "x".repeat(1_000));
+	expect(readUnneededText).toBe(false);
+});
+
+test("bounded naming text preserves Unicode trimming and text-block separators", () => {
+	const context = buildNamingContext([
+		{ role: "compactionSummary", summary: "\u00a0\ufeffDeploy safely\u00a0 " + " ".repeat(1_200) },
+		{ role: "user", content: [{ type: "text", text: "\u00a0Fix" }, { type: "text", text: " auth tests\ufeff\n" }] },
+	] as any, "\ufeffcontinue\u00a0");
+
+	expect(context).toBe("summary: Deploy safely\n\nuser: Fix\n auth tests\n\nuser: continue");
+});
+
 test("empty projected context cancels stale naming without preventing a later request", async () => {
 	for (const event of ["session_compact", "agent_settled"]) {
 		for (const staleResult of [response("Removed task"), response("Synthetic error", "error")]) {
