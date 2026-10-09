@@ -305,7 +305,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, checks, tests, and
 
 ## Publishing
 
-GitHub Actions tests pushes and pull requests. Publishing a stable GitHub
+GitHub Actions tests pushes to `main` and pull requests. Publishing a stable GitHub
 release tagged `v<package.json version>`, such as `v0.1.0`, runs the same test
 matrix before publishing `@leocavalcante/pi-tmux` to npm with provenance.
 Prereleases are not published. Bump `package.json` and `package-lock.json`
