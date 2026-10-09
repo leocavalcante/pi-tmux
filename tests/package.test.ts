@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { execFile } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const COMMAND_TIMEOUT_MS = 30_000;
@@ -98,14 +98,27 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 		expect(entrypoint).toBe("./index.ts");
 		if (entrypoint !== "./index.ts") throw new Error("Unexpected packed Pi entrypoint");
 		expect(manifest.files).toContain(entrypoint.replace(/^\.\//, ""));
+		expect(manifest.files).toContain("src/");
 		expect(manifest.keywords).toContain("pi-extension");
 		expect(manifest.keywords).toContain("coding-agent");
 		expect(manifest.peerDependencies?.["@earendil-works/pi-coding-agent"]).toBe("^1.1.0");
 
-		// Use the fixed, validated package path instead of allowing a manifest path
-		// to direct archive extraction outside this temporary directory.
+		// Extract only expected, fixed module paths rather than allowing archive
+		// members or manifest paths to escape this temporary directory.
+		const runtimeFiles = [
+			"index.ts",
+			"src/title.ts",
+			"src/naming.ts",
+			"src/tmux.ts",
+			"src/controller.ts",
+			"src/extension.ts",
+		];
+		for (const member of runtimeFiles) {
+			const packedPath = join(packageDirectory, member);
+			mkdirSync(dirname(packedPath), { recursive: true });
+			writeFileSync(packedPath, await readPackedMember(archive, `package/${member}`));
+		}
 		const packedEntrypoint = join(packageDirectory, "index.ts");
-		writeFileSync(packedEntrypoint, await readPackedMember(archive, "package/index.ts"));
 		const source = readFileSync(packedEntrypoint, "utf8");
 		const javascript = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
 		const modulePath = join(packageDirectory, "index.mjs");
