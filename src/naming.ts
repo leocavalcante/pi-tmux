@@ -1,5 +1,5 @@
 import type { ExtensionContext, SessionProjection } from "@earendil-works/pi-coding-agent";
-import { cleanTitle } from "./title.ts";
+import { cleanTitle, MAX_TITLE_LENGTH } from "./title.ts";
 
 export const MAX_PROMPT_LENGTH = 2_000;
 export const MAX_CONTEXT_LENGTH = 6_000;
@@ -14,6 +14,13 @@ export class UnsafeNamingOutputError extends Error {
 	constructor() {
 		super("Naming output looked sensitive");
 		this.name = "UnsafeNamingOutputError";
+	}
+}
+
+export class InvalidNamingTitleError extends Error {
+	constructor() {
+		super("Naming response was not a short title");
+		this.name = "InvalidNamingTitleError";
 	}
 }
 
@@ -36,6 +43,19 @@ const EMAIL_ADDRESS_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 
 function hasSensitiveOutput(text: string): boolean {
 	return CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(text)) || EMAIL_ADDRESS_PATTERN.test(text);
+}
+
+function getTextPhase(textSignature: string | undefined): "commentary" | "final_answer" | undefined {
+	if (!textSignature) return;
+	try {
+		const parsed: unknown = JSON.parse(textSignature);
+		if (typeof parsed !== "object" || parsed === null) return;
+		const { v, id, phase } = parsed as { v?: unknown; id?: unknown; phase?: unknown };
+		if (v !== 1 || typeof id !== "string") return;
+		return phase === "commentary" || phase === "final_answer" ? phase : undefined;
+	} catch {
+		return;
+	}
 }
 
 // Split at the first slash: routed model IDs can themselves contain slashes.
@@ -207,17 +227,25 @@ export async function requestNamingTitle(
 		},
 	).result(), signal);
 	if (signal.aborted || !isCurrent()) return;
-	if (response.stopReason === "error" || response.stopReason === "aborted") {
-		throw new Error("Naming request failed");
-	}
-	const textBlocks = response.content.filter((block) => block.type === "text").map((block) => block.text);
-	const output = textBlocks.join(" ");
+	if (response.stopReason === "length") throw new InvalidNamingTitleError();
+	if (response.stopReason !== "stop") throw new Error("Naming request failed");
+	const textBlocks = response.content.filter((block) => block.type === "text");
+	const phasedBlocks = textBlocks.map((block) => ({ block, phase: getTextPhase(block.textSignature) }));
+	const finalAnswerBlocks = phasedBlocks.filter(({ phase }) => phase === "final_answer").map(({ block }) => block);
+	const hasCommentary = phasedBlocks.some(({ phase }) => phase === "commentary");
+	const selectedBlocks = finalAnswerBlocks.length ? finalAnswerBlocks : hasCommentary ? [] : textBlocks.slice(-1);
+	const outputBlocks = selectedBlocks.map((block) => block.text);
+	const output = outputBlocks.join(" ");
 	// Also check adjacent raw blocks without a separator in case a provider split
 	// sensitive data across content blocks.
-	if (hasSensitiveOutput(output) || hasSensitiveOutput(textBlocks.join(""))) {
+	if (hasSensitiveOutput(output) || hasSensitiveOutput(outputBlocks.join(""))) {
 		throw new UnsafeNamingOutputError();
 	}
-	const title = cleanTitle(output);
-	if (!title) throw new Error("Naming request returned no title");
+	const singleLine = output.trim();
+	if (/[\r\n\u2028\u2029]/u.test(singleLine)) throw new InvalidNamingTitleError();
+	const title = cleanTitle(singleLine, Number.MAX_SAFE_INTEGER);
+	if (!title || title.length > MAX_TITLE_LENGTH || title.split(" ").length > 4) {
+		throw new InvalidNamingTitleError();
+	}
 	return title;
 }
