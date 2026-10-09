@@ -221,6 +221,30 @@ test("passes input through immediately and renames the owning window", async () 
 	expect(f.warnings).toEqual([]);
 });
 
+test("extension instances keep pins and pending naming state isolated", async () => {
+	const first = fixture();
+	const pending = deferred();
+	const second = fixture([pending.promise]);
+
+	await first.refresh("set isolated title");
+	expect(first.state.title).toBe("isolated title");
+	expect(first.requests).toHaveLength(0);
+
+	second.input("Name a different task");
+	await settle();
+	expect(second.requests).toHaveLength(1);
+
+	// Resetting one instance must not abort another instance's request
+	// or erase its result.
+	await first.emit("session_tree");
+	expect(second.requests[0].options.signal.aborted).toBe(false);
+	pending.resolve(response("second task"));
+	await settle();
+	expect(second.state.title).toBe("second task");
+	expect(first.state.title).toBe("isolated title");
+	expect(second.warnings).toEqual([]);
+});
+
 test.each(["-fix auth", "-t", "-a"])("model title %s is passed as a literal tmux argument", async (title) => {
 	const f = fixture([Promise.resolve(response(title))]);
 	f.input("Synthetic task");
