@@ -20,11 +20,12 @@ Use either the installed package or the development extension, not both.
 
 ## Checks
 
-Run the extension and test TypeScript checks:
+Run the extension and test TypeScript checks, plus the same high-severity dependency audit used by CI:
 
 ```sh
 npm run check
 npm run check:tests
+npm audit --audit-level=high
 ```
 
 `index.ts` contains the extension, title formatting, context selection, and tmux status updates. The window snapshot is tab-delimited and its last field can be empty; preserve its trailing tab and remove only tmux's line terminator. Injected `RunTmux` adapters retain flat command arrays by default; adapters that support the server-PID guard can opt in with `supportsServerPidGuard = true`.
