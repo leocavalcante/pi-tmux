@@ -517,6 +517,23 @@ test("does not use commentary text when no final_answer block is present", async
 	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
 });
 
+test("does not fall back to an unrecognized text phase", async () => {
+	const result = {
+		...response(""),
+		content: [{
+			type: "text",
+			text: "repair auth tests",
+			textSignature: JSON.stringify({ v: 1, id: "analysis-message", phase: "analysis" }),
+		}],
+	};
+	const f = fixture([Promise.resolve(result)]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
+});
+
 test("falls back to the last text block when phase metadata is absent", async () => {
 	const result = {
 		...response(""),
