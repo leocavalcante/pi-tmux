@@ -20,6 +20,7 @@ import {
 	SESSION_TITLE_MARKED_OPTION,
 	SESSION_TITLE_MARKED_VALUE_FORMAT,
 	SHARED_TASK_TITLE_FORMAT,
+	PRESERVED_WINDOW_TITLE_FORMAT,
 	STATUS_INFO_FORMAT,
 	targetDisappeared,
 	WINDOW_REPAIR_NEEDED_FORMAT,
@@ -236,13 +237,18 @@ export function createController(tmux: RunTmux) {
 				updated = isCurrent() && stable;
 				return;
 			}
+			const hasTaskTitle = candidate !== undefined || baseTitle !== undefined;
 			const taskTitle = candidate ?? baseTitle ?? currentTitle.replace(/^\* /, "");
-			const title = formatTitle(taskTitle, windowWaiting);
+			const preserveWindowName = !hasTaskTitle && taskTitle.length > 0;
+			const title = preserveWindowName
+				? `${windowWaiting ? READY_PREFIX : ""}${taskTitle}`
+				: formatTitle(taskTitle, windowWaiting);
 			if (title !== currentTitle) {
 				// Rename the pane's current window, aggregating its current statuses on
 				// the server rather than trusting the earlier client-side snapshot.
 				const renameLocation = current;
-				const format = !active && taskTitle === "zsh" ? QUIT_TITLE_FORMAT : buildWindowTitleFormat(taskTitle);
+				const format = !active && taskTitle === "zsh" ? QUIT_TITLE_FORMAT
+					: preserveWindowName ? PRESERVED_WINDOW_TITLE_FORMAT : buildWindowTitleFormat(taskTitle);
 				await writeOnServer(tmux, current.server ?? lastLocation?.server, ["rename-window", "-t", pane, "--", format], signal);
 				if (!isCurrent()) return;
 				// A guarded write can succeed as a tmux command while its PID condition
