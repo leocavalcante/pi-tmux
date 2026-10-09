@@ -100,6 +100,7 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 		expect(manifest.files).toContain(entrypoint.replace(/^\.\//, ""));
 		expect(manifest.keywords).toContain("pi-extension");
 		expect(manifest.keywords).toContain("coding-agent");
+		expect(manifest.peerDependencies?.["@earendil-works/pi-coding-agent"]).toBe("^1.1.0");
 
 		// Use the fixed, validated package path instead of allowing a manifest path
 		// to direct archive extraction outside this temporary directory.
