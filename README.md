@@ -70,11 +70,13 @@ Set `PI_TMUX_MODEL` before starting Pi to use another registered model:
 PI_TMUX_MODEL=anthropic/claude-sonnet-4-5 pi
 ```
 
-Use `provider/model` as listed by Pi. Custom provider IDs may contain visible
-punctuation other than `/`; whitespace and control characters are rejected.
-The first slash separates the provider from the model, while model IDs can
-contain additional slashes, such as `openrouter/vendor/model`. An unset or blank
-setting uses the default.
+Use `provider/model` as listed by Pi. The setting is trimmed at the edges and
+may contain at most 256 ASCII characters afterward. Provider IDs may contain
+visible punctuation other than `/`; model IDs may contain additional slashes.
+Whitespace and control characters inside either ID are rejected. The first
+slash separates provider from model, so `openrouter/vendor/model` uses
+`openrouter` as the provider and `vendor/model` as the model. An unset or blank
+setting uses the default; `off` (case-insensitive) disables naming.
 The extension reads this setting when it loads. Changes to a parent shell's
 exports require restarting Pi; `/reload` rereads Pi's own process environment.
 An invalid setting disables naming and warns without falling back to another
