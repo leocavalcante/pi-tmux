@@ -50,8 +50,9 @@ function getTextPhase(textSignature: string | undefined): string | undefined {
 	try {
 		const parsed: unknown = JSON.parse(textSignature);
 		if (typeof parsed !== "object" || parsed === null) return;
-		const { v, id, phase } = parsed as { v?: unknown; id?: unknown; phase?: unknown };
-		if (v !== 1 || typeof id !== "string") return;
+		const { phase } = parsed as { phase?: unknown };
+		// Keep recognizing phases if the signature schema evolves; unknown phases
+		// should not activate the metadata-free last-block fallback.
 		return typeof phase === "string" && phase.length ? phase : undefined;
 	} catch {
 		return;
