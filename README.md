@@ -340,8 +340,11 @@ npm test
   bounds also have a mock-only regression.
 - `tests/status.test.ts` verifies read-only diagnostic snapshots and waiting-flag
   aggregation on an isolated tmux server. It skips if tmux is unavailable.
-- `tests/package.test.ts` checks that the Pi extension entrypoint is pack-listed
-  and loads after TypeScript erasure without a runtime SDK dependency.
+- `tests/package.test.ts` runs `npm pack` in a temporary directory, inspects the
+  packed manifest and entrypoint, then imports the extracted file after Bun's
+  TypeScript erasure and exercises status-only lifecycle behavior without a
+  runtime SDK dependency. It requires `npm` and `tar` on `PATH`; on Windows the
+  npm command shim is launched through the command shell.
 
 Tmux integration tests use separate temporary servers and skip automatically
 when `tmux` is unavailable; install tmux to run that integration coverage. The
