@@ -285,7 +285,7 @@ export async function requestNamingTitle(
 			throw new UnsafeNamingOutputError();
 		}
 		const singleLine = output.trim();
-		if (/[\r\n\u2028\u2029]/u.test(singleLine)) throw new InvalidNamingTitleError("multiple-lines");
+		if (/[\r\n\v\f\u0085\u2028\u2029]/u.test(singleLine)) throw new InvalidNamingTitleError("multiple-lines");
 		const title = cleanTitle(singleLine, Number.MAX_SAFE_INTEGER);
 		if (!title) throw new InvalidNamingTitleError("empty");
 		if (title.length > MAX_TITLE_LENGTH) {
