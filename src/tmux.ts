@@ -63,7 +63,10 @@ export function buildWindowTitleFormat(title: string): string {
 }
 // A sibling may start, quit, or rename the window after our last lookup. Decide
 // ownership at execution time and preserve its latest title, not our snapshot.
-export const QUIT_TITLE_FORMAT = `#{?${WINDOW_ACTIVE_FORMAT},${SHARED_WINDOW_TITLE_FORMAT},${buildWindowTitleFormat("zsh")}}`;
+export function buildQuitTitleFormat(idleTitle: string): string {
+	return `#{?${WINDOW_ACTIVE_FORMAT},${SHARED_WINDOW_TITLE_FORMAT},${buildWindowTitleFormat(idleTitle)}}`;
+}
+export const QUIT_TITLE_FORMAT = buildQuitTitleFormat("zsh");
 
 export type RunTmux = ((args: string[], signal: AbortSignal) => Promise<string>) & {
 	// Adapters can opt into receiving the built-in server-PID if-shell wrapper.

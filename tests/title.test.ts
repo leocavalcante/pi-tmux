@@ -3,21 +3,26 @@ import { getEventListeners } from "node:events";
 import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, STATUS_INFO_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
-import { PRESERVED_WINDOW_TITLE_FORMAT } from "../src/tmux.ts";
+import { buildQuitTitleFormat, PRESERVED_WINDOW_TITLE_FORMAT } from "../src/tmux.ts";
 
 let originalPane: string | undefined;
 let originalModel: string | undefined;
+let originalIdleTitle: string | undefined;
 beforeEach(() => {
 	originalPane = process.env.TMUX_PANE;
 	originalModel = process.env.PI_TMUX_MODEL;
+	originalIdleTitle = process.env.PI_TMUX_IDLE_TITLE;
 	process.env.TMUX_PANE = "%1";
 	delete process.env.PI_TMUX_MODEL;
+	delete process.env.PI_TMUX_IDLE_TITLE;
 });
 afterEach(() => {
 	if (originalPane === undefined) delete process.env.TMUX_PANE;
 	else process.env.TMUX_PANE = originalPane;
 	if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 	else process.env.PI_TMUX_MODEL = originalModel;
+	if (originalIdleTitle === undefined) delete process.env.PI_TMUX_IDLE_TITLE;
+	else process.env.PI_TMUX_IDLE_TITLE = originalIdleTitle;
 });
 
 const response = (text: string, stopReason = "stop") => ({
@@ -50,6 +55,7 @@ function fixture(
 			},
 		},
 	} as unknown as ExtensionContext;
+	let idleTitle = "zsh";
 	const state = {
 		window: "@2", title: "existing task", session: "$0", sessionTitle: "My Session",
 		windowInfo: undefined as string | undefined,
@@ -63,11 +69,11 @@ function fixture(
 		if (format === PRESERVED_WINDOW_TITLE_FORMAT) {
 			return (windowWaiting() ? READY_PREFIX : "") + state.title.replace(/^\* /, "");
 		}
-		if (format === QUIT_TITLE_FORMAT) {
+		if (format === buildQuitTitleFormat(idleTitle)) {
 			const hasPeer = [...state.activePanes, ...state.waitingPanes].some(([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane));
-			if (!hasPeer) return formatTitle("zsh", windowWaiting());
+			if (!hasPeer) return formatTitle(idleTitle, windowWaiting());
 			const title = state.title.replace(/^\* /, "");
-			return windowWaiting() ? READY_PREFIX + title.slice(0, 22) : title;
+			return windowWaiting() ? READY_PREFIX + title : title;
 		}
 		const prefix = `#{?${WINDOW_WAITING_FORMAT},`;
 		expect(format).toStartWith(prefix);
@@ -100,10 +106,13 @@ function fixture(
 		}
 		return "";
 	};
-	const load = () => piTmux({
-		on: (event: string, handler: Function) => handlers.set(event, handler),
-		registerCommand: (name: string, command: { handler: Function; getArgumentCompletions?: Function }) => commands.set(name, command),
-	} as unknown as ExtensionAPI, tmux);
+	const load = () => {
+		idleTitle = cleanTitle(process.env.PI_TMUX_IDLE_TITLE ?? "zsh") || "zsh";
+		return piTmux({
+			on: (event: string, handler: Function) => handlers.set(event, handler),
+			registerCommand: (name: string, command: { handler: Function; getArgumentCompletions?: Function }) => commands.set(name, command),
+		} as unknown as ExtensionAPI, tmux);
+	};
 	load();
 	const input = (text: string, source = "interactive") => handlers.get("input")!({ text, source }, ctx);
 	const emit = (event: string, reason = event === "session_shutdown" ? "quit" : "startup") =>
@@ -959,6 +968,33 @@ test("pinning zsh is a task-title update, not quit cleanup", async () => {
 	expect(f.state.title).toBe("zsh");
 	expect(f.state.activePanes.get("%1")).toBe("1");
 	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildWindowTitleFormat("zsh")]);
+});
+
+test.each([
+	{ setting: " Fish & Shell ", expected: "fish shell" },
+	{ setting: "!!!", expected: "zsh" },
+	{ setting: "My Very Very Long Window Title", expected: "my very very long" },
+])("quit cleanup uses sanitized PI_TMUX_IDLE_TITLE: %j", async ({ setting, expected }) => {
+	process.env.PI_TMUX_IDLE_TITLE = setting;
+	const f = fixture([]);
+	await f.emit("session_start");
+	await f.emit("session_shutdown", "quit");
+	expect(f.state.title).toBe(expected);
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat(expected)]);
+});
+
+test("idle title configuration is reread by a fresh extension runtime", async () => {
+	process.env.PI_TMUX_IDLE_TITLE = "Fish Shell";
+	const f = fixture([]);
+	process.env.PI_TMUX_IDLE_TITLE = "Bash Shell";
+	await f.emit("session_start");
+	await f.emit("session_shutdown", "quit");
+	expect(f.state.title).toBe("fish shell");
+
+	f.load();
+	await f.emit("session_start", "reload");
+	await f.emit("session_shutdown", "quit");
+	expect(f.state.title).toBe("bash shell");
 });
 
 test("shutdown resets a busy title and repeated cleanup makes no extra writes", async () => {

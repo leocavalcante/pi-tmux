@@ -14,7 +14,7 @@ prompt. Naming runs in the background and does not delay Pi's answer.
 | Pi is working alone in its window | `fix auth tests` | Existing name |
 | Pi has settled and is waiting for input | `* fix auth tests` | `* ` plus the existing name |
 | Pi quits, another Pi remains in the window | Current task title, marked if a remaining pane is waiting | Existing name, still prefixed if another Pi pane is waiting |
-| Last Pi in a window quits normally | `zsh` | Existing name, still prefixed if a Pi pane in another window is waiting |
+| Last Pi in a window quits normally | `zsh` by default; configurable | Existing name, still prefixed if a Pi pane in another window is waiting |
 
 Generated and pinned task titles are lowercase and limited to 24 ASCII
 characters, including the waiting prefix. tmux session names keep their
@@ -82,6 +82,12 @@ exports require restarting Pi; `/reload` rereads Pi's own process environment.
 An invalid setting disables naming and warns without falling back to another
 provider. A missing model or missing credentials also does not trigger fallback.
 
+The last Pi pane normally resets its window to `zsh` when it quits. Set
+`PI_TMUX_IDLE_TITLE` before starting Pi to choose another idle title; the value
+uses the same lowercase ASCII cleanup and 24-character limit as generated
+names. Empty or non-alphanumeric values fall back to `zsh`. `/reload` rereads
+the setting from Pi's process environment.
+
 For waiting markers without any naming requests or dialogue collection:
 
 ```sh
@@ -89,8 +95,8 @@ PI_TMUX_MODEL=off pi
 ```
 
 Status-only mode still formats waiting window names. The last Pi in a window
-resets its name to `zsh` on graceful quit. You can set a manual title without
-enabling AI naming.
+resets its name to the configured idle title on graceful quit. You can set a
+manual title without enabling AI naming.
 
 ### Retry a title
 
@@ -237,15 +243,17 @@ most recent task-title update wins, including manual pins. Quitting one Pi
 keeps the current shared task title while another Pi remains in that window,
 whether it is busy or waiting. Cleanup chooses ownership and reads the latest
 shared title on the tmux server, so a peer that starts or renames after lookup
-is protected too. A peer in a different window does not prevent `zsh` cleanup.
+is protected too. A peer in a different window does not prevent idle-title
+cleanup.
 The waiting marker aggregates all Pi panes in its window independently of
 which pane last named it. A waiting pane in a different window marks the
 session but not this window.
 
 Renaming turns off tmux's automatic process-based naming for that window.
-The last Pi to quit gracefully resets the name to `zsh`, regardless of your
-actual shell, and does not re-enable automatic naming. `/reload` and Pi session
-replacement keep ownership registered, clear that pane's waiting status, then
+The last Pi to quit gracefully resets the name to the configured idle title
+(`zsh` by default), regardless of your actual shell, and does not re-enable
+automatic naming. `/reload` and Pi session replacement keep ownership
+registered, clear that pane's waiting status, then
 refresh the task name from the active history. The existing task name stays
 until a naming request succeeds.
 
