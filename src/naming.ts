@@ -10,15 +10,15 @@ const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 export type NamingModel = { provider: string; id: string };
 
-export class CredentialLikeOutputError extends Error {
+export class UnsafeNamingOutputError extends Error {
 	constructor() {
-		super("Naming output resembled a credential");
-		this.name = "CredentialLikeOutputError";
+		super("Naming output looked sensitive");
+		this.name = "UnsafeNamingOutputError";
 	}
 }
 
 // Defense in depth for common formats; this intentionally is not a general
-// secret scanner. Check the raw response before title normalization can hide it.
+// secret or personal-information scanner. Check raw text before title normalization.
 const CREDENTIAL_LIKE_PATTERNS = [
 	/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/,
 	/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/,
@@ -32,8 +32,10 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
 ];
 
-function hasCredentialLikeOutput(text: string): boolean {
-	return CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(text));
+const EMAIL_ADDRESS_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+
+function hasSensitiveOutput(text: string): boolean {
+	return CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(text)) || EMAIL_ADDRESS_PATTERN.test(text);
 }
 
 // Split at the first slash: routed model IDs can themselves contain slashes.
@@ -211,9 +213,9 @@ export async function requestNamingTitle(
 	const textBlocks = response.content.filter((block) => block.type === "text").map((block) => block.text);
 	const output = textBlocks.join(" ");
 	// Also check adjacent raw blocks without a separator in case a provider split
-	// a credential across content blocks.
-	if (hasCredentialLikeOutput(output) || hasCredentialLikeOutput(textBlocks.join(""))) {
-		throw new CredentialLikeOutputError();
+	// sensitive data across content blocks.
+	if (hasSensitiveOutput(output) || hasSensitiveOutput(textBlocks.join(""))) {
+		throw new UnsafeNamingOutputError();
 	}
 	const title = cleanTitle(output);
 	if (!title) throw new Error("Naming request returned no title");
