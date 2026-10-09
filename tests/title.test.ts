@@ -745,6 +745,24 @@ test("superseding input cancels an overlong-title retry without applying its sta
 });
 
 test.each([
+	["line feed", "\n"],
+	["carriage return", "\r"],
+	["vertical tab", "\v"],
+	["form feed", "\f"],
+	["next line", "\u0085"],
+	["line separator", "\u2028"],
+	["paragraph separator", "\u2029"],
+])("rejects %s in naming output as a line break", async (_name, separator) => {
+	const f = fixture([Promise.resolve(response(`fix auth${separator}tests`))]);
+	f.input("Name a task");
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(f.warnings).toEqual(["The naming model returned multiple lines instead of one title; the current title was kept."]);
+});
+
+test.each([
 	["I'll inspect the conversation and choose a title.", "The naming model title exceeded the 24-character limit; the current title was kept.", true],
 	["one two three four five", "The naming model title exceeded the 4-word limit; the current title was kept.", true],
 	["fix ssh\nhelpers", "The naming model returned multiple lines instead of one title; the current title was kept.", false],
