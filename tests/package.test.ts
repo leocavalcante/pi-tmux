@@ -6,6 +6,28 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const COMMAND_TIMEOUT_MS = 30_000;
+const PUBLIC_RUNTIME_EXPORTS = [
+	"ACTIVE_OPTION",
+	"MAX_CONTEXT_LENGTH",
+	"MAX_HISTORY_MESSAGES",
+	"MAX_PROMPT_LENGTH",
+	"MAX_TITLE_LENGTH",
+	"QUIT_TITLE_FORMAT",
+	"READY_PREFIX",
+	"SESSION_TITLE_FORMAT",
+	"SESSION_WAITING_FORMAT",
+	"STATUS_INFO_FORMAT",
+	"WAITING_OPTION",
+	"WINDOW_ACTIVE_FORMAT",
+	"WINDOW_INFO_FORMAT",
+	"WINDOW_WAITING_FORMAT",
+	"buildNamingContext",
+	"buildWindowTitleFormat",
+	"cleanTitle",
+	"default",
+	"formatTitle",
+	"parseNamingModel",
+].sort();
 
 type CommandOptions = {
 	cwd?: string;
@@ -124,6 +146,7 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 		const modulePath = join(packageDirectory, "index.mjs");
 		writeFileSync(modulePath, javascript);
 		const extension = await import(pathToFileURL(modulePath).href);
+		expect(Object.keys(extension).sort()).toEqual(PUBLIC_RUNTIME_EXPORTS);
 		expect(typeof extension.default).toBe("function");
 		expect(extension.MAX_TITLE_LENGTH).toBe(24);
 
