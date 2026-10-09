@@ -26,7 +26,8 @@ A session stays marked while any Pi pane across its windows waits.
 
 Run interactive Pi inside tmux, with `tmux` available on `PATH` and
 `TMUX_PANE` set by tmux. Tested with Pi 1.1.0. The package declares Node.js
-22.19 or newer; Pi supplies the runtime dependencies, with no build step.
+22.19 or newer; the Pi extension API peer range is `^1.1.0`. Pi supplies the
+runtime dependencies, with no build step.
 
 ```sh
 pi install npm:@leocavalcante/pi-tmux
