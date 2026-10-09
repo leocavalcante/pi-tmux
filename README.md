@@ -184,9 +184,10 @@ Repeat the command to retry them.
   compacted originals, and text removed by Pi context edits are not used.
 - Titles are forced to lowercase and clipped at a word boundary when possible.
 - If the provider marks text phases, only `final_answer` blocks are considered;
-  without phase metadata, the last text block is used. Multiline output or a
-  sanitized title over four words or 24 ASCII characters is rejected rather
-  than clipped into a misleading fragment.
+  without phase metadata, the last text block is used. An overlong or over-worded
+  first candidate gets one correction request. A still-overlong candidate is
+  clipped at a word boundary only when it remains a 2–4-word title; multiline,
+  over-word, and otherwise unusable output is rejected.
 - `* ` marks a fully settled run, after tool work, retries, and queued
   continuations are finished. It does not mean the task succeeded.
 - The 24-character limit includes the marker. Waiting titles reserve two
@@ -304,7 +305,8 @@ Images, thinking blocks, tool calls, tool results, shell output, system prompts,
 and custom extension messages are excluded. Summaries and ordinary dialogue
 can still mention details from tool output. Provider billing, subscription
 limits, and data handling apply to these additional requests. A run can request
-a title on input and again at settlement when its context changes. Each
+a title on input and again at settlement when its context changes; an invalid
+length or word-count result can trigger one short correction request. Each
 `/tmux-title` retry also makes a request when naming context is available.
 `PI_TMUX_MODEL=off` or an active manual pin prevents these naming requests.
 Manual title commands do not send the title or dialogue to a model.
