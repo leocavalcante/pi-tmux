@@ -19,7 +19,7 @@ import {
 	SESSION_TITLE_FORMAT,
 	SESSION_TITLE_MARKED_OPTION,
 	SESSION_TITLE_MARKED_VALUE_FORMAT,
-	SHARED_TASK_TITLE_FORMAT,
+	SHARED_WINDOW_TITLE_FORMAT,
 	PRESERVED_WINDOW_TITLE_FORMAT,
 	STATUS_INFO_FORMAT,
 	targetDisappeared,
@@ -131,7 +131,7 @@ export function createController(tmux: RunTmux) {
 				// if a custom unmarked name replaced the stale marker after lookup.
 				await writeOnServer(tmux, server, [
 					"if-shell", "-F", "-t", window, WINDOW_REPAIR_NEEDED_FORMAT,
-					`rename-window -t ${window} -- '${SHARED_TASK_TITLE_FORMAT}'`,
+					`rename-window -t ${window} -- '${SHARED_WINDOW_TITLE_FORMAT}'`,
 				], signal);
 			} catch (error) {
 				// Forget vanished windows, but retry transient failures on the next update.

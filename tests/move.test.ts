@@ -249,7 +249,7 @@ test.skipIf(!hasTmux).each([false, true])("former-window repair preserves late l
 		};
 		await f.emit("agent_settled");
 		expect(flipped).toBe(true);
-		expect(f.tmux("display-message", "-p", "-t", anchor, "#{window_name}")).toBe(initialWaiting ? latestTitle : "* " + latestTitle.slice(0, 22));
+		expect(f.tmux("display-message", "-p", "-t", anchor, "#{window_name}")).toBe(initialWaiting ? latestTitle : "* " + latestTitle);
 		expect(f.tmux("display-message", "-p", "-t", source, "#{session_name}")).toBe(initialWaiting ? "Source" : "* Source");
 		expect(f.tmux("list-windows", "-a", "-F", "#{window_id}").split("\n")).toHaveLength(2);
 		expect(f.tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("* move task");
@@ -416,6 +416,29 @@ test.skipIf(!hasTmux)("destroyed former windows and sessions do not prevent dest
 		const repairs = f.calls.filter((args) => args[3] === oldWindow || args[2] === source).length;
 		await f.emit("agent_settled");
 		expect(f.calls.filter((args) => args[3] === oldWindow || args[2] === source)).toHaveLength(repairs);
+		expect(f.warnings).toEqual([]);
+	});
+});
+
+test.skipIf(!hasTmux)("former-window repair preserves long custom names and waiting markers", async () => {
+	await withServer(async (f) => {
+		const customTitle = "Custom Deployment Window Name Exceeding the Task Title Limit";
+		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Source", "-n", customTitle, "/bin/sleep 60");
+		const session = f.tmux("display-message", "-p", "-t", pane, "#{session_id}");
+		const oldWindow = f.tmux("display-message", "-p", "-t", pane, "#{window_id}");
+		const anchor = f.tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		const destination = f.tmux("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", session, "-n", "destination", "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		await f.emit("session_start");
+		await f.emit("agent_settled");
+		expect(f.tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe(`* ${customTitle}`);
+
+		f.tmux("set-option", "-p", "-t", anchor, WAITING_OPTION, "1");
+		f.tmux("join-pane", "-d", "-s", pane, "-t", destination);
+		await f.emit("agent_settled");
+
+		expect(f.tmux("display-message", "-p", "-t", oldWindow, "#{window_name}")).toBe(`* ${customTitle}`);
+		expect(f.tmux("show-options", "-p", "-v", "-t", anchor, WAITING_OPTION)).toBe("1");
 		expect(f.warnings).toEqual([]);
 	});
 });
