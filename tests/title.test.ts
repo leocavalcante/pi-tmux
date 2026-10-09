@@ -477,6 +477,49 @@ test("empty or failed responses never become window names", async () => {
 	}
 });
 
+test("credential-shaped model output is rejected without applying or disclosing it", async () => {
+	const outputs = [
+		["gh", "p_", "a".repeat(36)].join(""),
+		["github", "_pat_", "a".repeat(30)].join(""),
+		["AKIA", "A".repeat(16)].join(""),
+		["ASIA", "A".repeat(16)].join(""),
+		["AIza", "A".repeat(32)].join(""),
+		["sk", "-proj-", "a".repeat(32)].join(""),
+		["sk", "_live_", "a".repeat(24)].join(""),
+		["xoxb-", "a".repeat(24)].join(""),
+		["npm_", "a".repeat(24)].join(""),
+		["eyJ", "a".repeat(8), ".", "b".repeat(8), ".", "c".repeat(8)].join(""),
+		["Bearer ", "a".repeat(24)].join(""),
+		["-----BEGIN ", "PRIVATE KEY-----"].join(""),
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Naming output looked credential-like and was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(output);
+	}
+
+	const split = ["gh", "p_", "a".repeat(36)];
+	const splitResponse = { ...response(""), content: split.map((text) => ({ type: "text", text })) };
+	const f = fixture([Promise.resolve(splitResponse)]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(f.warnings).toEqual(["Naming output looked credential-like and was not applied."]);
+});
+
+test("ordinary security-themed titles without credential values remain valid", async () => {
+	const f = fixture([Promise.resolve(response("review bearer auth flow"))]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("review bearer auth flow");
+	expect(f.warnings).toEqual([]);
+});
+
 test("ready marker fits within 24 cells and title text stays lowercase", () => {
 	expect(formatTitle("FIX API Tests", true)).toBe("* fix api tests");
 	expect(formatTitle("X".repeat(24), true)).toBe("* " + "x".repeat(22));

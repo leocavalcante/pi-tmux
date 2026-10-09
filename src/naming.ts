@@ -10,6 +10,32 @@ const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 export type NamingModel = { provider: string; id: string };
 
+export class CredentialLikeOutputError extends Error {
+	constructor() {
+		super("Naming output resembled a credential");
+		this.name = "CredentialLikeOutputError";
+	}
+}
+
+// Defense in depth for common formats; this intentionally is not a general
+// secret scanner. Check the raw response before title normalization can hide it.
+const CREDENTIAL_LIKE_PATTERNS = [
+	/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/,
+	/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/,
+	/\bAIza[A-Za-z0-9_-]{30,}\b/,
+	/\b(?:sk|rk)-(?:proj-|ant-)?[A-Za-z0-9_-]{16,}\b/i,
+	/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/i,
+	/\b(?:xox[baprs]|xapp)-[A-Za-z0-9-]{10,}\b/,
+	/\bnpm_[A-Za-z0-9]{20,}\b/,
+	/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
+	/\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b/i,
+	/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+];
+
+function hasCredentialLikeOutput(text: string): boolean {
+	return CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 // Split at the first slash: routed model IDs can themselves contain slashes.
 // Pi provider IDs are open-ended; allow visible punctuation except the separator.
 // An invalid setting must not silently send dialogue to the default provider.
@@ -182,12 +208,14 @@ export async function requestNamingTitle(
 	if (response.stopReason === "error" || response.stopReason === "aborted") {
 		throw new Error("Naming request failed");
 	}
-	const title = cleanTitle(
-		response.content
-			.filter((block) => block.type === "text")
-			.map((block) => block.text)
-			.join(" "),
-	);
+	const textBlocks = response.content.filter((block) => block.type === "text").map((block) => block.text);
+	const output = textBlocks.join(" ");
+	// Also check adjacent raw blocks without a separator in case a provider split
+	// a credential across content blocks.
+	if (hasCredentialLikeOutput(output) || hasCredentialLikeOutput(textBlocks.join(""))) {
+		throw new CredentialLikeOutputError();
+	}
+	const title = cleanTitle(output);
 	if (!title) throw new Error("Naming request returned no title");
 	return title;
 }
