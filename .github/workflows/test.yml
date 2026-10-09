@@ -39,6 +39,10 @@ jobs:
           command -v tmux || { sudo apt-get update && sudo apt-get install -y tmux; }
           tmux -V
       - run: npm ci --ignore-scripts
+      # Run the network-backed audit once per workflow, not once per Node version.
+      - name: Audit dependencies for high-severity vulnerabilities
+        if: matrix.node == 22
+        run: npm audit --audit-level=high
       - run: npm run check
       - run: npm run check:tests
       - run: npm test
