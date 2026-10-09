@@ -98,6 +98,8 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 		expect(entrypoint).toBe("./index.ts");
 		if (entrypoint !== "./index.ts") throw new Error("Unexpected packed Pi entrypoint");
 		expect(manifest.files).toContain(entrypoint.replace(/^\.\//, ""));
+		expect(manifest.keywords).toContain("pi-extension");
+		expect(manifest.keywords).toContain("coding-agent");
 
 		// Use the fixed, validated package path instead of allowing a manifest path
 		// to direct archive extraction outside this temporary directory.
