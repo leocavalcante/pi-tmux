@@ -50,6 +50,7 @@ const MAX_LOCATION_PASSES = 4;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 // Split at the first slash: routed model IDs can themselves contain slashes.
+// Pi provider IDs are open-ended; allow visible punctuation except the separator.
 // An invalid setting must not silently send dialogue to the default provider.
 export function parseNamingModel(value?: string): { provider: string; id: string } | null {
 	const setting = value?.trim();
@@ -58,7 +59,7 @@ export function parseNamingModel(value?: string): { provider: string; id: string
 	const slash = setting.indexOf("/");
 	const provider = setting.slice(0, slash);
 	const id = setting.slice(slash + 1);
-	if (slash < 1 || !/^[a-zA-Z0-9_-]+$/.test(provider) || !/^[\x21-\x7e]+$/.test(id) || setting.length > 256) {
+	if (slash < 1 || !/^[\x21-\x2e\x30-\x7e]+$/.test(provider) || !/^[\x21-\x7e]+$/.test(id) || setting.length > 256) {
 		throw new Error("PI_TMUX_MODEL must be provider/model or off");
 	}
 	return { provider, id };
