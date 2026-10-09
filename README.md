@@ -322,6 +322,7 @@ and 2FA, without creating a CI token:
 ```sh
 npm login
 npm ci --ignore-scripts
+npm audit --audit-level=high
 npm run check
 npm test
 npm publish --access public --provenance=false --ignore-scripts
