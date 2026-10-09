@@ -256,14 +256,39 @@ test.each(["-fix auth", "-t", "-a"])("model title %s is passed as a literal tmux
 	expect(f.warnings).toEqual([]);
 });
 
-test("bounds prompt and output and disables reasoning and retries", async () => {
+test("balances oversized prompt context and disables reasoning and retries", async () => {
 	const f = fixture();
 	f.input("x".repeat(10_000));
 	await settle();
 	const request = f.requests[0];
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixLength = Math.floor(retainedLength / 2);
 	expect(request.context.messages).toHaveLength(1);
-	expect(request.context.messages[0].content).toBe("user: " + "x".repeat(MAX_PROMPT_LENGTH));
+	expect(request.context.messages[0].content).toBe(
+		`user: ${"x".repeat(prefixLength)}\n${marker}\n${"x".repeat(suffixLength)}`,
+	);
 	expect(request.options).toMatchObject({ maxTokens: 96, reasoning: undefined, maxRetries: 0, cacheRetention: "none" });
+});
+
+test("retains task intent from both ends of a long prompt", () => {
+	const prompt = `TASK: fix authentication tests\n${"x".repeat(10_000)}MIDDLE_SENTINEL${"y".repeat(10_000)}\nAlso add a regression test.`;
+	const context = buildNamingContext([], prompt);
+	expect(context).toContain("user: TASK: fix authentication tests");
+	expect(context).toContain("Also add a regression test.");
+	expect(context).toContain("[... middle of prompt omitted ...]");
+	expect(context).not.toContain("MIDDLE_SENTINEL");
+	expect(context.length).toBeLessThanOrEqual("user: ".length + MAX_PROMPT_LENGTH);
+});
+
+test("does not split a supplementary character at the start of a retained prompt suffix", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const suffixLength = Math.floor((MAX_PROMPT_LENGTH - marker.length - 2) / 2);
+	const prompt = `TASK${"m".repeat(10_000)}😀${"x".repeat(suffixLength - 1)}`;
+	const context = buildNamingContext([], prompt);
+	const suffix = context.split(`\n${marker}\n`)[1];
+	expect(suffix).toBe("x".repeat(suffixLength - 1));
 });
 
 test("input skips trimming a bounded prompt's unneeded suffix", async () => {
@@ -1085,14 +1110,21 @@ test("naming context bounds history and prioritizes recent dialogue and the new 
 	expect(context).toContain("task-29");
 	expect(context.endsWith("user: continue")).toBe(true);
 
+	const largePrompt = "NEW_PROMPT".repeat(1_000);
 	const large = buildNamingContext([
 		{ role: "compactionSummary", summary: "SUMMARY".repeat(2_000) },
 		...Array.from({ length: 30 }, (_, i) => ({ role: "user", content: `${i}:` + "x".repeat(10_000) })),
-	] as any, "NEW_PROMPT".repeat(1_000));
+	] as any, largePrompt);
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixLength = Math.floor(retainedLength / 2);
 	expect(large.length).toBeLessThanOrEqual(MAX_CONTEXT_LENGTH);
 	expect(large).toStartWith("summary: SUMMARY");
 	expect(large).toContain("user: 29:");
-	expect(large.endsWith("user: " + "NEW_PROMPT".repeat(1_000).slice(0, MAX_PROMPT_LENGTH))).toBe(true);
+	expect(large.endsWith(
+		`user: ${largePrompt.slice(0, prefixLength)}\n${marker}\n${largePrompt.slice(-suffixLength)}`,
+	)).toBe(true);
 });
 
 test("naming context does not read text from history older than its retained window", () => {

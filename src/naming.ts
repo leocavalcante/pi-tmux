@@ -126,6 +126,27 @@ function boundedText(content: unknown, maxLength: number): string {
 	return trimTrailingWhitespace(text);
 }
 
+const PROMPT_TRUNCATION_MARKER = "[... middle of prompt omitted ...]";
+
+function boundedPrompt(prompt: string, maxLength: number): string {
+	if (prompt.length <= maxLength) return boundedText(prompt, maxLength);
+	const retainedLength = maxLength - PROMPT_TRUNCATION_MARKER.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixLength = Math.floor(retainedLength / 2);
+	const prefix = boundedText(prompt.slice(0, prefixLength), prefixLength);
+	let suffixStart = prompt.length - suffixLength;
+	// Do not start the suffix with half of a supplementary Unicode character.
+	if (suffixStart > 0 && suffixStart < prompt.length
+		&& prompt.charCodeAt(suffixStart) >= 0xdc00 && prompt.charCodeAt(suffixStart) <= 0xdfff
+		&& prompt.charCodeAt(suffixStart - 1) >= 0xd800 && prompt.charCodeAt(suffixStart - 1) <= 0xdbff) {
+		suffixStart++;
+	}
+	const suffix = boundedText(prompt.slice(suffixStart), suffixLength);
+	if (!prefix) return suffix;
+	if (!suffix) return prefix;
+	return `${prefix}\n${PROMPT_TRUNCATION_MARKER}\n${suffix}`;
+}
+
 // Use Pi's active projection so abandoned branches, compacted originals, and
 // text removed by context edits never leak back into the naming request.
 export function buildNamingContext(messages: SessionProjection["messages"], prompt = ""): string {
@@ -155,7 +176,7 @@ export function buildNamingContext(messages: SessionProjection["messages"], prom
 		if (foundSummary && history.length >= MAX_HISTORY_MESSAGES) break;
 	}
 
-	const latest = boundedText(prompt, MAX_PROMPT_LENGTH);
+	const latest = boundedPrompt(prompt, MAX_PROMPT_LENGTH);
 	const parts = latest ? [`user: ${latest}`] : [];
 	let remaining = MAX_CONTEXT_LENGTH - parts.join("\n\n").length - (summary ? summary.length + 2 : 0);
 	// The backward scan already selected recent entries, newest first. Prepending
