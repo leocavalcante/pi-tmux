@@ -50,6 +50,22 @@ type Fixture = {
 	sync: () => Promise<string>;
 };
 
+async function waitForProcessExit(pidText: string) {
+	const pid = Number(pidText);
+	if (!Number.isSafeInteger(pid) || pid < 1) throw new Error("Invalid tmux server PID");
+	const deadline = Date.now() + 2_000;
+	while (true) {
+		try {
+			process.kill(pid, 0);
+		} catch (error) {
+			if (error && typeof error === "object" && "code" in error && error.code === "ESRCH") return;
+			throw error;
+		}
+		if (Date.now() >= deadline) throw new Error(`tmux server ${pid} did not exit`);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	}
+}
+
 async function withServer(run: (fixture: Fixture) => Promise<void>) {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-move-"));
 	const socket = join(directory, "socket");
@@ -113,6 +129,7 @@ test.skipIf(!hasTmux)("a server restart after lookup cannot apply the pending ba
 			if (restarted || args[0] !== "set-option") return;
 			restarted = true;
 			f.tmux("kill-server");
+			await waitForProcessExit(oldServer);
 			const replacementPane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Replacement", "-n", "untouched", "/bin/sleep 60");
 			const [session, window, server] = f.tmux(
 				"display-message", "-p", "-t", replacementPane, "#{session_id}\t#{window_id}\t#{pid}",
@@ -155,6 +172,7 @@ test.skipIf(!hasTmux)("a guarded title rename skipped by a server restart is not
 			if (restarted || args[0] !== "rename-window") return;
 			restarted = true;
 			f.tmux("kill-server");
+			await waitForProcessExit(oldServer);
 			const replacementPane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Replacement", "-n", "untouched", "/bin/sleep 60");
 			const [session, window, server] = f.tmux(
 				"display-message", "-p", "-t", replacementPane, "#{session_id}\t#{window_id}\t#{pid}",
