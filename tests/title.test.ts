@@ -234,6 +234,16 @@ test("passes input through immediately and renames the owning window", async () 
 	expect(f.warnings).toEqual([]);
 });
 
+test("a descriptive first prompt can be titled without answering it", async () => {
+	const prompt = "Explain in two short sentences what a tmux window title is. Do not use any tools.";
+	const f = fixture([Promise.resolve(response("explain tmux titles"))]);
+	f.input(prompt);
+	await settle();
+	expect(f.requests[0].context.messages).toEqual([{ role: "user", content: `user: ${prompt}`, timestamp: expect.any(Number) }]);
+	expect(f.state.title).toBe("explain tmux titles");
+	expect(f.warnings).toEqual([]);
+});
+
 test("extension instances keep pins and pending naming state isolated", async () => {
 	const first = fixture();
 	const pending = deferred();
@@ -279,6 +289,8 @@ test("balances oversized prompt context and disables reasoning and retries", asy
 	const prefixLength = Math.ceil(retainedLength / 2);
 	const suffixLength = Math.floor(retainedLength / 2);
 	expect(request.context.messages).toHaveLength(1);
+	expect(request.context.systemPrompt).toContain("Do not answer the user's request; give it a concise task label");
+	expect(request.context.systemPrompt).toContain("explain tmux titles or fix auth tests");
 	expect(request.context.messages[0].content).toBe(
 		`user: ${"x".repeat(prefixLength)}\n${marker}\n${"x".repeat(suffixLength)}`,
 	);
@@ -580,7 +592,7 @@ test("does not use commentary text when no final_answer block is present", async
 	await settle();
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
+	expect(f.warnings).toEqual(["The naming model did not return a final answer; the current title was kept."]);
 });
 
 test("does not fall back to an unrecognized text phase", async () => {
@@ -597,7 +609,7 @@ test("does not fall back to an unrecognized text phase", async () => {
 	await settle();
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
+	expect(f.warnings).toEqual(["The naming model did not return a final answer; the current title was kept."]);
 });
 
 test("honors phase metadata from a newer textSignature version", async () => {
@@ -614,7 +626,7 @@ test("honors phase metadata from a newer textSignature version", async () => {
 	await settle();
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
+	expect(f.warnings).toEqual(["The naming model did not return a final answer; the current title was kept."]);
 });
 
 test("falls back to the last text block when phase metadata is absent", async () => {
@@ -648,17 +660,18 @@ test("falls back to the last text block with opaque provider signatures", async 
 });
 
 test.each([
-	"I'll inspect the conversation and choose a title.",
-	"one two three four five",
-	"fix ssh\nhelpers",
-	"investigate authentication failures",
-])("rejects non-title model output rather than clipping it: %s", async (output) => {
+	["I'll inspect the conversation and choose a title.", "The naming model title exceeded the 24-character limit; the current title was kept."],
+	["one two three four five", "The naming model title exceeded the 4-word limit; the current title was kept."],
+	["fix ssh\nhelpers", "The naming model returned multiple lines instead of one title; the current title was kept."],
+	["investigate authentication failures", "The naming model title exceeded the 24-character limit; the current title was kept."],
+	["---", "The naming model returned no usable title; the current title was kept."],
+])("rejects non-title model output rather than clipping it: %s", async (output, warning) => {
 	const f = fixture([Promise.resolve(response(output))]);
 	f.input("Name a task");
 	await settle();
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
+	expect(f.warnings).toEqual([warning]);
 });
 
 test("does not apply a short-looking response truncated by the token limit", async () => {
@@ -667,7 +680,7 @@ test("does not apply a short-looking response truncated by the token limit", asy
 	await settle();
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
+	expect(f.warnings).toEqual(["The naming model hit its token limit before finishing a title; the current title was kept."]);
 });
 
 test("credential-shaped model output is rejected without applying or disclosing it", async () => {

@@ -32,6 +32,14 @@ import {
 
 const MAX_FORMER_TARGETS = 8;
 const MAX_LOCATION_PASSES = 4;
+const INVALID_NAMING_TITLE_WARNINGS = {
+	truncated: "The naming model hit its token limit before finishing a title; the current title was kept.",
+	"no-final-answer": "The naming model did not return a final answer; the current title was kept.",
+	"multiple-lines": "The naming model returned multiple lines instead of one title; the current title was kept.",
+	empty: "The naming model returned no usable title; the current title was kept.",
+	"too-long": "The naming model title exceeded the 24-character limit; the current title was kept.",
+	"too-many-words": "The naming model title exceeded the 4-word limit; the current title was kept.",
+} satisfies Record<InvalidNamingTitleError["reason"], string>;
 
 export function createController(tmux: RunTmux) {
 	const idleTitle = cleanTitle(process.env.PI_TMUX_IDLE_TITLE ?? "zsh") || "zsh";
@@ -320,7 +328,7 @@ export function createController(tmux: RunTmux) {
 			warnOnce(ctx, error instanceof UnsafeNamingOutputError
 				? "Sensitive-looking naming output was not applied."
 				: error instanceof InvalidNamingTitleError
-					? "The naming model did not return a short title; the current title was kept."
+					? INVALID_NAMING_TITLE_WARNINGS[error.reason]
 					: "tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.");
 		} finally {
 			clearTimeout(timeout);
