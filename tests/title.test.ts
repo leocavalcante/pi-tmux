@@ -591,6 +591,21 @@ test("falls back to the last text block when phase metadata is absent", async ()
 	expect(f.warnings).toEqual([]);
 });
 
+test("falls back to the last text block with opaque provider signatures", async () => {
+	const result = {
+		...response(""),
+		content: [
+			{ type: "text", text: "Earlier provider output", textSignature: "opaque-commentary-id" },
+			{ type: "text", text: "repair auth tests", textSignature: "opaque-final-id" },
+		],
+	};
+	const f = fixture([Promise.resolve(result)]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("repair auth tests");
+	expect(f.warnings).toEqual([]);
+});
+
 test.each([
 	"I'll inspect the conversation and choose a title.",
 	"one two three four five",
