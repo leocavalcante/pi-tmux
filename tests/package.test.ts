@@ -1,16 +1,60 @@
 import { expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-function readPackedMember(archive: string, member: string): string {
-	return execFileSync("tar", ["-xOzf", archive, member], {
-		encoding: "utf8",
-		maxBuffer: 4 * 1024 * 1024,
+const COMMAND_TIMEOUT_MS = 30_000;
+
+type CommandOptions = {
+	cwd?: string;
+	maxBuffer?: number;
+	timeoutMs?: number;
+	signal?: AbortSignal;
+};
+
+function runCommand(file: string, args: string[], options: CommandOptions = {}): Promise<string> {
+	return new Promise((resolve, reject) => {
+		execFile(file, args, {
+			cwd: options.cwd,
+			encoding: "utf8",
+			maxBuffer: options.maxBuffer ?? 4 * 1024 * 1024,
+			timeout: options.timeoutMs ?? COMMAND_TIMEOUT_MS,
+			killSignal: "SIGTERM",
+			signal: options.signal,
+		}, (error, stdout) => {
+			if (error) reject(error);
+			else resolve(stdout);
+		});
 	});
 }
+
+async function readPackedMember(archive: string, member: string): Promise<string> {
+	return runCommand("tar", ["-xOzf", archive, member]);
+}
+
+test("package subprocesses are terminated on timeout and cancellation", async () => {
+	const args = ["-e", "setInterval(() => {}, 1000)"];
+	let timedOut: unknown;
+	try {
+		await runCommand(process.execPath, args, { timeoutMs: 50 });
+	} catch (error) {
+		timedOut = error;
+	}
+	expect(timedOut).toBeDefined();
+
+	const controller = new AbortController();
+	const cancelled = runCommand(process.execPath, args, { signal: controller.signal });
+	controller.abort();
+	let cancellation: unknown;
+	try {
+		await cancelled;
+	} catch (error) {
+		cancellation = error;
+	}
+	expect((cancellation as { name?: unknown } | undefined)?.name).toBe("AbortError");
+});
 
 test("the packed Pi entrypoint imports without runtime SDK dependencies and runs its status-only lifecycle", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-package-"));
@@ -18,9 +62,8 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 	const originalModel = process.env.PI_TMUX_MODEL;
 	try {
 		const repository = fileURLToPath(new URL("..", import.meta.url));
-		const packedResults = JSON.parse(execFileSync("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", directory], {
+		const packedResults = JSON.parse(await runCommand("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", directory], {
 			cwd: repository,
-			encoding: "utf8",
 		})) as Array<{ filename?: unknown }>;
 		const filename = packedResults[0]?.filename;
 		if (typeof filename !== "string" || basename(filename) !== filename || !filename.endsWith(".tgz")) {
@@ -31,7 +74,7 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 		mkdirSync(packageDirectory);
 
 		const packedManifestPath = join(packageDirectory, "package.json");
-		writeFileSync(packedManifestPath, readPackedMember(archive, "package/package.json"));
+		writeFileSync(packedManifestPath, await readPackedMember(archive, "package/package.json"));
 		const manifest = JSON.parse(readFileSync(packedManifestPath, "utf8"));
 		const entrypoints = manifest.pi?.extensions;
 		const entrypoint: unknown = Array.isArray(entrypoints) ? entrypoints[0] : undefined;
@@ -42,7 +85,7 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 		// Use the fixed, validated package path instead of allowing a manifest path
 		// to direct archive extraction outside this temporary directory.
 		const packedEntrypoint = join(packageDirectory, "index.ts");
-		writeFileSync(packedEntrypoint, readPackedMember(archive, "package/index.ts"));
+		writeFileSync(packedEntrypoint, await readPackedMember(archive, "package/index.ts"));
 		const source = readFileSync(packedEntrypoint, "utf8");
 		const javascript = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
 		const modulePath = join(packageDirectory, "index.mjs");
