@@ -33,5 +33,6 @@ jobs:
           tmux -V
       - run: npm ci --ignore-scripts
       - run: npm run check
+      - run: npm run check:tests
       - run: npm test
       - run: npm pack --dry-run --ignore-scripts

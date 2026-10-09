@@ -16,10 +16,12 @@
   "files": ["index.ts", "README.md", "LICENSE"],
   "scripts": {
     "check": "tsc -p tsconfig.json",
+    "check:tests": "tsc -p tsconfig.test.json",
     "test": "bun test tests/"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "1.0.4",
+    "@types/bun": "^1.4.2",
     "@types/node": "22.19.19",
     "typescript": "5.9.3"
   },

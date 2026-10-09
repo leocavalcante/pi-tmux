@@ -20,10 +20,11 @@ Use either the installed package or the development extension, not both.
 
 ## Checks
 
-Run the TypeScript check:
+Run the extension and test TypeScript checks:
 
 ```sh
 npm run check
+npm run check:tests
 ```
 
 `index.ts` contains the extension, title formatting, context selection, and tmux status updates. The window snapshot is tab-delimited and its last field can be empty; preserve its trailing tab and remove only tmux's line terminator. Injected `RunTmux` adapters retain flat command arrays by default; adapters that support the server-PID guard can opt in with `supportsServerPidGuard = true`.
@@ -36,6 +37,7 @@ Run the test suite:
 npm test
 ```
 
+- `npm run check:tests` type-checks every file under `tests/` with strict settings and Bun/Node types; CI runs this check.
 - `tests/title.test.ts` covers formatting, context bounds and exclusions, naming cancellation, model configuration, empty window-name fields, status-only mode, explicit retries, manual pins, read-only diagnostics, model-free sync, truthful confirmations, lifecycle events, waiting markers, and failures with mock model responses and tmux commands.
 - `tests/session.test.ts` checks window and session aggregation, shared-window ownership, concurrent status and ownership changes at rename time, and pane moves against a separate temporary tmux server with no user configuration. Its command wrapper strips only the final line ending so trailing spaces in literal tmux names remain observable in assertions. It skips if tmux is unavailable.
 - `tests/move.test.ts` checks former-location marker repair, remaining peers, custom names, vanished targets, repeated moves, explicit sync retries, superseded repairs, and a server restart between lookup and write with reused numeric IDs on isolated tmux servers. Those checks skip if tmux is unavailable; the queue and stabilization bounds also have a mock-only regression.
