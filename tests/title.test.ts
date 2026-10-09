@@ -1164,6 +1164,33 @@ test("empty or non-text history does not start a naming request", async () => {
 	expect(f.requests).toHaveLength(0);
 });
 
+test("session-projection failures cancel stale naming and allow later retries", async () => {
+	const stale = deferred();
+	const f = fixture([stale.promise, Promise.resolve(response("fresh task"))]);
+	f.messages.push({ role: "user", content: "Original task" });
+	await f.emit("session_start");
+	expect(f.requests).toHaveLength(1);
+
+	const sessionManager = f.ctx.sessionManager as any;
+	sessionManager.buildSessionProjection = () => { throw new Error("Synthetic private projection failure"); };
+	expect(() => f.emit("session_compact")).not.toThrow();
+	expect(f.requests[0].options.signal.aborted).toBe(true);
+	expect(f.warnings).toEqual(["Pi session context could not be read. The tmux title was not updated."]);
+	stale.resolve(response("stale title"));
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.warnings.join("\n")).not.toContain("Synthetic private projection failure");
+	await f.refresh();
+	expect(f.warnings).toHaveLength(2);
+	expect(f.notices).toEqual([]);
+
+	sessionManager.buildSessionProjection = () => ({ messages: f.messages });
+	await f.emit("session_compact");
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	expect(f.state.title).toBe("fresh task");
+});
+
 test("brief follow-ups include the active conversation instead of only the new prompt", async () => {
 	const f = fixture();
 	f.messages.push(

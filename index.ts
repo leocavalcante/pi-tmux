@@ -595,7 +595,17 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			warnOnce(ctx, "Invalid PI_TMUX_MODEL. Set provider/model or off, then /reload. Naming is disabled; waiting markers still work.");
 		}
 		if (!namingModel) return false;
-		const text = buildNamingContext(ctx.sessionManager.buildSessionProjection().messages, prompt);
+		let text: string;
+		try {
+			text = buildNamingContext(ctx.sessionManager.buildSessionProjection().messages, prompt);
+		} catch {
+			// Do not let a transient session-projection failure escape a Pi event or
+			// leave an older request eligible to rename the window with stale context.
+			cancel();
+			lastNamingContext = undefined;
+			warnOnce(ctx, "Pi session context could not be read. The tmux title was not updated.");
+			return undefined;
+		}
 		if (!force && text === lastNamingContext) return false;
 		// Empty projected context still supersedes work based on removed dialogue.
 		cancel();
@@ -710,9 +720,12 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				else ctx.ui.notify("AI naming is disabled by PI_TMUX_MODEL=off; waiting markers still work.", "info");
 				return;
 			}
-			ctx.ui.notify(requestTitle(ctx, "", true)
-				? "Requested a tmux title refresh."
-				: "No text in the active session to name.", "info");
+			const requested = requestTitle(ctx, "", true);
+			if (requested !== undefined) {
+				ctx.ui.notify(requested
+					? "Requested a tmux title refresh."
+					: "No text in the active session to name.", "info");
+			}
 		},
 	});
 
