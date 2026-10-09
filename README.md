@@ -29,28 +29,30 @@ Run interactive Pi inside tmux, with `tmux` available on `PATH` and
 22.19 or newer; the Pi extension API peer range is `^1.1.0`. Pi supplies the
 runtime dependencies, with no build step.
 
-```sh
-pi install npm:@leocavalcante/pi-tmux
-```
-
-Or install from GitHub:
+The npm package has not been published yet, so install from GitHub for now:
 
 ```sh
 pi install git:github.com/leocavalcante/pi-tmux
+```
+
+After the npm bootstrap publish is complete, npm installation will also be
+available:
+
+```sh
+pi install npm:@leocavalcante/pi-tmux
 ```
 
 Run `/reload` in Pi after installation. If you previously used the local
 `tmux-title` extension, remove that copy before loading this package to avoid
 running two naming requests for each prompt.
 
-To update an existing installation:
+To update a GitHub installation:
 
 ```sh
-pi update npm:@leocavalcante/pi-tmux
+pi update git:github.com/leocavalcante/pi-tmux
 ```
 
-For a GitHub installation, use `pi update git:github.com/leocavalcante/pi-tmux`
-instead.
+After installing from npm, use `pi update npm:@leocavalcante/pi-tmux` instead.
 
 Run `/reload` in each running Pi instance afterward so busy panes register
 window ownership. Waiting panes from older runtimes are still recognized from
