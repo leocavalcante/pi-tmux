@@ -427,6 +427,33 @@ test("deadline settles pending naming even when the provider never settles", asy
 	});
 });
 
+test("the original deadline also aborts a hanging title correction request", async () => {
+	await withNamingTimers(async (timers, cleared) => {
+		const retry = deferred();
+		const f = fixture([
+			Promise.resolve(response("Explain what a tmux window title is")),
+			retry.promise,
+		]);
+		f.input("Explain in two short sentences what a tmux window title is.");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.requests[1].options.signal).toBe(f.requests[0].options.signal);
+		expect(timers).toHaveLength(1);
+		timers[0].fire();
+		await settle();
+		const signal = f.requests[1].options.signal as AbortSignal;
+		expect(signal.aborted).toBe(true);
+		expect(cleared.has(timers[0].handle)).toBe(true);
+		expect(getEventListeners(signal, "abort")).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toHaveLength(1);
+		retry.resolve(response("stale correction"));
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toHaveLength(1);
+	});
+});
+
 test.each(["resolve", "reject"])("late provider %s after timeout is consumed without changing the title or warning again", async (completion) => {
 	await withNamingTimers(async (timers) => {
 		let resolve!: (value: ReturnType<typeof response>) => void;
