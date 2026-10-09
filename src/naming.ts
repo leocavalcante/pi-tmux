@@ -45,14 +45,14 @@ function hasSensitiveOutput(text: string): boolean {
 	return CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(text)) || EMAIL_ADDRESS_PATTERN.test(text);
 }
 
-function getTextPhase(textSignature: string | undefined): "commentary" | "final_answer" | undefined {
+function getTextPhase(textSignature: string | undefined): string | undefined {
 	if (!textSignature) return;
 	try {
 		const parsed: unknown = JSON.parse(textSignature);
 		if (typeof parsed !== "object" || parsed === null) return;
 		const { v, id, phase } = parsed as { v?: unknown; id?: unknown; phase?: unknown };
 		if (v !== 1 || typeof id !== "string") return;
-		return phase === "commentary" || phase === "final_answer" ? phase : undefined;
+		return typeof phase === "string" && phase.length ? phase : undefined;
 	} catch {
 		return;
 	}
@@ -232,8 +232,8 @@ export async function requestNamingTitle(
 	const textBlocks = response.content.filter((block) => block.type === "text");
 	const phasedBlocks = textBlocks.map((block) => ({ block, phase: getTextPhase(block.textSignature) }));
 	const finalAnswerBlocks = phasedBlocks.filter(({ phase }) => phase === "final_answer").map(({ block }) => block);
-	const hasCommentary = phasedBlocks.some(({ phase }) => phase === "commentary");
-	const selectedBlocks = finalAnswerBlocks.length ? finalAnswerBlocks : hasCommentary ? [] : textBlocks.slice(-1);
+	const hasPhaseMetadata = phasedBlocks.some(({ phase }) => phase !== undefined);
+	const selectedBlocks = finalAnswerBlocks.length ? finalAnswerBlocks : hasPhaseMetadata ? [] : textBlocks.slice(-1);
 	const outputBlocks = selectedBlocks.map((block) => block.text);
 	const output = outputBlocks.join(" ");
 	// Also check adjacent raw blocks without a separator in case a provider split
