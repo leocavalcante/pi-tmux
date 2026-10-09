@@ -291,6 +291,19 @@ test("does not split a supplementary character at the start of a retained prompt
 	expect(suffix).toBe("x".repeat(suffixLength - 1));
 });
 
+test("does not split a supplementary character at the end of a retained prompt prefix", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixLength = Math.floor(retainedLength / 2);
+	const prompt = `${"x".repeat(prefixLength - 1)}😀${"y".repeat(10_000)}`;
+	const context = buildNamingContext([], prompt);
+	const [prefix, suffix] = context.slice("user: ".length).split(`\n${marker}\n`);
+	expect(prefix).toBe(`${"x".repeat(prefixLength - 1)}😀`);
+	expect(suffix).toBe("y".repeat(suffixLength - 1));
+	expect(context.length).toBeLessThanOrEqual("user: ".length + MAX_PROMPT_LENGTH);
+});
+
 test("input skips trimming a bounded prompt's unneeded suffix", async () => {
 	const f = fixture();
 	const trim = spyOn(String.prototype, "trim").mockImplementation(() => {

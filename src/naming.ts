@@ -131,8 +131,16 @@ const PROMPT_TRUNCATION_MARKER = "[... middle of prompt omitted ...]";
 function boundedPrompt(prompt: string, maxLength: number): string {
 	if (prompt.length <= maxLength) return boundedText(prompt, maxLength);
 	const retainedLength = maxLength - PROMPT_TRUNCATION_MARKER.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
+	let prefixLength = Math.ceil(retainedLength / 2);
+	let suffixLength = Math.floor(retainedLength / 2);
+	// Keep a supplementary character intact if the balanced prefix boundary
+	// falls between its surrogate pair; take that extra code unit from the suffix.
+	if (prefixLength < prompt.length
+		&& prompt.charCodeAt(prefixLength - 1) >= 0xd800 && prompt.charCodeAt(prefixLength - 1) <= 0xdbff
+		&& prompt.charCodeAt(prefixLength) >= 0xdc00 && prompt.charCodeAt(prefixLength) <= 0xdfff) {
+		prefixLength++;
+		suffixLength--;
+	}
 	const prefix = boundedText(prompt.slice(0, prefixLength), prefixLength);
 	let suffixStart = prompt.length - suffixLength;
 	// Do not start the suffix with half of a supplementary Unicode character.
