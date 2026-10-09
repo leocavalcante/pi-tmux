@@ -200,6 +200,38 @@ test.skipIf(!hasTmux)("the real tmux adapter preserves empty window names", asyn
 	}
 });
 
+test.skipIf(!hasTmux)("the real tmux adapter handles long custom window names", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalTmux = process.env.TMUX;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "LongTitle", "/bin/sleep 60");
+		const title = "x".repeat(8_000);
+		tmux("rename-window", "-t", pane, "--", title);
+		process.env.TMUX_PANE = pane;
+		process.env.TMUX = tmux("display-message", "-p", "-t", pane, "#{socket_path},#{pid},0");
+		const handlers = new Map<string, Function>();
+		piTmux(mockPi(handlers));
+		const warnings: string[] = [];
+		const ctx = { mode: "tui", ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
+		await handlers.get("session_start")!({ type: "session_start" }, ctx);
+		expect(warnings).toEqual([]);
+		expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe(title);
+		expect(tmux("show-options", "-p", "-v", "-t", pane, ACTIVE_OPTION)).toBe("1");
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalTmux === undefined) delete process.env.TMUX;
+		else process.env.TMUX = originalTmux;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
 test.skipIf(!hasTmux).each([false, true])("quitting one Pi preserves a live sibling's task title, sibling waiting=%j", async (waiting) => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");
