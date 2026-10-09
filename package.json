@@ -13,7 +13,7 @@
     "url": "https://github.com/leocavalcante/pi-tmux.git"
   },
   "keywords": ["pi-package", "pi", "tmux", "pi-extension", "coding-agent"],
-  "files": ["index.ts", "README.md", "LICENSE"],
+  "files": ["index.ts", "src/", "README.md", "LICENSE"],
   "scripts": {
     "check": "tsc -p tsconfig.json",
     "check:tests": "tsc -p tsconfig.test.json",
