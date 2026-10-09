@@ -127,20 +127,20 @@ async function withNamingTimers(run: (timers: { handle: ReturnType<typeof setTim
 	const nativeClear = globalThis.clearTimeout;
 	const timers: { handle: ReturnType<typeof setTimeout>; fire: () => void }[] = [];
 	const cleared = new Set<unknown>();
-	const set = spyOn(globalThis, "setTimeout").mockImplementation((callback: any, delay?: number, ...args: any[]) => {
+	const set = spyOn(globalThis, "setTimeout").mockImplementation(((callback: (...args: any[]) => void, delay?: number, ...args: any[]) => {
 		const handle = nativeSet(callback, delay, ...args);
 		if (delay === 15_000) timers.push({ handle, fire: () => callback(...args) });
 		return handle;
-	});
+	}) as typeof globalThis.setTimeout);
 	const clear = spyOn(globalThis, "clearTimeout").mockImplementation((handle) => {
 		cleared.add(handle);
-		nativeClear(handle);
+		nativeClear(handle as Timer);
 	});
 	try { await run(timers, cleared); }
 	finally {
 		set.mockRestore();
 		clear.mockRestore();
-		for (const { handle } of timers) nativeClear(handle);
+		for (const { handle } of timers) nativeClear(handle as Timer);
 	}
 }
 
@@ -1429,7 +1429,7 @@ test.each([
 	const f = fixture();
 	const provider = new CombinedAutocompleteProvider([{ name: "tmux-title", getArgumentCompletions: f.complete }], process.cwd());
 	const line = "/tmux-title " + prefix;
-	const suggestions = await provider.getSuggestions([line], 0, line.length, { force: false });
+	const suggestions = await provider.getSuggestions([line], 0, line.length, { force: false, signal: new AbortController().signal });
 	expect(suggestions).not.toBeNull();
 	const item = suggestions!.items.find((entry) => entry.value === value)!;
 	const result = provider.applyCompletion([line], 0, line.length, item, suggestions!.prefix);
@@ -1444,7 +1444,7 @@ test("Pi's provider does not replace a partially entered manual title", async ()
 	const f = fixture();
 	const provider = new CombinedAutocompleteProvider([{ name: "tmux-title", getArgumentCompletions: f.complete }], process.cwd());
 	const line = "/tmux-title set a custom title";
-	expect(await provider.getSuggestions([line], 0, line.length, { force: false })).toBeNull();
+	expect(await provider.getSuggestions([line], 0, line.length, { force: false, signal: new AbortController().signal })).toBeNull();
 	expect(f.calls).toEqual([]);
 });
 
