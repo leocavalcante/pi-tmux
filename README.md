@@ -281,7 +281,9 @@ tmux set-window-option -t "$TMUX_PANE" automatic-rename on
 With AI naming enabled, the configured naming model receives up to 6,000
 characters of task context:
 
-- The first 2,000 characters of your new prompt, when present.
+- Up to 2,000 characters from your new prompt. Oversized prompts retain both
+  ends around `[... middle of prompt omitted ...]`; shorter prompts are included
+  in full.
 - Up to eight recent user, assistant, or branch-summary text entries, each
   capped at 1,000 characters. Older entries are omitted to fit the total cap.
 - The latest active compaction summary, capped at 1,000 characters.
