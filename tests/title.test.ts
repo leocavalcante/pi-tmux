@@ -3,6 +3,7 @@ import { getEventListeners } from "node:events";
 import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, STATUS_INFO_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
+import { PRESERVED_WINDOW_TITLE_FORMAT } from "../src/tmux.ts";
 
 let originalPane: string | undefined;
 let originalModel: string | undefined;
@@ -59,6 +60,9 @@ function fixture(
 	};
 	const windowWaiting = () => [...state.waitingPanes].some(([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane));
 	const renderTitle = (format: string) => {
+		if (format === PRESERVED_WINDOW_TITLE_FORMAT) {
+			return (windowWaiting() ? READY_PREFIX : "") + state.title.replace(/^\* /, "");
+		}
 		if (format === QUIT_TITLE_FORMAT) {
 			const hasPeer = [...state.activePanes, ...state.waitingPanes].some(([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane));
 			if (!hasPeer) return formatTitle("zsh", windowWaiting());
@@ -1001,6 +1005,20 @@ test("session startup preserves an unmarked custom window name", async () => {
 	await f.emit("session_start");
 	expect(f.state.title).toBe("Custom Manual Name");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+});
+
+test("waiting markers preserve custom window text when no task title is available", async () => {
+	process.env.PI_TMUX_MODEL = "off";
+	const f = fixture();
+	const customTitle = "Custom Build Server Name Exceeding the 24 Character Task Limit";
+	f.state.title = customTitle;
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe(`${READY_PREFIX}${customTitle}`);
+	expect(f.requests).toHaveLength(0);
+	f.emit("agent_start");
+	await settle();
+	expect(f.state.title).toBe(customTitle);
+	expect(f.warnings).toEqual([]);
 });
 
 test("status updates stay disabled outside interactive tmux", async () => {

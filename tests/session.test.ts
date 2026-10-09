@@ -128,6 +128,54 @@ test.skipIf(!hasTmux)("leading-hyphen titles remain literal when clearing a wait
 	}
 });
 
+test.skipIf(!hasTmux)("waiting markers preserve literal custom window names without a task title", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const requestedTitle = `Custom API #{session_id}, \"Deploy\" ${"X".repeat(30)}  `;
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "CustomWindow", "-n", requestedTitle.replaceAll("#", "##"), "/bin/sleep 60");
+		const customTitle = tmux("display-message", "-p", "-t", pane, "#{window_name}");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		const warnings: string[] = [];
+		piTmux(mockPi(handlers), async (args) => tmux(...args));
+		const ctx = {
+			mode: "tui",
+			sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+			ui: { notify: (text: string) => warnings.push(text) },
+		} as unknown as ExtensionContext;
+		const windowTitle = () => tmux("display-message", "-p", "-t", pane, "#{window_name}");
+		const waitForTitle = async (expected: string) => {
+			for (let i = 0; i < 50; i++) {
+				if (windowTitle() === expected) return;
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			throw new Error(`Window title did not become ${JSON.stringify(expected)}; got ${JSON.stringify(windowTitle())}`);
+		};
+
+		expect(windowTitle()).toBe(customTitle);
+		await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
+		await waitForTitle(`* ${customTitle}`);
+		expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe("1");
+		handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+		await waitForTitle(customTitle);
+		expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe("0");
+		expect(warnings).toEqual([]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
 test.skipIf(!hasTmux).each([false, true])("window renames re-evaluate sibling status at execution time, initially waiting=%j", async (initialWaiting) => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");

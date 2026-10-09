@@ -169,7 +169,9 @@ Repeat the command to retry them.
 - Final settlement refreshes the title when the assistant's text adds context.
   Identical bounded context does not start another request.
 - An empty Pi session makes no naming request and preserves an unmarked custom
-  window name. Lifecycle events still update waiting markers.
+  window name. When no task title is available, lifecycle waiting markers are
+  added to and removed from that name without applying task-title casing or
+  length rules.
 - Context comes from Pi's active session projection. Abandoned branches,
   compacted originals, and text removed by Pi context edits are not used.
 - Titles are forced to lowercase and clipped at a word boundary when possible.
