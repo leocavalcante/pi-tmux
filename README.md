@@ -173,6 +173,10 @@ Repeat the command to retry them.
 - Context comes from Pi's active session projection. Abandoned branches,
   compacted originals, and text removed by Pi context edits are not used.
 - Titles are forced to lowercase and clipped at a word boundary when possible.
+- If the provider marks text phases, only `final_answer` blocks are considered;
+  without phase metadata, the last text block is used. Multiline output or a
+  sanitized title over four words or 24 ASCII characters is rejected rather
+  than clipped into a misleading fragment.
 - `* ` marks a fully settled run, after tool work, retries, and queued
   continuations are finished. It does not mean the task succeeded.
 - The 24-character limit includes the marker. Waiting titles reserve two

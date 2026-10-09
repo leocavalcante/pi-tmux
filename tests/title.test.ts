@@ -477,6 +477,84 @@ test("empty or failed responses never become window names", async () => {
 	}
 });
 
+test("uses only final_answer text blocks when available", async () => {
+	const result = {
+		...response(""),
+		content: [
+			{
+				type: "text",
+				text: "I'll inspect the conversation and choose a title.",
+				textSignature: JSON.stringify({ v: 1, id: "commentary-message", phase: "commentary" }),
+			},
+			{
+				type: "text",
+				text: "fix ssh helpers",
+				textSignature: JSON.stringify({ v: 1, id: "final-message", phase: "final_answer" }),
+			},
+		],
+	};
+	const f = fixture([Promise.resolve(result)]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("fix ssh helpers");
+	expect(f.warnings).toEqual([]);
+});
+
+test("does not use commentary text when no final_answer block is present", async () => {
+	const result = {
+		...response(""),
+		content: [{
+			type: "text",
+			text: "fix ssh helpers",
+			textSignature: JSON.stringify({ v: 1, id: "commentary-message", phase: "commentary" }),
+		}],
+	};
+	const f = fixture([Promise.resolve(result)]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
+});
+
+test("falls back to the last text block when phase metadata is absent", async () => {
+	const result = {
+		...response(""),
+		content: [
+			{ type: "text", text: "Earlier commentary that is not a title" },
+			{ type: "text", text: "repair test fixtures" },
+		],
+	};
+	const f = fixture([Promise.resolve(result)]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("repair test fixtures");
+	expect(f.warnings).toEqual([]);
+});
+
+test.each([
+	"I'll inspect the conversation and choose a title.",
+	"one two three four five",
+	"fix ssh\nhelpers",
+	"investigate authentication failures",
+])("rejects non-title model output rather than clipping it: %s", async (output) => {
+	const f = fixture([Promise.resolve(response(output))]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
+});
+
+test("does not apply a short-looking response truncated by the token limit", async () => {
+	const f = fixture([Promise.resolve(response("fix ssh", "length"))]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
+});
+
 test("credential-shaped model output is rejected without applying or disclosing it", async () => {
 	const outputs = [
 		["gh", "p_", "a".repeat(36)].join(""),
@@ -503,7 +581,14 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	}
 
 	const split = ["gh", "p_", "a".repeat(36)];
-	const splitResponse = { ...response(""), content: split.map((text) => ({ type: "text", text })) };
+	const splitResponse = {
+		...response(""),
+		content: split.map((text, index) => ({
+			type: "text",
+			text,
+			textSignature: JSON.stringify({ v: 1, id: `split-${index}`, phase: "final_answer" }),
+		})),
+	};
 	const f = fixture([Promise.resolve(splitResponse)]);
 	f.input("Name a task");
 	await settle();
@@ -515,7 +600,14 @@ test("credential-shaped model output is rejected without applying or disclosing 
 test("email-address-like model output is rejected before normalization and not disclosed", async () => {
 	const address = ["pi-tmux", "@", "example", ".", "invalid"].join("");
 	const fragments = ["pi-tmux", "@", "example", ".", "invalid"];
-	const splitResponse = { ...response(""), content: fragments.map((text) => ({ type: "text", text })) };
+	const splitResponse = {
+		...response(""),
+		content: fragments.map((text, index) => ({
+			type: "text",
+			text,
+			textSignature: JSON.stringify({ v: 1, id: `email-${index}`, phase: "final_answer" }),
+		})),
+	};
 	const f = fixture([Promise.resolve(splitResponse)]);
 	f.input("Name a task");
 	await settle();
