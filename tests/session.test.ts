@@ -253,6 +253,35 @@ test.skipIf(!hasTmux).each([false, true])("quitting one Pi preserves a live sibl
 	}
 });
 
+test.skipIf(!hasTmux)("malformed active flags do not prevent quit cleanup", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "BadFlag", "-n", "existing task", "/bin/sleep 60");
+		const sibling = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		tmux("set-option", "-p", "-t", sibling, ACTIVE_OPTION, "10");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		piTmux(mockPi(handlers), async (args) => tmux(...args));
+		const warnings: string[] = [];
+		const ctx = { mode: "tui", ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
+		await handlers.get("session_start")!({ type: "session_start" }, ctx);
+		await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, ctx);
+		expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("zsh");
+		expect(tmux("show-options", "-p", "-v", "-t", sibling, ACTIVE_OPTION)).toBe("10");
+		expect(warnings).toEqual([]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
 test.skipIf(!hasTmux).each([
 	{ activeAtExecution: false, waitingAtExecution: false },
 	{ activeAtExecution: true, waitingAtExecution: false },
