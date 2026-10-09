@@ -51,6 +51,7 @@ function fixture(
 	} as unknown as ExtensionContext;
 	const state = {
 		window: "@2", title: "existing task", session: "$0", sessionTitle: "My Session",
+		windowInfo: undefined as string | undefined,
 		statusInfo: undefined as string | undefined,
 		waitingPanes: new Map<string, string>(),
 		activePanes: new Map<string, string>(),
@@ -76,7 +77,7 @@ function fixture(
 		if (args[0] === "display-message" && args[4] === STATUS_INFO_FORMAT) {
 			return state.statusInfo ?? `${state.session}\t${state.window}\t${state.waitingPanes.get("%1") === "1" ? "1" : "0"}\t${windowWaiting() ? "1" : "0"}\t${[...state.waitingPanes.values()].includes("1") ? "1" : "0"}`;
 		}
-		if (args[0] === "display-message") return `${state.session}\t${state.window}\t${windowWaiting() ? "1" : "0"}\t${state.title}`;
+		if (args[0] === "display-message") return state.windowInfo ?? `${state.session}\t${state.window}\t${windowWaiting() ? "1" : "0"}\t${state.title}`;
 		if (args[0] === "set-option") {
 			expect(args).toEqual([
 				"set-option", "-p", "-t", "%1", WAITING_OPTION, args[5],
@@ -190,6 +191,21 @@ test("an empty server-PID field remains compatible with older tmux adapters", as
 	expect(calls[0]).toEqual(["display-message", "-p", "-t", "%1", WINDOW_INFO_FORMAT]);
 	expect(calls[1][0]).toBe("set-option");
 	expect(warnings).toEqual([]);
+});
+
+test.each([
+	["invalid-session", "@2", "0", "custom"],
+	["$0", "invalid-window", "0", "custom"],
+	["$0", "@2", "2", "custom"],
+	["$0", "@2", "0"],
+].map((fields) => fields.join("\t")))("malformed tmux window snapshot %s is rejected without writes", async (info) => {
+	const f = fixture();
+	f.state.windowInfo = info;
+	await f.emit("session_start");
+	await f.emit("agent_settled");
+	expect(f.calls.filter((args) => args[0] !== "display-message")).toEqual([]);
+	expect(f.warnings).toEqual(["tmux window/session status could not be updated. Check tmux."]);
+	expect(f.requests).toEqual([]);
 });
 
 test("passes input through immediately and renames the owning window", async () => {
