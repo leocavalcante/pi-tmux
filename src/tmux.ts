@@ -48,11 +48,14 @@ export const WINDOW_INFO_FORMAT = `#{session_id}:1:#{pid}\t#{window_id}\t#{?${WI
 export const STATUS_INFO_FORMAT = `#{session_id}\t#{window_id}\t${WAITING_FLAG_FORMAT}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{?${SESSION_WAITING_FORMAT},1,0}`;
 const CURRENT_TASK_FORMAT = "#{s/^\\* //:window_name}";
 export const SHARED_TASK_TITLE_FORMAT = `#{?${WINDOW_WAITING_FORMAT},${READY_PREFIX}#{=22:${CURRENT_TASK_FORMAT}},${CURRENT_TASK_FORMAT}}`;
+// Former-window repair preserves its current name; unlike shared task-title
+// updates, cleanup must not truncate a long custom title.
+export const SHARED_WINDOW_TITLE_FORMAT = `#{?${WINDOW_WAITING_FORMAT},${READY_PREFIX}${CURRENT_TASK_FORMAT},${CURRENT_TASK_FORMAT}}`;
 // If no task title exists, toggle only the waiting prefix around the literal
 // current window name instead of normalizing or clipping user-owned text.
 export const PRESERVED_WINDOW_TITLE_FORMAT =
 	`#{?${WINDOW_WAITING_FORMAT},${READY_PREFIX},}${unescapeNestedTmuxFormatValue(CURRENT_TASK_FORMAT)}`;
-export const WINDOW_REPAIR_NEEDED_FORMAT = `#{!=:#{window_name},${SHARED_TASK_TITLE_FORMAT}}`;
+export const WINDOW_REPAIR_NEEDED_FORMAT = `#{!=:#{window_name},${SHARED_WINDOW_TITLE_FORMAT}}`;
 // Both branches contain only sanitized title text. tmux chooses the prefix at
 // execution time, so another pane's status cannot be lost during a slow rename.
 export function buildWindowTitleFormat(title: string): string {
