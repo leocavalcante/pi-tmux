@@ -208,11 +208,13 @@ export async function requestNamingTitle(
 	if (response.stopReason === "error" || response.stopReason === "aborted") {
 		throw new Error("Naming request failed");
 	}
-	const output = response.content
-		.filter((block) => block.type === "text")
-		.map((block) => block.text)
-		.join(" ");
-	if (hasCredentialLikeOutput(output)) throw new CredentialLikeOutputError();
+	const textBlocks = response.content.filter((block) => block.type === "text").map((block) => block.text);
+	const output = textBlocks.join(" ");
+	// Also check adjacent raw blocks without a separator in case a provider split
+	// a credential across content blocks.
+	if (hasCredentialLikeOutput(output) || hasCredentialLikeOutput(textBlocks.join(""))) {
+		throw new CredentialLikeOutputError();
+	}
 	const title = cleanTitle(output);
 	if (!title) throw new Error("Naming request returned no title");
 	return title;

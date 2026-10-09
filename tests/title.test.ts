@@ -501,6 +501,23 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		expect(f.warnings).toEqual(["Naming output looked credential-like and was not applied."]);
 		expect(f.warnings.join(" ")).not.toContain(output);
 	}
+
+	const split = ["gh", "p_", "a".repeat(36)];
+	const splitResponse = { ...response(""), content: split.map((text) => ({ type: "text", text })) };
+	const f = fixture([Promise.resolve(splitResponse)]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(f.warnings).toEqual(["Naming output looked credential-like and was not applied."]);
+});
+
+test("ordinary security-themed titles without credential values remain valid", async () => {
+	const f = fixture([Promise.resolve(response("review bearer auth flow"))]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("review bearer auth flow");
+	expect(f.warnings).toEqual([]);
 });
 
 test("ready marker fits within 24 cells and title text stays lowercase", () => {
