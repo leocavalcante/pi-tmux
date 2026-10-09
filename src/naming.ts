@@ -47,7 +47,14 @@ function boundedText(content: unknown, maxLength: number): string {
 		if (index === part.length) return false;
 		if (text.length < maxLength) {
 			const count = Math.min(maxLength - text.length, part.length - index);
-			text += part.slice(index, index + count);
+			const end = index + count;
+			// Keep a supplementary Unicode character intact when the cap lands
+			// between its UTF-16 surrogate pair.
+			const splitsSurrogate = end < part.length
+				&& part.charCodeAt(end - 1) >= 0xd800 && part.charCodeAt(end - 1) <= 0xdbff
+				&& part.charCodeAt(end) >= 0xdc00 && part.charCodeAt(end) <= 0xdfff;
+			text += part.slice(index, splitsSurrogate ? end - 1 : end);
+			if (splitsSurrogate) return true;
 		}
 		return text.length === maxLength;
 	};
