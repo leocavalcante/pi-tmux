@@ -9,17 +9,26 @@ const COMMAND_TIMEOUT_MS = 30_000;
 
 type CommandOptions = {
 	cwd?: string;
+	env?: NodeJS.ProcessEnv;
 	maxBuffer?: number;
+	shell?: boolean;
 	timeoutMs?: number;
 	signal?: AbortSignal;
 };
+
+function needsCommandShell(file: string, platform = process.platform): boolean {
+	// On Windows npm is a .cmd shim, which execFile cannot launch directly.
+	return platform === "win32" && file === "npm";
+}
 
 function runCommand(file: string, args: string[], options: CommandOptions = {}): Promise<string> {
 	return new Promise((resolve, reject) => {
 		execFile(file, args, {
 			cwd: options.cwd,
+			env: options.env,
 			encoding: "utf8",
 			maxBuffer: options.maxBuffer ?? 4 * 1024 * 1024,
+			shell: options.shell,
 			timeout: options.timeoutMs ?? COMMAND_TIMEOUT_MS,
 			killSignal: "SIGTERM",
 			signal: options.signal,
@@ -33,6 +42,12 @@ function runCommand(file: string, args: string[], options: CommandOptions = {}):
 async function readPackedMember(archive: string, member: string): Promise<string> {
 	return runCommand("tar", ["-xOzf", archive, member]);
 }
+
+test("only the Windows npm shim runs through a command shell", () => {
+	expect(needsCommandShell("npm", "win32")).toBe(true);
+	expect(needsCommandShell("npm", "linux")).toBe(false);
+	expect(needsCommandShell("tar", "win32")).toBe(false);
+});
 
 test("package subprocesses are terminated on timeout and cancellation", async () => {
 	const args = ["-e", "setInterval(() => {}, 1000)"];
@@ -62,8 +77,10 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 	const originalModel = process.env.PI_TMUX_MODEL;
 	try {
 		const repository = fileURLToPath(new URL("..", import.meta.url));
-		const packedResults = JSON.parse(await runCommand("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", directory], {
+		const packedResults = JSON.parse(await runCommand("npm", ["pack", "--ignore-scripts", "--json"], {
 			cwd: repository,
+			env: { ...process.env, npm_config_pack_destination: directory },
+			shell: needsCommandShell("npm"),
 		})) as Array<{ filename?: unknown }>;
 		const filename = packedResults[0]?.filename;
 		if (typeof filename !== "string" || basename(filename) !== filename || !filename.endsWith(".tgz")) {
