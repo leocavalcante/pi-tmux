@@ -1313,6 +1313,7 @@ test("parses naming models and rejects malformed configuration", () => {
 	}
 	expect(parseNamingModel(" anthropic/claude-sonnet-4-5 ")).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5" });
 	expect(parseNamingModel("openrouter/vendor/model")).toEqual({ provider: "openrouter", id: "vendor/model" });
+	expect(parseNamingModel("custom.provider+region/model")).toEqual({ provider: "custom.provider+region", id: "model" });
 	expect(parseNamingModel(" OFF ")).toBeNull();
 	for (const value of ["model", "/model", "provider/", "bad provider/model", "provider/a\nb", "provider/" + "x".repeat(300)]) {
 		expect(() => parseNamingModel(value)).toThrow();
