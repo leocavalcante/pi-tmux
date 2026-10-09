@@ -6,9 +6,13 @@ const execFileAsync = promisify(execFile);
 
 export const WAITING_OPTION = "@pi-tmux-waiting";
 export const ACTIVE_OPTION = "@pi-tmux-active";
+// Normalize each pane option before aggregation; matching raw values such as 10
+// would otherwise mistake any embedded `1` for a true flag.
+const WAITING_FLAG_FORMAT = `#{?#{==:#{${WAITING_OPTION}},1},1,0}`;
+const ACTIVE_OR_WAITING_FLAG_FORMAT = `#{?#{==:#{${ACTIVE_OPTION}},1},1,${WAITING_FLAG_FORMAT}}`;
 // tmux evaluates this on the server after the pane status write, so concurrent
 // Pi instances aggregate their status without a client-side read/rename race.
-export const SESSION_WAITING_FORMAT = `#{m:*1*,#{W:#{P:#{${WAITING_OPTION}}}}}`;
+export const SESSION_WAITING_FORMAT = `#{m:*1*,#{W:#{P:${WAITING_FLAG_FORMAT}}}}`;
 // Preserve the original format for RunTmux adapters that return legacy target
 // fields; capable tmux servers use the stored-base format below.
 export const SESSION_TITLE_FORMAT =
@@ -31,14 +35,14 @@ export const SESSION_BASE_NAME_TITLE_FORMAT =
 	`#{?${SESSION_WAITING_FORMAT},${READY_PREFIX}${SESSION_BASE_NAME_VALUE_FORMAT},${SESSION_BASE_NAME_VALUE_FORMAT}}`;
 export const SESSION_TITLE_MARKED_VALUE_FORMAT =
 	`#{?${SESSION_NAME_IS_MARKED_BASE_FORMAT},marked,unmarked}`;
-export const WINDOW_WAITING_FORMAT = `#{m:*1*,#{P:#{${WAITING_OPTION}}}}`;
+export const WINDOW_WAITING_FORMAT = `#{m:*1*,#{P:${WAITING_FLAG_FORMAT}}}`;
 // Waiting flags also recognize idle peers loaded before active tracking existed.
-export const WINDOW_ACTIVE_FORMAT = `#{m:*1*,#{P:#{${ACTIVE_OPTION}}#{${WAITING_OPTION}}}}`;
+export const WINDOW_ACTIVE_FORMAT = `#{m:*1*,#{P:${ACTIVE_OR_WAITING_FLAG_FORMAT}}}`;
 // The fixed suffix advertises session-name base-option support; the PID scopes
 // numeric tmux IDs to the server process that produced this snapshot.
 export const WINDOW_INFO_FORMAT = `#{session_id}:1:#{pid}\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
 // Diagnostics omit names and dialogue, reading all flags in one server snapshot.
-export const STATUS_INFO_FORMAT = `#{session_id}\t#{window_id}\t#{?#{m:*1*,#{${WAITING_OPTION}}},1,0}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{?${SESSION_WAITING_FORMAT},1,0}`;
+export const STATUS_INFO_FORMAT = `#{session_id}\t#{window_id}\t${WAITING_FLAG_FORMAT}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{?${SESSION_WAITING_FORMAT},1,0}`;
 const CURRENT_TASK_FORMAT = "#{s/^\\* //:window_name}";
 export const SHARED_TASK_TITLE_FORMAT = `#{?${WINDOW_WAITING_FORMAT},${READY_PREFIX}#{=22:${CURRENT_TASK_FORMAT}},${CURRENT_TASK_FORMAT}}`;
 export const WINDOW_REPAIR_NEEDED_FORMAT = `#{!=:#{window_name},${SHARED_TASK_TITLE_FORMAT}}`;

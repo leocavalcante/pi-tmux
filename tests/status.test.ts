@@ -14,7 +14,7 @@ test.skipIf(!hasTmux).each([
 	{ own: false, peer: true, elsewhere: false, flags: "pane no, window yes, session yes" },
 	{ own: false, peer: false, elsewhere: true, flags: "pane no, window no, session yes" },
 	{ own: "2", peer: false, elsewhere: false, flags: "pane no, window no, session no" },
-	{ own: "10", peer: false, elsewhere: false, flags: "pane yes, window yes, session yes" },
+	{ own: "10", peer: false, elsewhere: false, flags: "pane no, window no, session no" },
 ])("status reads real tmux aggregation without changing names or flags: %j", async ({ own, peer, elsewhere, flags }) => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-status-"));
 	const socket = join(directory, "socket");
