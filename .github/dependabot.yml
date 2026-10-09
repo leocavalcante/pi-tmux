@@ -10,8 +10,6 @@ updates:
     open-pull-requests-limit: 5
     ignore:
       - dependency-name: "@types/node"
-        update-types:
-          - version-update:semver-major
     groups:
       npm-minor-and-patch:
         patterns:
