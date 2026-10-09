@@ -62,6 +62,40 @@ jobs:
       - run: npm test
       - run: npm pack --dry-run --ignore-scripts
 
+  tmux-3-7:
+    name: tmux 3.7c
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.19.0
+          cache: npm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - name: Build pinned tmux 3.7c
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential libevent-dev libncurses-dev pkg-config bison autoconf automake
+          git clone --quiet --depth 1 --branch 3.7c https://github.com/tmux/tmux.git "$RUNNER_TEMP/tmux-src"
+          test "$(git -C "$RUNNER_TEMP/tmux-src" rev-parse HEAD)" = "e476c1230b958df0cb12977517d24b3dc931375b"
+          cd "$RUNNER_TEMP/tmux-src"
+          sh autogen.sh
+          ./configure --prefix="$RUNNER_TEMP/tmux-3.7c"
+          make -j2
+          make install
+          echo "$RUNNER_TEMP/tmux-3.7c/bin" >> "$GITHUB_PATH"
+      - name: Verify tmux version
+        run: test "$(tmux -V)" = "tmux 3.7c"
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run check:tests
+      - run: npm test
+
   windows:
     runs-on: windows-2022
     timeout-minutes: 10
