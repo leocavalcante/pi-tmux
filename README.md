@@ -242,12 +242,13 @@ refresh the task name from the active history. The existing task name stays
 until a naming request succeeds.
 
 A forced kill cannot run cleanup and may leave task names, waiting flags, or
-ownership flags behind. If Pi has stopped but its pane remains, clear only that
-pane's stale flags before relying on another Pi's next status update:
+ownership flags behind. If Pi has stopped but its pane remains, run these
+commands from the shell in that pane to clear only its stale flags before
+relying on another Pi's next status update:
 
 ```sh
-tmux set-option -p -t <pane-id> @pi-tmux-active 0
-tmux set-option -p -t <pane-id> @pi-tmux-waiting 0
+tmux set-option -p -t "$TMUX_PANE" @pi-tmux-active 0
+tmux set-option -p -t "$TMUX_PANE" @pi-tmux-waiting 0
 ```
 
 Pane moves do not trigger an immediate update. The moved Pi's next status
@@ -263,10 +264,10 @@ are installed.
 
 Closing a pane without a graceful Pi shutdown cannot run repair. A Pi remaining
 in the former location must refresh it. To restore automatic process-based
-names instead:
+names for a window, run this from a shell in one of its panes:
 
 ```sh
-tmux set-window-option -t <window-id> automatic-rename on
+tmux set-window-option -t "$TMUX_PANE" automatic-rename on
 ```
 
 ## Privacy and security
