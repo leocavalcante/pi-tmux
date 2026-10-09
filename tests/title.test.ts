@@ -1339,7 +1339,12 @@ test("parses naming models and rejects malformed configuration", () => {
 	expect(parseNamingModel("openrouter/vendor/model")).toEqual({ provider: "openrouter", id: "vendor/model" });
 	expect(parseNamingModel("custom.provider+region/model")).toEqual({ provider: "custom.provider+region", id: "model" });
 	expect(parseNamingModel(" OFF ")).toBeNull();
-	for (const value of ["model", "/model", "provider/", "bad provider/model", "provider/a\nb", "provider/" + "x".repeat(300)]) {
+	const longestSetting = `${"p".repeat(254)}/m`;
+	expect(longestSetting).toHaveLength(256);
+	expect(parseNamingModel(longestSetting)).toEqual({ provider: "p".repeat(254), id: "m" });
+	const oversizedSetting = `${"p".repeat(255)}/m`;
+	expect(oversizedSetting).toHaveLength(257);
+	for (const value of ["model", "/model", "provider/", "bad provider/model", "provider/a\nb", oversizedSetting]) {
 		expect(() => parseNamingModel(value)).toThrow();
 	}
 });
