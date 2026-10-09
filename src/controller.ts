@@ -1,7 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	buildNamingContext,
-	CredentialLikeOutputError,
+	UnsafeNamingOutputError,
 	NAMING_REQUEST_TIMEOUT_MS,
 	parseNamingModel,
 	requestNamingTitle,
@@ -309,8 +309,8 @@ export function createController(tmux: RunTmux) {
 			void refreshTitle(ctx, pane, requestGeneration);
 		} catch (error) {
 			if (!isCurrent()) return;
-			warnOnce(ctx, error instanceof CredentialLikeOutputError
-				? "Naming output looked credential-like and was not applied."
+			warnOnce(ctx, error instanceof UnsafeNamingOutputError
+				? "Sensitive-looking naming output was not applied."
 				: "tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.");
 		} finally {
 			clearTimeout(timeout);
