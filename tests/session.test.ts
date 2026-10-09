@@ -366,7 +366,7 @@ test.skipIf(!hasTmux).each([
 	{ activeAtExecution: false, waitingAtExecution: false },
 	{ activeAtExecution: true, waitingAtExecution: false },
 	{ activeAtExecution: true, waitingAtExecution: true },
-])("quit re-evaluates ownership and preserves the latest literal title, status at execution=%j", async ({ activeAtExecution, waitingAtExecution }) => {
+])("quit re-evaluates ownership and preserves the latest literal title without truncation, status at execution=%j", async ({ activeAtExecution, waitingAtExecution }) => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");
 	const originalPane = process.env.TMUX_PANE;
@@ -382,6 +382,7 @@ test.skipIf(!hasTmux).each([
 		const handlers = new Map<string, Function>();
 		let quitting = false;
 		const latestTitle = "literal #{session_id}, Café\u2003-peer  ";
+		expect(latestTitle.length).toBeGreaterThan(22);
 		piTmux(mockPi(handlers), async (args) => {
 			if (quitting && observedCommand(args)[0] === "rename-window") {
 				quitting = false;
@@ -396,7 +397,7 @@ test.skipIf(!hasTmux).each([
 		await handlers.get("session_start")!({ type: "session_start" }, ctx);
 		quitting = true;
 		await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, ctx);
-		const expectedTitle = activeAtExecution ? (waitingAtExecution ? "* " + latestTitle.slice(0, 22) : latestTitle) : "zsh";
+		const expectedTitle = activeAtExecution ? (waitingAtExecution ? "* " + latestTitle : latestTitle) : "zsh";
 		expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe(expectedTitle);
 		expect(tmux("show-options", "-p", "-v", "-t", pane, ACTIVE_OPTION)).toBe("0");
 		expect(warnings).toEqual([]);

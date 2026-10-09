@@ -48,8 +48,8 @@ export const WINDOW_INFO_FORMAT = `#{session_id}:1:#{pid}\t#{window_id}\t#{?${WI
 export const STATUS_INFO_FORMAT = `#{session_id}\t#{window_id}\t${WAITING_FLAG_FORMAT}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{?${SESSION_WAITING_FORMAT},1,0}`;
 const CURRENT_TASK_FORMAT = "#{s/^\\* //:window_name}";
 export const SHARED_TASK_TITLE_FORMAT = `#{?${WINDOW_WAITING_FORMAT},${READY_PREFIX}#{=22:${CURRENT_TASK_FORMAT}},${CURRENT_TASK_FORMAT}}`;
-// Former-window repair preserves its current name; unlike shared task-title
-// updates, cleanup must not truncate a long custom title.
+// Former-window and quit cleanup preserve the current name; unlike shared
+// task-title updates, cleanup must not truncate a long custom title.
 export const SHARED_WINDOW_TITLE_FORMAT = `#{?${WINDOW_WAITING_FORMAT},${READY_PREFIX}${CURRENT_TASK_FORMAT},${CURRENT_TASK_FORMAT}}`;
 // If no task title exists, toggle only the waiting prefix around the literal
 // current window name instead of normalizing or clipping user-owned text.
@@ -63,7 +63,7 @@ export function buildWindowTitleFormat(title: string): string {
 }
 // A sibling may start, quit, or rename the window after our last lookup. Decide
 // ownership at execution time and preserve its latest title, not our snapshot.
-export const QUIT_TITLE_FORMAT = `#{?${WINDOW_ACTIVE_FORMAT},${SHARED_TASK_TITLE_FORMAT},${buildWindowTitleFormat("zsh")}}`;
+export const QUIT_TITLE_FORMAT = `#{?${WINDOW_ACTIVE_FORMAT},${SHARED_WINDOW_TITLE_FORMAT},${buildWindowTitleFormat("zsh")}}`;
 
 export type RunTmux = ((args: string[], signal: AbortSignal) => Promise<string>) & {
 	// Adapters can opt into receiving the built-in server-PID if-shell wrapper.
