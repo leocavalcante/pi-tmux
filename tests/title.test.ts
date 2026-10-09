@@ -534,6 +534,23 @@ test("does not fall back to an unrecognized text phase", async () => {
 	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
 });
 
+test("honors phase metadata from a newer textSignature version", async () => {
+	const result = {
+		...response(""),
+		content: [{
+			type: "text",
+			text: "repair auth tests",
+			textSignature: JSON.stringify({ v: 2, id: "commentary-message", phase: "commentary" }),
+		}],
+	};
+	const f = fixture([Promise.resolve(result)]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(f.warnings).toEqual(["The naming model did not return a short title; the current title was kept."]);
+});
+
 test("falls back to the last text block when phase metadata is absent", async () => {
 	const result = {
 		...response(""),
