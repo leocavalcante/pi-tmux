@@ -74,5 +74,5 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	pi.on("session_tree", (_event, ctx) => controller.restoreTitle(ctx));
 	pi.on("session_compact", (_event, ctx) => { controller.requestTitle(ctx); });
 	// Reload and session replacement tear down extensions without exiting Pi.
-	pi.on("session_shutdown", (event, ctx) => controller.reset(ctx, event.reason === "quit" ? "zsh" : undefined, event.reason !== "quit"));
+	pi.on("session_shutdown", (event, ctx) => controller.reset(ctx, undefined, event.reason !== "quit"));
 }

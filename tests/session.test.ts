@@ -8,13 +8,18 @@ import piTmux, { SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, type RunTm
 
 const hasTmux = Bun.which("tmux") !== null;
 let originalModel: string | undefined;
+let originalIdleTitle: string | undefined;
 beforeEach(() => {
 	originalModel = process.env.PI_TMUX_MODEL;
+	originalIdleTitle = process.env.PI_TMUX_IDLE_TITLE;
 	delete process.env.PI_TMUX_MODEL;
+	delete process.env.PI_TMUX_IDLE_TITLE;
 });
 afterEach(() => {
 	if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 	else process.env.PI_TMUX_MODEL = originalModel;
+	if (originalIdleTitle === undefined) delete process.env.PI_TMUX_IDLE_TITLE;
+	else process.env.PI_TMUX_IDLE_TITLE = originalIdleTitle;
 });
 
 const mockPi = (handlers: Map<string, Function>, commands?: Map<string, Function>) => ({
@@ -280,7 +285,7 @@ test.skipIf(!hasTmux)("the real tmux adapter handles long custom window names", 
 	}
 });
 
-test.skipIf(!hasTmux).each([false, true])("quitting one Pi preserves a live sibling's task title, sibling waiting=%j", async (waiting) => {
+test.skipIf(!hasTmux).each([false, true])("quitting one Pi preserves its peer's title and uses the configured idle title when last, peer waiting=%j", async (waiting) => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");
 	const originalPane = process.env.TMUX_PANE;
@@ -289,6 +294,7 @@ test.skipIf(!hasTmux).each([false, true])("quitting one Pi preserves a live sibl
 	}).replace(/\r?\n$/, "");
 	try {
 		process.env.PI_TMUX_MODEL = "off";
+		process.env.PI_TMUX_IDLE_TITLE = "Fish & Shell";
 		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Owners", "/bin/sleep 60");
 		const sibling = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
 		const warnings: string[] = [];
@@ -323,7 +329,7 @@ test.skipIf(!hasTmux).each([false, true])("quitting one Pi preserves a live sibl
 		expect(tmux("show-options", "-p", "-v", "-t", pane, ACTIVE_OPTION)).toBe("0");
 		expect(tmux("show-options", "-p", "-v", "-t", sibling, ACTIVE_OPTION)).toBe("1");
 		await second.emit("session_shutdown");
-		expect(tmux("display-message", "-p", "-t", sibling, "#{window_name}")).toBe("zsh");
+		expect(tmux("display-message", "-p", "-t", sibling, "#{window_name}")).toBe("fish shell");
 		expect(tmux("display-message", "-p", "-t", sibling, "#{session_name}")).toBe("Owners");
 		expect(warnings).toEqual([]);
 	} finally {

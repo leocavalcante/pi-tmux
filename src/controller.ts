@@ -7,11 +7,11 @@ import {
 	parseNamingModel,
 	requestNamingTitle,
 } from "./naming.ts";
-import { formatTitle, READY_PREFIX } from "./title.ts";
+import { cleanTitle, formatTitle, READY_PREFIX } from "./title.ts";
 import {
 	ACTIVE_OPTION,
 	buildWindowTitleFormat,
-	QUIT_TITLE_FORMAT,
+	buildQuitTitleFormat,
 	readWindowTitle,
 	SESSION_BASE_NAME_OPTION,
 	SESSION_BASE_NAME_TITLE_FORMAT,
@@ -34,6 +34,7 @@ const MAX_FORMER_TARGETS = 8;
 const MAX_LOCATION_PASSES = 4;
 
 export function createController(tmux: RunTmux) {
+	const idleTitle = cleanTitle(process.env.PI_TMUX_IDLE_TITLE ?? "zsh") || "zsh";
 	let namingModel: ReturnType<typeof parseNamingModel> = null;
 	let invalidModelSetting = false;
 	try {
@@ -247,7 +248,7 @@ export function createController(tmux: RunTmux) {
 				// Rename the pane's current window, aggregating its current statuses on
 				// the server rather than trusting the earlier client-side snapshot.
 				const renameLocation = current;
-				const format = !active && taskTitle === "zsh" ? QUIT_TITLE_FORMAT
+				const format = !active ? buildQuitTitleFormat(idleTitle)
 					: preserveWindowName ? PRESERVED_WINDOW_TITLE_FORMAT : buildWindowTitleFormat(taskTitle);
 				await writeOnServer(tmux, current.server ?? lastLocation?.server, ["rename-window", "-t", pane, "--", format], signal);
 				if (!isCurrent()) return;
@@ -290,7 +291,7 @@ export function createController(tmux: RunTmux) {
 		cancel();
 		titleLifetime.abort();
 		titleLifetime = new AbortController();
-		baseTitle = title;
+		baseTitle = title ?? (!alive ? idleTitle : undefined);
 		active = alive;
 		manualTitle = false;
 		lastNamingContext = undefined;
