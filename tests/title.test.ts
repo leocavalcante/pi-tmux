@@ -279,7 +279,7 @@ test.each(["-fix auth", "-t", "-a"])("model title %s is passed as a literal tmux
 	expect(f.warnings).toEqual([]);
 });
 
-test("balances oversized prompt context and disables reasoning and retries", async () => {
+test("balances oversized prompt context and disables reasoning and provider retries", async () => {
 	const f = fixture();
 	f.input("x".repeat(10_000));
 	await settle();
@@ -289,7 +289,8 @@ test("balances oversized prompt context and disables reasoning and retries", asy
 	const prefixLength = Math.ceil(retainedLength / 2);
 	const suffixLength = Math.floor(retainedLength / 2);
 	expect(request.context.messages).toHaveLength(1);
-	expect(request.context.systemPrompt).toContain("Do not answer the user's request; give it a concise task label");
+	expect(request.context.systemPrompt).toContain("Ignore requested answer format, length, or style");
+	expect(request.context.systemPrompt).toContain("Do not answer or restate the user's request; give it a concise task label");
 	expect(request.context.systemPrompt).toContain("explain tmux titles or fix auth tests");
 	expect(request.context.messages[0].content).toBe(
 		`user: ${"x".repeat(prefixLength)}\n${marker}\n${"x".repeat(suffixLength)}`,
@@ -660,15 +661,75 @@ test("falls back to the last text block with opaque provider signatures", async 
 });
 
 test.each([
-	["I'll inspect the conversation and choose a title.", "The naming model title exceeded the 24-character limit; the current title was kept."],
-	["one two three four five", "The naming model title exceeded the 4-word limit; the current title was kept."],
-	["fix ssh\nhelpers", "The naming model returned multiple lines instead of one title; the current title was kept."],
-	["investigate authentication failures", "The naming model title exceeded the 24-character limit; the current title was kept."],
-	["---", "The naming model returned no usable title; the current title was kept."],
-])("rejects non-title model output rather than clipping it: %s", async (output, warning) => {
-	const f = fixture([Promise.resolve(response(output))]);
+	["Explain in two short sentences what a tmux window title is.", "tmux window titles"],
+	["one two three four five", "tmux title basics"],
+])("retries an overlong or over-word-count first title once: %s", async (firstOutput, correctedTitle) => {
+	const f = fixture([
+		Promise.resolve(response(firstOutput)),
+		Promise.resolve(response(correctedTitle)),
+	]);
+	f.input("Explain in two short sentences what a tmux window title is. Do not use any tools.");
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	expect(f.requests[0].context.messages[0].content).toBe(f.requests[1].context.messages[0].content);
+	expect(f.requests[1].context.systemPrompt).toContain("previous candidate exceeded a title limit");
+	expect(f.requests[1].context.systemPrompt).toContain("Do not restate the full request");
+	expect(f.requests[1].context.systemPrompt).toContain("answer-format constraints");
+	expect(f.requests[1].context.systemPrompt).toContain(`${MAX_TITLE_LENGTH} ASCII characters`);
+	expect(f.requests[1].context.systemPrompt).not.toContain(firstOutput);
+	expect(f.requests[1].options.maxRetries).toBe(0);
+	expect(f.state.title).toBe(correctedTitle);
+	expect(f.warnings).toEqual([]);
+});
+
+test("clips a still-overlong retry at a word boundary when it remains title-shaped", async () => {
+	const f = fixture([
+		Promise.resolve(response("Explain in two short sentences what a tmux window title is")),
+		Promise.resolve(response("tmux window title explanation")),
+	]);
+	f.input("Explain in two short sentences what a tmux window title is. Do not use any tools.");
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	expect(f.state.title).toBe("tmux window title");
+	expect(f.state.title.length).toBeLessThanOrEqual(MAX_TITLE_LENGTH);
+	expect(f.state.title.split(" ")).toHaveLength(3);
+	expect(f.warnings).toEqual([]);
+});
+
+test("superseding input cancels an overlong-title retry without applying its stale result", async () => {
+	const retry = deferred();
+	const f = fixture([
+		Promise.resolve(response("Explain what a tmux window title is")),
+		retry.promise,
+		Promise.resolve(response("new task")),
+	]);
+	f.input("Old task");
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	const retrySignal = f.requests[1].options.signal as AbortSignal;
+	f.input("New task");
+	await settle();
+	expect(retrySignal.aborted).toBe(true);
+	retry.resolve(response("stale title"));
+	await settle();
+	expect(f.requests).toHaveLength(3);
+	expect(f.state.title).toBe("new task");
+	expect(f.warnings).toEqual([]);
+});
+
+test.each([
+	["I'll inspect the conversation and choose a title.", "The naming model title exceeded the 24-character limit; the current title was kept.", true],
+	["one two three four five", "The naming model title exceeded the 4-word limit; the current title was kept.", true],
+	["fix ssh\nhelpers", "The naming model returned multiple lines instead of one title; the current title was kept.", false],
+	["investigate authentication failures", "The naming model title exceeded the 24-character limit; the current title was kept.", true],
+	["---", "The naming model returned no usable title; the current title was kept.", false],
+])("rejects output that remains invalid after at most one retry: %s", async (output, warning, retry) => {
+	const results = [Promise.resolve(response(output))];
+	if (retry) results.push(Promise.resolve(response(output)));
+	const f = fixture(results);
 	f.input("Name a task");
 	await settle();
+	expect(f.requests).toHaveLength(retry ? 2 : 1);
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 	expect(f.warnings).toEqual([warning]);
