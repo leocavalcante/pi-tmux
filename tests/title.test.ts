@@ -549,6 +549,14 @@ test("waiting status still works when the naming model is unavailable", async ()
 	expect(f.requests).toHaveLength(0);
 });
 
+test("an aborted run is settled and waiting, without implying task success", async () => {
+	const f = fixture([]);
+	await f.handlers.get("agent_settled")!({ type: "agent_settled", aborted: true }, f.ctx);
+	expect(f.state.title).toBe("* existing task");
+	expect(f.state.sessionTitle).toBe("* My Session");
+	expect(f.requests).toHaveLength(0);
+});
+
 test("session replacement clears the marker and shutdown resets the title", async () => {
 	for (const event of ["session_start", "session_shutdown"]) {
 		const f = fixture();
