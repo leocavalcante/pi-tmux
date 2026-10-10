@@ -45,6 +45,10 @@ function basicAuthorizationHeader(header: "Authorization" | "Proxy-Authorization
 	return `${header}: Basic ${Buffer.from(userPass).toString("base64")}`;
 }
 
+function npmrcAuthSetting(userPass: string): string {
+	return `//registry.npmjs.org/:_auth=${Buffer.from(userPass).toString("base64")}`;
+}
+
 function fixture(
 	results: Promise<ReturnType<typeof response>>[] = [Promise.resolve(response("Fix auth tests"))],
 	beforeCommand?: (args: string[], signal: AbortSignal, renderedTitle?: string) => Promise<void>,
@@ -1146,6 +1150,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const labeledCard = "card number=0000000000000000";
 	await suppressed(fixture(), `Validate the imported record ${labeledCard}`, labeledCard);
 
+	const npmrcAuth = npmrcAuthSetting("fixture-user:fixture-password");
+	await suppressed(fixture(), `Review npm config ${npmrcAuth}`, npmrcAuth);
+	const obfuscatedNpmrcAuth = npmrcAuth.replace("_auth", "_au\u200bth");
+	await suppressed(fixture(), `Review npm config ${obfuscatedNpmrcAuth}`, obfuscatedNpmrcAuth);
+
 	const databaseUrl = "postgres://test-user:example-only-password@db.example.test/app";
 	await suppressed(fixture(), `Review the database connection ${databaseUrl}`, databaseUrl);
 	const redisUrlWithoutUsername = "redis://:example-only-password@localhost:6379/0";
@@ -1274,6 +1283,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	expect(nearMiss.state.title).toBe("fix auth tests");
 	expect(nearMiss.warnings).toEqual([]);
 
+	const npmrcAuthWithoutPassword = npmrcAuthSetting("fixture-without-separator");
+	expect(hasSensitiveNamingContext(npmrcAuthWithoutPassword)).toBe(false);
+	expect(hasSensitiveOutput(npmrcAuthWithoutPassword)).toBe(false);
+
 	const uriWithoutPassword = fixture([Promise.resolve(response("review database"))]);
 	uriWithoutPassword.input("Review postgres://test-user@localhost/app");
 	await settle();
@@ -1295,7 +1308,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 
 	const placeholderCredentials = fixture([Promise.resolve(response("review docs"))]);
 	placeholderCredentials.input([
-		"Review docs with password=placeholder, passphrase=example, token: placeholder,",
+		"Review docs with password=placeholder, passphrase=example, token: placeholder, //registry.npmjs.org/:_auth=placeholder,",
 		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, PresharedKey=example,",
 		"client-key-data: example, Authorization: Basic example,",
 		`password: "example value", passphrase: example value, password: example\n  value`,
@@ -1374,6 +1387,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		basicAuthorizationHeader("Authorization", "u:p"),
 		basicAuthorizationHeader("Proxy-Authorization", "p:w"),
 	];
+	const npmrcAuth = npmrcAuthSetting("fixture-user:fixture-password");
+	const obfuscatedNpmrcAuth = npmrcAuth.replace("_auth", "_au\u200bth");
 	const outputs = [
 		`password=${"S".repeat(12)}`,
 		`password=secret phrase`,
@@ -1405,6 +1420,9 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`PresharedKey=${"A".repeat(43)}=`,
 		...basicAuthHeaders,
 		azureSasUrl,
+		npmrcAuth,
+		obfuscatedNpmrcAuth,
+		npmrcAuthSetting("u:p"),
 		"postgres://test-user:example-only-password@db.example.test/app",
 		"redis://:example-only-password@localhost:6379/0",
 		["gh", "p_", "a".repeat(36)].join(""),

@@ -76,6 +76,8 @@ const LABELED_PASSWORD_BLOCK_PATTERN = new RegExp(
 );
 // Basic authorization values are base64 user-info, not provider-prefixed tokens.
 const BASIC_AUTHORIZATION_PATTERN = /(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
+// npm .npmrc `_auth` settings also contain a base64 username:password pair.
+const NPM_AUTH_PATTERN = /(?<![A-Za-z0-9_-])_auth\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
 // YAML block-scalar form of the same Authorization/Proxy-Authorization header.
 const BASIC_AUTHORIZATION_BLOCK_PATTERN = new RegExp(
 	String.raw`(?<![A-Za-z0-9_-])["']?(?:proxy[-_\s]?)?authorization["']?[ \t]*:[ \t]*${YAML_BLOCK_SCALAR_PROPERTIES}[|>]`
@@ -302,6 +304,14 @@ function hasBasicAuthorizationCredential(value: string): boolean {
 	return false;
 }
 
+function hasNpmAuthCredential(value: string): boolean {
+	const pattern = new RegExp(NPM_AUTH_PATTERN.source, `${NPM_AUTH_PATTERN.flags}g`);
+	for (const match of value.matchAll(pattern)) {
+		if (isBasicAuthorizationCredential(match[1])) return true;
+	}
+	return false;
+}
+
 function hasBasicAuthorizationCredentialBlock(value: string): boolean {
 	const pattern = new RegExp(
 		BASIC_AUTHORIZATION_BLOCK_PATTERN.source, `${BASIC_AUTHORIZATION_BLOCK_PATTERN.flags}g`,
@@ -356,9 +366,10 @@ function hasLabeledPasswordPhrase(value: string): boolean {
 function hasLabeledCredential(value: string): boolean {
 	const withoutControls = value.replace(/[\p{Cc}\p{Cf}]+/gu, "");
 	return hasBasicAuthorizationCredential(value) || hasBasicAuthorizationCredentialBlock(value)
-		|| LABELED_CREDENTIAL_PATTERN.test(value) || LABELED_PASSWORD_PATTERN.test(value)
+		|| hasNpmAuthCredential(value) || LABELED_CREDENTIAL_PATTERN.test(value) || LABELED_PASSWORD_PATTERN.test(value)
 		|| hasLabeledCredentialBlock(value) || hasLabeledPasswordBlock(value) || hasLabeledPasswordPhrase(value)
-		|| hasBasicAuthorizationCredential(withoutControls) || LABELED_CREDENTIAL_PATTERN.test(withoutControls)
+		|| hasBasicAuthorizationCredential(withoutControls) || hasNpmAuthCredential(withoutControls)
+		|| LABELED_CREDENTIAL_PATTERN.test(withoutControls)
 		|| LABELED_PASSWORD_PATTERN.test(withoutControls) || hasLabeledCredentialBlock(withoutControls)
 		|| hasLabeledPasswordBlock(withoutControls) || hasLabeledPasswordPhrase(withoutControls);
 }
