@@ -995,6 +995,13 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	for (const token of shippoTokens) {
 		await suppressed(fixture(), `Review Shippo access ${token}`, token);
 	}
+	const planetscaleTokens = ["tkn", "oauth"].flatMap((kind) => [
+		`pscale_${kind}_${"A1_bc.-=".repeat(4)}`,
+		`pscale_${kind}_${"B".repeat(64)}`,
+	]);
+	for (const token of planetscaleTokens) {
+		await suppressed(fixture(), `Review PlanetScale access ${token}`, token);
+	}
 	const sourcegraphToken = `sgp_${"a".repeat(40)}`;
 	const sourcegraphSegmentedToken = `sgp_${"b".repeat(16)}_${"c".repeat(40)}`;
 	const sourcegraphLocalToken = `sgp_local_${"d".repeat(40)}`;
@@ -1150,6 +1157,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithShippoToken = fixture();
 	historyWithShippoToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${shippoTokens[0]!}` }] });
 	await suppressed(historyWithShippoToken, "Continue the task", shippoTokens[0]!);
+	const historyWithPlanetScaleToken = fixture();
+	historyWithPlanetScaleToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${planetscaleTokens[2]!}` }] });
+	await suppressed(historyWithPlanetScaleToken, "Continue the task", planetscaleTokens[2]!);
 	const historyWithSourcegraphToken = fixture();
 	historyWithSourcegraphToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${sourcegraphSegmentedToken}` }] });
 	await suppressed(historyWithSourcegraphToken, "Continue the task", sourcegraphSegmentedToken);
@@ -2052,6 +2062,59 @@ test("rejects Shippo API tokens without mistaking near-miss strings for tokens",
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("shippo label tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects PlanetScale API and OAuth tokens without mistaking near-misses for tokens", async () => {
+	const tokenFor = (kind: string, body: string) => `pscale_${kind}_${body}`;
+	const body32 = "A1_bc.-=".repeat(4);
+	const body64 = "B".repeat(64);
+	const tokens = [tokenFor("tkn", body32), tokenFor("tkn", body64), tokenFor("oauth", body32), tokenFor("oauth", body64)];
+	for (const token of tokens) {
+		const outputs = [
+			token,
+			token.toUpperCase(),
+			`configure-${token}`,
+			token.replace("pscale", "p\u200bscale"),
+			`${token.slice(0, 25)}\u200b${token.slice(25)}`,
+		];
+		for (const output of outputs) {
+			const f = fixture([Promise.resolve(response(output))]);
+			f.input("Name a task");
+			await settle();
+			expect(f.state.title).toBe("existing task");
+			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+			expect(f.warnings.join(" ")).not.toContain(token);
+		}
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("planetscale migration"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("planetscale migration");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		tokenFor("tkn", "A".repeat(31)),
+		tokenFor("oauth", "A".repeat(65)),
+		tokenFor("token", body32),
+		`x${tokens[0]}`,
+		`_${tokens[0]}`,
+		`${tokens[1]}x`,
+		`${tokens[1]}_x`,
+		`${tokens[1]}-x`,
+		`${tokens[1]}.x`,
+		`${tokens[1]}=x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("scale migration tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("scale migration tests");
 		expect(f.warnings).toEqual([]);
 	}
 });
@@ -4186,6 +4249,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`auth integration ${token}`,
 		`shippo_live_${"a".repeat(40)}`,
 		`shippo_test_${"b".repeat(40)}`,
+		`pscale_tkn_${"C".repeat(32)}`,
+		`pscale_oauth_${"D".repeat(64)}`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
