@@ -132,6 +132,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])sntrys_eyJpYXQiO[A-Za-z0-9+/]{10,200}(?:LCJyZWdpb25fdXJs|InJlZ2lvbl91cmwi|cmVnaW9uX3VybCI6)[A-Za-z0-9+/]{10,200}={0,2}_[A-Za-z0-9+/]{43}(?![A-Za-z0-9_+/=-])/,
 	// Sentry user access tokens use `sntryu_` followed by 64 lowercase hex characters.
 	/(?<![A-Za-z0-9_])sntryu_[a-f0-9]{64}(?![A-Za-z0-9_-])/,
+	// Telegram bot tokens contain a 5–16 digit ID and a fixed-length secret starting with `A`.
+	/(?<![A-Za-z0-9_])[0-9]{5,16}:A[A-Za-z0-9_-]{34}(?![A-Za-z0-9_-])/,
 	// Vault service and batch tokens use `hvs.` or `hvb.` followed by 24 URL-safe characters.
 	/(?<![A-Za-z0-9_])hv[bs]\.[A-Za-z0-9_-]{24}(?![A-Za-z0-9_-])/,
 	// Notion tokens use `ntn_`, 11 digits, then 35 alphanumeric characters.
