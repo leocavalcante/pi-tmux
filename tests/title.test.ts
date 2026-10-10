@@ -1503,6 +1503,47 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
 });
 
+test("screens Azure DevOps PAT environment settings without mistaking benign labels for credentials", async () => {
+	const token = "a1b2".repeat(13);
+	const settings = [
+		`AZURE_DEVOPS_EXT_PAT=${token}`,
+		`AZURE_DEVOPS_EXT_PAT=${token.slice(0, 26)}\u200b${token.slice(26)}`,
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const setting of settings) {
+		expect(hasSensitiveNamingContext(setting)).toBe(true);
+		expect(hasSensitiveOutput(setting)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review CI configuration: ${setting}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(token);
+
+		const output = fixture([Promise.resolve(response(setting))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(token);
+	}
+
+	for (const nearMiss of [
+		"AZURE_DEVOPS_EXT_PAT=placeholder",
+		`AZURE_DEVOPS_EXT_PAT=${"a".repeat(19)}`,
+		token,
+		"azure devops pat settings",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("rejects labeled Datadog API keys without mistaking near-misses for keys", async () => {
 	const keyValue = "A1b2".repeat(10);
 	const outputs = [
