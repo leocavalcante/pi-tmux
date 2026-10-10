@@ -966,6 +966,11 @@ test("credential-looking prompts and recent history never reach the naming model
 	const labeledCredential = `client_secret=${"C".repeat(24)}`;
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 
+	const databaseUrl = "postgres://test-user:example-only-password@db.example.test/app";
+	await suppressed(fixture(), `Review the database connection ${databaseUrl}`, databaseUrl);
+	const obfuscatedUrl = "postgres://test-user:example-only-\u200bpassword@db.example.test/app";
+	await suppressed(fixture(), `Review the database connection ${obfuscatedUrl}`, obfuscatedUrl);
+
 	const history = fixture();
 	history.messages.push({ role: "assistant", content: [{ type: "text", text: `The test fixture includes ${token}` }] });
 	await suppressed(history, "Continue the task");
@@ -983,6 +988,13 @@ test("credential-looking prompts and recent history never reach the naming model
 	expect(nearMiss.requests).toHaveLength(1);
 	expect(nearMiss.state.title).toBe("fix auth tests");
 	expect(nearMiss.warnings).toEqual([]);
+
+	const uriWithoutPassword = fixture([Promise.resolve(response("review database"))]);
+	uriWithoutPassword.input("Review postgres://test-user@db.example.test/app");
+	await settle();
+	expect(uriWithoutPassword.requests).toHaveLength(1);
+	expect(uriWithoutPassword.state.title).toBe("review database");
+	expect(uriWithoutPassword.warnings).toEqual([]);
 });
 
 test("safe naming can resume after a credential-looking context is blocked", async () => {
@@ -1032,6 +1044,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const compatibilityGithubToken = [...githubToken]
 		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
 	const outputs = [
+		"postgres://test-user:example-only-password@db.example.test/app",
 		["gh", "p_", "a".repeat(36)].join(""),
 		["gsk_", "a".repeat(24)].join(""),
 		["fw_", "A".repeat(40)].join(""),
@@ -2134,6 +2147,15 @@ test("sensitive-looking idle titles are replaced by zsh before cleanup", async (
 	expect(f.state.title).toBe("zsh");
 	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat("zsh")]);
 	expect(f.warnings).toEqual([]);
+});
+
+test("credential-bearing URLs in idle titles fall back without disclosure", async () => {
+	process.env.PI_TMUX_IDLE_TITLE = "postgres://test-user:example-only-password@db.example.test/app";
+	const f = fixture([]);
+	await f.emit("session_start");
+	await f.emit("session_shutdown", "quit");
+	expect(f.state.title).toBe("zsh");
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat("zsh")]);
 });
 
 test("obfuscated sensitive idle titles also fall back without disclosure", async () => {
@@ -3292,6 +3314,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		token,
 		`auth integration ${token}`,
 		`client_secret=${"B".repeat(24)}`,
+		"postgres://test-user:example-only-password@db.example.test/app",
 		`ghp_${"C".repeat(10)}\u200b${"C".repeat(10)}`,
 		"alice@example.com",
 	];
