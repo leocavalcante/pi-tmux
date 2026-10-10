@@ -209,6 +209,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])AIza[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])/,
 	// Google OAuth client secrets use a `GOCSPX-` prefix and a long URL-safe value.
 	/(?<![A-Za-z0-9_])GOCSPX-[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/i,
+	// Google OAuth refresh tokens use a `1//` prefix and a long URL-safe value.
+	/(?<![A-Za-z0-9_])1\/\/[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/,
 	// Google OAuth access tokens commonly use `ya29.` followed by a long URL-safe value.
 	/(?<![A-Za-z0-9_])ya29\.[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/,
 	// `csk-` is Cerebras; do not mistake its `sk-` suffix for an OpenAI key.
