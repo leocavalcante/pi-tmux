@@ -5,6 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, type RunTmux } from "../index";
+import {
+	WINDOW_BASE_NAME_OPTION,
+	WINDOW_TITLE_LITERAL_PREFIX_OPTION,
+	WINDOW_TITLE_MARKED_OPTION,
+} from "../src/tmux.ts";
 import { supportsUnixTmux } from "./tmux-support.ts";
 
 const hasTmux = supportsUnixTmux(process.platform, Bun.which("tmux"));
@@ -947,6 +952,60 @@ test.skipIf(!hasTmux)("former-window repair preserves tmux-escaped custom names"
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
 		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
+test.skipIf(!hasTmux || !hasRoundTripUnsafeWindowNames)("former-window repair preserves control-character custom names and clears stale metadata", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const customTitle = "Custom\nsource";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Source", "-n", customTitle, "/bin/sleep 60");
+		const sourceWindow = tmux("display-message", "-p", "-t", pane, "#{window_id}");
+		tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		tmux("set-option", "-w", "-t", sourceWindow, WINDOW_BASE_NAME_OPTION, "stale base");
+		tmux("set-option", "-w", "-t", sourceWindow, WINDOW_TITLE_MARKED_OPTION, "marked");
+		tmux("set-option", "-w", "-t", sourceWindow, WINDOW_TITLE_LITERAL_PREFIX_OPTION, "0");
+		expect(tmux("display-message", "-p", "-t", sourceWindow, "#{window_name}")).toBe(customTitle);
+		const destinationPane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Destination", "-n", "destination", "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		const run: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
+		piTmux(mockPi(handlers), run);
+		const warnings: string[] = [];
+		const ctx = {
+			mode: "tui",
+			sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+			ui: { notify: (text: string) => warnings.push(text) },
+		} as unknown as ExtensionContext;
+		const emit = async (event: string) => {
+			await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+			await new Promise<void>((resolve) => setImmediate(resolve));
+		};
+
+		await emit("session_start");
+		tmux("join-pane", "-d", "-s", pane, "-t", destinationPane);
+		await emit("agent_settled");
+		expect(tmux("display-message", "-p", "-t", sourceWindow, "#{window_name}")).toBe(customTitle);
+		expect(tmux("show-options", "-w", "-qv", "-t", sourceWindow, WINDOW_BASE_NAME_OPTION)).toBe("");
+		expect(tmux("show-options", "-w", "-qv", "-t", sourceWindow, WINDOW_TITLE_MARKED_OPTION)).toBe("");
+		expect(tmux("show-options", "-w", "-qv", "-t", sourceWindow, WINDOW_TITLE_LITERAL_PREFIX_OPTION)).toBe("");
+		expect(warnings).toEqual([
+			"A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.",
+		]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+		try { tmux("kill-server"); } catch { /* The server may already have exited. */ }
+		finally { rmSync(directory, { recursive: true, force: true }); }
 	}
 });
 
