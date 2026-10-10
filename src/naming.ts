@@ -146,6 +146,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])lin_api_[A-Za-z0-9]{40}(?![A-Za-z0-9_-])/i,
 	// SendGrid API keys have the `SG.` prefix and exactly 66 URL-safe characters.
 	/(?<![A-Za-z0-9_])SG\.[A-Za-z0-9=_.-]{66}(?![A-Za-z0-9=_.-])/i,
+	// Brevo (formerly Sendinblue) API keys use a 64-hex body and a 16-character suffix.
+	/(?<![A-Za-z0-9_])xkeysib-[a-f0-9]{64}-[a-z0-9]{16}(?![A-Za-z0-9_-])/i,
 	// Twilio API keys use `SK` followed by exactly 32 hexadecimal characters.
 	/(?<![A-Za-z0-9_])SK[a-f0-9]{32}(?![A-Za-z0-9_-])/i,
 	/nvapi-[A-Za-z0-9_-]{32,}/,
