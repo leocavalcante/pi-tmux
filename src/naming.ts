@@ -189,13 +189,17 @@ function hasBasicAuthorizationCredential(value: string): boolean {
 }
 
 function hasLabeledCredentialBlock(value: string): boolean {
-	const match = LABELED_CREDENTIAL_BLOCK_PATTERN.exec(value);
-	if (!match) return false;
-	const label = match[1].replace(/[-_\s]/gu, "").toLowerCase();
-	const credential = match[2].replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
-	if (credential.length >= 20) return true;
-	return (label === "password" || label === "passphrase")
-		&& LABELED_PASSWORD_PATTERN.test(`password=${credential}`);
+	const pattern = new RegExp(
+		LABELED_CREDENTIAL_BLOCK_PATTERN.source, `${LABELED_CREDENTIAL_BLOCK_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		const label = match[1].replace(/[-_\s]/gu, "").toLowerCase();
+		const credential = match[2].replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
+		if (credential.length >= 20) return true;
+		if ((label === "password" || label === "passphrase")
+			&& LABELED_PASSWORD_PATTERN.test(`password=${credential}`)) return true;
+	}
+	return false;
 }
 
 function hasLabeledCredential(value: string): boolean {
