@@ -1586,6 +1586,30 @@ test("naming context does not read text from history older than its retained win
 	expect(readDiscardedContent).toBe(false);
 });
 
+test("naming context bounds leading-whitespace scans", () => {
+	const context = buildNamingContext([{
+		role: "user",
+		content: " ".repeat(10_000) + "hidden task",
+	}] as any, "continue");
+
+	expect(context).toBe("user: continue");
+});
+
+test("naming context stops after its content-block scan budget", () => {
+	let readExcessBlock = false;
+	const excess = {} as any;
+	Object.defineProperty(excess, "type", {
+		get() {
+			readExcessBlock = true;
+			throw new Error("Content blocks beyond the scan budget should not be read");
+		},
+	});
+	const content = [...Array.from({ length: 128 }, () => ({ type: "image" })), excess];
+
+	expect(buildNamingContext([{ role: "user", content }] as any)).toBe("");
+	expect(readExcessBlock).toBe(false);
+});
+
 test("naming context stops reading text after its per-entry bound", () => {
 	let readUnneededText = false;
 	const laterBlock = { type: "text" } as any;
