@@ -1074,6 +1074,46 @@ test("rejects phone-shaped output only when a phone label is present", async () 
 	}
 });
 
+test("rejects Luhn-valid payment-card-shaped output only with an explicit card label", async () => {
+	const labeledNumbers = [
+		"Card Number: 0000 0000 0000 0000",
+		"Credit Card=0000000000000000",
+		"debit_card_number: 0000-0000-0000-0000",
+		"Payment Card No: 0000 0000 0000 0000",
+		"cc number=0000000000000000",
+		"CCN: 0000000000000000",
+		"CCN: 0000000000000",
+		"CCN: 0000000000000000000",
+		"Card Number: ００００-００００-００００-００００",
+		"Card Number:\u200b 0000-0000-0000-0000",
+		"Card Number: 0000-0000-0000-\u200b0000",
+	];
+	for (const output of labeledNumbers) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(output);
+	}
+
+	const fragments = ["Card Number: 0000-0000-", "0000-0000"];
+	const splitResponse = {
+		...response(""),
+		content: fragments.map((text, index) => ({
+			type: "text",
+			text,
+			textSignature: JSON.stringify({ v: 1, id: `card-${index}`, phase: "final_answer" }),
+		})),
+	};
+	const split = fixture([Promise.resolve(splitResponse)]);
+	split.input("Name a task");
+	await settle();
+	expect(split.state.title).toBe("existing task");
+	expect(split.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+});
+
 test.each([
 	["short suffix", ["r8_", "P".repeat(36)].join("")],
 	["long suffix", ["r8_", "Q".repeat(38)].join("")],
@@ -1168,6 +1208,12 @@ test("ordinary security-themed and hyphenated task titles without credential val
 		["headphone: 0000000", "headphone 0000000"],
 		["phone: 000-000", "phone 000-000"],
 		["phone parsing", "phone parsing"],
+		["credit card tests", "credit card tests"],
+		["credit card: placeholder", "credit card placeholder"],
+		["0000 0000 0000 0000", "0000 0000 0000 0000"],
+		["ccn: 0000000000001", "ccn 0000000000001"],
+		["card number: 000000000000", "card number 000000000000"],
+		["ccn: 00000000000000000000", "ccn 00000000000000000000"],
 		["replicate api tests", "replicate api tests"],
 		["r8 token setup", "r8 token setup"],
 		["fireworks api keys", "fireworks api keys"],

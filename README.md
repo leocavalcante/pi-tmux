@@ -329,8 +329,9 @@ The model is instructed not to include secrets or personal information in
 titles. Before applying a response, the extension checks raw and
 compatibility-normalized output for several recognizable credential formats,
 conventional email addresses, explicitly labeled U.S. SSN-shaped values,
-phone-labeled values with 7–15 digits, and long opaque values assigned to
-common credential labels. It also checks a view
+phone-labeled values with 7–15 digits, Luhn-valid payment-card-shaped numbers
+with explicit card labels, and long opaque values assigned to common credential
+labels. It also checks a view
 with whitespace, control, and format characters removed, which catches some
 obfuscated values.
 Rejected responses are not included in warnings. These limited checks are

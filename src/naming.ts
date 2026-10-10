@@ -47,6 +47,7 @@ const BEARER_TOKEN_PATTERN = /Bearer\s+([A-Za-z0-9._~+/=-](?:\s*[A-Za-z0-9._~+/=
 const US_SSN_PATTERN = /(?<![A-Za-z0-9])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?\d{3}[-\s]?\d{2}[-\s]?\d{4}(?![A-Za-z0-9_])/i;
 // Require a phone-related label and a phone-number-shaped value of 7–15 digits.
 const LABELED_PHONE_PATTERN = /(?<![A-Za-z0-9])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?number)?\s*["']?\s*[:=]\s*["']?[\s(]*\+?\d(?:[ .()-]?\d){6,14}(?![A-Za-z0-9_])/i;
+const LABELED_PAYMENT_CARD_PATTERN = /(?<![A-Za-z0-9])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no))?|card(?:[-_\s]?(?:number|no))?|cc[-_\s]?(?:number|no)|ccn)\s*["']?\s*[:=]\s*["']?(\d(?:[ .()-]?\d){12,18})(?![A-Za-z0-9_])/i;
 // Require an explicit assignment and a long token-like value; don't compact ordinary spaces.
 const LABELED_CREDENTIAL_PATTERN = /(?:api[-_\s]?key|access[-_\s]?token|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|secret(?:[-_\s]?key)?|passphrase|password|credential|token)\s*["']?\s*[:=]\s*["']?[A-Za-z0-9._~+/=-]{20,}/i;
 const CREDENTIAL_LIKE_PATTERNS = [
@@ -85,6 +86,26 @@ const SEPARATOR_TOLERANT_PATTERNS = [
 	EMAIL_ADDRESS_PATTERN,
 ].map((pattern) => new RegExp(`(?<![A-Za-z0-9])(?:${pattern.source})`, pattern.flags));
 
+function hasLabeledPaymentCard(value: string): boolean {
+	const pattern = new RegExp(LABELED_PAYMENT_CARD_PATTERN.source, `${LABELED_PAYMENT_CARD_PATTERN.flags}g`);
+	for (const match of value.matchAll(pattern)) {
+		const digits = match[1].replace(/\D/gu, "");
+		let sum = 0;
+		let doubleDigit = false;
+		for (let index = digits.length - 1; index >= 0; index--) {
+			let digit = digits.charCodeAt(index) - 48;
+			if (doubleDigit) {
+				digit *= 2;
+				if (digit > 9) digit -= 9;
+			}
+			sum += digit;
+			doubleDigit = !doubleDigit;
+		}
+		if (sum % 10 === 0) return true;
+	}
+	return false;
+}
+
 function hasBearerToken(value: string): boolean {
 	const pattern = new RegExp(BEARER_TOKEN_PATTERN.source, `${BEARER_TOKEN_PATTERN.flags}g`);
 	for (const match of value.matchAll(pattern)) {
@@ -104,9 +125,12 @@ function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 			|| hasBearerToken(value) || US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value)
-			|| EMAIL_ADDRESS_PATTERN.test(value);
-	const hasPatternWithSeparatorsRemoved = (value: string) =>
-		SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "")));
+			|| hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
+	const hasPatternWithSeparatorsRemoved = (value: string) => {
+		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
+		return SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
+			|| hasLabeledPaymentCard(compacted);
+	};
 	const hasLabeledCredential = (value: string) => LABELED_CREDENTIAL_PATTERN.test(value)
 		|| LABELED_CREDENTIAL_PATTERN.test(value.replace(/[\p{Cc}\p{Cf}]+/gu, ""));
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
