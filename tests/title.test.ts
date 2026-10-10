@@ -973,6 +973,13 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the configuration ${shortPassword}`, shortPassword);
 	const passwordBlock = `password: |-\n  ${"P".repeat(12)}`;
 	await suppressed(fixture(), `Review the configuration ${passwordBlock}`, passwordBlock);
+	const placeholderThenSecretBlocks = [
+		"password: |-\n  example",
+		`token: >-\n  ${"T".repeat(24)}`,
+	].join("\n");
+	await suppressed(
+		fixture(), `Review the configuration ${placeholderThenSecretBlocks}`, placeholderThenSecretBlocks,
+	);
 	const awsSecretAccessKey = `AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`;
 	await suppressed(fixture(), `Review the deployment config ${awsSecretAccessKey}`, awsSecretAccessKey);
 	const awsBlockSecretAccessKey = `AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`;
@@ -1144,6 +1151,10 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const outputs = [
 		`password=${"S".repeat(12)}`,
 		`password: |-\n  ${"P".repeat(12)}`,
+		[
+			"password: |-\n  example",
+			`token: >-\n  ${"T".repeat(24)}`,
+		].join("\n"),
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
 		`AccountKey=${"A".repeat(86)}==`,
@@ -3436,6 +3447,10 @@ test("manual titles reject sensitive text before normalization without disclosin
 		basicAuthorizationHeader("Proxy-Authorization", "p:w"),
 		`https://storage.example.test/blob?sv=2023-11-03&sig=${"A".repeat(43)}=`,
 		`password: |-\n  ${"P".repeat(12)}`,
+		[
+			"password: |-\n  example",
+			`token: >-\n  ${"T".repeat(24)}`,
+		].join("\n"),
 		`password=${"P".repeat(12)}`,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		`ghp_${"C".repeat(10)}\u200b${"C".repeat(10)}`,
