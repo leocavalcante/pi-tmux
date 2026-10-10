@@ -981,6 +981,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Sentry organization access ${sentryOrgToken}`, sentryOrgToken);
 	const telegramBotToken = `123456789:A${"a".repeat(34)}`;
 	await suppressed(fixture(), `Test the handler with generated identifier ${telegramBotToken}`, telegramBotToken);
+	const brevoApiToken = `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}`;
+	await suppressed(fixture(), `Review the mail integration with ${brevoApiToken}`, brevoApiToken);
 	const labeledCredential = `client_secret=${"C".repeat(24)}`;
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 	const shortPassword = `password=${"S".repeat(12)}`;
@@ -1115,6 +1117,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithTelegramToken = fixture();
 	historyWithTelegramToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated identifier: ${telegramBotToken}` }] });
 	await suppressed(historyWithTelegramToken, "Continue the task", telegramBotToken);
+	const historyWithBrevoToken = fixture();
+	historyWithBrevoToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Mail integration key: ${brevoApiToken}` }] });
+	await suppressed(historyWithBrevoToken, "Continue the task", brevoApiToken);
 	const historyWithEmail = fixture();
 	historyWithEmail.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous contact: ${emailAddress}` }] });
 	await suppressed(historyWithEmail, "Continue the task", emailAddress);
@@ -1758,6 +1763,55 @@ test("rejects Vault service and batch tokens without mistaking near-misses for t
 	expect(shortName.requests).toHaveLength(1);
 	expect(shortName.state.title).toBe("vault api setup");
 	expect(shortName.warnings).toEqual([]);
+});
+
+test("rejects Brevo API tokens without mistaking near-misses for tokens", async () => {
+	const token = `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}`;
+	const outputs = [
+		token,
+		token.toUpperCase(),
+		`configure-${token}`,
+		token.replace("xkeysib-", "xkeysib\u200b-"),
+		`${token.slice(0, 40)}\u200b${token.slice(40)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const shortName = fixture([Promise.resolve(response("brevo mail setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("brevo mail setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = [
+		`xkeysib-${"a".repeat(63)}-${"B".repeat(16)}`,
+		`xkeysib-${"a".repeat(65)}-${"B".repeat(16)}`,
+		`xkeysib-${"g".repeat(64)}-${"B".repeat(16)}`,
+		`xkeysib-${"a".repeat(64)}-${"B".repeat(15)}`,
+		`xkeysib-${"a".repeat(64)}-${"B".repeat(17)}`,
+		`xkeysix-${"a".repeat(64)}-${"B".repeat(16)}`,
+		`x${token}`,
+		`_${token}`,
+		`${token}x`,
+		`${token}_x`,
+		`${token}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("brevo mail tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("brevo mail tests");
+		expect(f.warnings).toEqual([]);
+	}
 });
 
 test("rejects SendGrid API keys without mistaking near-miss strings for keys", async () => {
