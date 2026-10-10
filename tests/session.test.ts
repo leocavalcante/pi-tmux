@@ -784,23 +784,25 @@ test.skipIf(!hasTmux).each(tmuxEscapedSessionNames)(
 			const initialName = sessionName();
 			expect(initialName).toContain(expectedText);
 			if (hasSessionFormat) expect(initialName).toContain("#{session_id}");
+			// tmux 3.4 escapes `$B` in formatted names; 3.7 returns it literally.
+			const escapedSessionName = initialName.includes("\\");
 			if (hasDollar) {
 				expect(name).not.toContain("\\");
-				expect(initialName).toMatch(/\\+\$/);
-			} else expect(initialName).toContain("\\");
+				expect(initialName).toContain("$");
+			} else expect(escapedSessionName).toBe(true);
 
 			await emit("session_start");
 			expect(sessionName()).toBe(initialName);
 			expect(windowName()).toBe("initial");
 			await emit("agent_settled");
-			expect(sessionName()).toBe(initialName);
+			expect(sessionName()).toBe(escapedSessionName ? initialName : `* ${initialName}`);
 			expect(windowName()).toBe("* initial");
 			await emit("agent_start");
 			expect(sessionName()).toBe(initialName);
 			expect(windowName()).toBe("initial");
-			expect(warnings).toEqual([
+			expect(warnings).toEqual(escapedSessionName ? [
 				"A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.",
-			]);
+			] : []);
 		} finally {
 			if (originalPane === undefined) delete process.env.TMUX_PANE;
 			else process.env.TMUX_PANE = originalPane;
