@@ -92,7 +92,11 @@ export function createController(tmux: RunTmux) {
 	const warnOnce = (ctx: ExtensionContext, message: string) => {
 		if (warned) return;
 		warned = true;
-		ctx.ui.notify(message, "warning");
+		try {
+			ctx.ui.notify(message, "warning");
+		} catch {
+			// A disposed UI must not reject the serialized tmux update queue.
+		}
 	};
 
 	const trackedSessions = new Set<string>();
