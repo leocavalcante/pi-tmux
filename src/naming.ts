@@ -44,6 +44,8 @@ export class InvalidNamingTitleError extends Error {
 // text because title cleanup can lowercase or clip recognizable tokens. Raw patterns
 // match substrings to catch values adjacent to ASCII word characters.
 const BEARER_TOKEN_PATTERN = /Bearer\s+([A-Za-z0-9._~+/=-](?:\s*[A-Za-z0-9._~+/=-]){15,})/i;
+// Require an explicit assignment and a long token-like value; don't compact ordinary spaces.
+const LABELED_CREDENTIAL_PATTERN = /(?:api[-_\s]?key|access[-_\s]?token|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|secret(?:[-_\s]?key)?|passphrase|password|credential|token)\s*["']?\s*[:=]\s*["']?[A-Za-z0-9._~+/=-]{20,}/i;
 const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,
@@ -97,9 +99,12 @@ function hasSensitiveOutput(text: string): boolean {
 			|| hasBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) =>
 		SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "")));
+	const hasLabeledCredential = (value: string) => LABELED_CREDENTIAL_PATTERN.test(value)
+		|| LABELED_CREDENTIAL_PATTERN.test(value.replace(/[\p{Cc}\p{Cf}]+/gu, ""));
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
-	return hasPattern(text) || hasPatternWithSeparatorsRemoved(text)
+	return hasPattern(text) || hasPatternWithSeparatorsRemoved(text) || hasLabeledCredential(text)
 		|| hasPattern(compatibilityNormalized) || hasPatternWithSeparatorsRemoved(compatibilityNormalized)
+		|| hasLabeledCredential(compatibilityNormalized)
 		|| hasPattern(compatibilityNormalized.toLowerCase())
 		|| hasPatternWithSeparatorsRemoved(compatibilityNormalized.toLowerCase());
 }
