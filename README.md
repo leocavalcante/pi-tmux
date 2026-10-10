@@ -146,12 +146,13 @@ Run `/tmux-title status` for a read-only snapshot of the title mode, naming
 configuration, pending naming work, and local waiting state. It shows pane,
 window, and session IDs, their waiting flags, and queued former-location repairs.
 
-Status makes no AI requests, collects no dialogue, and does not change titles,
-flags, pins, or pending naming work. It omits names, model-setting values, and
-provider errors. `AI naming: configured` means the setting is valid, not that
-the model or its credentials are available. If the tmux server changes while
-Pi is running, status reports that writes have stopped; restart Pi to reconnect
-safely because the inherited pane ID may have been reused. Snapshot values may
+Status makes no AI requests, collects no dialogue, and never writes titles or
+flags to tmux. It omits names, model-setting values, and provider errors.
+`AI naming: configured` means the setting is valid, not that the model or its
+credentials are available. Status checks the tmux server identity in its
+snapshot. If it detects a restart, it fails closed locally, cancelling naming
+and discarding state tied to the old server; restart Pi to reconnect safely
+because the inherited pane ID may have been reused. Snapshot values may
 change while Pi is working; run the command again for a fresh reading.
 
 ### Synchronize without AI

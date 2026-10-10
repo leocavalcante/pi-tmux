@@ -29,7 +29,7 @@ import {
 	SESSION_TITLE_MARKED_OPTION,
 	SESSION_TITLE_MARKED_VALUE_FORMAT,
 	SHARED_WINDOW_TITLE_FORMAT,
-	STATUS_INFO_FORMAT,
+	STATUS_SNAPSHOT_FORMAT,
 	targetDisappeared,
 	WAITING_OPTION,
 	WINDOW_BASE_NAME_OPTION,
@@ -89,6 +89,22 @@ export function createController(tmux: RunTmux) {
 		candidateTitle = undefined;
 	};
 
+	const stopAfterServerChange = () => {
+		if (serverIdentityChanged) return;
+		serverIdentityChanged = true;
+		formerWindows.clear();
+		formerSessions.clear();
+		trackedSessions.clear();
+		lastLocation = undefined;
+		baseTitle = undefined;
+		manualTitle = false;
+		lastNamingContext = undefined;
+		cancel();
+		titleRevision++;
+		titleLifetime.abort();
+		titleLifetime = new AbortController();
+	};
+
 	const getPane = (ctx: ExtensionContext) => {
 		const pane = process.env.TMUX_PANE;
 		return ctx.mode === "tui" && pane && /^%\d+$/.test(pane) ? pane : undefined;
@@ -105,18 +121,7 @@ export function createController(tmux: RunTmux) {
 		// Once the server changes, the inherited TMUX_PANE could name an unrelated
 		// reused pane. Discard cached IDs and stop writes rather than claim ownership.
 		if (lastLocation?.server && location.server && lastLocation.server !== location.server) {
-			serverIdentityChanged = true;
-			formerWindows.clear();
-			formerSessions.clear();
-			trackedSessions.clear();
-			lastLocation = undefined;
-			baseTitle = undefined;
-			manualTitle = false;
-			lastNamingContext = undefined;
-			cancel();
-			titleRevision++;
-			titleLifetime.abort();
-			titleLifetime = new AbortController();
+			stopAfterServerChange();
 			return;
 		}
 		if (location.sessionMetadataAvailable) trackedSessions.add(location.session);
@@ -457,12 +462,24 @@ export function createController(tmux: RunTmux) {
 	const status = async (ctx: ExtensionContext, pane: string) => {
 		const signal = titleLifetime.signal;
 		try {
-			const info = await tmux(["display-message", "-p", "-t", pane, STATUS_INFO_FORMAT], signal);
+			const info = await tmux(["display-message", "-p", "-t", pane, STATUS_SNAPSHOT_FORMAT], signal);
 			if (signal.aborted) return;
 			const fields = info.split("\t");
-			const [session, window, paneWaiting, windowWaiting, sessionWaiting] = fields;
-			if (fields.length !== 5 || !/^\$\d+$/.test(session) || !/^@\d+$/.test(window)
-				|| !fields.slice(2).every((value) => /^[01]$/.test(value))) throw new Error("Invalid tmux status");
+			const hasServerIdentity = fields.length === 6;
+			if (!hasServerIdentity && fields.length !== 5) throw new Error("Invalid tmux status");
+			const offset = hasServerIdentity ? 1 : 0;
+			const server = hasServerIdentity ? fields[0]! : undefined;
+			const session = fields[offset]!;
+			const window = fields[offset + 1]!;
+			const paneWaiting = fields[offset + 2]!;
+			const windowWaiting = fields[offset + 3]!;
+			const sessionWaiting = fields[offset + 4]!;
+			if ((server !== undefined && server !== "" && !/^\d+$/.test(server))
+				|| !/^\$\d+$/.test(session) || !/^@\d+$/.test(window)
+				|| fields.slice(hasServerIdentity ? 3 : 2).some((value) => !/^[01]$/.test(value))) {
+				throw new Error("Invalid tmux status");
+			}
+			if (server && lastLocation?.server && server !== lastLocation.server) stopAfterServerChange();
 			const yesNo = (value: string) => value === "1" ? "yes" : "no";
 			notifySafely(ctx, [
 				"tmux title status",

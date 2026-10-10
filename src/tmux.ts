@@ -65,6 +65,8 @@ export const WINDOW_BASE_NAME_HAS_LITERAL_PREFIX_FORMAT =
 export const WINDOW_INFO_FORMAT = `#{session_id}:1:#{pid}\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
 // Diagnostics omit names and dialogue, reading all flags in one server snapshot.
 export const STATUS_INFO_FORMAT = `#{session_id}\t#{window_id}\t${WAITING_FLAG_FORMAT}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{?${SESSION_WAITING_FORMAT},1,0}`;
+// Keep the public status format stable while including identity in the controller's private snapshot.
+export const STATUS_SNAPSHOT_FORMAT = `#{pid}\t${STATUS_INFO_FORMAT}`;
 const CURRENT_TASK_FORMAT = "#{s/^\\* //:window_name}";
 export const SHARED_TASK_TITLE_FORMAT = `#{?${WINDOW_WAITING_FORMAT},${READY_PREFIX}#{=22:${CURRENT_TASK_FORMAT}},${CURRENT_TASK_FORMAT}}`;
 // Former-window and quit cleanup preserve the current name; unlike shared
