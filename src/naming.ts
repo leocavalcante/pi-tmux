@@ -48,7 +48,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	/(?:AKIA|ASIA)[0-9A-Z]{16}/,
 	/AIza[A-Za-z0-9_-]{30,}/,
-	/(?:sk|rk)-(?:proj-|ant-|svcacct-)[A-Za-z0-9_-]{16,}/i,
+	/(?:sk|rk)-(?:proj-|ant-|svcacct-|or-v1-)[A-Za-z0-9_-]{16,}/i,
 	/(?:sk|rk)-[A-Za-z0-9]{16,}(?:[-_][A-Za-z0-9_-]+)*/i,
 	/(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}/i,
 	/(?:xox[baprcds]|xapp)-[A-Za-z0-9-]{10,}/,
