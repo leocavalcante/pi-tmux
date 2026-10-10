@@ -25,7 +25,7 @@ export class UnsafeNamingOutputError extends Error {
 
 export class UnsafeNamingContextError extends Error {
 	constructor() {
-		super("Naming context looked like it contained a credential");
+		super("Naming context looked like it contained sensitive data");
 		this.name = "UnsafeNamingContextError";
 	}
 }
@@ -159,16 +159,17 @@ function hasBearerToken(value: string): boolean {
 	return false;
 }
 
-// Check only likely credentials before transmission; personal-data checks remain
-// output-only to avoid suppressing titles for ordinary dialogue that mentions people.
+// Check likely credentials and conventional email addresses before transmission.
+// Broader personal-data checks stay output-only to avoid suppressing titles for
+// ordinary dialogue that mentions people.
 export function hasSensitiveNamingContext(text: string): boolean {
-	const hasCredential = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
-		|| hasBearerToken(value) || LABELED_CREDENTIAL_PATTERN.test(value);
-	const hasCredentialWithSeparatorsRemoved = (value: string) =>
-		hasCredential(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, ""));
+	const hasSensitiveValue = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
+		|| hasBearerToken(value) || LABELED_CREDENTIAL_PATTERN.test(value) || EMAIL_ADDRESS_PATTERN.test(value);
+	const hasSensitiveValueWithSeparatorsRemoved = (value: string) =>
+		hasSensitiveValue(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, ""));
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	return [text, compatibilityNormalized, compatibilityNormalized.toLowerCase()]
-		.some((value) => hasCredential(value) || hasCredentialWithSeparatorsRemoved(value));
+		.some((value) => hasSensitiveValue(value) || hasSensitiveValueWithSeparatorsRemoved(value));
 }
 
 export function hasSensitiveOutput(text: string): boolean {
