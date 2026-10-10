@@ -1544,6 +1544,52 @@ test("screens Azure DevOps PAT environment settings without mistaking benign lab
 	}
 });
 
+test("rejects current-format Azure DevOps PATs without mistaking near-misses for tokens", async () => {
+	const tokenFor = (prefix = "a".repeat(75), marker = "AZDO", suffix = "B".repeat(5)) => `${prefix}${marker}${suffix}`;
+	const token = tokenFor();
+	const obfuscatedToken = `${"a".repeat(75)}AZ\u200bDO${"B".repeat(5)}`;
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const sensitiveToken of [token, obfuscatedToken]) {
+		expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
+		expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review token ${sensitiveToken}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(token);
+
+		const output = fixture([Promise.resolve(response(sensitiveToken))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(token);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("azure devops tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("azure devops tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	for (const nearMiss of [
+		tokenFor("a".repeat(74)),
+		tokenFor("a".repeat(75), "AZDX"),
+		`${token}B`,
+		`x${token}`,
+		`_${token}`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("rejects labeled Datadog API keys without mistaking near-misses for keys", async () => {
 	const keyValue = "A1b2".repeat(10);
 	const outputs = [
