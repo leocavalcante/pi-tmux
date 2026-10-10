@@ -3,6 +3,7 @@ export const READY_PREFIX = "* ";
 
 // ASCII keeps the character cap equal to the status bar's display width.
 export function cleanTitle(text: string, maxLength = MAX_TITLE_LENGTH): string {
+	if (maxLength <= 0) return "";
 	const title = text
 		.normalize("NFKD")
 		.replace(/\p{M}/gu, "")
