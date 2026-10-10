@@ -330,12 +330,13 @@ can still mention details from tool output. Before model lookup or provider
 transport, the bounded context is checked locally for recognizable credential
 formats (including labeled Datadog API keys and Mailgun private API tokens,
 standalone Artifactory API and reference tokens, Fly.io token formats,
-Dynatrace API tokens, URL user-info, Azure Shared Access Signature URLs, and
-Base64 Basic credentials in HTTP `Authorization` or `Proxy-Authorization`
-headers, including YAML block scalars with tags or anchors, conventional email
-addresses, explicitly labeled U.S. SSN- and phone-shaped values, Luhn-valid
-payment-card values with explicit card labels, and long values assigned to
-common credential labels (including AWS `AWS_SECRET_ACCESS_KEY`, Azure
+Dynatrace API tokens, Resend API keys, URL user-info, Azure Shared Access
+Signature URLs, and Base64 Basic credentials in HTTP `Authorization` or
+`Proxy-Authorization` headers, including YAML block scalars with tags or
+anchors, conventional email addresses, explicitly labeled U.S. SSN- and
+phone-shaped values, Luhn-valid payment-card values with explicit card labels,
+and long values assigned to common credential labels (including AWS
+`AWS_SECRET_ACCESS_KEY`, Azure
 `AccountKey`, WireGuard `PresharedKey`, and Kubernetes `client-key-data`),
 whether inline or as YAML block scalars with tags or anchors. Shorter
 non-placeholder password/passphrase assignments are also checked in either
@@ -357,12 +358,13 @@ titles. Before applying a response, the extension checks raw and
 compatibility-normalized output for several recognizable credential formats,
 including labeled Datadog API keys and Mailgun private API tokens, standalone
 Artifactory API and reference tokens, Fly.io token formats, Dynatrace API
-tokens, Azure Shared Access Signature URLs, and Base64 Basic credentials in
-HTTP `Authorization` or `Proxy-Authorization` headers, including YAML block
-scalars with tags or anchors, conventional email addresses, explicitly labeled
-U.S. SSN-shaped values, phone-labeled values with 7–15 digits, Luhn-valid
-payment-card-shaped numbers with explicit card labels, long opaque values
-assigned to common credential labels (including AWS `AWS_SECRET_ACCESS_KEY`,
+tokens, Resend API keys, Azure Shared Access Signature URLs, and Base64 Basic
+credentials in HTTP `Authorization` or `Proxy-Authorization` headers,
+including YAML block scalars with tags or anchors, conventional email
+addresses, explicitly labeled U.S. SSN-shaped values, phone-labeled values
+with 7–15 digits, Luhn-valid payment-card-shaped numbers with explicit card
+labels, long opaque values assigned to common credential labels (including
+AWS `AWS_SECRET_ACCESS_KEY`,
 Azure `AccountKey`, WireGuard `PresharedKey`, and Kubernetes `client-key-data`),
 whether inline or as YAML block scalars with tags or anchors. Shorter
 non-placeholder password/passphrase assignments are also checked in either
