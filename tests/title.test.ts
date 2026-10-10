@@ -633,6 +633,18 @@ test("empty or failed responses never become window names", async () => {
 	}
 });
 
+test("rejects excess naming response blocks before inspecting them", async () => {
+	const content = Array.from({ length: 129 }, () => ({ type: "text", text: "fix auth tests" }));
+	Object.defineProperty(content, 0, { get: () => { throw new Error("response blocks should not be inspected"); } });
+	const f = fixture([Promise.resolve({ ...response(""), content })]);
+	f.input("Name a task");
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(f.warnings).toEqual(["The naming model returned too many content blocks; the current title was kept."]);
+});
+
 test.each(["one block", "combined final blocks"])("bounds oversized selected model output from %s before joining it", async (shape) => {
 	const oversized = "x".repeat(64 * 1024 + 1);
 	const first = shape === "one block"

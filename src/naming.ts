@@ -5,8 +5,9 @@ export const MAX_PROMPT_LENGTH = 2_000;
 export const MAX_CONTEXT_LENGTH = 6_000;
 export const MAX_HISTORY_MESSAGES = 8;
 export const NAMING_REQUEST_TIMEOUT_MS = 15_000;
-// Providers can ignore maxTokens; keep response validation's extra string work bounded.
+// Providers can ignore maxTokens; bound response traversal and selected-text processing.
 const MAX_NAMING_OUTPUT_LENGTH = 64 * 1024;
+const MAX_NAMING_CONTENT_BLOCKS = 128;
 const MAX_TEXT_SIGNATURE_LENGTH = 4 * 1024;
 const MAX_HISTORY_TEXT_LENGTH = 1_000;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
@@ -25,6 +26,7 @@ export type InvalidNamingTitleReason =
 	| "no-final-answer"
 	| "multiple-lines"
 	| "empty"
+	| "too-many-blocks"
 	| "too-long"
 	| "too-many-words";
 
@@ -278,6 +280,9 @@ export async function requestNamingTitle(
 		if (signal.aborted || !isCurrent()) return;
 		if (response.stopReason === "length") throw new InvalidNamingTitleError("truncated");
 		if (response.stopReason !== "stop") throw new Error("Naming request failed");
+		if (response.content.length > MAX_NAMING_CONTENT_BLOCKS) {
+			throw new InvalidNamingTitleError("too-many-blocks");
+		}
 		let hasPhaseMetadata = false;
 		let lastTextBlock: string | undefined;
 		const finalAnswerBlocks: string[] = [];

@@ -186,8 +186,9 @@ Repeat the command to retry them.
 - If the provider supplies phase metadata, only `final_answer` blocks are
   considered. When metadata is present but no final block exists, output is
   rejected rather than falling back to the last text block; without phase
-  metadata, the last text block is used. Signatures over 4 Ki UTF-16 code units
-  are treated as unrecognized metadata. If a provider ignores the requested
+  metadata, the last text block is used. Responses with more than 128 content
+  blocks are rejected; signatures over 4 Ki UTF-16 code units are treated as
+  unrecognized metadata. If a provider ignores the requested
   96-token cap and selected output exceeds 64 Ki UTF-16 code units, it gets one
   correction attempt and is not applied as-is. Other overlong or over-worded
   first candidates also get one correction request. A still-overlong candidate
