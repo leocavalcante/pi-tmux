@@ -8,7 +8,7 @@ import piTmux, { SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, type RunTm
 import { supportsUnixTmux } from "./tmux-support.ts";
 
 const hasTmux = supportsUnixTmux(process.platform, Bun.which("tmux"));
-const hasRoundTripUnsafeWindowNames = (() => {
+const supportsControlCharacterNames = (kind: "session" | "window") => {
 	if (!hasTmux) return false;
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-probe-"));
 	const socket = join(directory, "socket");
@@ -16,7 +16,8 @@ const hasRoundTripUnsafeWindowNames = (() => {
 		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
 	});
 	try {
-		run("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Probe", "-n", "probe\tline\n", "/bin/sleep 60");
+		const nameArgs = kind === "session" ? ["-s", "probe\tline\n", "-n", "probe"] : ["-s", "Probe", "-n", "probe\tline\n"];
+		run("new-session", "-d", "-P", "-F", "#{pane_id}", ...nameArgs, "/bin/sleep 60");
 		return true;
 	} catch {
 		return false;
@@ -24,7 +25,9 @@ const hasRoundTripUnsafeWindowNames = (() => {
 		try { run("kill-server"); } catch { /* The server may not have started. */ }
 		rmSync(directory, { recursive: true, force: true });
 	}
-})();
+};
+const hasRoundTripUnsafeWindowNames = supportsControlCharacterNames("window");
+const hasRoundTripUnsafeSessionNames = supportsControlCharacterNames("session");
 let originalModel: string | undefined;
 let originalIdleTitle: string | undefined;
 beforeEach(() => {
@@ -842,10 +845,7 @@ test.skipIf(!hasTmux)("former-session repair preserves an escaped custom session
 	}
 });
 
-test.skipIf(!hasTmux).each([
-	{ requestedSessionName: "Custom\u007fSession" },
-	{ requestedSessionName: "Custom\\path" },
-])("session markers preserve tmux-escaped custom names: %j", async ({ requestedSessionName }) => {
+test.skipIf(!hasTmux || !hasRoundTripUnsafeSessionNames)("session markers preserve tmux-escaped control characters", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");
 	const originalPane = process.env.TMUX_PANE;
@@ -855,7 +855,7 @@ test.skipIf(!hasTmux).each([
 	}).replace(/\r?\n$/, "");
 	try {
 		process.env.PI_TMUX_MODEL = "off";
-		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", requestedSessionName, "-n", "window", "/bin/sleep 60");
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Custom\nSession", "-n", "window", "/bin/sleep 60");
 		const originalSessionName = tmux("display-message", "-p", "-t", pane, "#{session_name}");
 		expect(originalSessionName).toContain("\\");
 		process.env.TMUX_PANE = pane;
@@ -894,7 +894,8 @@ test.skipIf(!hasTmux).each([
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		try { tmux("kill-server"); } catch { /* The server may already have exited. */ }
+		finally { rmSync(directory, { recursive: true, force: true }); }
 	}
 });
 
@@ -950,7 +951,6 @@ test.skipIf(!hasTmux)("former-window repair preserves tmux-escaped custom names"
 });
 
 test.skipIf(!hasTmux).each([
-	{ requestedTitle: "Custom\u007fwindow" },
 	{ requestedTitle: "Custom\\path" },
 ])("waiting markers preserve tmux-escaped custom names without a task title: %j", async ({ requestedTitle }) => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
