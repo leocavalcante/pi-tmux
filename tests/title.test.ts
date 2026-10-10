@@ -971,6 +971,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the deployment config ${awsSecretAccessKey}`, awsSecretAccessKey);
 	const azureAccountKey = `AccountKey=${"A".repeat(86)}==`;
 	await suppressed(fixture(), `Review the storage connection ${azureAccountKey}`, azureAccountKey);
+	const wireGuardPresharedKey = `PresharedKey=${"A".repeat(43)}=`;
+	await suppressed(
+		fixture(), `Review the WireGuard configuration ${wireGuardPresharedKey}`, wireGuardPresharedKey,
+	);
 	const obfuscatedPassword = `passphrase=${"P".repeat(5)}\u200b${"P".repeat(5)}`;
 	await suppressed(fixture(), `Review the configuration ${obfuscatedPassword}`, obfuscatedPassword);
 
@@ -1047,7 +1051,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const placeholderCredentials = fixture([Promise.resolve(response("review docs"))]);
 	placeholderCredentials.input([
 		"Review docs with password=placeholder, passphrase=example, token: placeholder,",
-		"AWS_SECRET_ACCESS_KEY=example, and AccountKey=example",
+		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, and PresharedKey=example",
 	].join(" "));
 	await settle();
 	expect(placeholderCredentials.requests).toHaveLength(1);
@@ -1106,6 +1110,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`password=${"S".repeat(12)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AccountKey=${"A".repeat(86)}==`,
+		`PresharedKey=${"A".repeat(43)}=`,
 		azureSasUrl,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		["gh", "p_", "a".repeat(36)].join(""),
@@ -3381,6 +3386,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AccountKey=${"A".repeat(86)}==`,
+		`PresharedKey=${"A".repeat(43)}=`,
 		`https://storage.example.test/blob?sv=2023-11-03&sig=${"A".repeat(43)}=`,
 		`password=${"P".repeat(12)}`,
 		"postgres://test-user:example-only-password@db.example.test/app",
