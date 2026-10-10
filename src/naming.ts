@@ -67,6 +67,13 @@ const LABELED_CREDENTIAL_BLOCK_PATTERN = new RegExp(
 	`(?<![A-Za-z0-9_-])["']?(${LABELED_CREDENTIAL_LABEL_PATTERN.source})["']?[ \\t]*:[ \\t]*${YAML_BLOCK_SCALAR_PROPERTIES}[|>](?:[1-9][+-]?|[+-][1-9]?)?[ \\t]*(?:#[^\\r\\n]*)?\\r?\\n((?:(?:[ \\t]+[A-Za-z0-9._~+/_=-]+[ \\t]*|[ \\t]*)(?:\\r?\\n|$))+)`,
 	"i",
 );
+// Short passphrases may contain spaces or wrap across block-scalar lines.
+const LABELED_PASSWORD_BLOCK_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])["']?(?:password|passphrase)["']?[ \t]*:[ \t]*${YAML_BLOCK_SCALAR_PROPERTIES}[|>]`
+		+ String.raw`(?:[1-9][+-]?|[+-][1-9]?)?[ \t]*(?:#[^\r\n]*)?\r?\n`
+		+ String.raw`((?:(?:[ \t]+[^\r\n]*|[ \t]*)(?:\r?\n|$))+)`,
+	"i",
+);
 // Basic authorization values are base64 user-info, not provider-prefixed tokens.
 const BASIC_AUTHORIZATION_PATTERN = /(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
 // YAML block-scalar form of the same Authorization/Proxy-Authorization header.
@@ -78,7 +85,12 @@ const BASIC_AUTHORIZATION_BLOCK_PATTERN = new RegExp(
 );
 // Passwords are often shorter than API tokens. Catch non-placeholder values
 // from explicit password/passphrase assignments without broadening other labels.
-const LABELED_PASSWORD_PATTERN = /(?:passphrase|password)\s*["']?\s*[:=]\s*["']?(?!(?:placeholder|example|redacted|changeme|change[_-]?me|your[_-]?password)\b)[A-Za-z0-9._~+/=-]{8,}/i;
+const PASSWORD_PLACEHOLDER_LABELS = String.raw`placeholder|example|redacted|changeme|change[_\s-]?me|your[_\s-]?password`;
+const PASSWORD_PLACEHOLDER_PATTERN = new RegExp(String.raw`^(?:${PASSWORD_PLACEHOLDER_LABELS})\b`, "i");
+const LABELED_PASSWORD_PATTERN = new RegExp(
+	String.raw`(?:passphrase|password)\s*["']?\s*[:=]\s*["']?(?!(?:${PASSWORD_PLACEHOLDER_LABELS})\b)[A-Za-z0-9._~+/=-]{8,}`,
+	"i",
+);
 // Azure Storage SAS URLs require both a dated version field and a long signature.
 const AZURE_SAS_PATTERN = /(?<![A-Za-z0-9_])(?:sv=\d{4}-\d{2}-\d{2}(?=[^#\s]{0,512}&sig=[A-Za-z0-9%+/_=-]{20,}(?:&|#|\s|$))|sig=[A-Za-z0-9%+/_=-]{20,}(?=&)(?=[^#\s]{0,512}&sv=\d{4}-\d{2}-\d{2}))/i;
 const CREDENTIAL_LIKE_PATTERNS = [
@@ -217,11 +229,21 @@ function hasLabeledCredentialBlock(value: string): boolean {
 		LABELED_CREDENTIAL_BLOCK_PATTERN.source, `${LABELED_CREDENTIAL_BLOCK_PATTERN.flags}g`,
 	);
 	for (const match of value.matchAll(pattern)) {
-		const label = match[1].replace(/[-_\s]/gu, "").toLowerCase();
 		const credential = match[2].replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
 		if (credential.length >= 20) return true;
-		if ((label === "password" || label === "passphrase")
-			&& LABELED_PASSWORD_PATTERN.test(`password=${credential}`)) return true;
+	}
+	return false;
+}
+
+function hasLabeledPasswordBlock(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_PASSWORD_BLOCK_PATTERN.source, `${LABELED_PASSWORD_BLOCK_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		const scalar = match[1].replace(/[\s\p{Cc}\p{Cf}]+/gu, " ").trim();
+		if (PASSWORD_PLACEHOLDER_PATTERN.test(scalar)) continue;
+		const credential = scalar.replace(/\s/gu, "");
+		if (LABELED_PASSWORD_PATTERN.test(`password=${credential}`)) return true;
 	}
 	return false;
 }
@@ -229,9 +251,11 @@ function hasLabeledCredentialBlock(value: string): boolean {
 function hasLabeledCredential(value: string): boolean {
 	const withoutControls = value.replace(/[\p{Cc}\p{Cf}]+/gu, "");
 	return hasBasicAuthorizationCredential(value) || hasBasicAuthorizationCredentialBlock(value)
-		|| LABELED_CREDENTIAL_PATTERN.test(value) || LABELED_PASSWORD_PATTERN.test(value) || hasLabeledCredentialBlock(value)
+		|| LABELED_CREDENTIAL_PATTERN.test(value) || LABELED_PASSWORD_PATTERN.test(value)
+		|| hasLabeledCredentialBlock(value) || hasLabeledPasswordBlock(value)
 		|| hasBasicAuthorizationCredential(withoutControls) || LABELED_CREDENTIAL_PATTERN.test(withoutControls)
-		|| LABELED_PASSWORD_PATTERN.test(withoutControls) || hasLabeledCredentialBlock(withoutControls);
+		|| LABELED_PASSWORD_PATTERN.test(withoutControls) || hasLabeledCredentialBlock(withoutControls)
+		|| hasLabeledPasswordBlock(withoutControls);
 }
 
 // Check credentials and high-confidence personal-data formats before transmission.
