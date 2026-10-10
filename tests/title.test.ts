@@ -1052,6 +1052,28 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
 });
 
+test("rejects phone-shaped output only when a phone label is present", async () => {
+	const labeledNumbers = [
+		"Phone: 000-000-0000",
+		"Mobile Number=0000000000",
+		"cellular_number: (000) 000-0000",
+		"Telephone: +1 (000) 000-0000",
+		"phone: 0000000",
+		"Phone: ０００-０００-００００",
+		"Phone: 000-\u200b000-0000",
+		"Phone:\u200b 000-000-0000",
+	];
+	for (const output of labeledNumbers) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(output);
+	}
+});
+
 test.each([
 	["short suffix", ["r8_", "P".repeat(36)].join("")],
 	["long suffix", ["r8_", "Q".repeat(38)].join("")],
@@ -1141,6 +1163,11 @@ test("ordinary security-themed and hyphenated task titles without credential val
 		["social security format", "social security format"],
 		["ssn: placeholder", "ssn placeholder"],
 		["ticket 000-00-0000", "ticket 000-00-0000"],
+		["ticket 000-000-0000", "ticket 000-000-0000"],
+		["000-000-0000", "000-000-0000"],
+		["headphone: 0000000", "headphone 0000000"],
+		["phone: 000-000", "phone 000-000"],
+		["phone parsing", "phone parsing"],
 		["replicate api tests", "replicate api tests"],
 		["r8 token setup", "r8 token setup"],
 		["fireworks api keys", "fireworks api keys"],
