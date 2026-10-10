@@ -973,6 +973,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the configuration ${shortPassword}`, shortPassword);
 	const passwordBlock = `password: |-\n  ${"P".repeat(12)}`;
 	await suppressed(fixture(), `Review the configuration ${passwordBlock}`, passwordBlock);
+	const multiwordPasswordBlock = `password: |-\n  secret phrase`;
+	const foldedPassphraseBlock = `passphrase: &words >-\n  moonlight\n  meadow`;
+	await suppressed(fixture(), `Review the configuration ${multiwordPasswordBlock}`, multiwordPasswordBlock);
+	await suppressed(fixture(), `Review the configuration ${foldedPassphraseBlock}`, foldedPassphraseBlock);
 	const taggedPasswordBlock = `password: !!str |-\n  ${"P".repeat(12)}`;
 	const anchoredTokenBlock = `token: &task-token >-\n  ${"T".repeat(24)}`;
 	await suppressed(fixture(), `Review the configuration ${taggedPasswordBlock}`, taggedPasswordBlock);
@@ -1109,6 +1113,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		"\nProxy-Authorization: &proxy-auth >-\n  Basic example\n",
 		"\nclient-key-data: |-\n  example\n",
 		"\npassword: |-\n  example\n",
+		"\npassword: |-\n  example value\n",
+		"\npassphrase: &phrase >-\n  your password\n",
 		"\ntoken: |-\n  example\n",
 		`Authorization: Basic ${"A".repeat(20)}`,
 	].join(" "));
@@ -1174,6 +1180,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const outputs = [
 		`password=${"S".repeat(12)}`,
 		`password: |-\n  ${"P".repeat(12)}`,
+		`password: |-\n  secret phrase`,
+		`passphrase: &words >-\n  moonlight\n  meadow`,
 		`password: !!str |-\n  ${"P".repeat(12)}`,
 		`token: &task-token >-\n  ${"T".repeat(24)}`,
 		`Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
@@ -3476,6 +3484,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 		basicAuthorizationHeader("Proxy-Authorization", "p:w"),
 		`https://storage.example.test/blob?sv=2023-11-03&sig=${"A".repeat(43)}=`,
 		`password: |-\n  ${"P".repeat(12)}`,
+		`password: |-\n  secret phrase`,
+		`passphrase: &words >-\n  moonlight\n  meadow`,
 		`password: !!str |-\n  ${"P".repeat(12)}`,
 		`token: &task-token >-\n  ${"T".repeat(24)}`,
 		`Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
