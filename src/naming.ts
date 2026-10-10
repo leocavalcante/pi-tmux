@@ -76,8 +76,10 @@ const LABELED_PASSWORD_BLOCK_PATTERN = new RegExp(
 );
 // Basic authorization values are base64 user-info, not provider-prefixed tokens.
 const BASIC_AUTHORIZATION_PATTERN = /(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
-// npm .npmrc `_auth` settings also contain a base64 username:password pair.
+// npm .npmrc `_auth` settings contain a base64 username:password pair.
 const NPM_AUTH_PATTERN = /(?<![A-Za-z0-9_-])_auth\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
+// Legacy npm .npmrc `_password` settings store a base64-encoded password.
+const NPM_PASSWORD_PATTERN = /(?<![A-Za-z0-9_-])_password\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{2,}={0,2})(?![A-Za-z0-9+/=])/i;
 // YAML block-scalar form of the same Authorization/Proxy-Authorization header.
 const BASIC_AUTHORIZATION_BLOCK_PATTERN = new RegExp(
 	String.raw`(?<![A-Za-z0-9_-])["']?(?:proxy[-_\s]?)?authorization["']?[ \t]*:[ \t]*${YAML_BLOCK_SCALAR_PROPERTIES}[|>]`
@@ -312,6 +314,33 @@ function hasNpmAuthCredential(value: string): boolean {
 	return false;
 }
 
+function decodeNpmPassword(encoded: string): string | undefined {
+	const decoded = Buffer.from(encoded, "base64");
+	const canonical = decoded.toString("base64");
+	if (encoded !== canonical && encoded !== canonical.replace(/=+$/u, "")) return;
+	return decoded.length > 0 ? decoded.toString("utf8") : undefined;
+}
+
+// The generic password-label scanner sees Base64 placeholders as opaque values.
+function replaceNpmPasswordPlaceholders(value: string): string {
+	const pattern = new RegExp(NPM_PASSWORD_PATTERN.source, `${NPM_PASSWORD_PATTERN.flags}g`);
+	return value.replace(pattern, (setting, encoded: string) => {
+		const password = decodeNpmPassword(encoded);
+		return password !== undefined && PASSWORD_PLACEHOLDER_PATTERN.test(password)
+			? setting.replace(encoded, "placeholder")
+			: setting;
+	});
+}
+
+function hasNpmPasswordCredential(value: string): boolean {
+	const pattern = new RegExp(NPM_PASSWORD_PATTERN.source, `${NPM_PASSWORD_PATTERN.flags}g`);
+	for (const match of value.matchAll(pattern)) {
+		const password = decodeNpmPassword(match[1]);
+		if (password !== undefined && !PASSWORD_PLACEHOLDER_PATTERN.test(password)) return true;
+	}
+	return false;
+}
+
 function hasBasicAuthorizationCredentialBlock(value: string): boolean {
 	const pattern = new RegExp(
 		BASIC_AUTHORIZATION_BLOCK_PATTERN.source, `${BASIC_AUTHORIZATION_BLOCK_PATTERN.flags}g`,
@@ -364,12 +393,17 @@ function hasLabeledPasswordPhrase(value: string): boolean {
 }
 
 function hasLabeledCredential(value: string): boolean {
-	const withoutControls = value.replace(/[\p{Cc}\p{Cf}]+/gu, "");
-	return hasBasicAuthorizationCredential(value) || hasBasicAuthorizationCredentialBlock(value)
-		|| hasNpmAuthCredential(value) || LABELED_CREDENTIAL_PATTERN.test(value) || LABELED_PASSWORD_PATTERN.test(value)
-		|| hasLabeledCredentialBlock(value) || hasLabeledPasswordBlock(value) || hasLabeledPasswordPhrase(value)
+	const passwordPlaceholdersReplaced = replaceNpmPasswordPlaceholders(value);
+	const withoutControls = replaceNpmPasswordPlaceholders(value.replace(/[\p{Cc}\p{Cf}]+/gu, ""));
+	return hasBasicAuthorizationCredential(passwordPlaceholdersReplaced)
+		|| hasBasicAuthorizationCredentialBlock(passwordPlaceholdersReplaced)
+		|| hasNpmAuthCredential(passwordPlaceholdersReplaced) || hasNpmPasswordCredential(passwordPlaceholdersReplaced)
+		|| LABELED_CREDENTIAL_PATTERN.test(passwordPlaceholdersReplaced)
+		|| LABELED_PASSWORD_PATTERN.test(passwordPlaceholdersReplaced)
+		|| hasLabeledCredentialBlock(passwordPlaceholdersReplaced) || hasLabeledPasswordBlock(passwordPlaceholdersReplaced)
+		|| hasLabeledPasswordPhrase(passwordPlaceholdersReplaced)
 		|| hasBasicAuthorizationCredential(withoutControls) || hasNpmAuthCredential(withoutControls)
-		|| LABELED_CREDENTIAL_PATTERN.test(withoutControls)
+		|| hasNpmPasswordCredential(withoutControls) || LABELED_CREDENTIAL_PATTERN.test(withoutControls)
 		|| LABELED_PASSWORD_PATTERN.test(withoutControls) || hasLabeledCredentialBlock(withoutControls)
 		|| hasLabeledPasswordBlock(withoutControls) || hasLabeledPasswordPhrase(withoutControls);
 }
@@ -392,9 +426,14 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
-	return [text, compatibilityNormalized, compatibilityNormalized.toLowerCase()]
-		.some((value) => hasSensitiveValue(value) || hasSensitiveValueWithSeparatorsRemoved(value)
-			|| hasLabeledCredential(value));
+	const lowercased = compatibilityNormalized.toLowerCase();
+	const lowercasedCredentialScan = replaceNpmPasswordPlaceholders(
+		compatibilityNormalized.replace(/[\p{Cc}\p{Cf}]+/gu, ""),
+	).toLowerCase();
+	return [text, compatibilityNormalized].some((value) =>
+		hasSensitiveValue(value) || hasSensitiveValueWithSeparatorsRemoved(value) || hasLabeledCredential(value))
+		|| hasSensitiveValue(lowercased) || hasSensitiveValueWithSeparatorsRemoved(lowercased)
+		|| hasLabeledCredential(lowercasedCredentialScan);
 }
 
 export function hasSensitiveOutput(text: string): boolean {
