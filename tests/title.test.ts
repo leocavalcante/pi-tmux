@@ -1211,6 +1211,53 @@ test("rejects SendGrid API keys without mistaking near-miss strings for keys", a
 	}
 });
 
+test("rejects Linear API tokens without mistaking near-miss strings for tokens", async () => {
+	const token = `lin_api_${"aA09".repeat(10)}`;
+	const outputs = [
+		token,
+		token.toUpperCase(),
+		`configure-${token}`,
+		token.replace("lin_api_", "lin_api_\u200b"),
+		`${token.slice(0, 25)}\u200b${token.slice(25)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const shortName = fixture([Promise.resolve(response("lin_api_setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("lin_api_setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = [
+		`lin_api_${"a".repeat(39)}`,
+		`lin_api_${"a".repeat(41)}`,
+		`linx_api_${"a".repeat(40)}`,
+		`lin_api_${"a".repeat(39)}_`,
+		`${token}x`,
+		`${token}_x`,
+		`${token}-x`,
+		`x${token}`,
+		`_${token}`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("linear api tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("linear api tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects Twilio API keys without mistaking near-miss strings for keys", async () => {
 	const token = `SK${"a1".repeat(16)}`;
 	const outputs = [
