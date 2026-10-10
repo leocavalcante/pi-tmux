@@ -45,7 +45,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/\bAIza[A-Za-z0-9_-]{30,}\b/,
 	/\b(?:sk|rk)-(?:proj-|ant-)?[A-Za-z0-9_-]{16,}\b/i,
 	/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/i,
-	/\b(?:xox[baprs]|xapp)-[A-Za-z0-9-]{10,}\b/,
+	/\b(?:xox[baprcds]|xapp)-[A-Za-z0-9-]{10,}\b/,
 	/\bnpm_[A-Za-z0-9]{20,}\b/,
 	/\bglpat-[A-Za-z0-9_-]{20,}\b/,
 	/\bhf_[A-Za-z0-9]{20,}\b/,

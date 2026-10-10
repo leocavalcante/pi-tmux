@@ -956,6 +956,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["sk", "-proj-", "a".repeat(32)].join(""),
 		["sk", "_live_", "a".repeat(24)].join(""),
 		["xoxb-", "a".repeat(24)].join(""),
+		["xoxc-", "a".repeat(24)].join(""),
+		["xoxd-", "a".repeat(24)].join(""),
 		["npm_", "a".repeat(24)].join(""),
 		["glpat-", "a".repeat(24)].join(""),
 		["hf_", "a".repeat(32)].join(""),
