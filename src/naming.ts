@@ -53,7 +53,11 @@ const LABELED_CREDENTIAL_PATTERN = /(?:api[-_\s]?key|access[-_\s]?token|client[-
 const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,
+	// Databricks tokens are `dapi` plus 32 hex characters, optionally suffixed by one digit.
 	/(?<![A-Za-z0-9_])dapi[a-f0-9]{32}(?:-\d)?(?![A-Za-z0-9_-])/,
+	// DigitalOcean access, personal, and refresh tokens share `_v1_` followed by
+	// 64 hexadecimal characters.
+	/(?<![A-Za-z0-9_])do[opr]_v1_[a-f0-9]{64}(?![A-Za-z0-9_-])/,
 	/nvapi-[A-Za-z0-9_-]{32,}/,
 	/r8_[A-Za-z0-9]{37}(?![A-Za-z0-9_])/, // Replicate tokens are exactly 40 characters.
 	// Cerebras keys have exactly 48 URL-safe characters; boundaries avoid `pcsk_` collisions.
