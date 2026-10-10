@@ -85,10 +85,11 @@ provider. A missing model or missing credentials also does not trigger fallback.
 The last Pi pane normally resets its window to `zsh` when it quits. Set
 `PI_TMUX_IDLE_TITLE` before starting Pi to choose another idle title; the value
 uses the same lowercase ASCII cleanup and 24-character limit as generated
-names. Empty or non-alphanumeric values fall back to `zsh`. The value is
-applied only on a future graceful quit when this is the last Pi pane in its
-window; it does not rename an open window. `/reload` rereads the setting from
-Pi's process environment.
+names. Empty or non-alphanumeric values and values matching the limited
+sensitive-output checks fall back to `zsh`; these checks are best-effort, not
+comprehensive redaction. The value applies only on a future graceful quit when
+this is the last Pi pane in its window; it does not rename an open window.
+`/reload` rereads the setting from Pi's process environment.
 
 For waiting markers without any naming requests or dialogue collection:
 
