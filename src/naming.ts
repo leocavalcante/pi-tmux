@@ -120,6 +120,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])pscale_(?:tkn|oauth)_[A-Za-z0-9_.=-]{32,64}(?![A-Za-z0-9_.=-])/,
 	// Postman API tokens use two fixed-length hexadecimal segments after `PMAK-`.
 	/(?<![A-Za-z0-9_])PMAK-[a-f0-9]{24}-[a-f0-9]{34}(?![A-Za-z0-9_-])/i,
+	// Prefect API tokens use `pnu_` followed by exactly 36 alphanumeric characters.
+	/(?<![A-Za-z0-9_])pnu_[A-Za-z0-9]{36}(?![A-Za-z0-9_-])/i,
 	// Pulumi API tokens use `pul-` followed by exactly 40 hexadecimal characters.
 	/(?<![A-Za-z0-9_])pul-[a-f0-9]{40}(?![A-Za-z0-9_-])/i,
 	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,

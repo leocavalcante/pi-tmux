@@ -1006,6 +1006,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Postman access ${postmanToken}`, postmanToken);
 	const pulumiToken = `pul-${"a".repeat(40)}`;
 	await suppressed(fixture(), `Review Pulumi access ${pulumiToken}`, pulumiToken);
+	const prefectToken = `pnu_${"A1b2".repeat(9)}`;
+	await suppressed(fixture(), `Review Prefect access ${prefectToken}`, prefectToken);
 	const sourcegraphToken = `sgp_${"a".repeat(40)}`;
 	const sourcegraphSegmentedToken = `sgp_${"b".repeat(16)}_${"c".repeat(40)}`;
 	const sourcegraphLocalToken = `sgp_local_${"d".repeat(40)}`;
@@ -1170,6 +1172,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithPulumiToken = fixture();
 	historyWithPulumiToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${pulumiToken}` }] });
 	await suppressed(historyWithPulumiToken, "Continue the task", pulumiToken);
+	const historyWithPrefectToken = fixture();
+	historyWithPrefectToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${prefectToken}` }] });
+	await suppressed(historyWithPrefectToken, "Continue the task", prefectToken);
 	const historyWithSourcegraphToken = fixture();
 	historyWithSourcegraphToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${sourcegraphSegmentedToken}` }] });
 	await suppressed(historyWithSourcegraphToken, "Continue the task", sourcegraphSegmentedToken);
@@ -2178,6 +2183,55 @@ test("rejects Postman API tokens without mistaking near-misses for tokens", asyn
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("postman auth tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Prefect API tokens without mistaking near-misses for tokens", async () => {
+	const tokenFor = (body = "A1b2".repeat(9)) => `pnu_${body}`;
+	const token = tokenFor();
+	const outputs = [
+		token,
+		token.toUpperCase(),
+		`configure-${token}`,
+		token.replace("pnu", "p\u200bnu"),
+		`${token.slice(0, 18)}\u200b${token.slice(18)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("prefect deployment tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("prefect deployment tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		tokenFor("A".repeat(35)),
+		tokenFor("A".repeat(37)),
+		tokenFor("A".repeat(35) + "_"),
+		tokenFor("A".repeat(35) + "-"),
+		token.replace("pnu_", "pnu-"),
+		`x${token}`,
+		`_${token}`,
+		`${token}x`,
+		`${token}_x`,
+		`${token}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("prefect deployment tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("prefect deployment tests");
 		expect(f.warnings).toEqual([]);
 	}
 });
@@ -4364,6 +4418,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`pscale_oauth_${"D".repeat(64)}`,
 		`PMAK-${"a".repeat(24)}-${"b".repeat(34)}`,
 		`pul-${"a".repeat(40)}`,
+		`pnu_${"A1b2".repeat(9)}`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
