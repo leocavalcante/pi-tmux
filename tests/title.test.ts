@@ -968,6 +968,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	};
 
 	await suppressed(fixture(), `Review the auth flow with ${token}`);
+	const googleApiKey = `AIza${"A".repeat(35)}`;
+	await suppressed(fixture(), `Review Google API access ${googleApiKey}`, googleApiKey);
 	const supabaseSecretKey = `sb_secret_${"S".repeat(32)}`;
 	await suppressed(fixture(), `Review the Supabase config ${supabaseSecretKey}`, supabaseSecretKey);
 	const neonApiKey = `neon_api_key_${"N".repeat(32)}`;
@@ -1132,6 +1134,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const history = fixture();
 	history.messages.push({ role: "assistant", content: [{ type: "text", text: `The test fixture includes ${token}` }] });
 	await suppressed(history, "Continue the task");
+	const historyWithGoogleApiKey = fixture();
+	historyWithGoogleApiKey.messages.push({ role: "assistant", content: [{ type: "text", text: `Google API key: ${googleApiKey}` }] });
+	await suppressed(historyWithGoogleApiKey, "Continue the task", googleApiKey);
 	const historyWithSupabaseSecret = fixture();
 	historyWithSupabaseSecret.messages.push({ role: "assistant", content: [{ type: "text", text: `Supabase key: ${supabaseSecretKey}` }] });
 	await suppressed(historyWithSupabaseSecret, "Continue the task", supabaseSecretKey);
@@ -1284,6 +1289,7 @@ test("new credential-looking context cancels in-flight naming without sending it
 
 test("credential-shaped model output is rejected without applying or disclosing it", async () => {
 	const githubToken = ["ghp_", "a".repeat(20)].join("");
+	const googleApiKey = `AIza${"A".repeat(35)}`;
 	const replicateToken = ["r8_", "M".repeat(37)].join("");
 	const awsKey = ["AKIA", "A".repeat(16)].join("");
 	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
@@ -1371,7 +1377,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["ABSK", "A".repeat(109)].join(""),
 		["bedrock-api-key-", Buffer.from("bedrock.amazonaws.com").toString("base64")].join(""),
 		["ABSK", "A".repeat(54), "\u200b", "A".repeat(55)].join(""),
-		["AIza", "A".repeat(32)].join(""),
+		googleApiKey,
+		`${googleApiKey.slice(0, 20)}\u200b${googleApiKey.slice(20)}`,
 		["sk", "-proj-", "a".repeat(32)].join(""),
 		["sk", "-ant-", "a".repeat(32)].join(""),
 		["sk", "-svcacct-", "a".repeat(32)].join(""),
@@ -1424,6 +1431,44 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 	expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+});
+
+test("rejects Google API keys without mistaking near-misses for keys", async () => {
+	const tokenFor = (suffix = "A".repeat(35)) => `AIza${suffix}`;
+	const token = tokenFor("A1_b-".repeat(7));
+	const sensitiveOutput = fixture([Promise.resolve(response(token))]);
+	sensitiveOutput.input("Name a task");
+	await settle();
+	expect(sensitiveOutput.state.title).toBe("existing task");
+	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+	expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
+
+	const ordinaryTitle = fixture([Promise.resolve(response("google api tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("google api tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		tokenFor("A".repeat(34)),
+		tokenFor("A".repeat(36)),
+		token.toLowerCase(),
+		`x${token}`,
+		`_${token}`,
+		`${token}A`,
+		`${token}_x`,
+		`${token}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("google api tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("google api tests");
+		expect(f.warnings).toEqual([]);
+	}
 });
 
 test("rejects Databricks access tokens without mistaking near-miss strings for tokens", async () => {
@@ -4475,6 +4520,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`pul-${"a".repeat(40)}`,
 		`pnu_${"A1b2".repeat(9)}`,
 		`API-${"A1B2".repeat(6)}A1`,
+		`AIza${"A".repeat(35)}`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
