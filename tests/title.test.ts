@@ -227,10 +227,15 @@ test("removes combining marks from Unicode blocks beyond the basic diacritics ra
 	expect(cleanTitle("Fix e\u1ab0mail tests")).toBe("fix email tests");
 });
 
+test.each([-1, -24])("returns an empty title for a negative length limit: %i", (maxLength) => {
+	expect(cleanTitle("fix auth", maxLength)).toBe("");
+});
+
 test("caps names at 24 ASCII cells, preferably on a word boundary", () => {
 	expect(cleanTitle("Investigate authentication failures")).toBe("investigate");
 	expect(cleanTitle("x".repeat(80))).toHaveLength(MAX_TITLE_LENGTH);
 	expect(cleanTitle("x".repeat(24))).toHaveLength(MAX_TITLE_LENGTH);
+	expect(cleanTitle("unbounded title", Number.MAX_SAFE_INTEGER)).toBe("unbounded title");
 });
 
 test("accepts an empty window-name field and supplies the waiting fallback", async () => {
