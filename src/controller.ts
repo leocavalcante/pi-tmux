@@ -410,7 +410,7 @@ export function createController(tmux: RunTmux) {
 		if (!namingModel) return false;
 		let text: string;
 		try {
-			text = buildNamingContext(ctx.sessionManager.buildSessionProjection().messages, prompt);
+			text = buildNamingContext(ctx.sessionManager.buildSessionProjection(), prompt);
 		} catch {
 			// Do not let a transient session-projection failure escape a Pi event or
 			// leave an older request eligible to rename the window with stale context.

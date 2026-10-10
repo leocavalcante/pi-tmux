@@ -1505,6 +1505,33 @@ test("naming context bounds history and prioritizes recent dialogue and the new 
 	)).toBe(true);
 });
 
+test("projection-aware naming context reads the checkpoint summary and skips older history", () => {
+	let readDiscardedRole = false;
+	const discarded = {} as any;
+	Object.defineProperty(discarded, "role", {
+		get() {
+			readDiscardedRole = true;
+			throw new Error("Older messages should not be scanned after the retained window is full");
+		},
+	});
+	const summary = { role: "compactionSummary", summary: "Compacted auth task" };
+	const recent = Array.from({ length: MAX_HISTORY_MESSAGES }, (_, i) => ({ role: "user", content: `recent-${i}` }));
+	const messages = [summary, discarded, ...recent] as any;
+	const projection = {
+		entries: [{ sourceEntry: { type: "compaction" }, messages: [summary] }],
+		messages,
+		thinkingLevel: "off",
+		model: null,
+	} as any;
+
+	const context = buildNamingContext(projection);
+	expect(context).toBe([
+		"summary: Compacted auth task",
+		...recent.map((message) => `user: ${message.content}`),
+	].join("\n\n"));
+	expect(readDiscardedRole).toBe(false);
+});
+
 test("naming context does not read text from history older than its retained window", () => {
 	let readDiscardedContent = false;
 	const discarded = { role: "user" } as any;
