@@ -1590,6 +1590,46 @@ test("rejects current-format Azure DevOps PATs without mistaking near-misses for
 	}
 });
 
+test("rejects GitLab Runner authentication tokens without mistaking near-misses for tokens", async () => {
+	const tokenBody = `${"A1b2_-".repeat(3)}Z9`;
+	const token = `glrt-${tokenBody}`;
+	const obfuscatedToken = `gl\u200brt-${tokenBody}`;
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const sensitiveToken of [token, obfuscatedToken]) {
+		expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
+		expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review runner ${sensitiveToken}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(token);
+
+		const output = fixture([Promise.resolve(response(sensitiveToken))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(token);
+	}
+
+	for (const nearMiss of [
+		`glrt-${tokenBody.slice(0, -1)}`,
+		`${token}Z`,
+		`glrx-${tokenBody}`,
+		`x${token}`,
+		`_${token}`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("rejects labeled Datadog API keys without mistaking near-misses for keys", async () => {
 	const keyValue = "A1b2".repeat(10);
 	const outputs = [
