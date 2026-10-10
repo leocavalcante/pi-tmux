@@ -900,7 +900,7 @@ test.each([
 	expect(f.requests).toHaveLength(1);
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model returned multiple lines instead of one title; the current title was kept."]);
+	expect(f.warnings).toEqual(["The naming model returned multiple lines; the current title was kept. Retry with /tmux-title or set it with /tmux-title set <name>."]);
 });
 
 test.each([
@@ -919,7 +919,7 @@ test.each([
 		expect(f.requests).toHaveLength(1);
 		expect(f.state.title).toBe("existing task");
 		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["The naming model returned multiple lines instead of one title; the current title was kept."]);
+		expect(f.warnings).toEqual(["The naming model returned multiple lines; the current title was kept. Retry with /tmux-title or set it with /tmux-title set <name>."]);
 	}
 });
 
@@ -934,7 +934,7 @@ test("accepts ordinary surrounding spaces in naming output", async () => {
 test.each([
 	["I'll inspect the conversation and choose a title.", "The naming model title exceeded the 24-character limit; the current title was kept.", true],
 	["one two three four five", "The naming model title exceeded the 4-word limit; the current title was kept.", true],
-	["fix ssh\nhelpers", "The naming model returned multiple lines instead of one title; the current title was kept.", false],
+	["fix ssh\nhelpers", "The naming model returned multiple lines; the current title was kept. Retry with /tmux-title or set it with /tmux-title set <name>.", false],
 	["investigate authentication failures", "The naming model title exceeded the 24-character limit; the current title was kept.", true],
 	["---", "The naming model returned no usable title; the current title was kept.", false],
 ])("rejects output that remains invalid after at most one retry: %s", async (output, warning, retry) => {
