@@ -408,6 +408,10 @@ function hasLabeledCredential(value: string): boolean {
 		|| hasLabeledPasswordBlock(withoutControls) || hasLabeledPasswordPhrase(withoutControls);
 }
 
+function distinctTextVariants(...values: string[]): string[] {
+	return [...new Set(values)];
+}
+
 // Check credentials and high-confidence personal-data formats before transmission.
 // These PII patterns require conventional email syntax or explicit labels; avoid
 // broad checks for names and other personal data that suppress ordinary titles.
@@ -430,10 +434,9 @@ export function hasSensitiveNamingContext(text: string): boolean {
 	const lowercasedCredentialScan = replaceNpmPasswordPlaceholders(
 		compatibilityNormalized.replace(/[\p{Cc}\p{Cf}]+/gu, ""),
 	).toLowerCase();
-	return [text, compatibilityNormalized].some((value) =>
-		hasSensitiveValue(value) || hasSensitiveValueWithSeparatorsRemoved(value) || hasLabeledCredential(value))
-		|| hasSensitiveValue(lowercased) || hasSensitiveValueWithSeparatorsRemoved(lowercased)
-		|| hasLabeledCredential(lowercasedCredentialScan);
+	return distinctTextVariants(text, compatibilityNormalized, lowercased).some((value) =>
+		hasSensitiveValue(value) || hasSensitiveValueWithSeparatorsRemoved(value))
+		|| distinctTextVariants(text, compatibilityNormalized, lowercasedCredentialScan).some(hasLabeledCredential);
 }
 
 export function hasSensitiveOutput(text: string): boolean {
@@ -450,11 +453,9 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
-	return hasPattern(text) || hasPatternWithSeparatorsRemoved(text) || hasLabeledCredential(text)
-		|| hasPattern(compatibilityNormalized) || hasPatternWithSeparatorsRemoved(compatibilityNormalized)
-		|| hasLabeledCredential(compatibilityNormalized)
-		|| hasPattern(compatibilityNormalized.toLowerCase())
-		|| hasPatternWithSeparatorsRemoved(compatibilityNormalized.toLowerCase());
+	return distinctTextVariants(text, compatibilityNormalized, compatibilityNormalized.toLowerCase()).some((value) =>
+		hasPattern(value) || hasPatternWithSeparatorsRemoved(value))
+		|| distinctTextVariants(text, compatibilityNormalized).some(hasLabeledCredential);
 }
 
 function getTextPhase(textSignature: string | undefined): string | undefined {
