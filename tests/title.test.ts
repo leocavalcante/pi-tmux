@@ -1211,6 +1211,53 @@ test("rejects SendGrid API keys without mistaking near-miss strings for keys", a
 	}
 });
 
+test("rejects Twilio API keys without mistaking near-miss strings for keys", async () => {
+	const token = `SK${"a1".repeat(16)}`;
+	const outputs = [
+		token,
+		token.toLowerCase(),
+		`configure-${token}`,
+		token.replace("SK", "S\u200bK"),
+		`${token.slice(0, 17)}\u200b${token.slice(17)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const shortName = fixture([Promise.resolve(response("sk_api_setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("sk_api_setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = [
+		`SK${"a".repeat(31)}`,
+		`SK${"a".repeat(33)}`,
+		`SX${"a".repeat(32)}`,
+		`SK${"g".repeat(32)}`,
+		`${token}x`,
+		`${token}_x`,
+		`x${token}`,
+		`_${token}`,
+		`c${token}`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("twilio api tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("twilio api tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",

@@ -62,6 +62,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])ntn_[0-9]{11}[A-Za-z0-9]{35}(?![A-Za-z0-9_-])/,
 	// SendGrid API keys have the `SG.` prefix and exactly 66 URL-safe characters.
 	/(?<![A-Za-z0-9_])SG\.[A-Za-z0-9=_.-]{66}(?![A-Za-z0-9=_.-])/i,
+	// Twilio API keys use `SK` followed by exactly 32 hexadecimal characters.
+	/(?<![A-Za-z0-9_])SK[a-f0-9]{32}(?![A-Za-z0-9_-])/i,
 	/nvapi-[A-Za-z0-9_-]{32,}/,
 	/r8_[A-Za-z0-9]{37}(?![A-Za-z0-9_])/, // Replicate tokens are exactly 40 characters.
 	// Cerebras keys have exactly 48 URL-safe characters; boundaries avoid `pcsk_` collisions.
