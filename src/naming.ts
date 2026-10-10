@@ -118,6 +118,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])shippo_(?:live|test)_[a-f0-9]{40}(?![A-Za-z0-9_-])/i,
 	// PlanetScale API and OAuth tokens use 32–64 URL-safe characters after fixed prefixes.
 	/(?<![A-Za-z0-9_])pscale_(?:tkn|oauth)_[A-Za-z0-9_.=-]{32,64}(?![A-Za-z0-9_.=-])/,
+	// Postman API tokens use two fixed-length hexadecimal segments after `PMAK-`.
+	/(?<![A-Za-z0-9_])PMAK-[a-f0-9]{24}-[a-f0-9]{34}(?![A-Za-z0-9_-])/i,
 	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,
 	// Databricks tokens are `dapi` plus 32 hex characters, optionally suffixed by one digit.
 	/(?<![A-Za-z0-9_])dapi[a-f0-9]{32}(?:-\d)?(?![A-Za-z0-9_-])/,

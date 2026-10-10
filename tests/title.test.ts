@@ -1002,6 +1002,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	for (const token of planetscaleTokens) {
 		await suppressed(fixture(), `Review PlanetScale access ${token}`, token);
 	}
+	const postmanToken = ["PMAK-", "a".repeat(24), "-", "b".repeat(34)].join("");
+	await suppressed(fixture(), `Review Postman access ${postmanToken}`, postmanToken);
 	const sourcegraphToken = `sgp_${"a".repeat(40)}`;
 	const sourcegraphSegmentedToken = `sgp_${"b".repeat(16)}_${"c".repeat(40)}`;
 	const sourcegraphLocalToken = `sgp_local_${"d".repeat(40)}`;
@@ -1160,6 +1162,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithPlanetScaleToken = fixture();
 	historyWithPlanetScaleToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${planetscaleTokens[2]!}` }] });
 	await suppressed(historyWithPlanetScaleToken, "Continue the task", planetscaleTokens[2]!);
+	const historyWithPostmanToken = fixture();
+	historyWithPostmanToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${postmanToken}` }] });
+	await suppressed(historyWithPostmanToken, "Continue the task", postmanToken);
 	const historyWithSourcegraphToken = fixture();
 	historyWithSourcegraphToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${sourcegraphSegmentedToken}` }] });
 	await suppressed(historyWithSourcegraphToken, "Continue the task", sourcegraphSegmentedToken);
@@ -2115,6 +2120,59 @@ test("rejects PlanetScale API and OAuth tokens without mistaking near-misses for
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("scale migration tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Postman API tokens without mistaking near-misses for tokens", async () => {
+	const tokenFor = (first = "a".repeat(24), second = "b".repeat(34)) => `PMAK-${first}-${second}`;
+	const token = tokenFor();
+	const outputs = [
+		token,
+		token.toLowerCase(),
+		token.toUpperCase(),
+		`configure-${token}`,
+		token.replace("PMAK", "PM\u200bAK"),
+		`${token.slice(0, 35)}\u200b${token.slice(35)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("postman auth tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("postman auth tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		tokenFor("a".repeat(23)),
+		tokenFor("a".repeat(25)),
+		tokenFor("a".repeat(24), "b".repeat(33)),
+		tokenFor("a".repeat(24), "b".repeat(35)),
+		tokenFor("g".repeat(24)),
+		tokenFor("a".repeat(24), "g".repeat(34)),
+		token.replace("PMAK-", "XMAK-"),
+		token.replace("PMAK-", "PMAK_"),
+		`x${token}`,
+		`_${token}`,
+		`${token}x`,
+		`${token}_x`,
+		`${token}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("postman auth tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("postman auth tests");
 		expect(f.warnings).toEqual([]);
 	}
 });
@@ -4251,6 +4309,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`shippo_test_${"b".repeat(40)}`,
 		`pscale_tkn_${"C".repeat(32)}`,
 		`pscale_oauth_${"D".repeat(64)}`,
+		`PMAK-${"a".repeat(24)}-${"b".repeat(34)}`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
