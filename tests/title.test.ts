@@ -988,6 +988,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	for (const flyIoMachineToken of flyIoMachineTokens) {
 		await suppressed(fixture(), `Review Fly.io access ${flyIoMachineToken}`, flyIoMachineToken);
 	}
+	const dynatraceApiToken = `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`;
+	await suppressed(fixture(), `Review Dynatrace access ${dynatraceApiToken}`, dynatraceApiToken);
 	const supabaseSecretKey = `sb_secret_${"S".repeat(32)}`;
 	await suppressed(fixture(), `Review the Supabase config ${supabaseSecretKey}`, supabaseSecretKey);
 	const neonApiKey = `neon_api_key_${"N".repeat(32)}`;
@@ -1175,6 +1177,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		historyWithFlyIoMachineToken.messages.push({ role: "assistant", content: [{ type: "text", text: flyIoMachineToken }] });
 		await suppressed(historyWithFlyIoMachineToken, "Continue the task", flyIoMachineToken);
 	}
+	const historyWithDynatraceToken = fixture();
+	historyWithDynatraceToken.messages.push({ role: "assistant", content: [{ type: "text", text: dynatraceApiToken }] });
+	await suppressed(historyWithDynatraceToken, "Continue the task", dynatraceApiToken);
 	const historyWithSupabaseSecret = fixture();
 	historyWithSupabaseSecret.messages.push({ role: "assistant", content: [{ type: "text", text: `Supabase key: ${supabaseSecretKey}` }] });
 	await suppressed(historyWithSupabaseSecret, "Continue the task", supabaseSecretKey);
@@ -1329,6 +1334,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const githubToken = ["ghp_", "a".repeat(20)].join("");
 	const googleApiKey = `AIza${"A".repeat(35)}`;
 	const datadogApiKey = "A1b2".repeat(10);
+	const dynatraceApiToken = `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`;
 	const replicateToken = ["r8_", "M".repeat(37)].join("");
 	const awsKey = ["AKIA", "A".repeat(16)].join("");
 	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
@@ -1420,6 +1426,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`${googleApiKey.slice(0, 20)}\u200b${googleApiKey.slice(20)}`,
 		`Datadog: ${datadogApiKey}`,
 		`Datadog: ${datadogApiKey.slice(0, 20)}\u200b${datadogApiKey.slice(20)}`,
+		dynatraceApiToken,
+		`${dynatraceApiToken.slice(0, 20)}\u200b${dynatraceApiToken.slice(20)}`,
 		["sk", "-proj-", "a".repeat(32)].join(""),
 		["sk", "-ant-", "a".repeat(32)].join(""),
 		["sk", "-svcacct-", "a".repeat(32)].join(""),
@@ -1604,6 +1612,47 @@ test("rejects Artifactory tokens without mistaking near-misses for tokens", asyn
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("artifactory tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Dynatrace API tokens without mistaking near-misses for tokens", async () => {
+	const token = `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`;
+	const sensitiveOutputs = [token, `Dynatrace API token: ${token}`, `${token.slice(0, 34)}\u200b${token.slice(34)}`];
+	for (const output of sensitiveOutputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("dynatrace tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("dynatrace tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`dt0c02.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
+		`dt0c01.${"A1b2".repeat(6).slice(1)}.${"C3d4".repeat(16)}`,
+		`dt0c01.${"A1b2".repeat(6)}A.${"C3d4".repeat(16)}`,
+		`dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16).slice(1)}`,
+		`dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}A`,
+		`x${token}`,
+		`_${token}`,
+		`${token}A`,
+		`${token}_`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("dynatrace tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("dynatrace tests");
 		expect(f.warnings).toEqual([]);
 	}
 });
@@ -4756,6 +4805,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`fm1a_${"A1b+/".repeat(20)}`,
 		`fm1r_${"B2c+/".repeat(20)}=`,
 		`fm2_${"C3d+/".repeat(20)}===`,
+		`dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
