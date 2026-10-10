@@ -47,7 +47,7 @@ const MAX_LOCATION_PASSES = 4;
 const INVALID_NAMING_TITLE_WARNINGS = {
 	truncated: "The naming model hit its token limit before finishing a title; the current title was kept.",
 	"no-final-answer": "The naming model did not return a final answer; the current title was kept.",
-	"multiple-lines": "The naming model returned multiple lines instead of one title; the current title was kept.",
+	"multiple-lines": "The naming model returned multiple lines; the current title was kept. Retry with /tmux-title or set it with /tmux-title set <name>.",
 	empty: "The naming model returned no usable title; the current title was kept.",
 	"too-many-blocks": "The naming model returned too many content blocks; the current title was kept.",
 	"too-long": "The naming model title exceeded the 24-character limit; the current title was kept.",
