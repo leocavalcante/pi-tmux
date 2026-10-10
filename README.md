@@ -326,8 +326,8 @@ transport, the bounded context is checked locally for recognizable credential
 formats (including URL user-info), conventional email addresses, explicitly
 labeled U.S. SSN- and phone-shaped values, Luhn-valid payment-card values with
 explicit card labels, long values assigned to common credential labels
-(including AWS `AWS_SECRET_ACCESS_KEY` fields), and shorter non-placeholder values
-explicitly assigned to password/passphrase labels.
+(including AWS `AWS_SECRET_ACCESS_KEY` and Azure `AccountKey` fields), and
+shorter non-placeholder values assigned explicitly to password/passphrase labels.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
 deduplication cache. This is a limited, best-effort check, not comprehensive
@@ -346,10 +346,10 @@ compatibility-normalized output for several recognizable credential formats,
 conventional email addresses, explicitly labeled U.S. SSN-shaped values,
 phone-labeled values with 7–15 digits, Luhn-valid payment-card-shaped numbers
 with explicit card labels, long opaque values assigned to common credential
-labels (including AWS `AWS_SECRET_ACCESS_KEY` fields), and shorter non-placeholder
-password/passphrase assignments. It also checks a view with whitespace,
-control, and format characters removed, which catches some
-obfuscated values.
+labels (including AWS `AWS_SECRET_ACCESS_KEY` and Azure `AccountKey` fields),
+and shorter non-placeholder password/passphrase assignments. It also checks a
+view with whitespace, control, and format characters removed, which catches
+some obfuscated values.
 Rejected responses are not included in warnings. These limited checks are
 defense in depth, not comprehensive secret or personal-information redaction.
 Do not put secrets into prompts.
