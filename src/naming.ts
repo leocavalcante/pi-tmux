@@ -50,6 +50,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/xai-[A-Za-z0-9_-]{16,}/,
 	/pplx-[A-Za-z0-9]{48}/,
 	/(?:AKIA|ASIA)[0-9A-Z]{16}/,
+	/ABSK[A-Za-z0-9+/]{109,269}={0,2}/,
+	/bedrock-api-key-\x59\x6d\x56\x6b\x63\x6d\x39\x6a\x61\x79\x35\x68\x62\x57\x46\x36\x62\x32\x35\x68\x64\x33\x4d\x75\x59\x32\x39\x74/,
 	/AIza[A-Za-z0-9_-]{30,}/,
 	/(?:sk|rk)-(?:proj-|ant-|svcacct-|or-v1-)[A-Za-z0-9_-]{16,}/i,
 	/(?:sk|rk)-[A-Za-z0-9]{16,}(?:[-_][A-Za-z0-9_-]+)*/i,
