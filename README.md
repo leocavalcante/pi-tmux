@@ -326,11 +326,13 @@ length or word-count result can trigger one short correction request. Each
 Manual title commands do not send the title or dialogue to a model.
 
 The model is instructed not to include secrets or personal information in
-titles. Before applying a response, the extension rejects several recognizable
-credential formats and conventional email addresses in both raw and
-compatibility-normalized output, and warns without including the response.
-This limited check is defense in depth, not comprehensive secret or
-personal-information redaction. Do not put secrets into prompts.
+titles. Before applying a response, the extension checks raw and
+compatibility-normalized output for several recognizable credential formats
+and conventional email addresses. It also checks a view with whitespace,
+control, and format characters removed, which catches some obfuscated values.
+Rejected responses are not included in warnings. These limited checks are
+defense in depth, not comprehensive secret or personal-information redaction.
+Do not put secrets into prompts.
 Window names are visible in your tmux status bar and may be retained by tmux
 session-persistence plugins.
 
