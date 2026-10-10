@@ -183,10 +183,15 @@ Repeat the command to retry them.
 - Context comes from Pi's active session projection. Abandoned branches,
   compacted originals, and text removed by Pi context edits are not used.
 - Titles are forced to lowercase and clipped at a word boundary when possible.
-- If the provider marks text phases, only `final_answer` blocks are considered;
-  without phase metadata, the last text block is used. An overlong or over-worded
-  first candidate gets one correction request. A still-overlong candidate is
-  clipped at a word boundary only when it remains a 2–4-word title; multiline,
+- If the provider supplies phase metadata, only `final_answer` blocks are
+  considered. When metadata is present but no final block exists, output is
+  rejected rather than falling back to the last text block; without phase
+  metadata, the last text block is used. Signatures over 4 Ki UTF-16 code units
+  are treated as unrecognized metadata. If a provider ignores the requested
+  96-token cap and selected output exceeds 64 Ki UTF-16 code units, it gets one
+  correction attempt and is not applied as-is. Other overlong or over-worded
+  first candidates also get one correction request. A still-overlong candidate
+  is clipped at a word boundary only when it remains a 2–4-word title; multiline,
   over-word, and otherwise unusable output is rejected.
 - `* ` marks a fully settled run, after tool work, retries, and queued
   continuations are finished. It does not mean the task succeeded.
