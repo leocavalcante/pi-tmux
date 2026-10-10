@@ -948,7 +948,7 @@ test("does not apply a short-looking response truncated by the token limit", asy
 	expect(f.warnings).toEqual(["The naming model hit its token limit before finishing a title; the current title was kept."]);
 });
 
-test("credential-looking prompts and recent history never reach the naming model", async () => {
+test("sensitive-looking prompts and recent history never reach the naming model", async () => {
 	const token = ["ghp_", "A".repeat(20)].join("");
 	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 	const suppressed = async (f: ReturnType<typeof fixture>, prompt: string, sensitiveText = token) => {
@@ -966,6 +966,11 @@ test("credential-looking prompts and recent history never reach the naming model
 	const labeledCredential = `client_secret=${"C".repeat(24)}`;
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 
+	const emailAddress = "customer@example.test";
+	await suppressed(fixture(), `Update the notification flow for ${emailAddress}`, emailAddress);
+	const obfuscatedEmailAddress = "customer@\u200bexample.test";
+	await suppressed(fixture(), `Update the notification flow for ${obfuscatedEmailAddress}`, obfuscatedEmailAddress);
+
 	const databaseUrl = "postgres://test-user:example-only-password@db.example.test/app";
 	await suppressed(fixture(), `Review the database connection ${databaseUrl}`, databaseUrl);
 	const obfuscatedUrl = "postgres://test-user:example-only-\u200bpassword@db.example.test/app";
@@ -974,6 +979,9 @@ test("credential-looking prompts and recent history never reach the naming model
 	const history = fixture();
 	history.messages.push({ role: "assistant", content: [{ type: "text", text: `The test fixture includes ${token}` }] });
 	await suppressed(history, "Continue the task");
+	const historyWithEmail = fixture();
+	historyWithEmail.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous contact: ${emailAddress}` }] });
+	await suppressed(historyWithEmail, "Continue the task", emailAddress);
 
 	const obfuscated = `ghp_${"A".repeat(10)}\u200b${"A".repeat(10)}`;
 	await suppressed(fixture(), `Review ${obfuscated}`);
@@ -990,7 +998,7 @@ test("credential-looking prompts and recent history never reach the naming model
 	expect(nearMiss.warnings).toEqual([]);
 
 	const uriWithoutPassword = fixture([Promise.resolve(response("review database"))]);
-	uriWithoutPassword.input("Review postgres://test-user@db.example.test/app");
+	uriWithoutPassword.input("Review postgres://test-user@localhost/app");
 	await settle();
 	expect(uriWithoutPassword.requests).toHaveLength(1);
 	expect(uriWithoutPassword.state.title).toBe("review database");
