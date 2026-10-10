@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { formatTitle, READY_PREFIX } from "./title.ts";
 
 const execFileAsync = promisify(execFile);
+const TMUX_COMMAND_TIMEOUT_MS = 2_000;
 // WINDOW_INFO_FORMAT includes a user-owned window name; allow long names while
 // keeping command output bounded.
 const MAX_TMUX_OUTPUT_BYTES = 64 * 1024;
@@ -123,14 +124,22 @@ export type RunTmux = ((args: string[], signal: AbortSignal) => Promise<string>)
 };
 
 export const runTmux: RunTmux = async (args, signal) => {
-	const { stdout } = await execFileAsync("tmux", args, {
-		signal,
-		timeout: 2_000,
-		maxBuffer: MAX_TMUX_OUTPUT_BYTES,
-	});
-	// Remove the command's line terminator, not tabs or spaces in window names.
-	// In particular, a trailing tab is the empty title field in WINDOW_INFO_FORMAT.
-	return stdout.replace(/\r?\n$/, "");
+	// execFile's `timeout` option only sends SIGTERM; a child that handles it and
+	// exits 0 can make a timed-out command look successful. Abort its signal too.
+	const timeoutController = new AbortController();
+	const timeout = setTimeout(() => timeoutController.abort(), TMUX_COMMAND_TIMEOUT_MS);
+	timeout.unref();
+	try {
+		const { stdout } = await execFileAsync("tmux", args, {
+			signal: AbortSignal.any([signal, timeoutController.signal]),
+			maxBuffer: MAX_TMUX_OUTPUT_BYTES,
+		});
+		// Remove the command's line terminator, not tabs or spaces in window names.
+		// In particular, a trailing tab is the empty title field in WINDOW_INFO_FORMAT.
+		return stdout.replace(/\r?\n$/, "");
+	} finally {
+		clearTimeout(timeout);
+	}
 };
 runTmux.supportsServerPidGuard = true;
 
