@@ -1,6 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	buildNamingContext,
+	hasSensitiveNamingContext,
 	hasSensitiveOutput,
 	InvalidNamingTitleError,
 	UnsafeNamingContextError,
@@ -387,7 +388,7 @@ export function createController(tmux: RunTmux) {
 		const isCurrent = () => requestGeneration === generation;
 		try {
 			if (!namingModel) return;
-			const title = await requestNamingTitle(text, ctx, namingModel, controller.signal, isCurrent);
+			const title = await requestNamingTitle(text, ctx, namingModel, controller.signal, isCurrent, true);
 			if (title === undefined || controller.signal.aborted || !isCurrent()) return;
 			candidateTitle = title;
 			// A late summary must retain the latest busy/waiting status.
@@ -430,8 +431,14 @@ export function createController(tmux: RunTmux) {
 			return undefined;
 		}
 		if (!force && text === lastNamingContext) return false;
-		// Empty projected context still supersedes work based on removed dialogue.
+		// Empty or sensitive context still supersedes work based on prior dialogue.
 		cancel();
+		if (hasSensitiveNamingContext(text)) {
+			// Do not retain a rejected credential-bearing context for deduplication.
+			lastNamingContext = undefined;
+			warnOnce(ctx, "Sensitive-looking task context was not sent to the naming model; the current title was kept.");
+			return false;
+		}
 		lastNamingContext = text;
 		if (!text) return false;
 		const controller = new AbortController();
