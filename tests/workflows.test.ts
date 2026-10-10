@@ -4,15 +4,29 @@ import { fileURLToPath } from "node:url";
 
 const WORKFLOWS_DIRECTORY = fileURLToPath(new URL("../.github/workflows/", import.meta.url));
 
-test("npm publishing is restricted to release commits on main", () => {
-	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/publish.yml", import.meta.url)), "utf8");
-	const checkout = workflow.indexOf("fetch-depth: 0");
-	const ancestryCheck = workflow.indexOf('git merge-base --is-ancestor "$GITHUB_SHA" origin/main');
-	const publish = workflow.indexOf("npm publish --access public");
+test("npm publishing requires all release safety gates", () => {
+	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/publish.yml", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
+	const publishJob = workflow.indexOf("  publish:\n");
+	const testDependency = workflow.indexOf("    needs: test", publishJob);
+	const stableReleaseOnly = workflow.indexOf("    if: github.event.release.prerelease == false", publishJob);
+	const checkout = workflow.indexOf("fetch-depth: 0", publishJob);
+	const ancestryCheck = workflow.indexOf('git merge-base --is-ancestor "$GITHUB_SHA" origin/main', publishJob);
+	const versionCheck = workflow.indexOf("- name: Check release tag matches package version", publishJob);
+	const releaseTagInput = workflow.indexOf("RELEASE_TAG: ${{ github.event.release.tag_name }}", versionCheck);
+	const semanticVersionValidation = workflow.indexOf(String.raw`!/^\d+\.\d+\.\d+$/.test(version)`, versionCheck);
+	const tagValidation = workflow.indexOf("process.env.RELEASE_TAG !== `v${version}`", versionCheck);
+	const publish = workflow.indexOf("npm publish --access public", publishJob);
 
-	expect(checkout).toBeGreaterThanOrEqual(0);
+	expect(publishJob).toBeGreaterThanOrEqual(0);
+	expect(testDependency).toBeGreaterThan(publishJob);
+	expect(stableReleaseOnly).toBeGreaterThan(testDependency);
+	expect(checkout).toBeGreaterThan(stableReleaseOnly);
 	expect(ancestryCheck).toBeGreaterThan(checkout);
-	expect(publish).toBeGreaterThan(ancestryCheck);
+	expect(versionCheck).toBeGreaterThan(ancestryCheck);
+	expect(releaseTagInput).toBeGreaterThan(versionCheck);
+	expect(semanticVersionValidation).toBeGreaterThan(releaseTagInput);
+	expect(tagValidation).toBeGreaterThan(semanticVersionValidation);
+	expect(publish).toBeGreaterThan(tagValidation);
 });
 
 test("external GitHub Actions use full commit SHAs with version comments", () => {
