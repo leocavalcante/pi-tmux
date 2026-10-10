@@ -1630,6 +1630,53 @@ test("rejects GitLab Runner authentication tokens without mistaking near-misses 
 	}
 });
 
+test("rejects Docker Hub personal and organization tokens without mistaking near-misses for tokens", async () => {
+	const patBody = "A1b2_-".repeat(5).slice(0, 27);
+	const oatBody = "Q7w8_-".repeat(6).slice(0, 32);
+	const tokens = [
+		{ value: `dckr_pat_${patBody}`, obfuscated: `dckr\u200b_pat_${patBody}` },
+		{ value: `dckr_oat_${oatBody}`, obfuscated: `dckr\u200b_oat_${oatBody}` },
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const { value, obfuscated } of tokens) {
+		for (const sensitiveToken of [value, obfuscated]) {
+			expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
+			expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
+
+			const input = fixture();
+			const find = spyOn(input.ctx.modelRegistry, "find");
+			input.input(`Review token ${sensitiveToken}`);
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(input.requests).toHaveLength(0);
+			expect(input.warnings).toEqual([contextWarning]);
+			expect(input.warnings.join(" ")).not.toContain(value);
+
+			const output = fixture([Promise.resolve(response(sensitiveToken))]);
+			output.input("Name a task");
+			await settle();
+			expect(output.state.title).toBe("existing task");
+			expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+			expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+			expect(output.warnings.join(" ")).not.toContain(value);
+		}
+	}
+
+	for (const nearMiss of [
+		`dckr_pat_${patBody.slice(0, -1)}`,
+		`dckr_pat_${patBody}Z`,
+		`dckr_oat_${oatBody.slice(0, -1)}`,
+		`dckr_oat_${oatBody}Z`,
+		`dckr_pot_${patBody}`,
+		`x${tokens[0].value}`,
+		`_${tokens[1].value}`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("rejects labeled Datadog API keys without mistaking near-misses for keys", async () => {
 	const keyValue = "A1b2".repeat(10);
 	const outputs = [
