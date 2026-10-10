@@ -66,6 +66,12 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])AGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]{58}(?![A-Za-z0-9_-])/i,
 	// Adobe OAuth client secrets use `p8e-` followed by 32 alphanumeric characters.
 	/(?<![A-Za-z0-9_])p8e-[a-z0-9]{32}(?![A-Za-z0-9_-])/i,
+	// Grafana API keys use `eyJrIjoi` followed by 70–400 alphanumeric characters.
+	/(?<![A-Za-z0-9_])eyJrIjoi[a-z0-9]{70,400}={0,3}(?![A-Za-z0-9_=-])/i,
+	// Grafana Cloud tokens use `glc_` followed by 32–400 base64 characters.
+	/(?<![A-Za-z0-9_])glc_[a-z0-9+/]{32,400}={0,3}(?![A-Za-z0-9_+/=-])/i,
+	// Grafana service-account tokens use 32 alphanumeric and 8 hexadecimal characters.
+	/(?<![A-Za-z0-9_])glsa_[a-z0-9]{32}_[a-f0-9]{8}(?![A-Za-z0-9_-])/i,
 	// Doppler personal tokens use `dp.pt.` followed by 43 alphanumeric characters.
 	/(?<![A-Za-z0-9_])dp\.pt\.[a-z0-9]{43}(?![A-Za-z0-9_-])/i,
 	// Notion tokens use `ntn_`, 11 digits, then 35 alphanumeric characters.

@@ -1563,6 +1563,66 @@ test("rejects Adobe client secrets without mistaking near-miss strings for secre
 	}
 });
 
+test("rejects Grafana tokens without mistaking near-miss strings for tokens", async () => {
+	const alphabet = "aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x";
+	const serviceBody = alphabet.repeat(2).slice(0, 32);
+	const apiKey = `eyJrIjoi${alphabet.repeat(3).slice(0, 70)}`;
+	const cloudToken = `glc_${"/+AbC0123".repeat(4)}`;
+	const serviceToken = `glsa_${serviceBody}_A1B2C3D4`;
+	const tokens = [apiKey, cloudToken, serviceToken];
+	const outputs = tokens.flatMap((token) => [
+		token,
+		token.toUpperCase(),
+		`configure-${token}`,
+		`${token.slice(0, 12)}\u200b${token.slice(12)}`,
+	]);
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(output);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("grafana alerts"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("grafana alerts");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`eyJrIjoi${alphabet.repeat(3).slice(0, 69)}`,
+		`eyJrIjoi${alphabet.repeat(13).slice(0, 401)}`,
+		`${apiKey}====`,
+		`${["eyJrIji", "i"].join("")}${alphabet.repeat(3).slice(0, 70)}`,
+		`glc_${"/+AbC0123".repeat(4).slice(0, 31)}`,
+		`glc_${"/+AbC0123".repeat(45).slice(0, 401)}`,
+		`${cloudToken.slice(0, 18)}?${cloudToken.slice(19)}`,
+		`${["glx", "_"].join("")}${"/+AbC0123".repeat(4)}`,
+		`glsa_${serviceBody.slice(0, 31)}_A1B2C3D4`,
+		`glsa_${serviceBody}_A1B2C3D`,
+		`glsa_${serviceBody}_A1B2C3D4F`,
+		`glsa_${serviceBody}_A1B2C3DG`,
+		`${["glsb", "_"].join("")}${serviceBody}_A1B2C3D4`,
+		`x${apiKey}`,
+		`_${cloudToken}`,
+		`${serviceToken}x`,
+		`${serviceToken}_x`,
+		`${serviceToken}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("grafana alerts"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("grafana alerts");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",
