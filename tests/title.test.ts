@@ -1888,6 +1888,46 @@ test("rejects Google OAuth access tokens without mistaking near-misses for token
 	}
 });
 
+test("rejects Google OAuth refresh tokens without mistaking near-misses for tokens", async () => {
+	const tokenFor = (suffix = "A".repeat(32)) => `1//${suffix}`;
+	const token = tokenFor("A1_b-".repeat(6));
+	const obfuscatedToken = `1//${"A".repeat(16)}\u200b${"B".repeat(16)}`;
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const sensitiveToken of [token, obfuscatedToken]) {
+		const context = `Review Google OAuth refresh ${sensitiveToken}`;
+		expect(hasSensitiveNamingContext(context)).toBe(true);
+		expect(hasSensitiveOutput(context)).toBe(true);
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(context);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([warning]);
+		expect(input.warnings.join(" ")).not.toContain(sensitiveToken);
+
+		const output = fixture([Promise.resolve(response(sensitiveToken))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(sensitiveToken);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("google oauth refresh"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("google oauth refresh");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	for (const nearMiss of [tokenFor("A".repeat(19)), token.replace("1//", "2//"), `x${token}`, `_${token}`]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("rejects Databricks access tokens without mistaking near-miss strings for tokens", async () => {
 	const token = ["dapi", "a".repeat(32)].join("");
 	for (const output of [token, `${token}-2`, `rotate-${token}`, token.replace("dapi", "da\u200bpi")]) {
