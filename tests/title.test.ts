@@ -974,6 +974,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the config Datadog: ${datadogApiKey}`, datadogApiKey);
 	const mailgunPrivateApiToken = `key-${"a1b2".repeat(8)}`;
 	await suppressed(fixture(), `Review Mailgun API access: ${mailgunPrivateApiToken}`, mailgunPrivateApiToken);
+	const artifactoryApiKey = `AKCp${"A1b2".repeat(17)}A`;
+	const artifactoryReferenceToken = `cmVmd${"C1d2".repeat(14)}AbC`;
+	await suppressed(fixture(), `Review the artifact repository ${artifactoryApiKey}`, artifactoryApiKey);
+	await suppressed(fixture(), `Review the artifact repository ${artifactoryReferenceToken}`, artifactoryReferenceToken);
 	const supabaseSecretKey = `sb_secret_${"S".repeat(32)}`;
 	await suppressed(fixture(), `Review the Supabase config ${supabaseSecretKey}`, supabaseSecretKey);
 	const neonApiKey = `neon_api_key_${"N".repeat(32)}`;
@@ -1147,6 +1151,12 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithMailgunToken = fixture();
 	historyWithMailgunToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Mailgun API key: ${mailgunPrivateApiToken}` }] });
 	await suppressed(historyWithMailgunToken, "Continue the task", mailgunPrivateApiToken);
+	const historyWithArtifactoryApiKey = fixture();
+	historyWithArtifactoryApiKey.messages.push({ role: "assistant", content: [{ type: "text", text: artifactoryApiKey }] });
+	await suppressed(historyWithArtifactoryApiKey, "Continue the task", artifactoryApiKey);
+	const historyWithArtifactoryReferenceToken = fixture();
+	historyWithArtifactoryReferenceToken.messages.push({ role: "assistant", content: [{ type: "text", text: artifactoryReferenceToken }] });
+	await suppressed(historyWithArtifactoryReferenceToken, "Continue the task", artifactoryReferenceToken);
 	const historyWithSupabaseSecret = fixture();
 	historyWithSupabaseSecret.messages.push({ role: "assistant", content: [{ type: "text", text: `Supabase key: ${supabaseSecretKey}` }] });
 	await suppressed(historyWithSupabaseSecret, "Continue the task", supabaseSecretKey);
@@ -1528,6 +1538,54 @@ test("rejects labeled Mailgun private API tokens without mistaking near-misses f
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("mailgun tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Artifactory tokens without mistaking near-misses for tokens", async () => {
+	const apiKey = `AKCp${"A1b2".repeat(17)}A`;
+	const referenceToken = `cmVmd${"C1d2".repeat(14)}AbC`;
+	const sensitiveOutputs = [
+		apiKey,
+		referenceToken,
+		`${apiKey.slice(0, 24)}\u200b${apiKey.slice(24)}`,
+		`${referenceToken.slice(0, 30)}\u200b${referenceToken.slice(30)}`,
+	];
+	for (const output of sensitiveOutputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(apiKey);
+		expect(f.warnings.join(" ")).not.toContain(referenceToken);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("artifactory tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("artifactory tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`AKCp${"A1b2".repeat(17)}`,
+		`${apiKey}A`,
+		`x${apiKey}`,
+		`_${apiKey}`,
+		`${apiKey}_`,
+		`cmVmd${"C1d2".repeat(14)}Ab`,
+		`${referenceToken}A`,
+		`x${referenceToken}`,
+		`${referenceToken}_`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("artifactory tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("artifactory tests");
 		expect(f.warnings).toEqual([]);
 	}
 });
@@ -4622,6 +4680,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`AIza${"A".repeat(35)}`,
 		`Datadog: ${"A1b2".repeat(10)}`,
 		`Mailgun: key-${"a1b2".repeat(8)}`,
+		`AKCp${"A1b2".repeat(17)}A`,
+		`cmVmd${"C1d2".repeat(14)}AbC`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,

@@ -329,7 +329,8 @@ and custom extension messages are excluded. Summaries and ordinary dialogue
 can still mention details from tool output. Before model lookup or provider
 transport, the bounded context is checked locally for recognizable credential
 formats (including labeled Datadog API keys and Mailgun private API tokens,
-URL user-info, Azure Shared Access Signature URLs, and Base64 Basic credentials
+standalone Artifactory API and reference tokens, URL user-info, Azure Shared
+Access Signature URLs, and Base64 Basic credentials
 in HTTP `Authorization` or `Proxy-Authorization`
 headers, including YAML block scalars with tags or anchors, conventional email
 addresses, explicitly labeled U.S. SSN- and phone-shaped values, Luhn-valid
@@ -354,8 +355,9 @@ send the title or dialogue to a model.
 The model is instructed not to include secrets or personal information in
 titles. Before applying a response, the extension checks raw and
 compatibility-normalized output for several recognizable credential formats,
-including labeled Datadog API keys and Mailgun private API tokens, Azure Shared
-Access Signature URLs, and Base64 Basic credentials in HTTP `Authorization` or
+including labeled Datadog API keys and Mailgun private API tokens, standalone
+Artifactory API and reference tokens, Azure Shared Access Signature URLs, and
+Base64 Basic credentials in HTTP `Authorization` or
 `Proxy-Authorization` headers, including YAML block scalars with tags or
 anchors, conventional email addresses, explicitly labeled
 U.S. SSN-shaped values, phone-labeled values with 7–15 digits, Luhn-valid
