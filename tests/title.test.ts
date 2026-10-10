@@ -972,6 +972,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Google API access ${googleApiKey}`, googleApiKey);
 	const datadogApiKey = "A1b2".repeat(10);
 	await suppressed(fixture(), `Review the config Datadog: ${datadogApiKey}`, datadogApiKey);
+	const mailgunPrivateApiToken = `key-${"a1b2".repeat(8)}`;
+	await suppressed(fixture(), `Review Mailgun API access: ${mailgunPrivateApiToken}`, mailgunPrivateApiToken);
 	const supabaseSecretKey = `sb_secret_${"S".repeat(32)}`;
 	await suppressed(fixture(), `Review the Supabase config ${supabaseSecretKey}`, supabaseSecretKey);
 	const neonApiKey = `neon_api_key_${"N".repeat(32)}`;
@@ -1142,6 +1144,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithDatadogApiKey = fixture();
 	historyWithDatadogApiKey.messages.push({ role: "assistant", content: [{ type: "text", text: `Datadog: ${datadogApiKey}` }] });
 	await suppressed(historyWithDatadogApiKey, "Continue the task", datadogApiKey);
+	const historyWithMailgunToken = fixture();
+	historyWithMailgunToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Mailgun API key: ${mailgunPrivateApiToken}` }] });
+	await suppressed(historyWithMailgunToken, "Continue the task", mailgunPrivateApiToken);
 	const historyWithSupabaseSecret = fixture();
 	historyWithSupabaseSecret.messages.push({ role: "assistant", content: [{ type: "text", text: `Supabase key: ${supabaseSecretKey}` }] });
 	await suppressed(historyWithSupabaseSecret, "Continue the task", supabaseSecretKey);
@@ -1479,6 +1484,50 @@ test("rejects labeled Datadog API keys without mistaking near-misses for keys", 
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("datadog tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects labeled Mailgun private API tokens without mistaking near-misses for tokens", async () => {
+	const token = `key-${"a1b2".repeat(8)}`;
+	const sensitiveOutputs = [
+		`Mailgun: ${token}`,
+		`MAILGUN_API_KEY=${token}`,
+		`mailgun: KEY-${"A1B2".repeat(8)}`,
+		`Mailgun: ${token.slice(0, 20)}\u200b${token.slice(20)}`,
+	];
+	for (const output of sensitiveOutputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("mailgun tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("mailgun tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`Mailgun: key-${"a1b2".repeat(7)}a1b`,
+		`Mailgun: ${token}a`,
+		`Mailgun: ${token}_`,
+		`Mailgun: ${token}-`,
+		`Mailgun ${token}`,
+		token,
+		`Mailgun: key-${"g".repeat(32)}`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("mailgun tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("mailgun tests");
 		expect(f.warnings).toEqual([]);
 	}
 });
@@ -4572,6 +4621,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`API-${"A1B2".repeat(6)}A1`,
 		`AIza${"A".repeat(35)}`,
 		`Datadog: ${"A1b2".repeat(10)}`,
+		`Mailgun: key-${"a1b2".repeat(8)}`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
