@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 import { cleanupTmuxFixture, supportsUnixTmux } from "./tmux-support.ts";
 
 const WORKFLOWS_DIRECTORY = fileURLToPath(new URL("../.github/workflows/", import.meta.url));
@@ -42,6 +43,30 @@ test("README documents the bounded manual and idle-title input limit", () => {
 	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
 	expect(readme).toContain("values longer than 64 Ki UTF-16 code units");
 	expect(readme).toContain("Inputs longer than 64 Ki UTF-16 code units are rejected before screening");
+});
+
+test("CI history secret scanning verifies its pinned binary and redacts findings", () => {
+	type WorkflowStep = { name?: string; if?: string; env?: Record<string, string>; run?: string };
+	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8")) as {
+		jobs?: Record<string, { steps?: WorkflowStep[] }>;
+	};
+	const scan = workflow.jobs?.test?.steps?.find((step) => step.name === "Scan Git history for secrets");
+	if (!scan) throw new Error("The Tests workflow must scan Git history for secrets");
+
+	expect(scan.if).toBe("matrix.node == 22");
+	expect(scan.env?.GITLEAKS_VERSION).toMatch(/^\d+\.\d+\.\d+$/u);
+	expect(scan.env?.GITLEAKS_SHA256).toMatch(/^[a-f0-9]{64}$/u);
+	const run = scan.run ?? "";
+	expect(run).toContain('archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"');
+	expect(run).toContain('url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"');
+	expect(run).toContain("curl --fail --location --silent --show-error");
+	expect(run).toContain('"$GITLEAKS_SHA256" "$RUNNER_TEMP/$archive" | sha256sum --check --status');
+	const checksum = run.indexOf("sha256sum --check --status");
+	const extraction = run.indexOf("tar -xzf");
+	const execution = run.indexOf('"$RUNNER_TEMP/gitleaks" git --redact --no-banner .');
+	expect(checksum).toBeGreaterThanOrEqual(0);
+	expect(extraction).toBeGreaterThan(checksum);
+	expect(execution).toBeGreaterThan(extraction);
 });
 
 test("npm publishing requires all release safety gates", () => {
