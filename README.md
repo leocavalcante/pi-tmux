@@ -330,9 +330,9 @@ can still mention details from tool output. Before model lookup or provider
 transport, the bounded context is checked locally with limited patterns for
 recognizable credentials. These include selected provider-specific formats
 (for example GitHub, GitLab, and PyPI tokens, Azure DevOps PATs, Google OAuth/API
-keys, and other service tokens), npm `.npmrc` `_auth` values with a Base64
-username/password pair, credential-bearing URLs, Bearer and Base64 Basic
-authorization values, and long values assigned to common credential labels.
+keys, and other service tokens), npm `.npmrc` `_auth` username/password pairs
+and legacy Base64 `_password` values, credential-bearing URLs, Bearer and Base64
+Basic authorization values, and long values assigned to common credential labels.
 For supported credential labels, YAML block scalars with tags or anchors are
 also checked, as are shorter non-placeholder password/passphrase assignments.
 The context scanner also checks conventional email addresses and explicitly

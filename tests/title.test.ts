@@ -49,6 +49,10 @@ function npmrcAuthSetting(userPass: string): string {
 	return `//registry.npmjs.org/:_auth=${Buffer.from(userPass).toString("base64")}`;
 }
 
+function npmrcPasswordSetting(password: string): string {
+	return `//registry.npmjs.org/:_password=${Buffer.from(password).toString("base64")}`;
+}
+
 function fixture(
 	results: Promise<ReturnType<typeof response>>[] = [Promise.resolve(response("Fix auth tests"))],
 	beforeCommand?: (args: string[], signal: AbortSignal, renderedTitle?: string) => Promise<void>,
@@ -1154,6 +1158,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review npm config ${npmrcAuth}`, npmrcAuth);
 	const obfuscatedNpmrcAuth = npmrcAuth.replace("_auth", "_au\u200bth");
 	await suppressed(fixture(), `Review npm config ${obfuscatedNpmrcAuth}`, obfuscatedNpmrcAuth);
+	const npmrcPassword = npmrcPasswordSetting("pw1");
+	await suppressed(fixture(), `Review npm config ${npmrcPassword}`, npmrcPassword);
+	const obfuscatedNpmrcPassword = npmrcPassword.replace("_password", "_pass\u200bword");
+	await suppressed(fixture(), `Review npm config ${obfuscatedNpmrcPassword}`, obfuscatedNpmrcPassword);
 
 	const databaseUrl = "postgres://test-user:example-only-password@db.example.test/app";
 	await suppressed(fixture(), `Review the database connection ${databaseUrl}`, databaseUrl);
@@ -1286,6 +1294,12 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const npmrcAuthWithoutPassword = npmrcAuthSetting("fixture-without-separator");
 	expect(hasSensitiveNamingContext(npmrcAuthWithoutPassword)).toBe(false);
 	expect(hasSensitiveOutput(npmrcAuthWithoutPassword)).toBe(false);
+	const npmrcPasswordPlaceholder = npmrcPasswordSetting("example");
+	expect(hasSensitiveNamingContext(npmrcPasswordPlaceholder)).toBe(false);
+	expect(hasSensitiveOutput(npmrcPasswordPlaceholder)).toBe(false);
+	const obfuscatedNpmrcPasswordPlaceholder = npmrcPasswordPlaceholder.replace("_password", "_pass\u200bword");
+	expect(hasSensitiveNamingContext(obfuscatedNpmrcPasswordPlaceholder)).toBe(false);
+	expect(hasSensitiveOutput(obfuscatedNpmrcPasswordPlaceholder)).toBe(false);
 
 	const uriWithoutPassword = fixture([Promise.resolve(response("review database"))]);
 	uriWithoutPassword.input("Review postgres://test-user@localhost/app");
@@ -1308,7 +1322,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 
 	const placeholderCredentials = fixture([Promise.resolve(response("review docs"))]);
 	placeholderCredentials.input([
-		"Review docs with password=placeholder, passphrase=example, token: placeholder, //registry.npmjs.org/:_auth=placeholder,",
+		"Review docs with password=placeholder, passphrase=example, token: placeholder, //registry.npmjs.org/:_auth=placeholder, //registry.npmjs.org/:_password=placeholder,",
 		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, PresharedKey=example,",
 		"client-key-data: example, Authorization: Basic example,",
 		`password: "example value", passphrase: example value, password: example\n  value`,
@@ -1389,6 +1403,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	];
 	const npmrcAuth = npmrcAuthSetting("fixture-user:fixture-password");
 	const obfuscatedNpmrcAuth = npmrcAuth.replace("_auth", "_au\u200bth");
+	const npmrcPassword = npmrcPasswordSetting("pw1");
+	const obfuscatedNpmrcPassword = npmrcPassword.replace("_password", "_pass\u200bword");
 	const outputs = [
 		`password=${"S".repeat(12)}`,
 		`password=secret phrase`,
@@ -1423,6 +1439,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		npmrcAuth,
 		obfuscatedNpmrcAuth,
 		npmrcAuthSetting("u:p"),
+		npmrcPassword,
+		obfuscatedNpmrcPassword,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		"redis://:example-only-password@localhost:6379/0",
 		["gh", "p_", "a".repeat(36)].join(""),
@@ -4056,10 +4074,11 @@ test("sensitive-looking idle titles are replaced by zsh before cleanup", async (
 	expect(f.warnings).toEqual([]);
 });
 
-test("credential-bearing URLs in idle titles fall back without disclosure", async () => {
+test("credential-bearing URLs and npm settings in idle titles fall back without disclosure", async () => {
 	for (const idleTitle of [
 		"postgres://test-user:example-only-password@db.example.test/app",
 		"redis://:example-only-password@localhost:6379/0",
+		npmrcPasswordSetting("pw1"),
 	]) {
 		process.env.PI_TMUX_IDLE_TITLE = idleTitle;
 		const f = fixture([]);
