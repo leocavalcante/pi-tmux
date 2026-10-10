@@ -3464,6 +3464,13 @@ test("email-address-like model output is rejected before normalization and not d
 	expect(f.warnings.join(" ")).not.toContain(splitAddress);
 });
 
+test("sensitive-output email scanning stays bounded on long non-email text", () => {
+	const nonEmail = `http://${"a".repeat(64_000)}`;
+	const startedAt = performance.now();
+	expect(hasSensitiveOutput(nonEmail)).toBe(false);
+	expect(performance.now() - startedAt).toBeLessThan(5_000);
+});
+
 test("ordinary security-themed and hyphenated task titles without credential values remain valid", async () => {
 	for (const [title, expected] of [
 		["review bearer auth flow", "review bearer auth flow"],
