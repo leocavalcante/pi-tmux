@@ -975,10 +975,16 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const inlinePasswordPhrase = `password=secret phrase`;
 	const plainPassphrase = `passphrase: silver owl`;
 	const foldedPlainPassword = `password: secret\n  phrase`;
+	const punctuatedPassword = `password=secret phrase, keep this private`;
+	const punctuatedPassphrase = `passphrase: silver owl; do not copy it`;
+	const punctuatedFoldedPassword = `password: secret\n  phrase, keep this private`;
 	await suppressed(fixture(), `Review the configuration ${quotedPasswordPhrase}`, quotedPasswordPhrase);
 	await suppressed(fixture(), `Review the configuration ${inlinePasswordPhrase}`, inlinePasswordPhrase);
 	await suppressed(fixture(), `Review the configuration ${plainPassphrase}`, plainPassphrase);
 	await suppressed(fixture(), `Review the configuration ${foldedPlainPassword}`, foldedPlainPassword);
+	await suppressed(fixture(), `Review the configuration ${punctuatedPassword}`, punctuatedPassword);
+	await suppressed(fixture(), `Review the configuration ${punctuatedPassphrase}`, punctuatedPassphrase);
+	await suppressed(fixture(), `Review the configuration ${punctuatedFoldedPassword}`, punctuatedFoldedPassword);
 	const passwordBlock = `password: |-\n  ${"P".repeat(12)}`;
 	await suppressed(fixture(), `Review the configuration ${passwordBlock}`, passwordBlock);
 	const multiwordPasswordBlock = `password: |-\n  secret phrase`;
@@ -1116,6 +1122,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, PresharedKey=example,",
 		"client-key-data: example, Authorization: Basic example,",
 		`password: "example value", passphrase: example value, password: example\n  value`,
+		"password=example phrase, continue; passphrase: placeholder phrase; continue",
 		"\nAuthorization: |-\n  Basic example\n",
 		"\nAuthorization: !!str |-\n  Basic example\n",
 		"\nProxy-Authorization: >-\n  Basic example\n",
@@ -1192,6 +1199,9 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`password: "secret phrase"`,
 		`passphrase: silver owl`,
 		`password: secret\n  phrase`,
+		`password=secret phrase, keep this private`,
+		`passphrase: silver owl; do not copy it`,
+		`password: secret\n  phrase, keep this private`,
 		`password: |-\n  ${"P".repeat(12)}`,
 		`password: |-\n  secret phrase`,
 		`passphrase: &words >-\n  moonlight\n  meadow`,
@@ -3500,6 +3510,9 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`password: "secret phrase"`,
 		`passphrase: silver owl`,
 		`password: secret\n  phrase`,
+		`password=secret phrase, keep this private`,
+		`passphrase: silver owl; do not copy it`,
+		`password: secret\n  phrase, keep this private`,
 		`password: |-\n  ${"P".repeat(12)}`,
 		`password: |-\n  secret phrase`,
 		`passphrase: &words >-\n  moonlight\n  meadow`,
