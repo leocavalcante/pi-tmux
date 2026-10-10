@@ -4,6 +4,17 @@ import { fileURLToPath } from "node:url";
 
 const WORKFLOWS_DIRECTORY = fileURLToPath(new URL("../.github/workflows/", import.meta.url));
 
+test("npm publishing is restricted to release commits on main", () => {
+	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/publish.yml", import.meta.url)), "utf8");
+	const checkout = workflow.indexOf("fetch-depth: 0");
+	const ancestryCheck = workflow.indexOf('git merge-base --is-ancestor "$GITHUB_SHA" origin/main');
+	const publish = workflow.indexOf("npm publish --access public");
+
+	expect(checkout).toBeGreaterThanOrEqual(0);
+	expect(ancestryCheck).toBeGreaterThan(checkout);
+	expect(publish).toBeGreaterThan(ancestryCheck);
+});
+
 test("external GitHub Actions use full commit SHAs with version comments", () => {
 	const workflowFiles = readdirSync(WORKFLOWS_DIRECTORY)
 		.filter((file) => /\.ya?ml$/i.test(file))
