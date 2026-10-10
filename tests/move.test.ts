@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { STATUS_INFO_FORMAT, WAITING_OPTION, type RunTmux } from "../index";
+import piTmux, { WAITING_OPTION, type RunTmux } from "../index";
+import { STATUS_SNAPSHOT_FORMAT } from "../src/tmux.ts";
 
 const hasTmux = Bun.which("tmux") !== null;
 const sessionRenameTarget = (args: string[]) => {
@@ -153,7 +154,7 @@ test.skipIf(!hasTmux)("a server restart after lookup cannot apply the pending ba
 		const status = await f.status();
 		expect(status).toContain("tmux writes: stopped (server changed; restart Pi to resume)");
 		expect(f.rawCalls.slice(beforeStatus)).toEqual([[
-			"display-message", "-p", "-t", pane, STATUS_INFO_FORMAT,
+			"display-message", "-p", "-t", pane, STATUS_SNAPSHOT_FORMAT,
 		]]);
 		expect(f.warnings).toEqual([]);
 	});
@@ -165,6 +166,41 @@ const movingCases = [
 	{ sameSession: false, peerWaiting: false, otherWindowWaiting: true },
 	{ sameSession: true, peerWaiting: false, otherWindowWaiting: false },
 ];
+
+test.skipIf(!hasTmux)("status detects a server restart before any update and stops future writes", async () => {
+	await withServer(async (f) => {
+		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Old Server", "-n", "old title", "/bin/sleep 60");
+		const [oldSession, oldWindow, oldServer] = f.tmux(
+			"display-message", "-p", "-t", pane, "#{session_id}\t#{window_id}\t#{pid}",
+		).split("\t");
+		process.env.TMUX_PANE = pane;
+		await f.emit("session_start");
+
+		f.tmux("kill-server");
+		await waitForProcessExit(oldServer);
+		const replacementPane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Replacement", "-n", "private replacement title", "/bin/sleep 60");
+		const [session, window, server] = f.tmux(
+			"display-message", "-p", "-t", replacementPane, "#{session_id}\t#{window_id}\t#{pid}",
+		).split("\t");
+		expect(replacementPane).toBe(pane);
+		expect([session, window]).toEqual([oldSession, oldWindow]);
+		expect(server).not.toBe(oldServer);
+
+		const beforeStatus = f.rawCalls.length;
+		const status = await f.status();
+		expect(status).toContain("tmux writes: stopped (server changed; restart Pi to resume)");
+		expect(status).not.toContain("Replacement");
+		expect(status).not.toContain("private replacement title");
+		expect(f.rawCalls.slice(beforeStatus)).toEqual([[
+			"display-message", "-p", "-t", pane, STATUS_SNAPSHOT_FORMAT,
+		]]);
+		expect(f.warnings).toEqual([]);
+
+		const afterStatus = f.rawCalls.length;
+		await f.emit("agent_settled");
+		expect(f.rawCalls.slice(afterStatus)).toEqual([]);
+	});
+});
 
 test.skipIf(!hasTmux)("a guarded title rename skipped by a server restart is not reported as applied", async () => {
 	await withServer(async (f) => {
@@ -396,7 +432,7 @@ test.skipIf(!hasTmux)("status reports queued move repairs without consuming them
 		await f.emit("agent_settled");
 		const beforeStatus = f.calls.length;
 		expect(await f.status()).toContain("Pending move repairs: windows 1, sessions 1");
-		expect(f.calls.slice(beforeStatus)).toEqual([["display-message", "-p", "-t", pane, STATUS_INFO_FORMAT]]);
+		expect(f.calls.slice(beforeStatus)).toEqual([["display-message", "-p", "-t", pane, STATUS_SNAPSHOT_FORMAT]]);
 		f.beforeCommand = undefined;
 		await f.emit("agent_settled");
 		expect(f.tmux("display-message", "-p", "-t", anchor, "#{window_name}")).toBe("move task");

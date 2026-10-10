@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { getEventListeners } from "node:events";
 import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, STATUS_INFO_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
+import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
+import { STATUS_SNAPSHOT_FORMAT } from "../src/tmux.ts";
 import { hasSensitiveOutput } from "../src/naming.ts";
 import {
 	buildQuitTitleFormat,
@@ -100,8 +101,8 @@ function fixture(
 	const tmux: RunTmux = async (args, signal) => {
 		calls.push(args);
 		if (beforeCommand) await beforeCommand(args, signal, args[0] === "rename-window" ? renderTitle(args[4]) : undefined);
-		if (args[0] === "display-message" && args[4] === STATUS_INFO_FORMAT) {
-			return state.statusInfo ?? `${state.session}\t${state.window}\t${state.waitingPanes.get("%1") === "1" ? "1" : "0"}\t${windowWaiting() ? "1" : "0"}\t${[...state.waitingPanes.values()].includes("1") ? "1" : "0"}`;
+		if (args[0] === "display-message" && args[4] === STATUS_SNAPSHOT_FORMAT) {
+			return state.statusInfo ?? `123\t${state.session}\t${state.window}\t${state.waitingPanes.get("%1") === "1" ? "1" : "0"}\t${windowWaiting() ? "1" : "0"}\t${[...state.waitingPanes.values()].includes("1") ? "1" : "0"}`;
 		}
 		if (args[0] === "display-message") return state.windowInfo ?? `${state.session}\t${state.window}\t${windowWaiting() ? "1" : "0"}\t${state.title}`;
 		if (args[0] === "show-options" && args.at(-1) === WINDOW_TITLE_MARKED_OPTION) return state.windowTitleMarked ?? "";
@@ -3845,7 +3846,7 @@ test.each([
 	f.state.title = "synthetic private title";
 	f.state.sessionTitle = "synthetic private session name";
 	await f.refresh("status");
-	expect(f.calls).toEqual([["display-message", "-p", "-t", "%1", STATUS_INFO_FORMAT]]);
+	expect(f.calls).toEqual([["display-message", "-p", "-t", "%1", STATUS_SNAPSHOT_FORMAT]]);
 	expect(f.requests).toEqual([]);
 	expect(f.writes).toEqual([]);
 	expect(f.state.waitingPanes.size).toBe(0);
@@ -3888,7 +3889,7 @@ test("status preserves manual pins and waiting state", async () => {
 	expect(f.notices.at(-1)).toContain("Local waiting: yes");
 	expect(f.notices.at(-1)).toContain("Waiting flags: pane yes, window yes, session yes");
 	expect(f.writes).toEqual(previousWrites);
-	expect(f.calls.slice(previousCalls)).toEqual([["display-message", "-p", "-t", "%1", STATUS_INFO_FORMAT]]);
+	expect(f.calls.slice(previousCalls)).toEqual([["display-message", "-p", "-t", "%1", STATUS_SNAPSHOT_FORMAT]]);
 	f.input("another task");
 	await settle();
 	expect(f.state.title).toBe("pinned task");
@@ -3907,6 +3908,43 @@ test("status does not cancel or wait for a pending naming request", async () => 
 	pending.resolve(response("completed task"));
 	await settle();
 	expect(f.state.title).toBe("completed task");
+});
+
+test("status accepts a legacy adapter snapshot without server identity", async () => {
+	const f = fixture();
+	f.state.statusInfo = "$0\t@2\t0\t0\t0";
+	await f.refresh("status");
+	expect(f.notices.at(-1)).toContain("Targets: pane %1, window @2, session $0");
+	expect(f.notices.at(-1)).toContain("tmux writes: enabled");
+	expect(f.warnings).toEqual([]);
+	expect(f.writes).toEqual([]);
+});
+
+test("status detects a changed server, cancels obsolete naming work, and leaves tmux untouched", async () => {
+	const pending = deferred();
+	const f = fixture([pending.promise]);
+	f.state.windowInfo = "$0:1:123\t@2\t0\texisting task";
+	f.input("synthetic task");
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	expect(f.requests[0].options.signal.aborted).toBe(false);
+
+	f.state.statusInfo = "124\t$0\t@2\t0\t0\t0";
+	const beforeWrites = [...f.writes];
+	const beforeCalls = f.calls.length;
+	await f.refresh("status");
+	expect(f.notices.at(-1)).toContain("tmux writes: stopped (server changed; restart Pi to resume)");
+	expect(f.notices.at(-1)).toContain("Naming request: idle");
+	expect(f.requests[0].options.signal.aborted).toBe(true);
+	expect(f.writes).toEqual(beforeWrites);
+	expect(f.calls.slice(beforeCalls)).toEqual([[
+		"display-message", "-p", "-t", "%1", STATUS_SNAPSHOT_FORMAT,
+	]]);
+
+	pending.resolve(response("obsolete title"));
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.requests).toHaveLength(1);
 });
 
 test("status reports completed model output waiting to be applied without changing it", async () => {
@@ -3933,9 +3971,9 @@ test("status reports completed model output waiting to be applied without changi
 });
 
 test.each([
-	"$0\t@2\t2\t0\t0", "$0\t@2\t0\tx\t0", "$0\t@2\t0\t0\t9",
-	"home\t@2\t0\t0\t0", "$0\t-t\t0\t0\t0", "$0\t@2\t0\t0",
-	"$0\t@2\t0\t0\t0\textra",
+	"123\t$0\t@2\t2\t0\t0", "123\t$0\t@2\t0\tx\t0", "123\t$0\t@2\t0\t0\t9",
+	"pid\t$0\t@2\t0\t0\t0", "123\thome\t@2\t0\t0\t0", "123\t$0\t-t\t0\t0\t0",
+	"123\t$0\t@2\t0\t0", "123\t$0\t@2\t0\t0\t0\textra",
 ])("invalid status snapshots are contained without exposing their contents: %j", async (info) => {
 	const f = fixture();
 	f.state.statusInfo = info;
@@ -3967,7 +4005,7 @@ test("reload cancels a pending status snapshot without notifying the disposed ru
 	const gate = new Promise<void>((resolve) => { release = resolve; });
 	let statusSignal: AbortSignal | undefined;
 	const f = fixture(undefined, async (args, signal) => {
-		if (args[4] === STATUS_INFO_FORMAT) { statusSignal = signal; await gate; }
+		if (args[4] === STATUS_SNAPSHOT_FORMAT) { statusSignal = signal; await gate; }
 	});
 	const status = f.refresh("status");
 	await settle();

@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { STATUS_INFO_FORMAT, WAITING_OPTION, type RunTmux } from "../index";
+import piTmux, { WAITING_OPTION, type RunTmux } from "../index";
+import { STATUS_SNAPSHOT_FORMAT } from "../src/tmux.ts";
 
 const hasTmux = Bun.which("tmux") !== null;
 
@@ -60,7 +61,7 @@ test.skipIf(!hasTmux).each([
 		expect(notices[0]).toContain("tmux writes: enabled");
 		expect(notices[0]).not.toContain("synthetic private title");
 		expect(notices[0]).not.toContain("Synthetic Session");
-		expect(calls).toEqual([["display-message", "-p", "-t", pane, STATUS_INFO_FORMAT]]);
+		expect(calls).toEqual([["display-message", "-p", "-t", pane, STATUS_SNAPSHOT_FORMAT]]);
 		expect(snapshot()).toEqual(before);
 		expect(warnings).toEqual([]);
 	} finally {
