@@ -108,6 +108,10 @@ const MAILGUN_PRIVATE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?mailgu
 // Artifactory tokens have distinctive fixed prefixes and exact body lengths.
 const ARTIFACTORY_API_KEY_PATTERN = /(?<![A-Za-z0-9_])AKCp[A-Za-z0-9]{69}(?![A-Za-z0-9_])/;
 const ARTIFACTORY_REFERENCE_TOKEN_PATTERN = /(?<![A-Za-z0-9_])cmVmd[A-Za-z0-9]{59}(?![A-Za-z0-9_])/;
+// Fly.io org tokens use `fo1_` plus 43 URL-safe characters; machine tokens use
+// `fm1a_`, `fm1r_`, or `fm2_` plus at least 100 Base64 characters.
+const FLY_IO_ORG_TOKEN_PATTERN = /(?<![A-Za-z0-9_])fo1_[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/;
+const FLY_IO_MACHINE_TOKEN_PATTERN = /(?<![A-Za-z0-9_])(?:fm1[ar]|fm2)_[A-Za-z0-9+/]{100,}={0,3}(?![A-Za-z0-9_+/=-])/;
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/[^\s/:@]+:[^\s/@]+@/i,
@@ -116,6 +120,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	MAILGUN_PRIVATE_API_TOKEN_PATTERN,
 	ARTIFACTORY_API_KEY_PATTERN,
 	ARTIFACTORY_REFERENCE_TOKEN_PATTERN,
+	FLY_IO_ORG_TOKEN_PATTERN,
+	FLY_IO_MACHINE_TOKEN_PATTERN,
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed
 	// by a 16-hex or `local` segment.
