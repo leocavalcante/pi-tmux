@@ -3,6 +3,7 @@ import { getEventListeners } from "node:events";
 import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, STATUS_INFO_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
+import { hasSensitiveOutput } from "../src/naming.ts";
 import {
 	buildQuitTitleFormat,
 	buildWindowBaseQuitTitleFormats,
@@ -157,7 +158,8 @@ function fixture(
 		return "";
 	};
 	const load = () => {
-		idleTitle = cleanTitle(process.env.PI_TMUX_IDLE_TITLE ?? "zsh") || "zsh";
+		const setting = process.env.PI_TMUX_IDLE_TITLE ?? "zsh";
+		idleTitle = hasSensitiveOutput(setting) ? "zsh" : cleanTitle(setting) || "zsh";
 		return piTmux({
 			on: (event: string, handler: Function) => handlers.set(event, handler),
 			registerCommand: (name: string, command: { handler: Function; getArgumentCompletions?: Function }) => commands.set(name, command),
@@ -2104,6 +2106,25 @@ test.each([
 	await f.emit("session_shutdown", "quit");
 	expect(f.state.title).toBe(expected);
 	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat(expected)]);
+});
+
+test("sensitive-looking idle titles are replaced by zsh before cleanup", async () => {
+	process.env.PI_TMUX_IDLE_TITLE = ["ghp_", "A".repeat(20)].join("");
+	const f = fixture([]);
+	await f.emit("session_start");
+	await f.emit("session_shutdown", "quit");
+	expect(f.state.title).toBe("zsh");
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat("zsh")]);
+	expect(f.warnings).toEqual([]);
+});
+
+test("obfuscated sensitive idle titles also fall back without disclosure", async () => {
+	process.env.PI_TMUX_IDLE_TITLE = `ghp_${"B".repeat(10)}\u200b${"B".repeat(10)}`;
+	const f = fixture([]);
+	await f.emit("session_start");
+	await f.emit("session_shutdown", "quit");
+	expect(f.state.title).toBe("zsh");
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat("zsh")]);
 });
 
 test("idle title configuration is reread by a fresh extension runtime", async () => {

@@ -1,6 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	buildNamingContext,
+	hasSensitiveOutput,
 	InvalidNamingTitleError,
 	UnsafeNamingContextError,
 	UnsafeNamingOutputError,
@@ -53,7 +54,8 @@ const INVALID_NAMING_TITLE_WARNINGS = {
 } satisfies Record<InvalidNamingTitleError["reason"], string>;
 
 export function createController(tmux: RunTmux) {
-	const idleTitle = cleanTitle(process.env.PI_TMUX_IDLE_TITLE ?? "zsh") || "zsh";
+	const idleTitleSetting = process.env.PI_TMUX_IDLE_TITLE ?? "zsh";
+	const idleTitle = hasSensitiveOutput(idleTitleSetting) ? "zsh" : cleanTitle(idleTitleSetting) || "zsh";
 	let namingModel: ReturnType<typeof parseNamingModel> = null;
 	let invalidModelSetting = false;
 	try {
