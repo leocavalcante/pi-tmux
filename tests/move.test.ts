@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { WAITING_OPTION, type RunTmux } from "../index";
 import { STATUS_SNAPSHOT_FORMAT, WINDOW_INFO_INTERNAL_FORMAT } from "../src/tmux.ts";
-import { supportsUnixTmux } from "./tmux-support.ts";
+import { cleanupTmuxFixture, supportsUnixTmux } from "./tmux-support.ts";
 
 const hasTmux = supportsUnixTmux(process.platform, Bun.which("tmux"));
 const sessionRenameTarget = (args: string[]) => {
@@ -116,8 +116,7 @@ async function withServer(run: (fixture: Fixture) => Promise<void>) {
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { fixture.tmux("kill-server"); } catch { /* Server may already be gone. */ }
-		rmSync(directory, { recursive: true, force: true });
+		cleanupTmuxFixture(() => fixture.tmux("kill-server"), directory);
 	}
 }
 

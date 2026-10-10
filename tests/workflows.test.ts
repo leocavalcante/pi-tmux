@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { supportsUnixTmux } from "./tmux-support.ts";
+import { cleanupTmuxFixture, supportsUnixTmux } from "./tmux-support.ts";
 
 const WORKFLOWS_DIRECTORY = fileURLToPath(new URL("../.github/workflows/", import.meta.url));
 
@@ -9,6 +11,23 @@ test("tmux integration fixtures require a Unix-like platform and a tmux executab
 	expect(supportsUnixTmux("win32", "C:\\tools\\tmux.exe")).toBe(false);
 	expect(supportsUnixTmux("linux", "/usr/bin/tmux")).toBe(true);
 	expect(supportsUnixTmux("darwin", null)).toBe(false);
+});
+
+test("tmux fixture cleanup does not mask a test failure", () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-cleanup-test-"));
+	const failure = new Error("fixture failed");
+	let observed: unknown;
+	try {
+		try {
+			throw failure;
+		} finally {
+			cleanupTmuxFixture(() => { throw new Error("server already exited"); }, directory);
+		}
+	} catch (error) {
+		observed = error;
+	}
+	expect(observed).toBe(failure);
+	expect(existsSync(directory)).toBe(false);
 });
 
 test("README tmux compatibility versions stay aligned with version-checked CI", () => {

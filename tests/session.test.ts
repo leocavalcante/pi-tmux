@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -10,7 +10,7 @@ import {
 	WINDOW_TITLE_LITERAL_PREFIX_OPTION,
 	WINDOW_TITLE_MARKED_OPTION,
 } from "../src/tmux.ts";
-import { supportsUnixTmux } from "./tmux-support.ts";
+import { cleanupTmuxFixture, supportsUnixTmux } from "./tmux-support.ts";
 
 const hasTmux = supportsUnixTmux(process.platform, Bun.which("tmux"));
 const supportsControlCharacterNames = (kind: "session" | "window") => {
@@ -27,8 +27,7 @@ const supportsControlCharacterNames = (kind: "session" | "window") => {
 	} catch {
 		return false;
 	} finally {
-		try { run("kill-server"); } catch { /* The server may not have started. */ }
-		rmSync(directory, { recursive: true, force: true });
+		cleanupTmuxFixture(() => run("kill-server"), directory);
 	}
 };
 const hasRoundTripUnsafeWindowNames = supportsControlCharacterNames("window");
@@ -124,7 +123,7 @@ test.skipIf(!hasTmux).each([
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;
 		else process.env.TMUX_PANE = originalPane;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -155,7 +154,7 @@ test.skipIf(!hasTmux)("leading-hyphen titles remain literal when clearing a wait
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;
 		else process.env.TMUX_PANE = originalPane;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -203,7 +202,7 @@ test.skipIf(!hasTmux)("waiting markers preserve literal custom window names with
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -247,7 +246,7 @@ test.skipIf(!hasTmux)("quit preserves a literal leading prefix when legacy windo
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -304,7 +303,7 @@ test.skipIf(!hasTmux)("literal leading waiting prefixes survive startup and shar
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -380,7 +379,7 @@ test.skipIf(!hasTmux)("literal leading prefixes survive move repair and peer-awa
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -417,7 +416,7 @@ test.skipIf(!hasTmux).each([false, true])("window renames re-evaluate sibling st
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;
 		else process.env.TMUX_PANE = originalPane;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -464,7 +463,7 @@ test.skipIf(!hasTmux)("the real tmux adapter preserves empty window names", asyn
 		else process.env.TMUX_PANE = originalPane;
 		if (originalTmux === undefined) delete process.env.TMUX;
 		else process.env.TMUX = originalTmux;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -496,7 +495,7 @@ test.skipIf(!hasTmux)("the real tmux adapter handles long custom window names", 
 		else process.env.TMUX_PANE = originalPane;
 		if (originalTmux === undefined) delete process.env.TMUX;
 		else process.env.TMUX = originalTmux;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -550,7 +549,7 @@ test.skipIf(!hasTmux).each([false, true])("quitting one Pi preserves its peer's 
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;
 		else process.env.TMUX_PANE = originalPane;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -579,7 +578,7 @@ test.skipIf(!hasTmux)("malformed active flags do not prevent quit cleanup", asyn
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;
 		else process.env.TMUX_PANE = originalPane;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -625,7 +624,7 @@ test.skipIf(!hasTmux).each([
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;
 		else process.env.TMUX_PANE = originalPane;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -705,7 +704,7 @@ test.skipIf(!hasTmux)("window markers aggregate only their own waiting panes", a
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;
 		else process.env.TMUX_PANE = originalPane;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -743,7 +742,7 @@ test.skipIf(!hasTmux)("tmux aggregates waiting panes across windows and preserve
 		update(splitPane, false);
 		expect(title()).toBe(name);
 	} finally {
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -798,7 +797,7 @@ test.skipIf(!hasTmux)("server-guarded waiting updates preserve tmux-escaped sess
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -846,7 +845,7 @@ test.skipIf(!hasTmux)("former-session repair preserves an escaped custom session
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -899,8 +898,7 @@ test.skipIf(!hasTmux || !hasRoundTripUnsafeSessionNames)("session markers preser
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } catch { /* The server may already have exited. */ }
-		finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -951,7 +949,7 @@ test.skipIf(!hasTmux)("former-window repair preserves tmux-escaped custom names"
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -1004,8 +1002,7 @@ test.skipIf(!hasTmux || !hasRoundTripUnsafeWindowNames)("former-window repair pr
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } catch { /* The server may already have exited. */ }
-		finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -1060,7 +1057,7 @@ test.skipIf(!hasTmux).each([
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
 
@@ -1111,7 +1108,6 @@ test.skipIf(!hasTmux || !hasRoundTripUnsafeWindowNames)("server-guarded waiting 
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } catch { /* The server may not have started if setup failed. */ }
-		rmSync(directory, { recursive: true, force: true });
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
 });
