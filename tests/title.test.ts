@@ -971,6 +971,13 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const obfuscatedEmailAddress = "customer@\u200bexample.test";
 	await suppressed(fixture(), `Update the notification flow for ${obfuscatedEmailAddress}`, obfuscatedEmailAddress);
 
+	const labeledSsn = "ssn=000-00-0000";
+	await suppressed(fixture(), `Validate the imported record ${labeledSsn}`, labeledSsn);
+	const labeledPhone = "phone=0000000";
+	await suppressed(fixture(), `Validate the imported record ${labeledPhone}`, labeledPhone);
+	const labeledCard = "card number=0000000000000000";
+	await suppressed(fixture(), `Validate the imported record ${labeledCard}`, labeledCard);
+
 	const databaseUrl = "postgres://test-user:example-only-password@db.example.test/app";
 	await suppressed(fixture(), `Review the database connection ${databaseUrl}`, databaseUrl);
 	const obfuscatedUrl = "postgres://test-user:example-only-\u200bpassword@db.example.test/app";
@@ -982,6 +989,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithEmail = fixture();
 	historyWithEmail.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous contact: ${emailAddress}` }] });
 	await suppressed(historyWithEmail, "Continue the task", emailAddress);
+	const historyWithSsn = fixture();
+	historyWithSsn.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous record: ${labeledSsn}` }] });
+	await suppressed(historyWithSsn, "Continue the task", labeledSsn);
 
 	const obfuscated = `ghp_${"A".repeat(10)}\u200b${"A".repeat(10)}`;
 	await suppressed(fixture(), `Review ${obfuscated}`);
@@ -1003,6 +1013,13 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	expect(uriWithoutPassword.requests).toHaveLength(1);
 	expect(uriWithoutPassword.state.title).toBe("review database");
 	expect(uriWithoutPassword.warnings).toEqual([]);
+
+	const unlabeledNumbers = fixture([Promise.resolve(response("review record"))]);
+	unlabeledNumbers.input("Review record 000-00-0000 and 0000000");
+	await settle();
+	expect(unlabeledNumbers.requests).toHaveLength(1);
+	expect(unlabeledNumbers.state.title).toBe("review record");
+	expect(unlabeledNumbers.warnings).toEqual([]);
 });
 
 test("safe naming can resume after a credential-looking context is blocked", async () => {

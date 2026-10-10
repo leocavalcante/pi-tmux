@@ -159,12 +159,13 @@ function hasBearerToken(value: string): boolean {
 	return false;
 }
 
-// Check likely credentials and conventional email addresses before transmission.
-// Broader personal-data checks stay output-only to avoid suppressing titles for
-// ordinary dialogue that mentions people.
+// Check credentials and high-confidence personal-data formats before transmission.
+// These PII patterns require conventional email syntax or explicit labels; avoid
+// broad checks for names and other personal data that suppress ordinary titles.
 export function hasSensitiveNamingContext(text: string): boolean {
 	const hasSensitiveValue = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
-		|| hasBearerToken(value) || LABELED_CREDENTIAL_PATTERN.test(value) || EMAIL_ADDRESS_PATTERN.test(value);
+		|| hasBearerToken(value) || LABELED_CREDENTIAL_PATTERN.test(value) || EMAIL_ADDRESS_PATTERN.test(value)
+		|| US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) =>
 		hasSensitiveValue(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, ""));
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");

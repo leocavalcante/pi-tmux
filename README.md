@@ -323,8 +323,9 @@ Images, thinking blocks, tool calls, tool results, shell output, system prompts,
 and custom extension messages are excluded. Summaries and ordinary dialogue
 can still mention details from tool output. Before model lookup or provider
 transport, the bounded context is checked locally for recognizable credential
-formats, including credentials embedded in URL user-info, conventional email
-addresses, and long values explicitly assigned to common credential labels.
+formats (including URL user-info), conventional email addresses, explicitly
+labeled U.S. SSN- and phone-shaped values, Luhn-valid payment-card values with
+explicit card labels, and long values assigned to common credential labels.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
 deduplication cache. This is a limited, best-effort check, not comprehensive
