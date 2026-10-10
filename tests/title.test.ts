@@ -1406,6 +1406,62 @@ test("rejects Doppler personal tokens without mistaking near-miss strings for to
 	}
 });
 
+test("rejects 1Password Secret Keys without mistaking near-miss strings for keys", async () => {
+	const six = "A".repeat(6);
+	const eleven = "B".repeat(11);
+	const five = "C".repeat(5);
+	const fiveGroups = ["A3", six, eleven, five, five, five];
+	const token = fiveGroups.join("-");
+	const alternate = ["A3", six, "D".repeat(6), "E".repeat(5), five, five, five].join("-");
+	const outputs = [
+		token,
+		token.toLowerCase(),
+		alternate,
+		`configure-${token}`,
+		token.replace("A3-", "A3-\u200b"),
+		token.replace(six, `${six}\u200b`),
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(output);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("1password vault"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("1password vault");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		["A3", "A".repeat(5), eleven, five, five, five].join("-"),
+		["A3", "A".repeat(7), eleven, five, five, five].join("-"),
+		["A3", six, "B".repeat(10), five, five, five].join("-"),
+		["A3", six, "B".repeat(12), five, five, five].join("-"),
+		["A3", six, "D".repeat(6), "E".repeat(4), five, five, five].join("-"),
+		["A3", six, eleven, "C".repeat(4), five, five].join("-"),
+		["B3", six, eleven, five, five, five].join("-"),
+		`${token}x`,
+		`${token}_x`,
+		`${token}-x`,
+		`x${token}`,
+		`_${token}`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("1password vault"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("1password vault");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",

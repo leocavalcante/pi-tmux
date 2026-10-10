@@ -60,6 +60,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])do[opr]_v1_[a-f0-9]{64}(?![A-Za-z0-9_-])/,
 	// Cloudflare Origin CA keys have 24 and 146 hexadecimal characters around a hyphen.
 	/(?<![A-Za-z0-9_])v1\.0-[a-f0-9]{24}-[a-f0-9]{146}(?![A-Za-z0-9_-])/i,
+	// 1Password Secret Keys have an `A3-` prefix and fixed-length grouped characters.
+	/(?<![A-Za-z0-9_])A3-[A-Z0-9]{6}-(?:[A-Z0-9]{11}|[A-Z0-9]{6}-[A-Z0-9]{5})-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}(?![A-Za-z0-9_-])/i,
 	// Doppler personal tokens use `dp.pt.` followed by 43 alphanumeric characters.
 	/(?<![A-Za-z0-9_])dp\.pt\.[a-z0-9]{43}(?![A-Za-z0-9_-])/i,
 	// Notion tokens use `ntn_`, 11 digits, then 35 alphanumeric characters.
