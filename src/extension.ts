@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createController } from "./controller.ts";
 import { hasSensitiveOutput } from "./naming.ts";
 import { notifySafely } from "./notify.ts";
-import { cleanTitle } from "./title.ts";
+import { cleanTitle, MAX_TITLE_INPUT_LENGTH } from "./title.ts";
 import { runTmux, type RunTmux } from "./tmux.ts";
 
 const HAS_NON_WHITESPACE = /[^\s\p{White_Space}]/u;
@@ -46,6 +46,10 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			}
 			if (set) {
 				const requestedTitle = set[1] ?? "";
+				if (requestedTitle.length > MAX_TITLE_INPUT_LENGTH) {
+					notifySafely(ctx, "Manual title input is too long to check safely; it was not applied.", "warning");
+					return;
+				}
 				if (hasSensitiveOutput(requestedTitle)) {
 					notifySafely(ctx, "Sensitive-looking manual title was not applied.", "warning");
 					return;

@@ -10,7 +10,7 @@ import {
 	parseNamingModel,
 	requestNamingTitle,
 } from "./naming.ts";
-import { cleanTitle, formatTitle, READY_PREFIX } from "./title.ts";
+import { cleanTitle, formatTitle, MAX_TITLE_INPUT_LENGTH, READY_PREFIX } from "./title.ts";
 import { notifySafely } from "./notify.ts";
 import {
 	ACTIVE_OPTION,
@@ -58,7 +58,8 @@ const INVALID_NAMING_TITLE_WARNINGS = {
 
 export function createController(tmux: RunTmux) {
 	const idleTitleSetting = process.env.PI_TMUX_IDLE_TITLE ?? "zsh";
-	const idleTitle = hasSensitiveOutput(idleTitleSetting) ? "zsh" : cleanTitle(idleTitleSetting) || "zsh";
+	const idleTitle = idleTitleSetting.length > MAX_TITLE_INPUT_LENGTH || hasSensitiveOutput(idleTitleSetting)
+		? "zsh" : cleanTitle(idleTitleSetting) || "zsh";
 	let namingModel: ReturnType<typeof parseNamingModel> = null;
 	let invalidModelSetting = false;
 	try {

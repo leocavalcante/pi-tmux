@@ -87,10 +87,11 @@ provider. A missing model or missing credentials also does not trigger fallback.
 The last Pi pane normally resets its window to `zsh` when it quits. Set
 `PI_TMUX_IDLE_TITLE` before starting Pi to choose another idle title; the value
 uses the same lowercase ASCII cleanup and 24-character limit as generated
-names. Empty or non-alphanumeric values and values matching the limited
-sensitive-output checks fall back to `zsh`; these checks are best-effort, not
-comprehensive redaction. The value applies only on a future graceful quit when
-this is the last Pi pane in its window; it does not rename an open window.
+names. Empty or non-alphanumeric values, values longer than 64 Ki UTF-16 code
+units, and values matching the limited sensitive-output checks fall back to
+`zsh`; these checks are best-effort, not comprehensive redaction. The value
+applies only on a future graceful quit when this is the last Pi pane in its
+window; it does not rename an open window.
 `/reload` rereads the setting from Pi's process environment.
 
 For waiting markers without any naming requests or dialogue collection:
@@ -129,9 +130,10 @@ New input, settlement, and compaction keep the pinned text while waiting
 markers still update. The extension does not collect naming context or make
 naming requests while the pin is active. Manual titles use the same lowercase,
 ASCII, and length rules as generated titles, and work with `PI_TMUX_MODEL=off`.
-Empty names and names containing no letters or numbers are rejected. Values
-matching the limited sensitive-output checks are also rejected before cleanup,
-so obvious credentials or personal data are not pinned. This is not
+Inputs longer than 64 Ki UTF-16 code units are rejected before screening to
+bound work. Empty names and names containing no letters or numbers are rejected.
+Values matching the limited sensitive-output checks are also rejected before
+cleanup, so obvious credentials or personal data are not pinned. This is not
 comprehensive redaction. If a tmux update fails, the pin stays active but the
 command warns instead of confirming success. Repeat `set <name>` or use `sync`
 to retry.
