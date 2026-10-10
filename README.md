@@ -230,12 +230,16 @@ Repeat the command to retry them.
   clear another pane's marker. Window renames choose the prefix and its length
   budget on the tmux server, even if another pane changed status after lookup.
   Session names are not summarized, lowercased, or clipped. A literal leading
-  `* ` is preserved, with the waiting marker added separately. The extension
-  keeps each session's unmarked name in the namespaced
-  `@pi-tmux-session-base-name` tmux session option so it can distinguish a
-  literal prefix from its marker across status updates. Window names use the
-  same stored-base approach when waiting state or a leading `* ` makes the
-  marker ambiguous, using the namespaced `@pi-tmux-window-base-name` option.
+  `* ` is preserved, with the waiting marker added separately. Tabs and line
+  feeds cannot be round-tripped through tmux rename commands, so if a custom
+  window name contains either and no task title is available, the extension
+  preserves that name and skips its window waiting marker (the session marker
+  still updates), with a generic warning. The extension keeps each session's
+  unmarked name in the namespaced `@pi-tmux-session-base-name` tmux session
+  option so it can distinguish a literal prefix from its marker across status
+  updates. Window names use the same stored-base approach to distinguish a
+  literal prefix when waiting state or a leading `* ` makes the marker
+  ambiguous, using the namespaced `@pi-tmux-window-base-name` option.
   On first seeing an existing session or window with no stored base, the
   extension preserves its displayed name; an old waiting marker left by an
   earlier version may therefore appear twice on a later waiting update rather

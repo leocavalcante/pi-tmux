@@ -285,6 +285,19 @@ export function createController(tmux: RunTmux) {
 			// This is essential for a custom name which itself begins with `* `.
 			// On quit, use the conservative path for ambiguous legacy titles even if
 			// their window options are absent, so an active peer's name is preserved.
+			const needsWindowRename = hasTaskTitle || windowWaiting || currentTitle.startsWith(READY_PREFIX);
+			if (!needsWindowRename) {
+				updated = isCurrent() && stable;
+				return;
+			}
+			// tmux's command parser rewrites control characters in names passed through
+			// rename-window (for example, a literal newline becomes the two characters
+			// `\n`). Preserve an existing custom name rather than corrupting it just to
+			// add a waiting prefix; session-level status was already updated above.
+			if (!hasTaskTitle && /[\t\n]/u.test(currentTitle)) {
+				warnOnce(ctx, "A custom window name contains a tab or line feed; its waiting marker was skipped.");
+				return;
+			}
 			const useWindowBase = windowTitleMark !== undefined
 				|| ((windowWaiting || currentTitle.startsWith(READY_PREFIX)) && (!hasTaskTitle || !active));
 			if (useWindowBase) {
@@ -313,11 +326,6 @@ export function createController(tmux: RunTmux) {
 					candidateTitle = undefined;
 				}
 				updated = stable;
-				return;
-			}
-			// Leave a custom name alone unless we have a summary or a marker to update.
-			if (!candidate && !baseTitle && !windowWaiting && !currentTitle.startsWith(READY_PREFIX)) {
-				updated = isCurrent() && stable;
 				return;
 			}
 			const preserveWindowName = !hasTaskTitle && taskTitle.length > 0;
