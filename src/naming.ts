@@ -58,6 +58,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	// DigitalOcean access, personal, and refresh tokens share `_v1_` followed by
 	// 64 hexadecimal characters.
 	/(?<![A-Za-z0-9_])do[opr]_v1_[a-f0-9]{64}(?![A-Za-z0-9_-])/,
+	// Cloudflare Origin CA keys have 24 and 146 hexadecimal characters around a hyphen.
+	/(?<![A-Za-z0-9_])v1\.0-[a-f0-9]{24}-[a-f0-9]{146}(?![A-Za-z0-9_-])/i,
 	// Notion tokens use `ntn_`, 11 digits, then 35 alphanumeric characters.
 	/(?<![A-Za-z0-9_])ntn_[0-9]{11}[A-Za-z0-9]{35}(?![A-Za-z0-9_-])/,
 	// Linear API tokens use `lin_api_` followed by exactly 40 alphanumeric characters.
