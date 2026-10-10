@@ -116,6 +116,12 @@ export function createController(tmux: RunTmux) {
 		notifySafely(ctx, message, "warning");
 	};
 
+	const warnIfServerChanged = (ctx: ExtensionContext) => {
+		if (!serverIdentityChanged) return false;
+		notifySafely(ctx, "The tmux server changed; restart Pi to resume title updates.", "warning");
+		return true;
+	};
+
 	const trackedSessions = new Set<string>();
 	const rememberLocation = (location: WindowSnapshot) => {
 		// Once the server changes, the inherited TMUX_PANE could name an unrelated
@@ -498,6 +504,7 @@ export function createController(tmux: RunTmux) {
 	};
 
 	const sync = async (ctx: ExtensionContext, pane: string) => {
+		if (warnIfServerChanged(ctx)) return;
 		const signal = titleLifetime.signal;
 		warned = false;
 		const update = refreshTitle(ctx, pane);
@@ -510,6 +517,7 @@ export function createController(tmux: RunTmux) {
 	};
 
 	const pinTitle = async (ctx: ExtensionContext, pane: string, title: string) => {
+		if (warnIfServerChanged(ctx)) return;
 		warned = false;
 		cancel();
 		manualTitle = true;
@@ -526,6 +534,7 @@ export function createController(tmux: RunTmux) {
 	};
 
 	const refresh = (ctx: ExtensionContext) => {
+		if (warnIfServerChanged(ctx)) return;
 		if (manualTitle) {
 			notifySafely(ctx, "Manual title is pinned. Use /tmux-title auto to resume automatic naming.", "info");
 			return;
