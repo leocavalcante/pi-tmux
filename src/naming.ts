@@ -5,6 +5,8 @@ export const MAX_PROMPT_LENGTH = 2_000;
 export const MAX_CONTEXT_LENGTH = 6_000;
 export const MAX_HISTORY_MESSAGES = 8;
 export const NAMING_REQUEST_TIMEOUT_MS = 15_000;
+// Providers can ignore maxTokens; keep response validation's extra string work bounded.
+const MAX_NAMING_OUTPUT_LENGTH = 64 * 1024;
 const MAX_HISTORY_TEXT_LENGTH = 1_000;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
@@ -273,17 +275,34 @@ export async function requestNamingTitle(
 		if (signal.aborted || !isCurrent()) return;
 		if (response.stopReason === "length") throw new InvalidNamingTitleError("truncated");
 		if (response.stopReason !== "stop") throw new Error("Naming request failed");
-		const textBlocks = response.content.filter((block) => block.type === "text");
-		const phasedBlocks = textBlocks.map((block) => ({ block, phase: getTextPhase(block.textSignature) }));
-		const finalAnswerBlocks = phasedBlocks.filter(({ phase }) => phase === "final_answer").map(({ block }) => block);
-		const hasPhaseMetadata = phasedBlocks.some(({ phase }) => phase !== undefined);
-		const selectedBlocks = finalAnswerBlocks.length ? finalAnswerBlocks : hasPhaseMetadata ? [] : textBlocks.slice(-1);
+		let hasPhaseMetadata = false;
+		let lastTextBlock: string | undefined;
+		const finalAnswerBlocks: string[] = [];
+		let finalAnswerLength = 0;
+		for (const block of response.content) {
+			if (block.type !== "text") continue;
+			const phase = getTextPhase(block.textSignature);
+			if (phase !== undefined) hasPhaseMetadata = true;
+			if (phase === "final_answer") {
+				const length = block.text.length + (finalAnswerBlocks.length ? 1 : 0);
+				if (length > MAX_NAMING_OUTPUT_LENGTH - finalAnswerLength) {
+					throw new InvalidNamingTitleError("too-long");
+				}
+				finalAnswerLength += length;
+				finalAnswerBlocks.push(block.text);
+			}
+			lastTextBlock = block.text;
+		}
 		if (hasPhaseMetadata && finalAnswerBlocks.length === 0) throw new InvalidNamingTitleError("no-final-answer");
-		const outputBlocks = selectedBlocks.map((block) => block.text);
-		const output = outputBlocks.join(" ");
+		if (!finalAnswerBlocks.length && lastTextBlock && lastTextBlock.length > MAX_NAMING_OUTPUT_LENGTH) {
+			throw new InvalidNamingTitleError("too-long");
+		}
+		const selectedBlocks = finalAnswerBlocks.length ? finalAnswerBlocks
+			: lastTextBlock === undefined ? [] : [lastTextBlock];
+		const output = selectedBlocks.join(" ");
 		// Also check adjacent raw blocks without a separator in case a provider split
 		// sensitive data across content blocks.
-		if (hasSensitiveOutput(output) || hasSensitiveOutput(outputBlocks.join(""))) {
+		if (hasSensitiveOutput(output) || hasSensitiveOutput(selectedBlocks.join(""))) {
 			throw new UnsafeNamingOutputError();
 		}
 		// Check before trimming so leading/trailing line breaks cannot masquerade as a single line.
