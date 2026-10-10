@@ -40,6 +40,10 @@ const response = (text: string, stopReason = "stop") => ({
 	stopReason,
 });
 
+function basicAuthorizationHeader(header: "Authorization" | "Proxy-Authorization", userPass: string): string {
+	return `${header}: Basic ${Buffer.from(userPass).toString("base64")}`;
+}
+
 function fixture(
 	results: Promise<ReturnType<typeof response>>[] = [Promise.resolve(response("Fix auth tests"))],
 	beforeCommand?: (args: string[], signal: AbortSignal, renderedTitle?: string) => Promise<void>,
@@ -975,10 +979,14 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(
 		fixture(), `Review the WireGuard configuration ${wireGuardPresharedKey}`, wireGuardPresharedKey,
 	);
-	const basicAuthorization = `Authorization: Basic ${"A".repeat(28)}`;
-	const proxyBasicAuthorization = `Proxy-Authorization: Basic ${"B".repeat(28)}`;
+	const basicAuthorization = basicAuthorizationHeader("Authorization", `u:${"p".repeat(20)}`);
+	const proxyBasicAuthorization = basicAuthorizationHeader("Proxy-Authorization", `p:${"w".repeat(20)}`);
+	const shortBasicAuthorization = basicAuthorizationHeader("Authorization", "u:p");
+	const shortProxyAuthorization = basicAuthorizationHeader("Proxy-Authorization", "p:w");
 	await suppressed(fixture(), `Review the request headers ${basicAuthorization}`, basicAuthorization);
 	await suppressed(fixture(), `Review the proxy headers ${proxyBasicAuthorization}`, proxyBasicAuthorization);
+	await suppressed(fixture(), `Review the short request headers ${shortBasicAuthorization}`, shortBasicAuthorization);
+	await suppressed(fixture(), `Review the short proxy headers ${shortProxyAuthorization}`, shortProxyAuthorization);
 	const obfuscatedPassword = `passphrase=${"P".repeat(5)}\u200b${"P".repeat(5)}`;
 	await suppressed(fixture(), `Review the configuration ${obfuscatedPassword}`, obfuscatedPassword);
 
@@ -1056,7 +1064,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	placeholderCredentials.input([
 		"Review docs with password=placeholder, passphrase=example, token: placeholder,",
 		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, PresharedKey=example,",
-		`Authorization: Basic example and Authorization: Basic ${"A".repeat(19)}`,
+		`Authorization: Basic example and Authorization: Basic ${"A".repeat(20)}`,
 	].join(" "));
 	await settle();
 	expect(placeholderCredentials.requests).toHaveLength(1);
@@ -1111,13 +1119,18 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
 	const compatibilityGithubToken = [...githubToken]
 		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
+	const basicAuthHeaders = [
+		basicAuthorizationHeader("Authorization", `u:${"p".repeat(20)}`),
+		basicAuthorizationHeader("Proxy-Authorization", `p:${"w".repeat(20)}`),
+		basicAuthorizationHeader("Authorization", "u:p"),
+		basicAuthorizationHeader("Proxy-Authorization", "p:w"),
+	];
 	const outputs = [
 		`password=${"S".repeat(12)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`PresharedKey=${"A".repeat(43)}=`,
-		`Authorization: Basic ${"A".repeat(28)}`,
-		`Proxy-Authorization: Basic ${"B".repeat(28)}`,
+		...basicAuthHeaders,
 		azureSasUrl,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		["gh", "p_", "a".repeat(36)].join(""),
@@ -3394,8 +3407,10 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`PresharedKey=${"A".repeat(43)}=`,
-		`Authorization: Basic ${"A".repeat(28)}`,
-		`Proxy-Authorization: Basic ${"B".repeat(28)}`,
+		basicAuthorizationHeader("Authorization", `u:${"p".repeat(20)}`),
+		basicAuthorizationHeader("Proxy-Authorization", `p:${"w".repeat(20)}`),
+		basicAuthorizationHeader("Authorization", "u:p"),
+		basicAuthorizationHeader("Proxy-Authorization", "p:w"),
 		`https://storage.example.test/blob?sv=2023-11-03&sig=${"A".repeat(43)}=`,
 		`password=${"P".repeat(12)}`,
 		"postgres://test-user:example-only-password@db.example.test/app",
