@@ -43,6 +43,7 @@ export class InvalidNamingTitleError extends Error {
 // secret or personal-information scanner. Check raw and compatibility-normalized
 // text because title cleanup can lowercase or clip recognizable tokens. Raw patterns
 // match substrings to catch values adjacent to ASCII word characters.
+const BEARER_TOKEN_PATTERN = /Bearer\s+([A-Za-z0-9._~+/=-](?:\s*[A-Za-z0-9._~+/=-]){15,})/i;
 const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	/(?:AKIA|ASIA)[0-9A-Z]{16}/,
@@ -55,19 +56,34 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/glpat-[A-Za-z0-9_-]{20,}/,
 	/hf_[A-Za-z0-9]{20,}/,
 	/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/,
-	/Bearer\s+[A-Za-z0-9._~+/=-](?:\s*[A-Za-z0-9._~+/=-]){15,}/i,
 	/-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/,
 ];
 
 const EMAIL_ADDRESS_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 // Compacted scans require a left boundary so unrelated title words do not combine into tokens.
-const SEPARATOR_TOLERANT_PATTERNS = [...CREDENTIAL_LIKE_PATTERNS, EMAIL_ADDRESS_PATTERN].map(
+const SEPARATOR_TOLERANT_PATTERNS = [...CREDENTIAL_LIKE_PATTERNS, BEARER_TOKEN_PATTERN, EMAIL_ADDRESS_PATTERN].map(
 	(pattern) => new RegExp(`(?<![A-Za-z0-9])(?:${pattern.source})`, pattern.flags),
 );
 
+function hasBearerToken(value: string): boolean {
+	const pattern = new RegExp(BEARER_TOKEN_PATTERN.source, `${BEARER_TOKEN_PATTERN.flags}g`);
+	for (const match of value.matchAll(pattern)) {
+		const token = match[1];
+		const firstFragment = token.split(/\s/u, 1)[0];
+		// Spaced bearer tokens are ambiguous with ordinary prose such as
+		// "bearer authentication v2". Require a token-like first fragment
+		// when whitespace is present, while keeping contiguous tokens covered.
+		if (!/\s/u.test(token) || firstFragment.length >= 16
+			|| (firstFragment.length >= 8 && /[A-Z0-9._~+/=]/u.test(firstFragment))
+			|| /^(.)\1{7,}$/u.test(firstFragment)) return true;
+	}
+	return false;
+}
+
 function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
-		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value)) || EMAIL_ADDRESS_PATTERN.test(value);
+		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
+			|| hasBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) =>
 		SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "")));
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");

@@ -979,6 +979,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["eyJ", "a".repeat(8), ".", "b".repeat(8), ".", "c".repeat(8)].join(""),
 		["Bearer ", "a".repeat(24)].join(""),
 		["Bearer ", "a".repeat(8), " ", "a".repeat(8)].join(""),
+		["Bearer ", "a".repeat(7), "1 ", "a".repeat(8)].join(""),
 		["-----BEGIN ", "PRIVATE KEY-----"].join(""),
 		["-----BEGIN ", "DSA PRIVATE KEY-----"].join(""),
 		["-----BEGIN ", "ENCRYPTED PRIVATE KEY-----"].join(""),
@@ -1045,6 +1046,7 @@ test("email-address-like model output is rejected before normalization and not d
 test("ordinary security-themed and hyphenated task titles without credential values remain valid", async () => {
 	for (const [title, expected] of [
 		["review bearer auth flow", "review bearer auth flow"],
+		["bearer authentication v2", "bearer authentication v2"],
 		["task-based development", "task-based development"],
 		["task-based-development", "task-based-development"],
 		["work-based-development", "work-based-development"],
