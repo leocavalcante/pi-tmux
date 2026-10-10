@@ -335,10 +335,10 @@ Signature URLs, and Base64 Basic credentials in HTTP `Authorization` or
 `Proxy-Authorization` headers, including YAML block scalars with tags or
 anchors, conventional email addresses, explicitly labeled U.S. SSN- and
 phone-shaped values, Luhn-valid payment-card values with explicit card labels,
-and long values assigned to common credential labels (including AWS
-`AWS_SECRET_ACCESS_KEY`, Azure
-`AccountKey`, WireGuard `PresharedKey`, and Kubernetes `client-key-data`),
-whether inline or as YAML block scalars with tags or anchors. Shorter
+and long values assigned to common credential labels (including
+AWS `AWS_SECRET_ACCESS_KEY`, Azure `AccountKey`, WireGuard `PresharedKey`, and
+Kubernetes `client-key-data`), whether inline or as YAML block scalars with
+tags or anchors. Shorter
 non-placeholder password/passphrase assignments are also checked in either
 form.
 If detected, the request is skipped and the current title is kept; warnings do
@@ -364,9 +364,9 @@ including YAML block scalars with tags or anchors, conventional email
 addresses, explicitly labeled U.S. SSN-shaped values, phone-labeled values
 with 7–15 digits, Luhn-valid payment-card-shaped numbers with explicit card
 labels, long opaque values assigned to common credential labels (including
-AWS `AWS_SECRET_ACCESS_KEY`,
-Azure `AccountKey`, WireGuard `PresharedKey`, and Kubernetes `client-key-data`),
-whether inline or as YAML block scalars with tags or anchors. Shorter
+AWS `AWS_SECRET_ACCESS_KEY`, Azure `AccountKey`, WireGuard `PresharedKey`, and
+Kubernetes `client-key-data`), whether inline or as YAML block scalars with
+tags or anchors. Shorter
 non-placeholder password/passphrase assignments are also checked in either
 form. It also checks a view with
 whitespace, control, and format characters removed, which catches some
