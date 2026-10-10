@@ -327,8 +327,9 @@ Manual title commands do not send the title or dialogue to a model.
 
 The model is instructed not to include secrets or personal information in
 titles. Before applying a response, the extension checks raw and
-compatibility-normalized output for several recognizable credential formats
-and conventional email addresses. It also checks a view with whitespace,
+compatibility-normalized output for several recognizable credential formats,
+conventional email addresses, and long opaque values assigned to common
+credential labels. It also checks a view with whitespace,
 control, and format characters removed, which catches some obfuscated values.
 Rejected responses are not included in warnings. These limited checks are
 defense in depth, not comprehensive secret or personal-information redaction.

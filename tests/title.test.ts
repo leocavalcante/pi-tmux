@@ -965,6 +965,11 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`fix${replicateToken}`,
 		["r8_", "N".repeat(18), "\u200b", "N".repeat(19)].join(""),
 		["R8_", "O".repeat(37)].join(""),
+		["MY_SERVICE_API_KEY=", "S".repeat(24)].join(""),
+		["Access Token : ", "T".repeat(24)].join(""),
+		["client_secret\": \"", "U".repeat(24), "\""].join(""),
+		["private", "\u200b", "_key=", "V".repeat(24)].join(""),
+		["refresh-token = ", "W".repeat(24)].join(""),
 		["nvapi-", "K".repeat(19), "\u200b", "K".repeat(21)].join(""),
 		["NVAPI-", "L".repeat(40)].join(""),
 		["csk_", "E".repeat(48)].join(""),
@@ -1057,6 +1062,18 @@ test.each([
 	expect(f.warnings).toEqual([]);
 });
 
+test("does not join prose after a label into an opaque credential", async () => {
+	const f = fixture([
+		Promise.resolve(response("api key: rotate integration tests after every release")),
+		Promise.resolve(response("fix auth tests")),
+	]);
+	f.input("Name a task");
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.warnings).toEqual([]);
+});
+
 test.each([
 	["Pinecone-style prefix", ["p", "csk_", "A".repeat(48)].join("")],
 	["alphanumeric leading glue", `x${["csk-", "B".repeat(48)].join("")}`],
@@ -1112,6 +1129,11 @@ test("ordinary security-themed and hyphenated task titles without credential val
 		["groq api authentication", "groq api authentication"],
 		["nvidia api keys", "nvidia api keys"],
 		["nvapi-short-token", "nvapi-short-token"],
+		["api key setup", "api key setup"],
+		["access token flow", "access token flow"],
+		["api_key=example", "api_key example"],
+		["token: placeholder", "token placeholder"],
+		["token: rotate safely", "token rotate safely"],
 		["replicate api tests", "replicate api tests"],
 		["r8 token setup", "r8 token setup"],
 		["fireworks api keys", "fireworks api keys"],
