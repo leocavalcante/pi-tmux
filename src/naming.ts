@@ -91,6 +91,14 @@ const LABELED_PASSWORD_PATTERN = new RegExp(
 	String.raw`(?:passphrase|password)\s*["']?\s*[:=]\s*["']?(?!(?:${PASSWORD_PLACEHOLDER_LABELS})\b)[A-Za-z0-9._~+/=-]{8,}`,
 	"i",
 );
+const LABELED_PASSWORD_QUOTED_PHRASE_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])(?:passphrase|password)\s*["']?\s*[:=]\s*(["'])([A-Za-z0-9._~+/=-]+(?:[ \t]+[A-Za-z0-9._~+/=-]+)+)\1`,
+	"i",
+);
+const LABELED_PASSWORD_PLAIN_PHRASE_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])(?:passphrase|password)\s*["']?\s*[:=]\s*(?!["'])([A-Za-z0-9._~+/=-]+(?:(?:[ \t]+|\r?\n[ \t]+)[A-Za-z0-9._~+/=-]+)+)(?=[ \t]*(?:#[^\r\n]*|\r?\n|$))`,
+	"i",
+);
 // Azure Storage SAS URLs require both a dated version field and a long signature.
 const AZURE_SAS_PATTERN = /(?<![A-Za-z0-9_])(?:sv=\d{4}-\d{2}-\d{2}(?=[^#\s]{0,512}&sig=[A-Za-z0-9%+/_=-]{20,}(?:&|#|\s|$))|sig=[A-Za-z0-9%+/_=-]{20,}(?=&)(?=[^#\s]{0,512}&sv=\d{4}-\d{2}-\d{2}))/i;
 const CREDENTIAL_LIKE_PATTERNS = [
@@ -248,14 +256,29 @@ function hasLabeledPasswordBlock(value: string): boolean {
 	return false;
 }
 
+function hasLabeledPasswordPhrase(value: string): boolean {
+	for (const [source, captureIndex] of [
+		[LABELED_PASSWORD_QUOTED_PHRASE_PATTERN, 2],
+		[LABELED_PASSWORD_PLAIN_PHRASE_PATTERN, 1],
+	] as const) {
+		const pattern = new RegExp(source.source, `${source.flags}g`);
+		for (const match of value.matchAll(pattern)) {
+			const scalar = match[captureIndex].replace(/[\s\p{Cc}\p{Cf}]+/gu, " ").trim();
+			if (PASSWORD_PLACEHOLDER_PATTERN.test(scalar)) continue;
+			if (scalar.replace(/\s/gu, "").length >= 8) return true;
+		}
+	}
+	return false;
+}
+
 function hasLabeledCredential(value: string): boolean {
 	const withoutControls = value.replace(/[\p{Cc}\p{Cf}]+/gu, "");
 	return hasBasicAuthorizationCredential(value) || hasBasicAuthorizationCredentialBlock(value)
 		|| LABELED_CREDENTIAL_PATTERN.test(value) || LABELED_PASSWORD_PATTERN.test(value)
-		|| hasLabeledCredentialBlock(value) || hasLabeledPasswordBlock(value)
+		|| hasLabeledCredentialBlock(value) || hasLabeledPasswordBlock(value) || hasLabeledPasswordPhrase(value)
 		|| hasBasicAuthorizationCredential(withoutControls) || LABELED_CREDENTIAL_PATTERN.test(withoutControls)
 		|| LABELED_PASSWORD_PATTERN.test(withoutControls) || hasLabeledCredentialBlock(withoutControls)
-		|| hasLabeledPasswordBlock(withoutControls);
+		|| hasLabeledPasswordBlock(withoutControls) || hasLabeledPasswordPhrase(withoutControls);
 }
 
 // Check credentials and high-confidence personal-data formats before transmission.
