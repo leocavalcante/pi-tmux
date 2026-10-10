@@ -214,10 +214,14 @@ Repeat the command to retry them.
   `* ` is preserved, with the waiting marker added separately. The extension
   keeps each session's unmarked name in the namespaced
   `@pi-tmux-session-base-name` tmux session option so it can distinguish a
-  literal prefix from its marker across status updates. On first seeing a
-  session with no stored base, the extension preserves its displayed name;
-  an old waiting marker left by an earlier version may therefore appear twice
-  on a later waiting update rather than risking loss of a literal prefix.
+  literal prefix from its marker across status updates. Window names use the
+  same stored-base approach when waiting state or a leading `* ` makes the
+  marker ambiguous, using the namespaced `@pi-tmux-window-base-name` option.
+  On first seeing an existing session or window with no stored base, the
+  extension preserves its displayed name; an old waiting marker left by an
+  earlier version may therefore appear twice on a later waiting update rather
+  than risking loss of a literal prefix. The server skips a window rename when
+  its displayed name is already correct, so startup preserves automatic-rename.
 - Changed naming context cancels the previous request, including when a
   refresh finds no remaining naming text after context edits. It also discards
   queued title updates from superseded requests at tmux command boundaries.

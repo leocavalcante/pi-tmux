@@ -41,6 +41,25 @@ export const SESSION_TITLE_MARKED_VALUE_FORMAT =
 export const WINDOW_WAITING_FORMAT = `#{m:*1*,#{P:${WAITING_FLAG_FORMAT}}}`;
 // Waiting flags also recognize idle peers loaded before active tracking existed.
 export const WINDOW_ACTIVE_FORMAT = `#{m:*1*,#{P:${ACTIVE_OR_WAITING_FLAG_FORMAT}}}`;
+export const WINDOW_BASE_NAME_OPTION = "@pi-tmux-window-base-name";
+export const WINDOW_TITLE_MARKED_OPTION = "@pi-tmux-window-title-marked";
+export const WINDOW_TITLE_LITERAL_PREFIX_OPTION = "@pi-tmux-window-literal-prefix";
+const WINDOW_BASE_NAME_VALUE_FORMAT = `#{${WINDOW_BASE_NAME_OPTION}}`;
+const WINDOW_NAME_IS_BASE_FORMAT = `#{==:${unescapeNestedTmuxFormatValue("#{window_name}")},${WINDOW_BASE_NAME_VALUE_FORMAT}}`;
+const WINDOW_BASE_NAME_MARKED_TITLE_FORMAT =
+	`#{?#{==:${WINDOW_BASE_NAME_VALUE_FORMAT},},${READY_PREFIX}pi,${READY_PREFIX}${WINDOW_BASE_NAME_VALUE_FORMAT}}`;
+const WINDOW_NAME_IS_MARKED_BASE_FORMAT =
+	`#{==:${unescapeNestedTmuxFormatValue("#{window_name}")},${WINDOW_BASE_NAME_MARKED_TITLE_FORMAT}}`;
+const WINDOW_NAME_LITERAL_FORMAT = unescapeNestedTmuxFormatValue("#{window_name}");
+// Track an unmarked base independently so a literal leading `* ` survives
+// aggregate waiting prefixes, including overlapping updates from shared panes.
+export const WINDOW_BASE_NAME_UPDATE_FORMAT =
+	`#{?#{==:#{${WINDOW_TITLE_MARKED_OPTION}},transition},#{?${WINDOW_NAME_IS_BASE_FORMAT},${WINDOW_BASE_NAME_VALUE_FORMAT},#{?${WINDOW_NAME_IS_MARKED_BASE_FORMAT},${WINDOW_BASE_NAME_VALUE_FORMAT},${WINDOW_NAME_LITERAL_FORMAT}}},#{?#{==:#{${WINDOW_TITLE_MARKED_OPTION}},marked},#{?${WINDOW_NAME_IS_MARKED_BASE_FORMAT},${WINDOW_BASE_NAME_VALUE_FORMAT},${WINDOW_NAME_LITERAL_FORMAT}},#{?${WINDOW_NAME_IS_BASE_FORMAT},${WINDOW_BASE_NAME_VALUE_FORMAT},${WINDOW_NAME_LITERAL_FORMAT}}}}`;
+export const WINDOW_BASE_NAME_TITLE_FORMAT =
+	`#{?${WINDOW_WAITING_FORMAT},${READY_PREFIX}#{?#{==:${WINDOW_BASE_NAME_VALUE_FORMAT},},pi,${WINDOW_BASE_NAME_VALUE_FORMAT}},${WINDOW_BASE_NAME_VALUE_FORMAT}}`;
+export const WINDOW_TITLE_MARKED_VALUE_FORMAT = `#{?${WINDOW_NAME_IS_MARKED_BASE_FORMAT},marked,unmarked}`;
+export const WINDOW_BASE_NAME_HAS_LITERAL_PREFIX_FORMAT =
+	`#{?#{==:#{s/^\\* //:${WINDOW_BASE_NAME_VALUE_FORMAT}},${WINDOW_BASE_NAME_VALUE_FORMAT}},0,1}`;
 // The fixed suffix advertises session-name base-option support; the PID scopes
 // numeric tmux IDs to the server process that produced this snapshot.
 export const WINDOW_INFO_FORMAT = `#{session_id}:1:#{pid}\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
@@ -61,6 +80,30 @@ export const WINDOW_REPAIR_NEEDED_FORMAT = `#{!=:#{window_name},${SHARED_WINDOW_
 export function buildWindowTitleFormat(title: string): string {
 	return `#{?${WINDOW_WAITING_FORMAT},${formatTitle(title, true)},${formatTitle(title, false)}}`;
 }
+
+export function buildWindowBaseTitleUpdateArgs(
+	target: string,
+	baseName: string,
+	baseNameIsFormat = false,
+	titleFormat = WINDOW_BASE_NAME_TITLE_FORMAT,
+): string[] {
+	return [
+		"set-option", ...(baseNameIsFormat ? ["-F"] : []), "-w", "-t", target, WINDOW_BASE_NAME_OPTION, baseName,
+		";", "set-option", "-F", "-w", "-t", target, WINDOW_TITLE_LITERAL_PREFIX_OPTION, WINDOW_BASE_NAME_HAS_LITERAL_PREFIX_FORMAT,
+		";", "set-option", "-w", "-t", target, WINDOW_TITLE_MARKED_OPTION, "transition",
+		";", "if-shell", "-F", "-t", target, `#{!=:#{window_name},${titleFormat}}`,
+		`rename-window -t ${target} -- '${titleFormat}'`,
+		";", "set-option", "-F", "-w", "-t", target, WINDOW_TITLE_MARKED_OPTION, WINDOW_TITLE_MARKED_VALUE_FORMAT,
+	];
+}
+
+export function buildWindowBaseQuitTitleFormats(idleTitle: string) {
+	return {
+		baseName: `#{?${WINDOW_ACTIVE_FORMAT},${WINDOW_BASE_NAME_UPDATE_FORMAT},${idleTitle}}`,
+		title: `#{?${WINDOW_ACTIVE_FORMAT},${WINDOW_BASE_NAME_TITLE_FORMAT},${buildWindowTitleFormat(idleTitle)}}`,
+	};
+}
+
 // A sibling may start, quit, or rename the window after our last lookup. Decide
 // ownership at execution time and preserve its latest title, not our snapshot.
 export function buildQuitTitleFormat(idleTitle: string): string {
@@ -120,6 +163,15 @@ export async function readWindowTitle(tmux: RunTmux, target: string, signal: Abo
 		sessionMetadataAvailable: sessionMetadata !== null,
 		server: sessionMetadata?.[2] || undefined,
 	};
+}
+
+export async function readWindowTitleMark(tmux: RunTmux, target: string, signal: AbortSignal): Promise<string | undefined> {
+	const value = await tmux(["show-options", "-w", "-qv", "-t", target, WINDOW_TITLE_MARKED_OPTION], signal);
+	return ["marked", "unmarked", "transition"].includes(value) ? value : undefined;
+}
+
+export async function hasWindowLiteralPrefix(tmux: RunTmux, target: string, signal: AbortSignal): Promise<boolean> {
+	return await tmux(["show-options", "-w", "-qv", "-t", target, WINDOW_TITLE_LITERAL_PREFIX_OPTION], signal) === "1";
 }
 
 export function writeOnServer(tmux: RunTmux, server: string | undefined, args: string[], signal: AbortSignal) {

@@ -10,9 +10,14 @@ import {
 import { cleanTitle, formatTitle, READY_PREFIX } from "./title.ts";
 import {
 	ACTIVE_OPTION,
-	buildWindowTitleFormat,
 	buildQuitTitleFormat,
+	buildWindowBaseQuitTitleFormats,
+	buildWindowBaseTitleUpdateArgs,
+	buildWindowTitleFormat,
+	hasWindowLiteralPrefix,
+	PRESERVED_WINDOW_TITLE_FORMAT,
 	readWindowTitle,
+	readWindowTitleMark,
 	SESSION_BASE_NAME_OPTION,
 	SESSION_BASE_NAME_TITLE_FORMAT,
 	SESSION_BASE_NAME_UPDATE_FORMAT,
@@ -20,11 +25,14 @@ import {
 	SESSION_TITLE_MARKED_OPTION,
 	SESSION_TITLE_MARKED_VALUE_FORMAT,
 	SHARED_WINDOW_TITLE_FORMAT,
-	PRESERVED_WINDOW_TITLE_FORMAT,
 	STATUS_INFO_FORMAT,
 	targetDisappeared,
-	WINDOW_REPAIR_NEEDED_FORMAT,
 	WAITING_OPTION,
+	WINDOW_BASE_NAME_OPTION,
+	WINDOW_BASE_NAME_TITLE_FORMAT,
+	WINDOW_BASE_NAME_UPDATE_FORMAT,
+	WINDOW_TITLE_MARKED_OPTION,
+	WINDOW_REPAIR_NEEDED_FORMAT,
 	writeOnServer,
 	type RunTmux,
 	type WindowSnapshot,
@@ -134,14 +142,22 @@ export function createController(tmux: RunTmux) {
 		for (const window of [...formerWindows]) {
 			if (!isCurrent()) return;
 			try {
-				// -F evaluates a format, not a shell command. Only validated numeric
-				// IDs enter this fixed tmux command; title text is expanded at rename.
-				// Skip unchanged names on the server, preserving automatic-rename even
-				// if a custom unmarked name replaced the stale marker after lookup.
-				await writeOnServer(tmux, server, [
-					"if-shell", "-F", "-t", window, WINDOW_REPAIR_NEEDED_FORMAT,
-					`rename-window -t ${window} -- '${SHARED_WINDOW_TITLE_FORMAT}'`,
-				], signal);
+				const literalPrefix = await hasWindowLiteralPrefix(tmux, window, signal);
+				if (!isCurrent()) return;
+				if (literalPrefix) {
+					await writeOnServer(tmux, server, buildWindowBaseTitleUpdateArgs(
+						window, WINDOW_BASE_NAME_UPDATE_FORMAT, true, WINDOW_BASE_NAME_TITLE_FORMAT,
+					), signal);
+				} else {
+					// -F evaluates a format, not a shell command. Only validated numeric
+					// IDs enter this fixed tmux command; title text is expanded at rename.
+					// Skip unchanged names on the server, preserving automatic-rename even
+					// if a custom unmarked name replaced the stale marker after lookup.
+					await writeOnServer(tmux, server, [
+						"if-shell", "-F", "-t", window, WINDOW_REPAIR_NEEDED_FORMAT,
+						`rename-window -t ${window} -- '${SHARED_WINDOW_TITLE_FORMAT}'`,
+					], signal);
+				}
 			} catch (error) {
 				// Forget vanished windows, but retry transient failures on the next update.
 				if (!targetDisappeared(error, window)) continue;
@@ -241,13 +257,50 @@ export function createController(tmux: RunTmux) {
 			// Keep model output provisional until its tmux update succeeds. A failed
 			// or superseded write must not affect later status-only title decisions.
 			const candidate = candidateTitle;
+			const hasTaskTitle = candidate !== undefined || baseTitle !== undefined;
+			const taskTitle = candidate ?? baseTitle ?? currentTitle.replace(/^\* /, "");
+			let windowTitleMark: string | undefined;
+			if (currentTitle.startsWith(READY_PREFIX) || windowWaiting) {
+				windowTitleMark = await readWindowTitleMark(tmux, pane, signal);
+				if (!isCurrent()) return;
+			}
+			// Window options remember whether an existing leading marker is our own.
+			// This is essential for a custom name which itself begins with `* `.
+			const useWindowBase = windowTitleMark !== undefined
+				|| (active && !hasTaskTitle && (windowWaiting || currentTitle.startsWith(READY_PREFIX)));
+			if (useWindowBase) {
+				const renameLocation = current;
+				let args: string[];
+				if (!active) {
+					const quitFormats = buildWindowBaseQuitTitleFormats(idleTitle);
+					args = buildWindowBaseTitleUpdateArgs(pane, quitFormats.baseName, true, quitFormats.title);
+				} else if (hasTaskTitle) {
+					args = buildWindowBaseTitleUpdateArgs(pane, taskTitle, false, buildWindowTitleFormat(taskTitle));
+				} else {
+					args = buildWindowBaseTitleUpdateArgs(pane, WINDOW_BASE_NAME_UPDATE_FORMAT, true, WINDOW_BASE_NAME_TITLE_FORMAT);
+				}
+				await writeOnServer(tmux, current.server ?? lastLocation?.server, args, signal);
+				if (!isCurrent()) return;
+				if (renameLocation.server && tmux.supportsServerPidGuard) {
+					current = await readWindowTitle(tmux, pane, signal);
+					if (!isCurrent()) return;
+					rememberLocation(current);
+					if (!isCurrent()) return;
+					if (current.window !== renameLocation.window || current.session !== renameLocation.session) stable = false;
+				}
+				if (!isCurrent()) return;
+				if (candidate !== undefined && candidateTitle === candidate) {
+					baseTitle = candidate;
+					candidateTitle = undefined;
+				}
+				updated = stable;
+				return;
+			}
 			// Leave a custom name alone unless we have a summary or a marker to update.
 			if (!candidate && !baseTitle && !windowWaiting && !currentTitle.startsWith(READY_PREFIX)) {
 				updated = isCurrent() && stable;
 				return;
 			}
-			const hasTaskTitle = candidate !== undefined || baseTitle !== undefined;
-			const taskTitle = candidate ?? baseTitle ?? currentTitle.replace(/^\* /, "");
 			const preserveWindowName = !hasTaskTitle && taskTitle.length > 0;
 			const title = preserveWindowName
 				? `${windowWaiting ? READY_PREFIX : ""}${taskTitle}`
@@ -270,6 +323,15 @@ export function createController(tmux: RunTmux) {
 					if (!isCurrent()) return;
 					if (current.window !== renameLocation.window || current.session !== renameLocation.session) stable = false;
 				}
+			}
+			// Persist the base alongside a waiting task title so a fresh extension
+			// runtime can tell its marker from a literal leading `* ` in that name.
+			if (active && (windowWaiting || currentTitle.startsWith(READY_PREFIX))) {
+				await writeOnServer(tmux, current.server ?? lastLocation?.server, [
+					"set-option", "-w", "-t", pane, WINDOW_BASE_NAME_OPTION, taskTitle,
+					";", "set-option", "-w", "-t", pane, WINDOW_TITLE_MARKED_OPTION, "transition",
+				], signal);
+				if (!isCurrent()) return;
 			}
 			if (!isCurrent()) return;
 			// Preserve a current candidate after failures so /tmux-title sync can

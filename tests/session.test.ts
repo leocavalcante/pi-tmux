@@ -181,6 +181,139 @@ test.skipIf(!hasTmux)("waiting markers preserve literal custom window names with
 	}
 });
 
+test.skipIf(!hasTmux)("literal leading waiting prefixes survive startup and shared-pane status transitions", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "LiteralPrefix", "-n", "* Custom window", "/bin/sleep 60");
+		const window = tmux("display-message", "-p", "-t", pane, "#{window_id}");
+		tmux("set-window-option", "-t", window, "automatic-rename-format", "* Custom window");
+		tmux("set-window-option", "-t", window, "automatic-rename", "on");
+		const sibling = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		const run: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
+		piTmux(mockPi(handlers), run);
+		const warnings: string[] = [];
+		const ctx = { mode: "tui", ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
+		const windowTitle = () => tmux("display-message", "-p", "-t", pane, "#{window_name}");
+		const waitForTitle = async (expected: string) => {
+			for (let i = 0; i < 50; i++) {
+				if (windowTitle() === expected) return;
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			throw new Error(`Window title did not become ${JSON.stringify(expected)}; got ${JSON.stringify(windowTitle())}`);
+		};
+
+		await handlers.get("session_start")!({ type: "session_start" }, ctx);
+		expect(windowTitle()).toBe("* Custom window");
+		expect(tmux("show-options", "-w", "-v", "-t", window, "@pi-tmux-window-title-marked")).toBe("unmarked");
+		expect(tmux("show-options", "-w", "-v", "-t", window, "@pi-tmux-window-literal-prefix")).toBe("1");
+		expect(tmux("show-window-options", "-v", "-t", window, "automatic-rename")).toBe("on");
+
+		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "1");
+		handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+		await waitForTitle("* * Custom window");
+		tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "0");
+		handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+		await waitForTitle("* Custom window");
+
+		await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
+		await waitForTitle("* * Custom window");
+		handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+		await waitForTitle("* Custom window");
+		expect(warnings).toEqual([]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
+test.skipIf(!hasTmux)("literal leading prefixes survive move repair and peer-aware quit cleanup", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "PrefixSource", "-n", "* Custom window", "/bin/sleep 60");
+		const sourceWindow = tmux("display-message", "-p", "-t", pane, "#{window_id}");
+		const anchor = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		tmux("set-option", "-p", "-t", anchor, WAITING_OPTION, "1");
+		const destinationPane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "PrefixDestination", "-n", "* Custom window", "/bin/sleep 60");
+		const destinationWindow = tmux("display-message", "-p", "-t", destinationPane, "#{window_id}");
+		tmux("set-window-option", "-t", destinationWindow, "automatic-rename-format", "* Custom window");
+		tmux("set-window-option", "-t", destinationWindow, "automatic-rename", "on");
+		const peer = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", destinationPane, "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		const run: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
+		piTmux(mockPi(handlers), run);
+		const warnings: string[] = [];
+		const ctx = { mode: "tui", ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
+		const title = (target: string) => tmux("display-message", "-p", "-t", target, "#{window_name}");
+		const waitForTitle = async (target: string, expected: string) => {
+			for (let i = 0; i < 50; i++) {
+				if (title(target) === expected) return;
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			throw new Error(`Window ${target} did not become ${JSON.stringify(expected)}; got ${JSON.stringify(title(target))}`);
+		};
+		const waitForOption = async (target: string, option: string, expected: string) => {
+			for (let i = 0; i < 50; i++) {
+				try {
+					if (tmux("show-options", "-w", "-v", "-t", target, option) === expected) return;
+				} catch { /* the user option may not have been created yet */ }
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			throw new Error(`Window option ${option} on ${target} did not become ${JSON.stringify(expected)}`);
+		};
+
+		await handlers.get("session_start")!({ type: "session_start" }, ctx);
+		await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
+		await waitForTitle(pane, "* * Custom window");
+		tmux("set-option", "-p", "-t", anchor, WAITING_OPTION, "0");
+		tmux("set-option", "-p", "-t", peer, ACTIVE_OPTION, "1");
+		tmux("join-pane", "-d", "-s", pane, "-t", destinationPane);
+		handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+		await waitForTitle(anchor, "* Custom window");
+		await waitForTitle(pane, "* Custom window");
+		await waitForOption(destinationWindow, "@pi-tmux-window-title-marked", "unmarked");
+		expect(tmux("show-options", "-w", "-v", "-t", destinationWindow, "@pi-tmux-window-title-marked")).toBe("unmarked");
+		expect(tmux("display-message", "-p", "-t", pane, "#{window_id}")).toBe(destinationWindow);
+
+		tmux("set-option", "-p", "-t", peer, WAITING_OPTION, "1");
+		await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, ctx);
+		expect(title(pane)).toBe("* * Custom window");
+		expect(tmux("show-options", "-p", "-v", "-t", peer, ACTIVE_OPTION)).toBe("1");
+		tmux("set-option", "-p", "-t", peer, ACTIVE_OPTION, "0");
+		tmux("set-option", "-p", "-t", peer, WAITING_OPTION, "0");
+		await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, ctx);
+		expect(title(pane)).toBe("zsh");
+		expect(title(anchor)).toBe("* Custom window");
+		expect(tmux("display-message", "-p", "-t", sourceWindow, "#{session_name}")).toBe("PrefixSource");
+		expect(warnings).toEqual([]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
 test.skipIf(!hasTmux).each([false, true])("window renames re-evaluate sibling status at execution time, initially waiting=%j", async (initialWaiting) => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");
@@ -236,11 +369,23 @@ test.skipIf(!hasTmux)("the real tmux adapter preserves empty window names", asyn
 		piTmux(mockPi(handlers));
 		const warnings: string[] = [];
 		const ctx = { mode: "tui", ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
+		const title = () => tmux("display-message", "-p", "-t", pane, "#{window_name}");
+		const waitForTitle = async (expected: string) => {
+			for (let i = 0; i < 50; i++) {
+				if (title() === expected) return;
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			}
+			throw new Error(`Window title did not become ${JSON.stringify(expected)}; got ${JSON.stringify(title())}`);
+		};
 		await handlers.get("session_start")!({ type: "session_start" }, ctx);
-		expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("");
+		expect(title()).toBe("");
 		expect(warnings).toEqual([]);
 		await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
-		expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("* pi");
+		await waitForTitle("* pi");
+		handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+		await waitForTitle("");
+		await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
+		await waitForTitle("* pi");
 		await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, ctx);
 		expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("zsh");
 		expect(warnings).toEqual([]);
