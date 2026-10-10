@@ -42,7 +42,7 @@ export class InvalidNamingTitleError extends Error {
 // Defense in depth for common formats; this intentionally is not a general
 // secret or personal-information scanner. Check raw and compatibility-normalized
 // text because title cleanup can lowercase or clip recognizable tokens. Also
-// check without whitespace because cleanup preserves spaces inside sensitive values.
+// remove whitespace and invisible separators because cleanup turns them into spaces.
 // Do not use word boundaries in either detector: title cleanup preserves adjacent ASCII word chars.
 const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
@@ -64,12 +64,12 @@ const EMAIL_ADDRESS_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value)) || EMAIL_ADDRESS_PATTERN.test(value);
-	const hasPatternWithWhitespaceCompacted = (value: string) =>
-		hasPattern(value) || hasPattern(value.replace(/\s+/gu, ""));
+	const hasPatternWithSeparatorsRemoved = (value: string) =>
+		hasPattern(value) || hasPattern(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, ""));
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
-	return hasPatternWithWhitespaceCompacted(text)
-		|| hasPatternWithWhitespaceCompacted(compatibilityNormalized)
-		|| hasPatternWithWhitespaceCompacted(compatibilityNormalized.toLowerCase());
+	return hasPatternWithSeparatorsRemoved(text)
+		|| hasPatternWithSeparatorsRemoved(compatibilityNormalized)
+		|| hasPatternWithSeparatorsRemoved(compatibilityNormalized.toLowerCase());
 }
 
 function getTextPhase(textSignature: string | undefined): string | undefined {
