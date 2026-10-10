@@ -965,6 +965,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the auth flow with ${token}`);
 	const labeledCredential = `client_secret=${"C".repeat(24)}`;
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
+	const shortPassword = `password=${"S".repeat(12)}`;
+	await suppressed(fixture(), `Review the configuration ${shortPassword}`, shortPassword);
+	const obfuscatedPassword = `passphrase=${"P".repeat(5)}\u200b${"P".repeat(5)}`;
+	await suppressed(fixture(), `Review the configuration ${obfuscatedPassword}`, obfuscatedPassword);
 
 	const emailAddress = "customer@example.test";
 	await suppressed(fixture(), `Update the notification flow for ${emailAddress}`, emailAddress);
@@ -1020,6 +1024,13 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	expect(unlabeledNumbers.requests).toHaveLength(1);
 	expect(unlabeledNumbers.state.title).toBe("review record");
 	expect(unlabeledNumbers.warnings).toEqual([]);
+
+	const placeholderPassword = fixture([Promise.resolve(response("review docs"))]);
+	placeholderPassword.input("Review docs with password=placeholder, passphrase=example, and token: placeholder");
+	await settle();
+	expect(placeholderPassword.requests).toHaveLength(1);
+	expect(placeholderPassword.state.title).toBe("review docs");
+	expect(placeholderPassword.warnings).toEqual([]);
 });
 
 test("safe naming can resume after a credential-looking context is blocked", async () => {
@@ -1069,6 +1080,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const compatibilityGithubToken = [...githubToken]
 		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
 	const outputs = [
+		`password=${"S".repeat(12)}`,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		["gh", "p_", "a".repeat(36)].join(""),
 		["gsk_", "a".repeat(24)].join(""),
@@ -1885,6 +1897,8 @@ test("ordinary security-themed and hyphenated task titles without credential val
 		["api key setup", "api key setup"],
 		["access token flow", "access token flow"],
 		["api_key=example", "api_key example"],
+		["password: placeholder", "password placeholder"],
+		["passphrase=example", "passphrase example"],
 		["token: placeholder", "token placeholder"],
 		["token: rotate safely", "token rotate safely"],
 		["ssn parser tests", "ssn parser tests"],
@@ -3339,6 +3353,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		token,
 		`auth integration ${token}`,
 		`client_secret=${"B".repeat(24)}`,
+		`password=${"P".repeat(12)}`,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		`ghp_${"C".repeat(10)}\u200b${"C".repeat(10)}`,
 		"alice@example.com",
