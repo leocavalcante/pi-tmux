@@ -1052,6 +1052,41 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
 });
 
+test("rejects Databricks access tokens without mistaking near-miss strings for tokens", async () => {
+	const token = ["dapi", "a".repeat(32)].join("");
+	for (const output of [token, `${token}-2`, `rotate-${token}`, token.replace("dapi", "da\u200bpi")]) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const shortName = fixture([Promise.resolve(response("dapi"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("dapi");
+	expect(shortName.warnings).toEqual([]);
+
+	for (const output of [
+		["dapi", "0".repeat(31)].join(""),
+		["dapi", "0".repeat(33)].join(""),
+		["dapi", "g".repeat(32)].join(""),
+		`${token}_x`,
+		`${token}-x`,
+	]) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("databricks token tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("databricks token tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",
