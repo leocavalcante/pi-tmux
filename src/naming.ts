@@ -96,7 +96,7 @@ const LABELED_PASSWORD_QUOTED_PHRASE_PATTERN = new RegExp(
 	"i",
 );
 const LABELED_PASSWORD_PLAIN_PHRASE_PATTERN = new RegExp(
-	String.raw`(?<![A-Za-z0-9_-])(?:passphrase|password)\s*["']?\s*[:=]\s*(?!["'])([A-Za-z0-9._~+/=-]+(?:(?:[ \t]+|\r?\n[ \t]+)[A-Za-z0-9._~+/=-]+)+)(?=[ \t]*(?:#[^\r\n]*|\r?\n|$|[,;.!?)\]}]))`,
+	String.raw`(?<![A-Za-z0-9_-])(?:passphrase|password)\s*["']?\s*[:=]\s*(?!["'])([A-Za-z0-9._~+/=-]+(?:(?:[ \t]+|\r?\n[ \t]+)[A-Za-z0-9._~+/=-]+)+)(?=[ \t]*(?:#[^\r\n]*|\r?\n|$|[,;:!?)\]}]))`,
 	"i",
 );
 // Azure Storage SAS URLs require both a dated version field and a long signature.
