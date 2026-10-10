@@ -106,6 +106,9 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/[^\s/:@]+:[^\s/@]+@/i,
 	AZURE_SAS_PATTERN,
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
+	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed
+	// by a 16-hex or `local` segment.
+	/(?<![A-Za-z0-9_])sgp_(?:[a-f0-9]{40}|(?:[a-f0-9]{16}|local)_[a-f0-9]{40})(?![A-Za-z0-9_-])/i,
 	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,
 	// Databricks tokens are `dapi` plus 32 hex characters, optionally suffixed by one digit.
 	/(?<![A-Za-z0-9_])dapi[a-f0-9]{32}(?:-\d)?(?![A-Za-z0-9_-])/,

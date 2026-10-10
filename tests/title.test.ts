@@ -4,7 +4,7 @@ import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
 import { STATUS_SNAPSHOT_FORMAT } from "../src/tmux.ts";
-import { hasSensitiveOutput } from "../src/naming.ts";
+import { hasSensitiveNamingContext, hasSensitiveOutput } from "../src/naming.ts";
 import {
 	buildQuitTitleFormat,
 	buildWindowBaseQuitTitleFormats,
@@ -983,8 +983,14 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Test the handler with generated identifier ${telegramBotToken}`, telegramBotToken);
 	const brevoApiToken = `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}`;
 	await suppressed(fixture(), `Review the mail integration with ${brevoApiToken}`, brevoApiToken);
-	const atlassianApiToken = `ATATT3${"a".repeat(183)}_-=`;
+	const atlassianApiToken = "ATATT3" + "a".repeat(183) + "_-=";
 	await suppressed(fixture(), `Review the integration with ${atlassianApiToken}`, atlassianApiToken);
+	const sourcegraphToken = `sgp_${"a".repeat(40)}`;
+	const sourcegraphSegmentedToken = `sgp_${"b".repeat(16)}_${"c".repeat(40)}`;
+	const sourcegraphLocalToken = `sgp_local_${"d".repeat(40)}`;
+	await suppressed(fixture(), `Review Sourcegraph access ${sourcegraphToken}`, sourcegraphToken);
+	await suppressed(fixture(), `Review Sourcegraph access ${sourcegraphSegmentedToken}`, sourcegraphSegmentedToken);
+	await suppressed(fixture(), `Review Sourcegraph access ${sourcegraphLocalToken}`, sourcegraphLocalToken);
 	const labeledCredential = `client_secret=${"C".repeat(24)}`;
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 	const shortPassword = `password=${"S".repeat(12)}`;
@@ -1125,6 +1131,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithAtlassianToken = fixture();
 	historyWithAtlassianToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${atlassianApiToken}` }] });
 	await suppressed(historyWithAtlassianToken, "Continue the task", atlassianApiToken);
+	const historyWithSourcegraphToken = fixture();
+	historyWithSourcegraphToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${sourcegraphSegmentedToken}` }] });
+	await suppressed(historyWithSourcegraphToken, "Continue the task", sourcegraphSegmentedToken);
 	const historyWithEmail = fixture();
 	historyWithEmail.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous contact: ${emailAddress}` }] });
 	await suppressed(historyWithEmail, "Continue the task", emailAddress);
@@ -1865,6 +1874,76 @@ test("rejects Atlassian API tokens without mistaking near-misses for tokens", as
 		expect(f.state.title).toBe("atlassian api tests");
 		expect(f.warnings).toEqual([]);
 	}
+});
+
+test("rejects Sourcegraph access tokens without mistaking near-miss strings for tokens", async () => {
+	const tokens = [
+		`sgp_${"a".repeat(40)}`,
+		`sgp_${"b".repeat(16)}_${"c".repeat(40)}`,
+		`sgp_local_${"d".repeat(40)}`,
+	];
+	for (const token of tokens) {
+		const outputs = [
+			token,
+			token.toUpperCase(),
+			`configure-${token}`,
+			token.replace("sgp_", "sg\u200bp_"),
+			`${token.slice(0, 12)}\u200b${token.slice(12)}`,
+		];
+		for (const output of outputs) {
+			const f = fixture([Promise.resolve(response(output))]);
+			f.input("Name a task");
+			await settle();
+			expect(f.state.title).toBe("existing task");
+			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+			expect(f.warnings.join(" ")).not.toContain(token);
+		}
+	}
+
+	const shortName = fixture([Promise.resolve(response("sourcegraph api setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("sourcegraph api setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const token = tokens[0]!;
+	const segmentedToken = tokens[1]!;
+	const localToken = tokens[2]!;
+	const nearMisses = [
+		`sgp_${"a".repeat(39)}`,
+		`sgp_${"a".repeat(41)}`,
+		`sgp_${"g".repeat(40)}`,
+		`sgp_${"a".repeat(15)}_${"b".repeat(40)}`,
+		`sgp_${"a".repeat(17)}_${"b".repeat(40)}`,
+		`sgp_${"a".repeat(16)}_${"b".repeat(39)}`,
+		`sgp_${"a".repeat(16)}_${"b".repeat(41)}`,
+		`sgp_local_${"c".repeat(39)}`,
+		`sgp_local_${"c".repeat(41)}`,
+		`sgp_locax_${"c".repeat(40)}`,
+		`sgr_${"a".repeat(40)}`,
+		`x${token}`,
+		`_${token}`,
+		`${token}x`,
+		`${token}_x`,
+		`${token}-x`,
+		`${segmentedToken}x`,
+		`${segmentedToken}_x`,
+		`${localToken}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("sourcegraph api tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("sourcegraph api tests");
+		expect(f.warnings).toEqual([]);
+	}
+
+	const commitHash = "a".repeat(40);
+	expect(hasSensitiveNamingContext(`Review commit ${commitHash}`)).toBe(false);
+	expect(hasSensitiveOutput(commitHash)).toBe(false);
 });
 
 test("rejects SendGrid API keys without mistaking near-miss strings for keys", async () => {
