@@ -85,6 +85,23 @@ test.skipIf(process.platform === "win32")(
 );
 
 test.skipIf(process.platform === "win32")(
+	"runTmux rejects and reaps a child that exceeds its output bound",
+	async () => {
+		await withFakeTmux(() => [
+			"process.stdout.write('x'.repeat(70 * 1024));",
+			"setInterval(() => {}, 1000);",
+		], async ({ pid }) => {
+			const command = runTmux([], new AbortController().signal);
+			const childPid = await waitForChild(pid);
+			let error: unknown;
+			try { await command; } catch (caught) { error = caught; }
+			expect(error).toMatchObject({ code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" });
+			expect(await childHasExited(childPid)).toBe(true);
+		});
+	},
+);
+
+test.skipIf(process.platform === "win32")(
 	"runTmux rejects a timed-out child that exits cleanly after SIGTERM",
 	async () => {
 		await withFakeTmux(({ cleanExit }) => [
