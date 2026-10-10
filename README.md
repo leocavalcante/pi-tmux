@@ -330,17 +330,16 @@ can still mention details from tool output. Before model lookup or provider
 transport, the bounded context is checked locally for recognizable credential
 formats (including labeled Datadog API keys and Mailgun private API tokens,
 standalone Artifactory API and reference tokens, Fly.io token formats,
-Dynatrace API tokens, Resend API keys, URL user-info, Azure Shared Access
-Signature URLs, and Base64 Basic credentials in HTTP `Authorization` or
-`Proxy-Authorization` headers, including YAML block scalars with tags or
-anchors, conventional email addresses, explicitly labeled U.S. SSN- and
-phone-shaped values, Luhn-valid payment-card values with explicit card labels,
-and long values assigned to common credential labels (including
-AWS `AWS_SECRET_ACCESS_KEY`, Azure `AccountKey`, WireGuard `PresharedKey`, and
-Kubernetes `client-key-data`), whether inline or as YAML block scalars with
-tags or anchors. Shorter
-non-placeholder password/passphrase assignments are also checked in either
-form.
+Dynatrace API tokens, Resend API keys, Google Cloud API keys and OAuth access
+tokens, URL user-info, Azure Shared Access Signature URLs, and Base64 Basic
+credentials in HTTP `Authorization` or `Proxy-Authorization` headers,
+including YAML block scalars with tags or anchors, conventional email addresses,
+explicitly labeled U.S. SSN- and phone-shaped values, Luhn-valid payment-card
+values with explicit card labels, and long values assigned to common credential
+labels such as AWS `AWS_SECRET_ACCESS_KEY`, Azure `AccountKey`, WireGuard
+`PresharedKey`, and Kubernetes `client-key-data`, whether inline or as YAML
+block scalars with tags or anchors. Shorter non-placeholder password/passphrase
+assignments are also checked in either form.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
 deduplication cache. This is a limited, best-effort check, not comprehensive
@@ -358,7 +357,8 @@ titles. Before applying a response, the extension checks raw and
 compatibility-normalized output for several recognizable credential formats,
 including labeled Datadog API keys and Mailgun private API tokens, standalone
 Artifactory API and reference tokens, Fly.io token formats, Dynatrace API
-tokens, Resend API keys, Azure Shared Access Signature URLs, and Base64 Basic
+tokens, Resend API keys, Google Cloud API keys and OAuth access tokens, Azure
+Shared Access Signature URLs, and Base64 Basic
 credentials in HTTP `Authorization` or `Proxy-Authorization` headers,
 including YAML block scalars with tags or anchors, conventional email
 addresses, explicitly labeled U.S. SSN-shaped values, phone-labeled values
