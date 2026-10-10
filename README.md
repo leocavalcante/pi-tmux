@@ -327,9 +327,10 @@ Manual title commands do not send the title or dialogue to a model.
 
 The model is instructed not to include secrets or personal information in
 titles. Before applying a response, the extension rejects several recognizable
-credential formats and conventional email addresses, and warns without
-including the response. This limited check is defense in depth, not comprehensive
-secret or personal-information redaction. Do not put secrets into prompts.
+credential formats and conventional email addresses in both raw and
+compatibility-normalized output, and warns without including the response.
+This limited check is defense in depth, not comprehensive secret or
+personal-information redaction. Do not put secrets into prompts.
 Window names are visible in your tmux status bar and may be retained by tmux
 session-persistence plugins.
 

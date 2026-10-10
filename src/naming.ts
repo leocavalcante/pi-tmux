@@ -40,7 +40,7 @@ export class InvalidNamingTitleError extends Error {
 }
 
 // Defense in depth for common formats; this intentionally is not a general
-// secret or personal-information scanner. Check raw text before title normalization.
+// secret or personal-information scanner. Scan raw and cleanup-normalized text before title cleanup can lowercase or clip tokens.
 const CREDENTIAL_LIKE_PATTERNS = [
 	/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/,
 	/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/,
@@ -59,7 +59,10 @@ const CREDENTIAL_LIKE_PATTERNS = [
 const EMAIL_ADDRESS_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 
 function hasSensitiveOutput(text: string): boolean {
-	return CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(text)) || EMAIL_ADDRESS_PATTERN.test(text);
+	const hasPattern = (value: string) =>
+		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value)) || EMAIL_ADDRESS_PATTERN.test(value);
+	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
+	return hasPattern(text) || hasPattern(compatibilityNormalized) || hasPattern(compatibilityNormalized.toLowerCase());
 }
 
 function getTextPhase(textSignature: string | undefined): string | undefined {
