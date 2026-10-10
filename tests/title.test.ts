@@ -1462,6 +1462,56 @@ test("rejects 1Password Secret Keys without mistaking near-miss strings for keys
 	}
 });
 
+test("rejects age secret keys without mistaking near-miss strings for identities", async () => {
+	const prefix = ["AGE", "SECRET", "KEY", "1"].join("-");
+	const payload = "Q".repeat(58);
+	const identity = `${prefix}${payload}`;
+	const outputs = [
+		identity,
+		identity.toLowerCase(),
+		`configure-${identity}`,
+		identity.replace(prefix, `${prefix}\u200b`),
+		`${identity.slice(0, 45)}\u200b${identity.slice(45)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(output);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("age key migration"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("age key migration");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`${prefix}${"Q".repeat(57)}`,
+		`${prefix}${"Q".repeat(59)}`,
+		`${prefix}${"I"}${"Q".repeat(57)}`,
+		`${prefix}${"O"}${"Q".repeat(57)}`,
+		`${prefix.slice(0, -1)}2${payload}`,
+		`x${identity}`,
+		`_${identity}`,
+		`${identity}x`,
+		`${identity}_x`,
+		`${identity}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("age key migration"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("age key migration");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",
