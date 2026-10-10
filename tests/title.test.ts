@@ -972,6 +972,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the Supabase config ${supabaseSecretKey}`, supabaseSecretKey);
 	const neonApiKey = `neon_api_key_${"N".repeat(32)}`;
 	await suppressed(fixture(), `Review the Neon config ${neonApiKey}`, neonApiKey);
+	const vaultServiceToken = `hvs.${"V".repeat(24)}`;
+	const vaultBatchToken = `hvb.${"B".repeat(24)}`;
+	await suppressed(fixture(), `Review Vault access ${vaultServiceToken}`, vaultServiceToken);
 	const labeledCredential = `client_secret=${"C".repeat(24)}`;
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 	const shortPassword = `password=${"S".repeat(12)}`;
@@ -1094,6 +1097,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithNeonKey = fixture();
 	historyWithNeonKey.messages.push({ role: "assistant", content: [{ type: "text", text: `Neon key: ${neonApiKey}` }] });
 	await suppressed(historyWithNeonKey, "Continue the task", neonApiKey);
+	const historyWithVaultToken = fixture();
+	historyWithVaultToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Vault token: ${vaultBatchToken}` }] });
+	await suppressed(historyWithVaultToken, "Continue the task", vaultBatchToken);
 	const historyWithEmail = fixture();
 	historyWithEmail.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous contact: ${emailAddress}` }] });
 	await suppressed(historyWithEmail, "Continue the task", emailAddress);
@@ -1541,6 +1547,54 @@ test("rejects Neon API keys without mistaking near-miss strings for keys", async
 		expect(f.state.title).toBe("neon api setup");
 		expect(f.warnings).toEqual([]);
 	}
+});
+
+test("rejects Vault service and batch tokens without mistaking near-misses for tokens", async () => {
+	for (const prefix of ["hvs.", "hvb."]) {
+		const token = `${prefix}${"V".repeat(24)}`;
+		const outputs = [
+			token,
+			`configure-${token}`,
+			token.replace(prefix, `${prefix[0]}\u200b${prefix.slice(1)}`),
+			`${token.slice(0, 11)}\u200b${token.slice(11)}`,
+		];
+		for (const output of outputs) {
+			const f = fixture([Promise.resolve(response(output))]);
+			f.input("Name a task");
+			await settle();
+			expect(f.state.title).toBe("existing task");
+			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+			expect(f.warnings.join(" ")).not.toContain(token);
+		}
+
+		const nearMisses = [
+			`${prefix}${"V".repeat(23)}`,
+			`${prefix}${"V".repeat(25)}`,
+			`${prefix}${"V".repeat(24)}x`,
+			`${prefix}${"V".repeat(23)}.`,
+			`hvt.${"V".repeat(24)}`,
+			`x${token}`,
+			`_${token}`,
+			`${token}_x`,
+			`${token}-x`,
+		];
+		for (const output of nearMisses) {
+			const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("vault access setup"))]);
+			f.input("Name a task");
+			await settle();
+			expect(f.requests).toHaveLength(2);
+			expect(f.state.title).toBe("vault access setup");
+			expect(f.warnings).toEqual([]);
+		}
+	}
+
+	const shortName = fixture([Promise.resolve(response("vault api setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("vault api setup");
+	expect(shortName.warnings).toEqual([]);
 });
 
 test("rejects SendGrid API keys without mistaking near-miss strings for keys", async () => {
