@@ -42,7 +42,7 @@ export class InvalidNamingTitleError extends Error {
 // Defense in depth for common formats; this intentionally is not a general
 // secret or personal-information scanner. Check raw and compatibility-normalized
 // text because title cleanup can lowercase or clip recognizable tokens.
-// Do not use word boundaries: title cleanup preserves adjacent ASCII word chars.
+// Do not use word boundaries in either detector: title cleanup preserves adjacent ASCII word chars.
 const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	/(?:AKIA|ASIA)[0-9A-Z]{16}/,
@@ -58,7 +58,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/,
 ];
 
-const EMAIL_ADDRESS_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const EMAIL_ADDRESS_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 
 function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
