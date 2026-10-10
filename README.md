@@ -126,9 +126,12 @@ New input, settlement, and compaction keep the pinned text while waiting
 markers still update. The extension does not collect naming context or make
 naming requests while the pin is active. Manual titles use the same lowercase,
 ASCII, and length rules as generated titles, and work with `PI_TMUX_MODEL=off`.
-Empty names and names containing no letters or numbers are rejected. If a
-tmux update fails, the pin stays active but the command warns instead of
-confirming success. Repeat `set <name>` or use `sync` to retry.
+Empty names and names containing no letters or numbers are rejected. Values
+matching the limited sensitive-output checks are also rejected before cleanup,
+so obvious credentials or personal data are not pinned. This is not
+comprehensive redaction. If a tmux update fails, the pin stays active but the
+command warns instead of confirming success. Repeat `set <name>` or use `sync`
+to retry.
 
 `auto` releases the pin and requests a title from the active context. It respects
 `PI_TMUX_MODEL=off` and does not clear the current waiting marker. The manual

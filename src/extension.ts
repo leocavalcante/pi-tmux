@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createController } from "./controller.ts";
+import { hasSensitiveOutput } from "./naming.ts";
 import { notifySafely } from "./notify.ts";
 import { cleanTitle } from "./title.ts";
 import { runTmux, type RunTmux } from "./tmux.ts";
@@ -44,7 +45,12 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				return;
 			}
 			if (set) {
-				const title = cleanTitle(set[1] ?? "");
+				const requestedTitle = set[1] ?? "";
+				if (hasSensitiveOutput(requestedTitle)) {
+					notifySafely(ctx, "Sensitive-looking manual title was not applied.", "warning");
+					return;
+				}
+				const title = cleanTitle(requestedTitle);
 				if (!title) {
 					notifySafely(ctx, "Provide a title containing letters or numbers: /tmux-title set <name>", "warning");
 					return;
