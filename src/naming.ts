@@ -223,7 +223,9 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/,
 ];
 
-const EMAIL_ADDRESS_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+// Require the beginning of a local-part run; without this, long non-email text
+// makes the unbounded local-part repetition retry from every character.
+const EMAIL_ADDRESS_PATTERN = /(?<![A-Z0-9._%+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 // Compacted scans require a left boundary so unrelated title words do not combine into tokens.
 const SEPARATOR_TOLERANT_PATTERNS = [
 	...CREDENTIAL_LIKE_PATTERNS,
