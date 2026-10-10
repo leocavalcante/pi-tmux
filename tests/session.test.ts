@@ -770,3 +770,54 @@ test.skipIf(!hasTmux)("server-guarded waiting updates preserve session names wit
 		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
 	}
 });
+
+test.skipIf(!hasTmux)("server-guarded waiting updates preserve trailing newlines in custom window names", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const customTitle = "custom\n";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Newline", "-n", customTitle, "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		const run: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
+		piTmux(mockPi(handlers), run);
+		const warnings: string[] = [];
+		const ctx = {
+			mode: "tui",
+			sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+			ui: { notify: (text: string) => warnings.push(text) },
+		} as unknown as ExtensionContext;
+		const emit = async (event: string) => {
+			await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+			// agent_start intentionally schedules its status write without awaiting it.
+			await new Promise<void>((resolve) => setImmediate(resolve));
+		};
+		const title = () => tmux("display-message", "-p", "-t", pane, "#{window_name}");
+		const sessionName = () => tmux("display-message", "-p", "-t", pane, "#{session_name}");
+
+		expect(title()).toBe(customTitle);
+		await emit("session_start");
+		expect(title()).toBe(customTitle);
+		await emit("agent_settled");
+		expect(title()).toBe(customTitle);
+		expect(sessionName()).toBe("* Newline");
+		await emit("agent_start");
+		expect(title()).toBe(customTitle);
+		expect(sessionName()).toBe("Newline");
+		expect(warnings).toEqual([
+			"A custom window name contains control characters; its waiting marker was skipped.",
+		]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
