@@ -973,6 +973,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the configuration ${shortPassword}`, shortPassword);
 	const passwordBlock = `password: |-\n  ${"P".repeat(12)}`;
 	await suppressed(fixture(), `Review the configuration ${passwordBlock}`, passwordBlock);
+	const taggedPasswordBlock = `password: !!str |-\n  ${"P".repeat(12)}`;
+	const anchoredTokenBlock = `token: &task-token >-\n  ${"T".repeat(24)}`;
+	await suppressed(fixture(), `Review the configuration ${taggedPasswordBlock}`, taggedPasswordBlock);
+	await suppressed(fixture(), `Review the configuration ${anchoredTokenBlock}`, anchoredTokenBlock);
 	const placeholderThenSecretBlocks = [
 		"password: |-\n  example",
 		`token: >-\n  ${"T".repeat(24)}`,
@@ -1003,7 +1007,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const shortBasicAuthorization = basicAuthorizationHeader("Authorization", "u:p");
 	const shortProxyAuthorization = basicAuthorizationHeader("Proxy-Authorization", "p:w");
 	const basicAuthorizationBlock = `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`;
+	const taggedBasicAuthorizationBlock = `Authorization: !!str |-\n  Basic ${Buffer.from("u:p").toString("base64")}`;
 	const proxyBasicAuthorizationBlock = `Proxy-Authorization: >-\n  Basic\n  ${Buffer.from("p:w").toString("base64")}`;
+	const anchoredProxyBasicAuthorizationBlock = `Proxy-Authorization: &proxy-auth >-\n  Basic\n  ${Buffer.from("p:w").toString("base64")}`;
 	const placeholderThenBasicBlocks = [
 		"Authorization: |-\n  Basic example",
 		proxyBasicAuthorizationBlock,
@@ -1013,7 +1019,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the short request headers ${shortBasicAuthorization}`, shortBasicAuthorization);
 	await suppressed(fixture(), `Review the short proxy headers ${shortProxyAuthorization}`, shortProxyAuthorization);
 	await suppressed(fixture(), `Review the request headers ${basicAuthorizationBlock}`, basicAuthorizationBlock);
+	await suppressed(fixture(), `Review the request headers ${taggedBasicAuthorizationBlock}`, taggedBasicAuthorizationBlock);
 	await suppressed(fixture(), `Review the proxy headers ${proxyBasicAuthorizationBlock}`, proxyBasicAuthorizationBlock);
+	await suppressed(
+		fixture(), `Review the proxy headers ${anchoredProxyBasicAuthorizationBlock}`, anchoredProxyBasicAuthorizationBlock,
+	);
 	await suppressed(fixture(), `Review the auth headers ${placeholderThenBasicBlocks}`, placeholderThenBasicBlocks);
 	const obfuscatedPassword = `passphrase=${"P".repeat(5)}\u200b${"P".repeat(5)}`;
 	await suppressed(fixture(), `Review the configuration ${obfuscatedPassword}`, obfuscatedPassword);
@@ -1094,7 +1104,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, PresharedKey=example,",
 		"client-key-data: example, Authorization: Basic example,",
 		"\nAuthorization: |-\n  Basic example\n",
+		"\nAuthorization: !!str |-\n  Basic example\n",
 		"\nProxy-Authorization: >-\n  Basic example\n",
+		"\nProxy-Authorization: &proxy-auth >-\n  Basic example\n",
 		"\nclient-key-data: |-\n  example\n",
 		"\npassword: |-\n  example\n",
 		"\ntoken: |-\n  example\n",
@@ -1162,8 +1174,12 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const outputs = [
 		`password=${"S".repeat(12)}`,
 		`password: |-\n  ${"P".repeat(12)}`,
+		`password: !!str |-\n  ${"P".repeat(12)}`,
+		`token: &task-token >-\n  ${"T".repeat(24)}`,
 		`Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
+		`Authorization: !!str |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
 		`Proxy-Authorization: >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
+		`Proxy-Authorization: &proxy-auth >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
 		[
 			"password: |-\n  example",
 			`token: >-\n  ${"T".repeat(24)}`,
@@ -3460,8 +3476,12 @@ test("manual titles reject sensitive text before normalization without disclosin
 		basicAuthorizationHeader("Proxy-Authorization", "p:w"),
 		`https://storage.example.test/blob?sv=2023-11-03&sig=${"A".repeat(43)}=`,
 		`password: |-\n  ${"P".repeat(12)}`,
+		`password: !!str |-\n  ${"P".repeat(12)}`,
+		`token: &task-token >-\n  ${"T".repeat(24)}`,
 		`Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
+		`Authorization: !!str |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
 		`Proxy-Authorization: >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
+		`Proxy-Authorization: &proxy-auth >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
 		[
 			"password: |-\n  example",
 			`token: >-\n  ${"T".repeat(24)}`,
