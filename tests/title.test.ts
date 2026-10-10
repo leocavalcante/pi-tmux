@@ -970,6 +970,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the auth flow with ${token}`);
 	const supabaseSecretKey = `sb_secret_${"S".repeat(32)}`;
 	await suppressed(fixture(), `Review the Supabase config ${supabaseSecretKey}`, supabaseSecretKey);
+	const neonApiKey = `neon_api_key_${"N".repeat(32)}`;
+	await suppressed(fixture(), `Review the Neon config ${neonApiKey}`, neonApiKey);
 	const labeledCredential = `client_secret=${"C".repeat(24)}`;
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 	const shortPassword = `password=${"S".repeat(12)}`;
@@ -1089,6 +1091,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithSupabaseSecret = fixture();
 	historyWithSupabaseSecret.messages.push({ role: "assistant", content: [{ type: "text", text: `Supabase key: ${supabaseSecretKey}` }] });
 	await suppressed(historyWithSupabaseSecret, "Continue the task", supabaseSecretKey);
+	const historyWithNeonKey = fixture();
+	historyWithNeonKey.messages.push({ role: "assistant", content: [{ type: "text", text: `Neon key: ${neonApiKey}` }] });
+	await suppressed(historyWithNeonKey, "Continue the task", neonApiKey);
 	const historyWithEmail = fixture();
 	historyWithEmail.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous contact: ${emailAddress}` }] });
 	await suppressed(historyWithEmail, "Continue the task", emailAddress);
@@ -1488,6 +1493,52 @@ test("rejects Supabase secret keys without mistaking near-miss strings for keys"
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("supabase api setup");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Neon API keys without mistaking near-miss strings for keys", async () => {
+	const token = `neon_api_key_${"N".repeat(32)}`;
+	const outputs = [
+		token,
+		`configure-${token}`,
+		token.replace("neon_api_key_", "neon_api_ke\u200by_"),
+		`${token.slice(0, 22)}\u200b${token.slice(22)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const shortName = fixture([Promise.resolve(response("neon api setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("neon api setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = [
+		`neon_api_key_${"N".repeat(31)}`,
+		`neon_api_key_${"N".repeat(33)}`,
+		`neon_api_key_${"N".repeat(32)}x`,
+		`neon_api_keX_${"N".repeat(32)}`,
+		`neon_api_key_${"N".repeat(31)}.`,
+		`x${token}`,
+		`_${token}`,
+		`${token}_x`,
+		`${token}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("neon api setup"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("neon api setup");
 		expect(f.warnings).toEqual([]);
 	}
 });
