@@ -970,6 +970,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["glpat-", "a".repeat(24)].join(""),
 		["hf_", "a".repeat(32)].join(""),
 		`hf_${"a".repeat(19)} a`,
+		`hf_${"a".repeat(10)}\u200b${"a".repeat(10)}`,
+		`hf_${"a".repeat(10)}\u0000${"a".repeat(10)}`,
 		["eyJ", "a".repeat(8), ".", "b".repeat(8), ".", "c".repeat(8)].join(""),
 		["Bearer ", "a".repeat(24)].join(""),
 		["Bearer ", "a".repeat(8), " ", "a".repeat(8)].join(""),
