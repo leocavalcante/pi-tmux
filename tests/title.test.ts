@@ -1229,7 +1229,7 @@ test("shutdown waits for an in-flight marker write before resetting to zsh", asy
 	await completed;
 	await shutdown;
 	expect(f.state.title).toBe("zsh");
-	expect(f.calls.at(-1)).toEqual(quitCommand());
+	expect(f.state.windowBaseName).toBe("zsh");
 });
 
 test("session startup preserves an unmarked custom window name", async () => {

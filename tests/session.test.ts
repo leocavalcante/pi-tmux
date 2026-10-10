@@ -181,6 +181,50 @@ test.skipIf(!hasTmux)("waiting markers preserve literal custom window names with
 	}
 });
 
+test.skipIf(!hasTmux)("quit preserves a literal leading prefix when legacy window metadata is absent", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "LegacyPrefix", "-n", "* Custom window", "/bin/sleep 60");
+		const window = tmux("display-message", "-p", "-t", pane, "#{window_id}");
+		const peer = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		tmux("set-option", "-p", "-t", peer, ACTIVE_OPTION, "1");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		const run: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
+		piTmux(mockPi(handlers), run);
+		const warnings: string[] = [];
+		const ctx = { mode: "tui", ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
+		const windowTitle = () => tmux("display-message", "-p", "-t", pane, "#{window_name}");
+
+		await handlers.get("session_start")!({ type: "session_start" }, ctx);
+		expect(windowTitle()).toBe("* Custom window");
+		expect(tmux("show-options", "-w", "-v", "-t", window, "@pi-tmux-window-title-marked")).toBe("unmarked");
+		for (const option of ["@pi-tmux-window-base-name", "@pi-tmux-window-title-marked", "@pi-tmux-window-literal-prefix"]) {
+			tmux("set-option", "-w", "-u", "-t", window, option);
+		}
+		tmux("set-option", "-p", "-t", peer, WAITING_OPTION, "1");
+
+		await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, ctx);
+		expect(windowTitle()).toBe("* * Custom window");
+		expect(tmux("show-options", "-p", "-v", "-t", peer, ACTIVE_OPTION)).toBe("1");
+		expect(tmux("show-options", "-p", "-v", "-t", peer, WAITING_OPTION)).toBe("1");
+		expect(warnings).toEqual([]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
 test.skipIf(!hasTmux)("literal leading waiting prefixes survive startup and shared-pane status transitions", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");

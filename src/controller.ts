@@ -266,8 +266,10 @@ export function createController(tmux: RunTmux) {
 			}
 			// Window options remember whether an existing leading marker is our own.
 			// This is essential for a custom name which itself begins with `* `.
+			// On quit, use the conservative path for ambiguous legacy titles even if
+			// their window options are absent, so an active peer's name is preserved.
 			const useWindowBase = windowTitleMark !== undefined
-				|| (active && !hasTaskTitle && (windowWaiting || currentTitle.startsWith(READY_PREFIX)));
+				|| ((windowWaiting || currentTitle.startsWith(READY_PREFIX)) && (!hasTaskTitle || !active));
 			if (useWindowBase) {
 				const renameLocation = current;
 				let args: string[];
