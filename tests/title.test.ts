@@ -1512,6 +1512,57 @@ test("rejects age secret keys without mistaking near-miss strings for identities
 	}
 });
 
+test("rejects Adobe client secrets without mistaking near-miss strings for secrets", async () => {
+	const prefix = ["p8e", "-"].join("");
+	const alphabet = "aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x";
+	const body = alphabet.repeat(2).slice(0, 32);
+	const secret = `${prefix}${body}`;
+	const outputs = [
+		secret,
+		secret.toUpperCase(),
+		`configure-${secret}`,
+		secret.replace(prefix, `${prefix}\u200b`),
+		`${secret.slice(0, 20)}\u200b${secret.slice(20)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(output);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("adobe oauth migration"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("adobe oauth migration");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`${prefix}${body.slice(0, 31)}`,
+		`${prefix}${body}a`,
+		`${prefix}${body.slice(1)}!`,
+		`${prefix}${body.slice(1)}_`,
+		`${["p8f", "-"].join("")}${body}`,
+		`x${secret}`,
+		`_${secret}`,
+		`${secret}x`,
+		`${secret}_x`,
+		`${secret}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("adobe oauth migration"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("adobe oauth migration");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",

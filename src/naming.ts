@@ -64,6 +64,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])A3-[A-Z0-9]{6}-(?:[A-Z0-9]{11}|[A-Z0-9]{6}-[A-Z0-9]{5})-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}(?![A-Za-z0-9_-])/i,
 	// Age identities use `AGE-SECRET-KEY-1` followed by 58 Bech32 characters.
 	/(?<![A-Za-z0-9_])AGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]{58}(?![A-Za-z0-9_-])/i,
+	// Adobe OAuth client secrets use `p8e-` followed by 32 alphanumeric characters.
+	/(?<![A-Za-z0-9_])p8e-[a-z0-9]{32}(?![A-Za-z0-9_-])/i,
 	// Doppler personal tokens use `dp.pt.` followed by 43 alphanumeric characters.
 	/(?<![A-Za-z0-9_])dp\.pt\.[a-z0-9]{43}(?![A-Za-z0-9_-])/i,
 	// Notion tokens use `ntn_`, 11 digits, then 35 alphanumeric characters.
