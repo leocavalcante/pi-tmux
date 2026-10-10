@@ -47,6 +47,7 @@ const BEARER_TOKEN_PATTERN = /Bearer\s+([A-Za-z0-9._~+/=-](?:\s*[A-Za-z0-9._~+/=
 const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,
+	/nvapi-[A-Za-z0-9_-]{32,}/,
 	// Cerebras keys have exactly 48 URL-safe characters; boundaries avoid `pcsk_` collisions.
 	/(?<![A-Za-z0-9_-])csk[-_][A-Za-z0-9_-]{48}(?![A-Za-z0-9_-])/,
 	/gsk_[A-Za-z0-9]{20,}/,
