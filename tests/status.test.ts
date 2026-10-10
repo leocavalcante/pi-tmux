@@ -57,6 +57,7 @@ test.skipIf(!hasTmux).each([
 		expect(notices[0]).toContain("Waiting flags: " + flags);
 		expect(notices[0]).toContain(`Targets: pane ${pane}, window ${window}, session ${session}`);
 		expect(notices[0]).toContain("AI naming: off");
+		expect(notices[0]).toContain("tmux writes: enabled");
 		expect(notices[0]).not.toContain("synthetic private title");
 		expect(notices[0]).not.toContain("Synthetic Session");
 		expect(calls).toEqual([["display-message", "-p", "-t", pane, STATUS_INFO_FORMAT]]);
