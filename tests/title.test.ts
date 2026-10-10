@@ -3247,6 +3247,42 @@ test("manual titles work with AI disabled, and auto respects that setting", asyn
 	expect(f.state.title).toBe("zsh");
 });
 
+test("manual titles reject sensitive text before normalization without disclosing it", async () => {
+	const token = ["ghp_", "A".repeat(20)].join("");
+	const sensitiveTitles = [
+		token,
+		`auth integration ${token}`,
+		`client_secret=${"B".repeat(24)}`,
+		`ghp_${"C".repeat(10)}\u200b${"C".repeat(10)}`,
+		"alice@example.com",
+	];
+	for (const title of sensitiveTitles) {
+		const f = fixture();
+		await f.refresh(`set ${title}`);
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.requests).toHaveLength(0);
+		expect(f.warnings).toEqual(["Sensitive-looking manual title was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(title);
+	}
+});
+
+test("rejecting a sensitive manual title leaves pending naming intact", async () => {
+	const work = deferred();
+	const f = fixture([work.promise]);
+	f.input("Fix auth tests");
+	await settle();
+	const signal = f.requests[0].options.signal as AbortSignal;
+	const token = ["ghp_", "D".repeat(20)].join("");
+	await f.refresh(`set ${token}`);
+	expect(signal.aborted).toBe(false);
+	expect(f.state.title).toBe("existing task");
+	expect(f.warnings).toEqual(["Sensitive-looking manual title was not applied."]);
+	work.resolve(response("fix auth tests"));
+	await settle();
+	expect(f.state.title).toBe("fix auth tests");
+});
+
 test("invalid manual titles do not cancel pending naming or change the window", async () => {
 	const work = deferred();
 	const f = fixture([work.promise]);

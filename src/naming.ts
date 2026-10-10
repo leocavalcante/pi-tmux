@@ -169,7 +169,7 @@ function hasSensitiveNamingContext(text: string): boolean {
 		.some((value) => hasCredential(value) || hasCredentialWithSeparatorsRemoved(value));
 }
 
-function hasSensitiveOutput(text: string): boolean {
+export function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 			|| hasBearerToken(value) || US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value)
