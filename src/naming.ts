@@ -44,7 +44,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/\bnpm_[A-Za-z0-9]{20,}\b/,
 	/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
 	/\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b/i,
-	/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+	/-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/,
 ];
 
 const EMAIL_ADDRESS_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;

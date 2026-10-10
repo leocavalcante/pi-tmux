@@ -881,6 +881,9 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["eyJ", "a".repeat(8), ".", "b".repeat(8), ".", "c".repeat(8)].join(""),
 		["Bearer ", "a".repeat(24)].join(""),
 		["-----BEGIN ", "PRIVATE KEY-----"].join(""),
+		["-----BEGIN ", "DSA PRIVATE KEY-----"].join(""),
+		["-----BEGIN ", "ENCRYPTED PRIVATE KEY-----"].join(""),
+		["-----BEGIN PGP ", "PRIVATE KEY BLOCK-----"].join(""),
 	];
 	for (const output of outputs) {
 		const f = fixture([Promise.resolve(response(output))]);
