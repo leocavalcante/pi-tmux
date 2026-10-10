@@ -3,7 +3,16 @@ import { getEventListeners } from "node:events";
 import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, STATUS_INFO_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
-import { buildQuitTitleFormat, PRESERVED_WINDOW_TITLE_FORMAT } from "../src/tmux.ts";
+import {
+	buildQuitTitleFormat,
+	buildWindowBaseQuitTitleFormats,
+	PRESERVED_WINDOW_TITLE_FORMAT,
+	WINDOW_BASE_NAME_OPTION,
+	WINDOW_BASE_NAME_TITLE_FORMAT,
+	WINDOW_BASE_NAME_UPDATE_FORMAT,
+	WINDOW_TITLE_MARKED_OPTION,
+	WINDOW_TITLE_MARKED_VALUE_FORMAT,
+} from "../src/tmux.ts";
 
 let originalPane: string | undefined;
 let originalModel: string | undefined;
@@ -60,6 +69,8 @@ function fixture(
 		window: "@2", title: "existing task", session: "$0", sessionTitle: "My Session",
 		windowInfo: undefined as string | undefined,
 		statusInfo: undefined as string | undefined,
+		windowBaseName: undefined as string | undefined,
+		windowTitleMarked: undefined as string | undefined,
 		waitingPanes: new Map<string, string>(),
 		activePanes: new Map<string, string>(),
 		otherWindowPanes: new Set<string>(),
@@ -88,6 +99,45 @@ function fixture(
 			return state.statusInfo ?? `${state.session}\t${state.window}\t${state.waitingPanes.get("%1") === "1" ? "1" : "0"}\t${windowWaiting() ? "1" : "0"}\t${[...state.waitingPanes.values()].includes("1") ? "1" : "0"}`;
 		}
 		if (args[0] === "display-message") return state.windowInfo ?? `${state.session}\t${state.window}\t${windowWaiting() ? "1" : "0"}\t${state.title}`;
+		if (args[0] === "show-options" && args.at(-1) === WINDOW_TITLE_MARKED_OPTION) return state.windowTitleMarked ?? "";
+		if (args[0] === "set-option" && args.includes(WINDOW_BASE_NAME_OPTION)) {
+			const baseIndex = args.indexOf(WINDOW_BASE_NAME_OPTION);
+			const baseValue = args[baseIndex + 1];
+			const quitFormats = buildWindowBaseQuitTitleFormats(idleTitle);
+			if (baseValue === quitFormats.baseName) {
+				const hasPeer = [...state.activePanes, ...state.waitingPanes].some(([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane));
+				state.windowBaseName = hasPeer
+					? state.windowBaseName && (state.title === state.windowBaseName || state.title === READY_PREFIX + state.windowBaseName)
+						? state.windowBaseName
+						: state.windowTitleMarked === "marked" && state.title.startsWith(READY_PREFIX)
+							? state.title.slice(READY_PREFIX.length) : state.title
+					: idleTitle;
+			} else if (baseValue === WINDOW_BASE_NAME_UPDATE_FORMAT) {
+				state.windowBaseName = state.windowTitleMarked === "marked" && state.title.startsWith(READY_PREFIX)
+					? state.title.slice(READY_PREFIX.length)
+					: state.windowBaseName && (state.title === state.windowBaseName || state.title === READY_PREFIX + state.windowBaseName)
+						? state.windowBaseName : state.title;
+			} else state.windowBaseName = baseValue;
+			const action = args.find((value) => value.startsWith("rename-window -t "));
+			if (action) {
+				const titleFormat = action.match(/ -- '([\s\S]*)'$/)?.[1];
+				expect(titleFormat).toBeDefined();
+				if (titleFormat === quitFormats.title) {
+					const hasPeer = [...state.activePanes, ...state.waitingPanes].some(([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane));
+					state.title = hasPeer
+						? (windowWaiting() ? READY_PREFIX : "") + (state.windowBaseName ?? "")
+						: formatTitle(idleTitle, windowWaiting());
+				} else if (titleFormat === WINDOW_BASE_NAME_TITLE_FORMAT) {
+					state.title = windowWaiting()
+						? `${READY_PREFIX}${state.windowBaseName || "pi"}`
+						: state.windowBaseName ?? "";
+				} else state.title = renderTitle(titleFormat!);
+			}
+			state.windowTitleMarked = args.at(-1) === WINDOW_TITLE_MARKED_VALUE_FORMAT
+				? windowWaiting() ? "marked" : "unmarked"
+				: "transition";
+			return "";
+		}
 		if (args[0] === "set-option") {
 			expect(args).toEqual([
 				"set-option", "-p", "-t", "%1", WAITING_OPTION, args[5],
@@ -1229,7 +1279,7 @@ test("status updates resolve the window again after a pane move", async () => {
 	await settle();
 	f.state.window = "@3";
 	await f.emit("agent_settled");
-	expect(f.calls.at(-1)).toEqual(renameCommand("fix auth tests"));
+	expect(f.calls.filter((args) => args[0] === "rename-window").at(-1)).toEqual(renameCommand("fix auth tests"));
 });
 
 test("a slow marker write cannot overwrite newer input or its summary", async () => {
@@ -1249,7 +1299,7 @@ test("a slow marker write cannot overwrite newer input or its summary", async ()
 	await settle();
 	expect(f.state.title).toBe("new task");
 	expect(f.state.sessionTitle).toBe("My Session");
-	expect(f.calls.at(-1)).toEqual(renameCommand("new task"));
+	expect(f.calls.filter((args) => args[0] === "rename-window").at(-1)).toEqual(renameCommand("new task"));
 });
 
 test.each([1, 2])("new input invalidates a ready update waiting on slow window lookup %i", async (lookupToHold) => {
@@ -1322,7 +1372,7 @@ test("status updates target the owning session after a pane move", async () => {
 	f.state.sessionTitle = "Destination Session";
 	await f.emit("agent_settled");
 	expect(f.state.sessionTitle).toBe("* Destination Session");
-	expect(f.calls.filter((args) => args[0] === "set-option").at(-1)?.[16]).toBe("%1");
+	expect(f.calls.filter((args) => args[0] === "set-option" && args.includes("rename-session")).at(-1)?.[16]).toBe("%1");
 });
 
 test("naming context includes text dialogue and summaries, but not tools, thinking, images, or custom messages", () => {
