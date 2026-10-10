@@ -68,6 +68,23 @@ async function childHasExited(pid: number): Promise<boolean> {
 }
 
 test.skipIf(process.platform === "win32")(
+	"runTmux does not spawn a child for a pre-aborted signal",
+	async () => {
+		await withFakeTmux(() => [], async ({ pid }) => {
+			const controller = new AbortController();
+			const reason = new Error("cancelled");
+			controller.abort(reason);
+			await expect(runTmux([], controller.signal)).rejects.toMatchObject({
+				name: "AbortError",
+				code: "ABORT_ERR",
+				cause: reason,
+			});
+			expect(existsSync(pid)).toBe(false);
+		});
+	},
+);
+
+test.skipIf(process.platform === "win32")(
 	"runTmux rejects a timed-out child that exits cleanly after SIGTERM",
 	async () => {
 		await withFakeTmux(({ cleanExit }) => [
