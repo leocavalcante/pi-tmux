@@ -978,6 +978,16 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const artifactoryReferenceToken = `cmVmd${"C1d2".repeat(14)}AbC`;
 	await suppressed(fixture(), `Review the artifact repository ${artifactoryApiKey}`, artifactoryApiKey);
 	await suppressed(fixture(), `Review the artifact repository ${artifactoryReferenceToken}`, artifactoryReferenceToken);
+	const flyIoOrgToken = `fo1_${"A1_b".repeat(10)}ABC`;
+	const flyIoMachineTokens = [
+		`fm1a_${"A1b+/".repeat(20)}`,
+		`fm1r_${"B2c+/".repeat(20)}=`,
+		`fm2_${"C3d+/".repeat(20)}===`,
+	];
+	await suppressed(fixture(), `Review Fly.io access ${flyIoOrgToken}`, flyIoOrgToken);
+	for (const flyIoMachineToken of flyIoMachineTokens) {
+		await suppressed(fixture(), `Review Fly.io access ${flyIoMachineToken}`, flyIoMachineToken);
+	}
 	const supabaseSecretKey = `sb_secret_${"S".repeat(32)}`;
 	await suppressed(fixture(), `Review the Supabase config ${supabaseSecretKey}`, supabaseSecretKey);
 	const neonApiKey = `neon_api_key_${"N".repeat(32)}`;
@@ -1157,6 +1167,14 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithArtifactoryReferenceToken = fixture();
 	historyWithArtifactoryReferenceToken.messages.push({ role: "assistant", content: [{ type: "text", text: artifactoryReferenceToken }] });
 	await suppressed(historyWithArtifactoryReferenceToken, "Continue the task", artifactoryReferenceToken);
+	const historyWithFlyIoOrgToken = fixture();
+	historyWithFlyIoOrgToken.messages.push({ role: "assistant", content: [{ type: "text", text: flyIoOrgToken }] });
+	await suppressed(historyWithFlyIoOrgToken, "Continue the task", flyIoOrgToken);
+	for (const flyIoMachineToken of flyIoMachineTokens) {
+		const historyWithFlyIoMachineToken = fixture();
+		historyWithFlyIoMachineToken.messages.push({ role: "assistant", content: [{ type: "text", text: flyIoMachineToken }] });
+		await suppressed(historyWithFlyIoMachineToken, "Continue the task", flyIoMachineToken);
+	}
 	const historyWithSupabaseSecret = fixture();
 	historyWithSupabaseSecret.messages.push({ role: "assistant", content: [{ type: "text", text: `Supabase key: ${supabaseSecretKey}` }] });
 	await suppressed(historyWithSupabaseSecret, "Continue the task", supabaseSecretKey);
@@ -1586,6 +1604,58 @@ test("rejects Artifactory tokens without mistaking near-misses for tokens", asyn
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("artifactory tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Fly.io token formats without mistaking near-misses for tokens", async () => {
+	const orgToken = `fo1_${"A1_b".repeat(10)}ABC`;
+	const machineTokens = [
+		`fm1a_${"A1b+/".repeat(20)}`,
+		`fm1r_${"B2c+/".repeat(20)}=`,
+		`fm2_${"C3d+/".repeat(20)}===`,
+	];
+	const sensitiveOutputs = [
+		orgToken,
+		...machineTokens,
+		`${orgToken.slice(0, 22)}\u200b${orgToken.slice(22)}`,
+	];
+	for (const output of sensitiveOutputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(orgToken);
+		for (const machineToken of machineTokens) expect(f.warnings.join(" ")).not.toContain(machineToken);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("fly.io tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("fly.io tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`fo1_${"A1_b".repeat(10)}AB`,
+		`${orgToken}A`,
+		`x${orgToken}`,
+		`${orgToken}_`,
+		`fm1a_${"A1b+/".repeat(19)}xxxx`,
+		`fm1x_${"A1b+/".repeat(20)}`,
+		`fm2_${"A1b+/".repeat(20)}====`,
+		`x${machineTokens[0]}`,
+		`${machineTokens[0]}_`,
+		`${machineTokens[0]}-`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("fly.io tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("fly.io tests");
 		expect(f.warnings).toEqual([]);
 	}
 });
@@ -4682,6 +4752,10 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`Mailgun: key-${"a1b2".repeat(8)}`,
 		`AKCp${"A1b2".repeat(17)}A`,
 		`cmVmd${"C1d2".repeat(14)}AbC`,
+		`fo1_${"A1_b".repeat(10)}ABC`,
+		`fm1a_${"A1b+/".repeat(20)}`,
+		`fm1r_${"B2c+/".repeat(20)}=`,
+		`fm2_${"C3d+/".repeat(20)}===`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
