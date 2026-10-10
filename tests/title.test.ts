@@ -1165,6 +1165,52 @@ test("rejects Notion API tokens without mistaking near-miss strings for tokens",
 	}
 });
 
+test("rejects SendGrid API keys without mistaking near-miss strings for keys", async () => {
+	const token = `SG.${"a".repeat(66)}`;
+	const outputs = [
+		token,
+		token.toLowerCase(),
+		`configure-${token}`,
+		token.replace("SG.", "SG.\u200b"),
+		`${token.slice(0, 33)}\u200b${token.slice(33)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const shortName = fixture([Promise.resolve(response("sg_api_setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("sg_api_setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = [
+		`SG.${"a".repeat(65)}`,
+		`SG.${"a".repeat(67)}`,
+		`SX.${"a".repeat(66)}`,
+		`SG.${"a".repeat(65)}+`,
+		`${token}x`,
+		`${token}_x`,
+		`x${token}`,
+		`_${token}`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("sendgrid api tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("sendgrid api tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",
