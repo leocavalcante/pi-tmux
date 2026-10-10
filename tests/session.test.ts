@@ -8,6 +8,23 @@ import piTmux, { SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, type RunTm
 import { supportsUnixTmux } from "./tmux-support.ts";
 
 const hasTmux = supportsUnixTmux(process.platform, Bun.which("tmux"));
+const hasTrailingNewlineWindowNames = (() => {
+	if (!hasTmux) return false;
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-probe-"));
+	const socket = join(directory, "socket");
+	const run = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	});
+	try {
+		run("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Probe", "-n", "probe\n", "/bin/sleep 60");
+		return true;
+	} catch {
+		return false;
+	} finally {
+		try { run("kill-server"); } catch { /* The server may not have started. */ }
+		rmSync(directory, { recursive: true, force: true });
+	}
+})();
 let originalModel: string | undefined;
 let originalIdleTitle: string | undefined;
 beforeEach(() => {
@@ -771,7 +788,7 @@ test.skipIf(!hasTmux)("server-guarded waiting updates preserve session names wit
 	}
 });
 
-test.skipIf(!hasTmux)("server-guarded waiting updates preserve trailing newlines in custom window names", async () => {
+test.skipIf(!hasTmux || !hasTrailingNewlineWindowNames)("server-guarded waiting updates preserve trailing newlines in custom window names", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");
 	const originalPane = process.env.TMUX_PANE;
@@ -818,6 +835,7 @@ test.skipIf(!hasTmux)("server-guarded waiting updates preserve trailing newlines
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+		try { tmux("kill-server"); } catch { /* The server may not have started if setup failed. */ }
+		rmSync(directory, { recursive: true, force: true });
 	}
 });
