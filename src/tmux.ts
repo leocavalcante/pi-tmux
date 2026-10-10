@@ -7,6 +7,13 @@ const TMUX_COMMAND_KILL_GRACE_MS = 500;
 // keeping command output bounded.
 const MAX_TMUX_OUTPUT_BYTES = 64 * 1024;
 
+function createAbortError(reason: unknown): NodeJS.ErrnoException {
+	const error = new Error("The operation was aborted", { cause: reason }) as NodeJS.ErrnoException;
+	error.name = "AbortError";
+	error.code = "ABORT_ERR";
+	return error;
+}
+
 export const WAITING_OPTION = "@pi-tmux-waiting";
 export const ACTIVE_OPTION = "@pi-tmux-active";
 // Normalize each pane option before aggregation; matching raw values such as 10
@@ -123,6 +130,9 @@ export type RunTmux = ((args: string[], signal: AbortSignal) => Promise<string>)
 };
 
 export const runTmux: RunTmux = async (args, signal) => {
+	// execFile still starts a child for an already-aborted signal; avoid allowing
+	// a cancelled tmux command to begin before Node reports AbortError.
+	if (signal.aborted) throw createAbortError(signal.reason);
 	// The abort signal rejects even if a child handles SIGTERM and exits 0. Force-kill
 	// after a grace period so an unresponsive tmux client is not left running.
 	const timeoutController = new AbortController();
