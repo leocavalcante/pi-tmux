@@ -91,10 +91,12 @@ test.skipIf(process.platform === "win32")(
 			"process.stdout.write('x'.repeat(70 * 1024));",
 			"setInterval(() => {}, 1000);",
 		], async ({ pid }) => {
-			const command = runTmux([], new AbortController().signal);
+			const command = runTmux([], new AbortController().signal).then(
+				() => undefined,
+				(error: unknown) => error,
+			);
 			const childPid = await waitForChild(pid);
-			let error: unknown;
-			try { await command; } catch (caught) { error = caught; }
+			const error = await command;
 			expect(error).toMatchObject({ code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" });
 			expect(await childHasExited(childPid)).toBe(true);
 		});
