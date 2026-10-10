@@ -8,7 +8,7 @@ import piTmux, { SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, type RunTm
 import { supportsUnixTmux } from "./tmux-support.ts";
 
 const hasTmux = supportsUnixTmux(process.platform, Bun.which("tmux"));
-const hasTrailingNewlineWindowNames = (() => {
+const hasRoundTripUnsafeWindowNames = (() => {
 	if (!hasTmux) return false;
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-probe-"));
 	const socket = join(directory, "socket");
@@ -16,7 +16,7 @@ const hasTrailingNewlineWindowNames = (() => {
 		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
 	});
 	try {
-		run("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Probe", "-n", "probe\n", "/bin/sleep 60");
+		run("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Probe", "-n", "probe\tline\n", "/bin/sleep 60");
 		return true;
 	} catch {
 		return false;
@@ -788,7 +788,7 @@ test.skipIf(!hasTmux)("server-guarded waiting updates preserve session names wit
 	}
 });
 
-test.skipIf(!hasTmux || !hasTrailingNewlineWindowNames)("server-guarded waiting updates preserve trailing newlines in custom window names", async () => {
+test.skipIf(!hasTmux || !hasRoundTripUnsafeWindowNames)("server-guarded waiting updates preserve tabs and newlines in custom window names", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");
 	const originalPane = process.env.TMUX_PANE;
@@ -798,7 +798,7 @@ test.skipIf(!hasTmux || !hasTrailingNewlineWindowNames)("server-guarded waiting 
 	}).replace(/\r?\n$/, "");
 	try {
 		process.env.PI_TMUX_MODEL = "off";
-		const customTitle = "custom\n";
+		const customTitle = "custom\tline\n";
 		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Newline", "-n", customTitle, "/bin/sleep 60");
 		process.env.TMUX_PANE = pane;
 		const handlers = new Map<string, Function>();
@@ -828,7 +828,7 @@ test.skipIf(!hasTmux || !hasTrailingNewlineWindowNames)("server-guarded waiting 
 		expect(title()).toBe(customTitle);
 		expect(sessionName()).toBe("Newline");
 		expect(warnings).toEqual([
-			"A custom window name contains control characters; its waiting marker was skipped.",
+			"A custom window name contains a tab or line feed; its waiting marker was skipped.",
 		]);
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;

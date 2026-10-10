@@ -294,8 +294,8 @@ export function createController(tmux: RunTmux) {
 			// rename-window (for example, a literal newline becomes the two characters
 			// `\n`). Preserve an existing custom name rather than corrupting it just to
 			// add a waiting prefix; session-level status was already updated above.
-			if (!hasTaskTitle && /\p{Cc}/u.test(currentTitle)) {
-				warnOnce(ctx, "A custom window name contains control characters; its waiting marker was skipped.");
+			if (!hasTaskTitle && /[\t\n]/u.test(currentTitle)) {
+				warnOnce(ctx, "A custom window name contains a tab or line feed; its waiting marker was skipped.");
 				return;
 			}
 			const useWindowBase = windowTitleMark !== undefined
