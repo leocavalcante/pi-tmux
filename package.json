@@ -17,7 +17,8 @@
   "scripts": {
     "check": "tsc -p tsconfig.json",
     "check:tests": "tsc -p tsconfig.test.json",
-    "test": "bun test tests/"
+    "test": "bun test tests/",
+    "verify": "npm run check && npm run check:tests && npm audit --audit-level=high && npm test && npm pack --dry-run --ignore-scripts"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "1.1.0",
