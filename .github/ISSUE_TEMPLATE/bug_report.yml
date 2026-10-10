@@ -1,0 +1,77 @@
+name: Bug report
+description: Report a reproducible problem with pi-tmux.
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Privacy reminder:** Do not include credentials, prompts, conversation history, private window/session titles, or screenshots containing them. Sensitive-text screening is best-effort; scrub any logs before sharing. Use generated or redacted examples instead.
+  - type: input
+    id: pi-version
+    attributes:
+      label: Pi version
+      description: Run `pi --version`; enter `unknown` if unavailable.
+      placeholder: 1.1.0
+    validations:
+      required: true
+  - type: input
+    id: tmux-version
+    attributes:
+      label: tmux version
+      description: Run `tmux -V`; enter `unknown` if unavailable.
+      placeholder: tmux 3.7c
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: Run `node --version`, if available; enter `unknown` if unavailable.
+      placeholder: v22.19.0
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - WSL
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: ai-naming
+    attributes:
+      label: AI naming mode
+      description: Do not include the configured provider/model or any credentials.
+      options:
+        - Enabled
+        - Disabled with PI_TMUX_MODEL=off
+        - Invalid configuration
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Use synthetic or redacted text. Do not paste real prompts, task titles, session history, model output, or logs.
+      placeholder: |
+        1. Start Pi in a tmux pane.
+        2. Run a command with generated example text.
+        3. Observe the unexpected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected and actual behavior
+      description: Describe the behavior without including private titles or conversation content.
+    validations:
+      required: true
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Share only sanitized details that help reproduce the issue. Do not attach unsanitized logs, transcripts, or screenshots.
