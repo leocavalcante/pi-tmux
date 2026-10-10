@@ -49,6 +49,7 @@ type Fixture = {
 	pin: (title: string) => Promise<void>;
 	status: () => Promise<string>;
 	sync: () => Promise<string>;
+	refresh: (args?: string) => Promise<void>;
 };
 
 async function waitForProcessExit(pidText: string) {
@@ -92,6 +93,7 @@ async function withServer(run: (fixture: Fixture) => Promise<void>) {
 		pin: async (title) => { await commands.get("tmux-title")!("set " + title, ctx); },
 		status: async () => { await commands.get("tmux-title")!("status", ctx); return notices.at(-1)!; },
 		sync: async () => { await commands.get("tmux-title")!("sync", ctx); return notices.at(-1)!; },
+		refresh: async (args = "") => { await commands.get("tmux-title")!(args, ctx); },
 	};
 	const tmux: RunTmux = async (args, signal) => {
 		fixture.rawCalls.push(args);
@@ -197,8 +199,21 @@ test.skipIf(!hasTmux)("status detects a server restart before any update and sto
 		expect(f.warnings).toEqual([]);
 
 		const afterStatus = f.rawCalls.length;
-		await f.emit("agent_settled");
+		const blockedWarning = "The tmux server changed; restart Pi to resume title updates.";
+		await f.refresh();
+		expect(f.warnings.at(-1)).toBe(blockedWarning);
+		await f.sync();
+		expect(f.warnings.at(-1)).toBe(blockedWarning);
+		await f.pin("another task");
+		expect(f.warnings.at(-1)).toBe(blockedWarning);
+		expect(f.warnings).toEqual([blockedWarning, blockedWarning, blockedWarning]);
 		expect(f.rawCalls.slice(afterStatus)).toEqual([]);
+		const stillStopped = await f.status();
+		expect(stillStopped).toContain("Title mode: automatic");
+		expect(stillStopped).toContain("tmux writes: stopped (server changed; restart Pi to resume)");
+		const afterStatusCheck = f.rawCalls.length;
+		await f.emit("agent_settled");
+		expect(f.rawCalls.slice(afterStatusCheck)).toEqual([]);
 	});
 });
 

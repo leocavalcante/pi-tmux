@@ -152,8 +152,10 @@ flags to tmux. It omits names, model-setting values, and provider errors.
 credentials are available. Status checks the tmux server identity in its
 snapshot. If it detects a restart, it fails closed locally, cancelling naming
 and discarding state tied to the old server; restart Pi to reconnect safely
-because the inherited pane ID may have been reused. Snapshot values may
-change while Pi is working; run the command again for a fresh reading.
+because the inherited pane ID may have been reused. Until then,
+`/tmux-title`, `/tmux-title auto`, `/tmux-title sync`, and `/tmux-title set <name>`
+warn that Pi must restart. Snapshot values may change while Pi is working; run
+the command again for a fresh reading.
 
 ### Synchronize without AI
 
