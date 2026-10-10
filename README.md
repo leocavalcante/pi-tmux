@@ -323,7 +323,8 @@ Images, thinking blocks, tool calls, tool results, shell output, system prompts,
 and custom extension messages are excluded. Summaries and ordinary dialogue
 can still mention details from tool output. Before model lookup or provider
 transport, the bounded context is checked locally for recognizable credential
-formats (including URL user-info and Azure Shared Access Signature URLs),
+formats (including URL user-info, Azure Shared Access Signature URLs, and long
+Basic values in HTTP `Authorization` or `Proxy-Authorization` headers),
 conventional email addresses, explicitly labeled U.S. SSN- and phone-shaped
 values, Luhn-valid payment-card values with explicit card labels, long values
 assigned to common credential labels (including AWS `AWS_SECRET_ACCESS_KEY`,
@@ -344,7 +345,8 @@ send the title or dialogue to a model.
 The model is instructed not to include secrets or personal information in
 titles. Before applying a response, the extension checks raw and
 compatibility-normalized output for several recognizable credential formats,
-including Azure Shared Access Signature URLs, conventional email addresses,
+including Azure Shared Access Signature URLs, long Basic values in HTTP
+`Authorization` or `Proxy-Authorization` headers, conventional email addresses,
 explicitly labeled U.S. SSN-shaped values, phone-labeled values with 7–15 digits,
 Luhn-valid payment-card-shaped numbers with explicit card labels, long opaque
 values assigned to common credential labels (including AWS `AWS_SECRET_ACCESS_KEY`,
