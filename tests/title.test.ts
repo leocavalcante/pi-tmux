@@ -979,6 +979,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Sentry access ${sentryUserToken}`, sentryUserToken);
 	const sentryOrgToken = `sntrys_eyJpYXQiO${"a".repeat(20)}LCJyZWdpb25fdXJs${"b".repeat(20)}_${"C".repeat(43)}`;
 	await suppressed(fixture(), `Review Sentry organization access ${sentryOrgToken}`, sentryOrgToken);
+	const telegramBotToken = `123456789:A${"a".repeat(34)}`;
+	await suppressed(fixture(), `Test the handler with generated identifier ${telegramBotToken}`, telegramBotToken);
 	const labeledCredential = `client_secret=${"C".repeat(24)}`;
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 	const shortPassword = `password=${"S".repeat(12)}`;
@@ -1110,6 +1112,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithSentryOrgToken = fixture();
 	historyWithSentryOrgToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Sentry organization token: ${sentryOrgToken}` }] });
 	await suppressed(historyWithSentryOrgToken, "Continue the task", sentryOrgToken);
+	const historyWithTelegramToken = fixture();
+	historyWithTelegramToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated identifier: ${telegramBotToken}` }] });
+	await suppressed(historyWithTelegramToken, "Continue the task", telegramBotToken);
 	const historyWithEmail = fixture();
 	historyWithEmail.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous contact: ${emailAddress}` }] });
 	await suppressed(historyWithEmail, "Continue the task", emailAddress);
@@ -1655,6 +1660,54 @@ test("rejects Sentry user access tokens without mistaking near-misses for tokens
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("sentry api tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Telegram bot tokens without mistaking near-misses for tokens", async () => {
+	const token = `123456789:A${"a".repeat(34)}`;
+	const outputs = [
+		token,
+		`configure-${token}`,
+		`${token.slice(0, 12)}\u200b${token.slice(12)}`,
+		token.replace(":", ":\u200b"),
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const shortName = fixture([Promise.resolve(response("telegram bot setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("telegram bot setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = [
+		`1234:A${"a".repeat(34)}`,
+		`1${"2".repeat(16)}:A${"a".repeat(34)}`,
+		`123456789:A${"a".repeat(33)}`,
+		`123456789:A${"a".repeat(35)}`,
+		`123456789:a${"a".repeat(34)}`,
+		`123456789-B${"a".repeat(34)}`,
+		`x${token}`,
+		`_${token}`,
+		`${token}x`,
+		`${token}_x`,
+		`${token}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("telegram bot tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("telegram bot tests");
 		expect(f.warnings).toEqual([]);
 	}
 });
