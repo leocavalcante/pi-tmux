@@ -633,6 +633,43 @@ test("empty or failed responses never become window names", async () => {
 	}
 });
 
+test.each(["one block", "combined final blocks"])("bounds oversized selected model output from %s before joining it", async (shape) => {
+	const oversized = "x".repeat(64 * 1024 + 1);
+	const first = shape === "one block"
+		? response(oversized)
+		: {
+			...response(""),
+			content: [
+				{ type: "text", text: oversized.slice(0, 32 * 1024), textSignature: JSON.stringify({ v: 1, phase: "final_answer" }) },
+				{ type: "text", text: oversized.slice(32 * 1024), textSignature: JSON.stringify({ v: 1, phase: "final_answer" }) },
+			],
+		};
+	const f = fixture([Promise.resolve(first), Promise.resolve(response("fix auth tests"))]);
+	f.input("Name a task");
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	expect(f.requests[1].context.systemPrompt).toContain("previous candidate exceeded a title limit");
+	expect(f.requests[1].context.systemPrompt).not.toContain(oversized);
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.warnings).toEqual([]);
+});
+
+test("ignores oversized commentary when a bounded final answer is available", async () => {
+	const result = {
+		...response(""),
+		content: [
+			{ type: "text", text: "x".repeat(64 * 1024 + 1), textSignature: JSON.stringify({ v: 1, phase: "commentary" }) },
+			{ type: "text", text: "fix auth tests", textSignature: JSON.stringify({ v: 1, phase: "final_answer" }) },
+		],
+	};
+	const f = fixture([Promise.resolve(result)]);
+	f.input("Name a task");
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.warnings).toEqual([]);
+});
+
 test("uses only final_answer text blocks when available", async () => {
 	const result = {
 		...response(""),
