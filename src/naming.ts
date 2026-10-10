@@ -42,6 +42,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/i,
 	/\b(?:xox[baprs]|xapp)-[A-Za-z0-9-]{10,}\b/,
 	/\bnpm_[A-Za-z0-9]{20,}\b/,
+	/\bglpat-[A-Za-z0-9_-]{20,}\b/,
+	/\bhf_[A-Za-z0-9]{20,}\b/,
 	/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
 	/\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b/i,
 	/-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/,
