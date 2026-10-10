@@ -56,7 +56,7 @@ const US_SSN_PATTERN = /(?<![A-Za-z0-9])(?:ssn|social[-\s]+security(?:[-\s]+numb
 const LABELED_PHONE_PATTERN = /(?<![A-Za-z0-9])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?number)?\s*["']?\s*[:=]\s*["']?[\s(]*\+?\d(?:[ .()-]?\d){6,14}(?![A-Za-z0-9_])/i;
 const LABELED_PAYMENT_CARD_PATTERN = /(?<![A-Za-z0-9])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no))?|card(?:[-_\s]?(?:number|no))?|cc[-_\s]?(?:number|no)|ccn)\s*["']?\s*[:=]\s*["']?(\d(?:[ .()-]?\d){12,18})(?![A-Za-z0-9_])/i;
 // Require an explicit assignment and a long token-like value; don't compact ordinary spaces.
-const LABELED_CREDENTIAL_LABEL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?token|aws[-_\s]?secret[-_\s]?access[-_\s]?key|client[-_\s]?key[-_\s]?data|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key)?|passphrase|password|credential|token)/i;
+const LABELED_CREDENTIAL_LABEL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?token|aws[-_\s]?secret[-_\s]?access[-_\s]?key|client[-_\s]?key[-_\s]?data|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key)?|passphrase|password|credential|token|azure[-_\s]?devops(?:[-_\s]ext)?[-_\s]?pat)/i;
 const LABELED_CREDENTIAL_PATTERN = new RegExp(
 	`${LABELED_CREDENTIAL_LABEL_PATTERN.source}\\s*["']?\\s*[:=]\\s*["']?[A-Za-z0-9._~+/=-]{20,}`, "i",
 );
