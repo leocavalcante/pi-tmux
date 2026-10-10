@@ -471,6 +471,7 @@ export function createController(tmux: RunTmux) {
 				`Naming request: ${pending ? "pending" : candidateTitle ? "ready to apply" : "idle"}`,
 				`Local waiting: ${waiting ? "yes" : "no"}`,
 				`Targets: pane ${pane}, window ${window}, session ${session}`,
+				`tmux writes: ${serverIdentityChanged ? "stopped (server changed; restart Pi to resume)" : "enabled"}`,
 				`Waiting flags: pane ${yesNo(paneWaiting)}, window ${yesNo(windowWaiting)}, session ${yesNo(sessionWaiting)}`,
 				`Pending move repairs: windows ${formerWindows.size}, sessions ${formerSessions.size}`,
 			].join("\n"), "info");

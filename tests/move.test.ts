@@ -149,6 +149,12 @@ test.skipIf(!hasTmux)("a server restart after lookup cannot apply the pending ba
 		const afterDetection = f.rawCalls.length;
 		await f.emit("agent_settled");
 		expect(f.rawCalls.slice(afterDetection).filter((args) => args[0] !== "display-message")).toEqual([]);
+		const beforeStatus = f.rawCalls.length;
+		const status = await f.status();
+		expect(status).toContain("tmux writes: stopped (server changed; restart Pi to resume)");
+		expect(f.rawCalls.slice(beforeStatus)).toEqual([[
+			"display-message", "-p", "-t", pane, STATUS_INFO_FORMAT,
+		]]);
 		expect(f.warnings).toEqual([]);
 	});
 });
