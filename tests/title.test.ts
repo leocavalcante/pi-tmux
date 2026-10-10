@@ -948,10 +948,13 @@ test("does not apply a short-looking response truncated by the token limit", asy
 
 test("credential-shaped model output is rejected without applying or disclosing it", async () => {
 	const githubToken = ["ghp_", "a".repeat(20)].join("");
+	const awsKey = ["AKIA", "A".repeat(16)].join("");
 	const compatibilityGithubToken = [...githubToken]
 		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
 	const outputs = [
 		["gh", "p_", "a".repeat(36)].join(""),
+		`x${awsKey}`,
+		`${awsKey}_x`,
 		githubToken.toUpperCase(),
 		compatibilityGithubToken,
 		["github", "_pat_", "a".repeat(30)].join(""),
