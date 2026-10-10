@@ -29,6 +29,18 @@ test("tmux fixture cleanup does not mask a test failure", () => {
 	}
 	expect(observed).toBe(failure);
 	expect(existsSync(directory)).toBe(false);
+
+	observed = undefined;
+	try {
+		try {
+			throw failure;
+		} finally {
+			cleanupTmuxFixture(() => {}, "\0");
+		}
+	} catch (error) {
+		observed = error;
+	}
+	expect(observed).toBe(failure);
 });
 
 test("README tmux compatibility versions stay aligned with version-checked CI", () => {
