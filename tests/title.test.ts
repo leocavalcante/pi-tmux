@@ -975,6 +975,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(
 		fixture(), `Review the WireGuard configuration ${wireGuardPresharedKey}`, wireGuardPresharedKey,
 	);
+	const basicAuthorization = `Authorization: Basic ${"A".repeat(28)}`;
+	const proxyBasicAuthorization = `Proxy-Authorization: Basic ${"B".repeat(28)}`;
+	await suppressed(fixture(), `Review the request headers ${basicAuthorization}`, basicAuthorization);
+	await suppressed(fixture(), `Review the proxy headers ${proxyBasicAuthorization}`, proxyBasicAuthorization);
 	const obfuscatedPassword = `passphrase=${"P".repeat(5)}\u200b${"P".repeat(5)}`;
 	await suppressed(fixture(), `Review the configuration ${obfuscatedPassword}`, obfuscatedPassword);
 
@@ -1051,7 +1055,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const placeholderCredentials = fixture([Promise.resolve(response("review docs"))]);
 	placeholderCredentials.input([
 		"Review docs with password=placeholder, passphrase=example, token: placeholder,",
-		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, and PresharedKey=example",
+		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, PresharedKey=example,",
+		`Authorization: Basic example and Authorization: Basic ${"A".repeat(19)}`,
 	].join(" "));
 	await settle();
 	expect(placeholderCredentials.requests).toHaveLength(1);
@@ -1111,6 +1116,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`PresharedKey=${"A".repeat(43)}=`,
+		`Authorization: Basic ${"A".repeat(28)}`,
+		`Proxy-Authorization: Basic ${"B".repeat(28)}`,
 		azureSasUrl,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		["gh", "p_", "a".repeat(36)].join(""),
@@ -3387,6 +3394,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`PresharedKey=${"A".repeat(43)}=`,
+		`Authorization: Basic ${"A".repeat(28)}`,
+		`Proxy-Authorization: Basic ${"B".repeat(28)}`,
 		`https://storage.example.test/blob?sv=2023-11-03&sig=${"A".repeat(43)}=`,
 		`password=${"P".repeat(12)}`,
 		"postgres://test-user:example-only-password@db.example.test/app",

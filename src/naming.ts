@@ -57,6 +57,8 @@ const LABELED_PHONE_PATTERN = /(?<![A-Za-z0-9])(?:phone|telephone|mobile|cell(?:
 const LABELED_PAYMENT_CARD_PATTERN = /(?<![A-Za-z0-9])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no))?|card(?:[-_\s]?(?:number|no))?|cc[-_\s]?(?:number|no)|ccn)\s*["']?\s*[:=]\s*["']?(\d(?:[ .()-]?\d){12,18})(?![A-Za-z0-9_])/i;
 // Require an explicit assignment and a long token-like value; don't compact ordinary spaces.
 const LABELED_CREDENTIAL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?token|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key)?|passphrase|password|credential|token)\s*["']?\s*[:=]\s*["']?[A-Za-z0-9._~+/=-]{20,}/i;
+// Basic authorization values are base64 user-info, not provider-prefixed tokens.
+const BASIC_AUTHORIZATION_PATTERN = /(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?basic\s+[A-Za-z0-9+/]{20,}={0,2}(?![A-Za-z0-9+/=])/i;
 // Passwords are often shorter than API tokens. Catch non-placeholder values
 // from explicit password/passphrase assignments without broadening other labels.
 const LABELED_PASSWORD_PATTERN = /(?:passphrase|password)\s*["']?\s*[:=]\s*["']?(?!(?:placeholder|example|redacted|changeme|change[_-]?me|your[_-]?password)\b)[A-Za-z0-9._~+/=-]{8,}/i;
@@ -167,7 +169,8 @@ function hasBearerToken(value: string): boolean {
 
 function hasLabeledCredential(value: string): boolean {
 	const withoutControls = value.replace(/[\p{Cc}\p{Cf}]+/gu, "");
-	return LABELED_CREDENTIAL_PATTERN.test(value) || LABELED_PASSWORD_PATTERN.test(value)
+	return BASIC_AUTHORIZATION_PATTERN.test(value) || LABELED_CREDENTIAL_PATTERN.test(value)
+		|| LABELED_PASSWORD_PATTERN.test(value) || BASIC_AUTHORIZATION_PATTERN.test(withoutControls)
 		|| LABELED_CREDENTIAL_PATTERN.test(withoutControls) || LABELED_PASSWORD_PATTERN.test(withoutControls);
 }
 
