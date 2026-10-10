@@ -207,6 +207,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/bedrock-api-key-\x59\x6d\x56\x6b\x63\x6d\x39\x6a\x61\x79\x35\x68\x62\x57\x46\x36\x62\x32\x35\x68\x64\x33\x4d\x75\x59\x32\x39\x74/,
 	// Google Cloud API keys use `AIza` followed by exactly 35 alphanumeric, underscore, or hyphen characters.
 	/(?<![A-Za-z0-9_])AIza[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])/,
+	// Google OAuth access tokens commonly use `ya29.` followed by a long URL-safe value.
+	/(?<![A-Za-z0-9_])ya29\.[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/,
 	// `csk-` is Cerebras; do not mistake its `sk-` suffix for an OpenAI key.
 	/(?:(?<!c)sk|rk)-(?:proj-|ant-|svcacct-|or-v1-)[A-Za-z0-9_-]{16,}/i,
 	/(?:(?<!c)sk|rk)-[A-Za-z0-9]{16,}(?:[-_][A-Za-z0-9_-]+)*/i,
@@ -349,8 +351,12 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| hasBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
 		|| US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
+		// Removing format characters alone preserves prose boundaries around a token.
+		// The fully compacted view below can otherwise join a preceding word to it.
+		const withoutFormatCharacters = value.replace(/\p{Cf}/gu, "");
 		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
-		return CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
+		return hasSensitiveValue(withoutFormatCharacters)
+			|| CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
 			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_SSN_PATTERN.test(compacted)
 			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
@@ -366,8 +372,11 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasBearerToken(value) || US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value)
 			|| hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
+		// Keep ordinary whitespace as a boundary while stripping invisible formatting.
+		const withoutFormatCharacters = value.replace(/\p{Cf}/gu, "");
 		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
-		return SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
+		return hasPattern(withoutFormatCharacters)
+			|| SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
 			|| hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
