@@ -1305,6 +1305,58 @@ test("rejects Twilio API keys without mistaking near-miss strings for keys", asy
 	}
 });
 
+test("rejects Cloudflare Origin CA keys without mistaking near-miss strings for keys", async () => {
+	const firstSegment = "a".repeat(24);
+	const secondSegment = "b".repeat(146);
+	const token = ["v1.0-", firstSegment, "-", secondSegment].join("");
+	const outputs = [
+		token,
+		token.toUpperCase(),
+		`configure-${token}`,
+		token.replace("v1.0-", "v1.0-\u200b"),
+		`${token.slice(0, 50)}\u200b${token.slice(50)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("cloudflare origin tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("cloudflare origin tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`v1.0-${"a".repeat(23)}-${secondSegment}`,
+		`v1.0-${"a".repeat(25)}-${secondSegment}`,
+		`v1.0-${firstSegment}-${"b".repeat(145)}`,
+		`v1.0-${firstSegment}-${"b".repeat(147)}`,
+		`v1.0-${"g".repeat(24)}-${secondSegment}`,
+		`v1.0-${firstSegment}-${"g".repeat(146)}`,
+		`v1.1-${firstSegment}-${secondSegment}`,
+		`${token}x`,
+		`${token}_x`,
+		`${token}-x`,
+		`x${token}`,
+		`_${token}`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("cloudflare origin tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("cloudflare origin tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",
