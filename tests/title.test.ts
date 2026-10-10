@@ -1004,7 +1004,18 @@ test("credential-shaped model output is rejected without applying or disclosing 
 });
 
 test("email-address-like model output is rejected before normalization and not disclosed", async () => {
-	const address = ["pi-tmux", "@", "example", ".", "invalid"].join("");
+	const address = ["person", "@", "example", ".", "invalid"].join("");
+	for (const output of [address, `${address}_x`]) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(address);
+	}
+
+	const splitAddress = ["pi-tmux", "@", "example", ".", "invalid"].join("");
 	const fragments = ["pi-tmux", "@", "example", ".", "invalid"];
 	const splitResponse = {
 		...response(""),
@@ -1020,7 +1031,7 @@ test("email-address-like model output is rejected before normalization and not d
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 	expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-	expect(f.warnings.join(" ")).not.toContain(address);
+	expect(f.warnings.join(" ")).not.toContain(splitAddress);
 });
 
 test("ordinary security-themed titles without credential values remain valid", async () => {
