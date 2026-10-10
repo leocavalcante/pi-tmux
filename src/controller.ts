@@ -8,6 +8,7 @@ import {
 	requestNamingTitle,
 } from "./naming.ts";
 import { cleanTitle, formatTitle, READY_PREFIX } from "./title.ts";
+import { notifySafely } from "./notify.ts";
 import {
 	ACTIVE_OPTION,
 	buildQuitTitleFormat,
@@ -92,11 +93,7 @@ export function createController(tmux: RunTmux) {
 	const warnOnce = (ctx: ExtensionContext, message: string) => {
 		if (warned) return;
 		warned = true;
-		try {
-			ctx.ui.notify(message, "warning");
-		} catch {
-			// A disposed UI must not reject the serialized tmux update queue.
-		}
+		notifySafely(ctx, message, "warning");
 	};
 
 	const trackedSessions = new Set<string>();
@@ -451,7 +448,7 @@ export function createController(tmux: RunTmux) {
 			if (fields.length !== 5 || !/^\$\d+$/.test(session) || !/^@\d+$/.test(window)
 				|| !fields.slice(2).every((value) => /^[01]$/.test(value))) throw new Error("Invalid tmux status");
 			const yesNo = (value: string) => value === "1" ? "yes" : "no";
-			ctx.ui.notify([
+			notifySafely(ctx, [
 				"tmux title status",
 				`Title mode: ${manualTitle ? "manual" : "automatic"}`,
 				`AI naming: ${invalidModelSetting ? "invalid configuration" : namingModel ? "configured" : "off"}`,
@@ -462,7 +459,7 @@ export function createController(tmux: RunTmux) {
 				`Pending move repairs: windows ${formerWindows.size}, sessions ${formerSessions.size}`,
 			].join("\n"), "info");
 		} catch {
-			if (!signal.aborted) ctx.ui.notify("tmux status could not be read. Check tmux.", "warning");
+			if (!signal.aborted) notifySafely(ctx, "tmux status could not be read. Check tmux.", "warning");
 		}
 	};
 
@@ -472,7 +469,7 @@ export function createController(tmux: RunTmux) {
 		const update = refreshTitle(ctx, pane);
 		const revision = titleRevision;
 		if (await update && !signal.aborted && revision === titleRevision) {
-			ctx.ui.notify(formerWindows.size || formerSessions.size
+			notifySafely(ctx, formerWindows.size || formerSessions.size
 				? "Current tmux status synchronized; some former-location repairs remain queued."
 				: "tmux title and waiting markers synchronized.", "info");
 		}
@@ -490,25 +487,25 @@ export function createController(tmux: RunTmux) {
 		const revision = titleRevision;
 		if (await update && !signal.aborted && revision === titleRevision && manualTitle
 			&& baseTitle === title && generation === commandGeneration) {
-			ctx.ui.notify("Manual title pinned. Use /tmux-title auto to resume automatic naming.", "info");
+			notifySafely(ctx, "Manual title pinned. Use /tmux-title auto to resume automatic naming.", "info");
 		}
 	};
 
 	const refresh = (ctx: ExtensionContext) => {
 		if (manualTitle) {
-			ctx.ui.notify("Manual title is pinned. Use /tmux-title auto to resume automatic naming.", "info");
+			notifySafely(ctx, "Manual title is pinned. Use /tmux-title auto to resume automatic naming.", "info");
 			return;
 		}
 		// Explicit retries can report a new failure after the one-time warning.
 		warned = false;
 		if (!namingModel) {
 			if (invalidModelSetting) requestTitle(ctx);
-			else ctx.ui.notify("AI naming is disabled by PI_TMUX_MODEL=off; waiting markers still work.", "info");
+			else notifySafely(ctx, "AI naming is disabled by PI_TMUX_MODEL=off; waiting markers still work.", "info");
 			return;
 		}
 		const requested = requestTitle(ctx, "", true);
 		if (requested !== undefined) {
-			ctx.ui.notify(requested
+			notifySafely(ctx, requested
 				? "Requested a tmux title refresh."
 				: "No text in the active session to name.", "info");
 		}

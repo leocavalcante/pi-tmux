@@ -134,6 +134,7 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 			"src/tmux.ts",
 			"src/controller.ts",
 			"src/extension.ts",
+			"src/notify.ts",
 		];
 		for (const member of runtimeFiles) {
 			const packedPath = join(packageDirectory, member);
