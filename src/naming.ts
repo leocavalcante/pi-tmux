@@ -40,19 +40,21 @@ export class InvalidNamingTitleError extends Error {
 }
 
 // Defense in depth for common formats; this intentionally is not a general
-// secret or personal-information scanner. Scan raw and cleanup-normalized text before title cleanup can lowercase or clip tokens.
+// secret or personal-information scanner. Check raw and compatibility-normalized
+// text because title cleanup can lowercase or clip recognizable tokens.
+// Do not use word boundaries: title cleanup preserves adjacent ASCII word chars.
 const CREDENTIAL_LIKE_PATTERNS = [
-	/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/,
-	/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/,
-	/\bAIza[A-Za-z0-9_-]{30,}\b/,
-	/\b(?:sk|rk)-(?:proj-|ant-)?[A-Za-z0-9_-]{16,}\b/i,
-	/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/i,
-	/\b(?:xox[baprcds]|xapp)-[A-Za-z0-9-]{10,}\b/,
-	/\bnpm_[A-Za-z0-9]{20,}\b/,
-	/\bglpat-[A-Za-z0-9_-]{20,}\b/,
-	/\bhf_[A-Za-z0-9]{20,}\b/,
-	/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
-	/\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b/i,
+	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
+	/(?:AKIA|ASIA)[0-9A-Z]{16}/,
+	/AIza[A-Za-z0-9_-]{30,}/,
+	/(?:sk|rk)-(?:proj-|ant-)?[A-Za-z0-9_-]{16,}/i,
+	/(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}/i,
+	/(?:xox[baprcds]|xapp)-[A-Za-z0-9-]{10,}/,
+	/npm_[A-Za-z0-9]{20,}/,
+	/glpat-[A-Za-z0-9_-]{20,}/,
+	/hf_[A-Za-z0-9]{20,}/,
+	/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/,
+	/Bearer\s+[A-Za-z0-9._~+/=-]{16,}/i,
 	/-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/,
 ];
 
