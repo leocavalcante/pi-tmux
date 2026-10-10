@@ -65,10 +65,31 @@ async function readPackedMember(archive: string, member: string): Promise<string
 	return runCommand("tar", ["-xOzf", archive, member]);
 }
 
+function cleanupPackageDirectory(directory: string, remove: (path: string) => void = (path) => {
+	rmSync(path, { recursive: true, force: true });
+}): void {
+	try { remove(directory); } catch { /* Cleanup must not mask a packaging or assertion failure. */ }
+}
+
 test("only the Windows npm shim runs through a command shell", () => {
 	expect(needsCommandShell("npm", "win32")).toBe(true);
 	expect(needsCommandShell("npm", "linux")).toBe(false);
 	expect(needsCommandShell("tar", "win32")).toBe(false);
+});
+
+test("package fixture cleanup does not mask the original failure", () => {
+	const failure = new Error("package test failed");
+	let observed: unknown;
+	try {
+		try {
+			throw failure;
+		} finally {
+			cleanupPackageDirectory("fixture", () => { throw new Error("cleanup failed"); });
+		}
+	} catch (error) {
+		observed = error;
+	}
+	expect(observed).toBe(failure);
 });
 
 test("package subprocesses are terminated on timeout and cancellation", async () => {
@@ -186,6 +207,6 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 		else process.env.TMUX_PANE = originalPane;
 		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 		else process.env.PI_TMUX_MODEL = originalModel;
-		rmSync(directory, { recursive: true, force: true });
+		cleanupPackageDirectory(directory);
 	}
 });
