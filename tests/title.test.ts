@@ -1087,6 +1087,46 @@ test("rejects Databricks access tokens without mistaking near-miss strings for t
 	}
 });
 
+test("rejects DigitalOcean tokens without mistaking near-miss strings for tokens", async () => {
+	const body = "a".repeat(64);
+	const prefixes = ["doo_v1_", "dop_v1_", "dor_v1_"];
+	for (const prefix of prefixes) {
+		const token = `${prefix}${body}`;
+		for (const output of [token, token.toUpperCase(), `rotate-${token}`, token.replace("v1", "v\u200b1")]) {
+			const f = fixture([Promise.resolve(response(output))]);
+			f.input("Name a task");
+			await settle();
+			expect(f.state.title).toBe("existing task");
+			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+			expect(f.warnings.join(" ")).not.toContain(token);
+		}
+	}
+
+	const shortName = fixture([Promise.resolve(response("dop_v1_setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("dop_v1_setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = prefixes.flatMap((prefix) => [
+		`${prefix}${"a".repeat(63)}`,
+		`${prefix}${"a".repeat(65)}`,
+		`${prefix}${"g".repeat(64)}`,
+	]);
+	const validToken = `${prefixes[1]}${body}`;
+	nearMisses.push(`${validToken}_x`, `${validToken}-x`, `doq_v1_${body}`);
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("digitalocean token tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("digitalocean token tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",
