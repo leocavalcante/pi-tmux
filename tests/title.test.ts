@@ -983,6 +983,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Test the handler with generated identifier ${telegramBotToken}`, telegramBotToken);
 	const brevoApiToken = `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}`;
 	await suppressed(fixture(), `Review the mail integration with ${brevoApiToken}`, brevoApiToken);
+	const atlassianApiToken = `ATATT3${"a".repeat(183)}_-=`;
+	await suppressed(fixture(), `Review the integration with ${atlassianApiToken}`, atlassianApiToken);
 	const labeledCredential = `client_secret=${"C".repeat(24)}`;
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 	const shortPassword = `password=${"S".repeat(12)}`;
@@ -1120,6 +1122,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithBrevoToken = fixture();
 	historyWithBrevoToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Mail integration key: ${brevoApiToken}` }] });
 	await suppressed(historyWithBrevoToken, "Continue the task", brevoApiToken);
+	const historyWithAtlassianToken = fixture();
+	historyWithAtlassianToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${atlassianApiToken}` }] });
+	await suppressed(historyWithAtlassianToken, "Continue the task", atlassianApiToken);
 	const historyWithEmail = fixture();
 	historyWithEmail.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous contact: ${emailAddress}` }] });
 	await suppressed(historyWithEmail, "Continue the task", emailAddress);
@@ -1810,6 +1815,54 @@ test("rejects Brevo API tokens without mistaking near-misses for tokens", async 
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("brevo mail tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Atlassian API tokens without mistaking near-misses for tokens", async () => {
+	const token = `ATATT3${"a".repeat(183)}_-=`;
+	const outputs = [
+		token,
+		token.toLowerCase(),
+		`configure-${token}`,
+		token.replace("ATATT3", "ATATT\u200b3"),
+		`${token.slice(0, 50)}\u200b${token.slice(50)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const shortName = fixture([Promise.resolve(response("atlassian api setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("atlassian api setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = [
+		`ATATT3${"a".repeat(182)}_-=`,
+		`ATATT3${"a".repeat(184)}_-=`,
+		`ATATT3${"a".repeat(90)}.${"a".repeat(92)}_-=`,
+		`ATATT2${"a".repeat(183)}_-=`,
+		`x${token}`,
+		`_${token}`,
+		`${token}x`,
+		`${token}_x`,
+		`${token}-x`,
+		`${token}=x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("atlassian api tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("atlassian api tests");
 		expect(f.warnings).toEqual([]);
 	}
 });

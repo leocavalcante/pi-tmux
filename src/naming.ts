@@ -118,6 +118,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])A3-[A-Z0-9]{6}-(?:[A-Z0-9]{11}|[A-Z0-9]{6}-[A-Z0-9]{5})-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}(?![A-Za-z0-9_-])/i,
 	// Age identities use `AGE-SECRET-KEY-1` followed by 58 Bech32 characters.
 	/(?<![A-Za-z0-9_])AGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]{58}(?![A-Za-z0-9_-])/i,
+	// Atlassian API tokens use `ATATT3` followed by 186 URL-safe characters.
+	/(?<![A-Za-z0-9_])ATATT3[A-Za-z0-9_=-]{186}(?![A-Za-z0-9_=-])/i,
 	// Adobe OAuth client secrets use `p8e-` followed by 32 alphanumeric characters.
 	/(?<![A-Za-z0-9_])p8e-[a-z0-9]{32}(?![A-Za-z0-9_-])/i,
 	// Grafana API keys use `eyJrIjoi` followed by 70–400 alphanumeric characters.
