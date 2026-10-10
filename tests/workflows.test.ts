@@ -6,9 +6,12 @@ const WORKFLOWS_DIRECTORY = fileURLToPath(new URL("../.github/workflows/", impor
 
 test("npm publishing requires all release safety gates", () => {
 	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/publish.yml", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
+	const topLevelPermissions = /^permissions:\n((?:  [^\n]*\n)+)/m.exec(workflow)?.[1] ?? "";
 	const publishJob = workflow.indexOf("  publish:\n");
 	const testDependency = workflow.indexOf("    needs: test", publishJob);
 	const stableReleaseOnly = workflow.indexOf("    if: github.event.release.prerelease == false", publishJob);
+	const publishPermissions = workflow.indexOf("    permissions:\n", publishJob);
+	const publishTokenPermission = workflow.indexOf("      id-token: write", publishPermissions);
 	const checkout = workflow.indexOf("fetch-depth: 0", publishJob);
 	const ancestryCheck = workflow.indexOf('git merge-base --is-ancestor "$GITHUB_SHA" origin/main', publishJob);
 	const versionCheck = workflow.indexOf("- name: Check release tag matches package version", publishJob);
@@ -18,9 +21,14 @@ test("npm publishing requires all release safety gates", () => {
 	const publish = workflow.indexOf("npm publish --access public", publishJob);
 
 	expect(publishJob).toBeGreaterThanOrEqual(0);
+	expect(topLevelPermissions).toContain("contents: read");
+	expect(topLevelPermissions).not.toContain("id-token:");
 	expect(testDependency).toBeGreaterThan(publishJob);
 	expect(stableReleaseOnly).toBeGreaterThan(testDependency);
-	expect(checkout).toBeGreaterThan(stableReleaseOnly);
+	expect(publishPermissions).toBeGreaterThan(stableReleaseOnly);
+	expect(publishTokenPermission).toBeGreaterThan(publishPermissions);
+	expect(publishTokenPermission).toBeLessThan(checkout);
+	expect(checkout).toBeGreaterThan(publishTokenPermission);
 	expect(ancestryCheck).toBeGreaterThan(checkout);
 	expect(versionCheck).toBeGreaterThan(ancestryCheck);
 	expect(releaseTagInput).toBeGreaterThan(versionCheck);
