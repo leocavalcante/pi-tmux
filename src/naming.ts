@@ -60,9 +60,12 @@ const LABELED_CREDENTIAL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_
 // Passwords are often shorter than API tokens. Catch non-placeholder values
 // from explicit password/passphrase assignments without broadening other labels.
 const LABELED_PASSWORD_PATTERN = /(?:passphrase|password)\s*["']?\s*[:=]\s*["']?(?!(?:placeholder|example|redacted|changeme|change[_-]?me|your[_-]?password)\b)[A-Za-z0-9._~+/=-]{8,}/i;
+// Azure Storage SAS URLs require both a dated version field and a long signature.
+const AZURE_SAS_PATTERN = /(?<![A-Za-z0-9_])(?:sv=\d{4}-\d{2}-\d{2}(?=[^#\s]{0,512}&sig=[A-Za-z0-9%+/_=-]{20,}(?:&|#|\s|$))|sig=[A-Za-z0-9%+/_=-]{20,}(?=&)(?=[^#\s]{0,512}&sv=\d{4}-\d{2}-\d{2}))/i;
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/[^\s/:@]+:[^\s/@]+@/i,
+	AZURE_SAS_PATTERN,
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,
 	// Databricks tokens are `dapi` plus 32 hex characters, optionally suffixed by one digit.

@@ -990,6 +990,21 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the database connection ${databaseUrl}`, databaseUrl);
 	const obfuscatedUrl = "postgres://test-user:example-only-\u200bpassword@db.example.test/app";
 	await suppressed(fixture(), `Review the database connection ${obfuscatedUrl}`, obfuscatedUrl);
+	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
+	await suppressed(fixture(), `Review the storage download ${azureSasUrl}`, azureSasUrl);
+	const reversedAzureSasUrl = `https://storage.example.test/blob?sig=${"A".repeat(43)}=&sv=2023-11-03&sp=r`;
+	await suppressed(fixture(), `Review the storage download ${reversedAzureSasUrl}`, reversedAzureSasUrl);
+
+	const versionWithoutSignature = fixture([Promise.resolve(response("review storage"))]);
+	versionWithoutSignature.input("Review https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r");
+	await settle();
+	expect(versionWithoutSignature.requests).toHaveLength(1);
+	expect(versionWithoutSignature.warnings).toEqual([]);
+	const shortSasSignature = fixture([Promise.resolve(response("review storage"))]);
+	shortSasSignature.input("Review https://storage.example.test/blob?sv=2023-11-03&sig=short-signature");
+	await settle();
+	expect(shortSasSignature.requests).toHaveLength(1);
+	expect(shortSasSignature.warnings).toEqual([]);
 
 	const history = fixture();
 	history.messages.push({ role: "assistant", content: [{ type: "text", text: `The test fixture includes ${token}` }] });
@@ -1084,12 +1099,14 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const githubToken = ["ghp_", "a".repeat(20)].join("");
 	const replicateToken = ["r8_", "M".repeat(37)].join("");
 	const awsKey = ["AKIA", "A".repeat(16)].join("");
+	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
 	const compatibilityGithubToken = [...githubToken]
 		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
 	const outputs = [
 		`password=${"S".repeat(12)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AccountKey=${"A".repeat(86)}==`,
+		azureSasUrl,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		["gh", "p_", "a".repeat(36)].join(""),
 		["gsk_", "a".repeat(24)].join(""),
@@ -3364,6 +3381,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AccountKey=${"A".repeat(86)}==`,
+		`https://storage.example.test/blob?sv=2023-11-03&sig=${"A".repeat(43)}=`,
 		`password=${"P".repeat(12)}`,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		`ghp_${"C".repeat(10)}\u200b${"C".repeat(10)}`,
