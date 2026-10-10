@@ -325,9 +325,9 @@ can still mention details from tool output. Before model lookup or provider
 transport, the bounded context is checked locally for recognizable credential
 formats (including URL user-info, Azure Shared Access Signature URLs, and
 Base64 Basic credentials in HTTP `Authorization` or `Proxy-Authorization`
-headers), conventional email addresses, explicitly labeled U.S. SSN- and
-phone-shaped values, Luhn-valid payment-card values with explicit card labels,
-and long values assigned to common credential labels (including AWS
+headers, including YAML block-scalar forms, conventional email addresses,
+explicitly labeled U.S. SSN- and phone-shaped values, Luhn-valid payment-card
+values with explicit card labels, and long values assigned to common credential labels (including AWS
 `AWS_SECRET_ACCESS_KEY`, Azure `AccountKey`, WireGuard `PresharedKey`, and
 Kubernetes `client-key-data`), whether inline or as YAML block scalars. Shorter
 non-placeholder password/passphrase assignments are also checked in either
@@ -348,9 +348,10 @@ The model is instructed not to include secrets or personal information in
 titles. Before applying a response, the extension checks raw and
 compatibility-normalized output for several recognizable credential formats,
 including Azure Shared Access Signature URLs and Base64 Basic credentials in
-HTTP `Authorization` or `Proxy-Authorization` headers, conventional email
-addresses, explicitly labeled U.S. SSN-shaped values, phone-labeled values with
-7–15 digits, Luhn-valid payment-card-shaped numbers with explicit card labels,
+HTTP `Authorization` or `Proxy-Authorization` headers, including YAML
+block-scalar forms, conventional email addresses, explicitly labeled U.S.
+SSN-shaped values, phone-labeled values with 7–15 digits, Luhn-valid
+payment-card-shaped numbers with explicit card labels,
 long opaque values assigned to common credential labels (including AWS
 `AWS_SECRET_ACCESS_KEY`, Azure `AccountKey`, WireGuard `PresharedKey`, and
 Kubernetes `client-key-data`), whether inline or as YAML block scalars. Shorter

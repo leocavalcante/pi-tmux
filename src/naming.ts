@@ -67,6 +67,13 @@ const LABELED_CREDENTIAL_BLOCK_PATTERN = new RegExp(
 );
 // Basic authorization values are base64 user-info, not provider-prefixed tokens.
 const BASIC_AUTHORIZATION_PATTERN = /(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
+// YAML block-scalar form of the same Authorization/Proxy-Authorization header.
+const BASIC_AUTHORIZATION_BLOCK_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])["']?(?:proxy[-_\s]?)?authorization["']?[ \t]*:[ \t]*[|>]`
+		+ String.raw`(?:[1-9][+-]?|[+-][1-9]?)?[ \t]*(?:#[^\r\n]*)?\r?\n`
+		+ String.raw`((?:(?:[ \t]+[ \tA-Za-z0-9+/=]+[ \t]*|[ \t]*)(?:\r?\n|$))+)`,
+	"i",
+);
 // Passwords are often shorter than API tokens. Catch non-placeholder values
 // from explicit password/passphrase assignments without broadening other labels.
 const LABELED_PASSWORD_PATTERN = /(?:passphrase|password)\s*["']?\s*[:=]\s*["']?(?!(?:placeholder|example|redacted|changeme|change[_-]?me|your[_-]?password)\b)[A-Za-z0-9._~+/=-]{8,}/i;
@@ -175,15 +182,30 @@ function hasBearerToken(value: string): boolean {
 	return false;
 }
 
+function isBasicAuthorizationCredential(encoded: string): boolean {
+	const decoded = Buffer.from(encoded, "base64");
+	const canonical = decoded.toString("base64");
+	// Basic credentials encode a user-pass pair separated by a colon. Accept
+	// canonical padded or unpadded Base64, not arbitrary Basic-scheme prose.
+	return (encoded === canonical || encoded === canonical.replace(/=+$/u, "")) && decoded.includes(0x3a);
+}
+
 function hasBasicAuthorizationCredential(value: string): boolean {
 	const pattern = new RegExp(BASIC_AUTHORIZATION_PATTERN.source, `${BASIC_AUTHORIZATION_PATTERN.flags}g`);
 	for (const match of value.matchAll(pattern)) {
-		const encoded = match[1];
-		const decoded = Buffer.from(encoded, "base64");
-		const canonical = decoded.toString("base64");
-		// Basic credentials encode a user-pass pair separated by a colon. Accept
-		// canonical padded or unpadded Base64, not arbitrary Basic-scheme prose.
-		if ((encoded === canonical || encoded === canonical.replace(/=+$/u, "")) && decoded.includes(0x3a)) return true;
+		if (isBasicAuthorizationCredential(match[1])) return true;
+	}
+	return false;
+}
+
+function hasBasicAuthorizationCredentialBlock(value: string): boolean {
+	const pattern = new RegExp(
+		BASIC_AUTHORIZATION_BLOCK_PATTERN.source, `${BASIC_AUTHORIZATION_BLOCK_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		const scalar = match[1].replace(/[\s\p{Cc}\p{Cf}]+/gu, " ").trim();
+		const basic = /^Basic\s+([A-Za-z0-9+/]{4,}={0,2})$/iu.exec(scalar);
+		if (basic && isBasicAuthorizationCredential(basic[1])) return true;
 	}
 	return false;
 }
@@ -204,8 +226,8 @@ function hasLabeledCredentialBlock(value: string): boolean {
 
 function hasLabeledCredential(value: string): boolean {
 	const withoutControls = value.replace(/[\p{Cc}\p{Cf}]+/gu, "");
-	return hasBasicAuthorizationCredential(value) || LABELED_CREDENTIAL_PATTERN.test(value)
-		|| LABELED_PASSWORD_PATTERN.test(value) || hasLabeledCredentialBlock(value)
+	return hasBasicAuthorizationCredential(value) || hasBasicAuthorizationCredentialBlock(value)
+		|| LABELED_CREDENTIAL_PATTERN.test(value) || LABELED_PASSWORD_PATTERN.test(value) || hasLabeledCredentialBlock(value)
 		|| hasBasicAuthorizationCredential(withoutControls) || LABELED_CREDENTIAL_PATTERN.test(withoutControls)
 		|| LABELED_PASSWORD_PATTERN.test(withoutControls) || hasLabeledCredentialBlock(withoutControls);
 }
