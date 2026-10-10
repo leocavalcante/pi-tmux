@@ -970,6 +970,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the auth flow with ${token}`);
 	const googleApiKey = `AIza${"A".repeat(35)}`;
 	await suppressed(fixture(), `Review Google API access ${googleApiKey}`, googleApiKey);
+	const datadogApiKey = "A1b2".repeat(10);
+	await suppressed(fixture(), `Review the config Datadog: ${datadogApiKey}`, datadogApiKey);
 	const supabaseSecretKey = `sb_secret_${"S".repeat(32)}`;
 	await suppressed(fixture(), `Review the Supabase config ${supabaseSecretKey}`, supabaseSecretKey);
 	const neonApiKey = `neon_api_key_${"N".repeat(32)}`;
@@ -1137,6 +1139,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithGoogleApiKey = fixture();
 	historyWithGoogleApiKey.messages.push({ role: "assistant", content: [{ type: "text", text: `Google API key: ${googleApiKey}` }] });
 	await suppressed(historyWithGoogleApiKey, "Continue the task", googleApiKey);
+	const historyWithDatadogApiKey = fixture();
+	historyWithDatadogApiKey.messages.push({ role: "assistant", content: [{ type: "text", text: `Datadog: ${datadogApiKey}` }] });
+	await suppressed(historyWithDatadogApiKey, "Continue the task", datadogApiKey);
 	const historyWithSupabaseSecret = fixture();
 	historyWithSupabaseSecret.messages.push({ role: "assistant", content: [{ type: "text", text: `Supabase key: ${supabaseSecretKey}` }] });
 	await suppressed(historyWithSupabaseSecret, "Continue the task", supabaseSecretKey);
@@ -1290,6 +1295,7 @@ test("new credential-looking context cancels in-flight naming without sending it
 test("credential-shaped model output is rejected without applying or disclosing it", async () => {
 	const githubToken = ["ghp_", "a".repeat(20)].join("");
 	const googleApiKey = `AIza${"A".repeat(35)}`;
+	const datadogApiKey = "A1b2".repeat(10);
 	const replicateToken = ["r8_", "M".repeat(37)].join("");
 	const awsKey = ["AKIA", "A".repeat(16)].join("");
 	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
@@ -1379,6 +1385,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["ABSK", "A".repeat(54), "\u200b", "A".repeat(55)].join(""),
 		googleApiKey,
 		`${googleApiKey.slice(0, 20)}\u200b${googleApiKey.slice(20)}`,
+		`Datadog: ${datadogApiKey}`,
+		`Datadog: ${datadogApiKey.slice(0, 20)}\u200b${datadogApiKey.slice(20)}`,
 		["sk", "-proj-", "a".repeat(32)].join(""),
 		["sk", "-ant-", "a".repeat(32)].join(""),
 		["sk", "-svcacct-", "a".repeat(32)].join(""),
@@ -1431,6 +1439,48 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 	expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+});
+
+test("rejects labeled Datadog API keys without mistaking near-misses for keys", async () => {
+	const keyValue = "A1b2".repeat(10);
+	const outputs = [
+		`Datadog: ${keyValue}`,
+		`DATADOG_API_KEY=${keyValue}`,
+		`Datadog: ${keyValue.slice(0, 20)}\u200b${keyValue.slice(20)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(keyValue);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("datadog tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("datadog tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`Datadog: ${"A1b2".repeat(9)}A1b`,
+		`Datadog: ${keyValue}A`,
+		`Datadog: ${keyValue}_`,
+		`Datadog: ${keyValue}-`,
+		`datadog ${keyValue}`,
+		keyValue,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("datadog tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("datadog tests");
+		expect(f.warnings).toEqual([]);
+	}
 });
 
 test("rejects Google API keys without mistaking near-misses for keys", async () => {
@@ -4521,6 +4571,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`pnu_${"A1b2".repeat(9)}`,
 		`API-${"A1B2".repeat(6)}A1`,
 		`AIza${"A".repeat(35)}`,
+		`Datadog: ${"A1b2".repeat(10)}`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,

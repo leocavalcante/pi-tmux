@@ -101,10 +101,13 @@ const LABELED_PASSWORD_PLAIN_PHRASE_PATTERN = new RegExp(
 );
 // Azure Storage SAS URLs require both a dated version field and a long signature.
 const AZURE_SAS_PATTERN = /(?<![A-Za-z0-9_])(?:sv=\d{4}-\d{2}-\d{2}(?=[^#\s]{0,512}&sig=[A-Za-z0-9%+/_=-]{20,}(?:&|#|\s|$))|sig=[A-Za-z0-9%+/_=-]{20,}(?=&)(?=[^#\s]{0,512}&sv=\d{4}-\d{2}-\d{2}))/i;
+// Datadog API keys are 40 alphanumeric characters; require a nearby Datadog label.
+const DATADOG_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?datadog[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[A-Za-z0-9]{40}(?![A-Za-z0-9_-])/i;
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/[^\s/:@]+:[^\s/@]+@/i,
 	AZURE_SAS_PATTERN,
+	DATADOG_API_KEY_PATTERN,
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed
 	// by a 16-hex or `local` segment.
