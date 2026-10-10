@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, type RunTmux } from "../index";
+import { supportsUnixTmux } from "./tmux-support.ts";
 
-const hasTmux = Bun.which("tmux") !== null;
+const hasTmux = supportsUnixTmux(process.platform, Bun.which("tmux"));
 let originalModel: string | undefined;
 let originalIdleTitle: string | undefined;
 beforeEach(() => {

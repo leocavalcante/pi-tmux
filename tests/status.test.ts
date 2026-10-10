@@ -6,8 +6,9 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { WAITING_OPTION, type RunTmux } from "../index";
 import { STATUS_SNAPSHOT_FORMAT } from "../src/tmux.ts";
+import { supportsUnixTmux } from "./tmux-support.ts";
 
-const hasTmux = Bun.which("tmux") !== null;
+const hasTmux = supportsUnixTmux(process.platform, Bun.which("tmux"));
 
 test.skipIf(!hasTmux).each([
 	{ own: false, peer: false, elsewhere: false, flags: "pane no, window no, session no" },

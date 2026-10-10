@@ -1,8 +1,15 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { supportsUnixTmux } from "./tmux-support.ts";
 
 const WORKFLOWS_DIRECTORY = fileURLToPath(new URL("../.github/workflows/", import.meta.url));
+
+test("tmux integration fixtures require a Unix-like platform and a tmux executable", () => {
+	expect(supportsUnixTmux("win32", "C:\\tools\\tmux.exe")).toBe(false);
+	expect(supportsUnixTmux("linux", "/usr/bin/tmux")).toBe(true);
+	expect(supportsUnixTmux("darwin", null)).toBe(false);
+});
 
 test("npm publishing requires all release safety gates", () => {
 	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/publish.yml", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
