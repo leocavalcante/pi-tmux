@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { runTmux } from "../src/tmux.ts";
@@ -8,25 +8,38 @@ async function withFakeTmux(
 	script: (files: { pid: string; cleanExit: string }) => string[],
 	action: (files: { pid: string; cleanExit: string }) => Promise<void>,
 ) {
+	const nodeExecutable = Bun.which("node");
+	if (!nodeExecutable) throw new Error("Node.js is required for the fake tmux executable");
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-timeout-"));
-	const executable = join(directory, "tmux");
+	const executable = join(directory, process.platform === "win32" ? "tmux.exe" : "tmux");
+	const loader = join(directory, "fake-tmux.cjs");
 	const files = { pid: join(directory, "pid"), cleanExit: join(directory, "clean-exit") };
 	const originalPath = process.env.PATH;
+	const originalNodeOptions = process.env.NODE_OPTIONS;
 	let completed = false;
 	try {
-		writeFileSync(executable, [
-			"#!/usr/bin/env node",
+		copyFileSync(nodeExecutable, executable);
+		if (process.platform !== "win32") chmodSync(executable, 0o755);
+		writeFileSync(loader, [
+			`if (require("node:path").basename(process.execPath).toLowerCase() === ${JSON.stringify(process.platform === "win32" ? "tmux.exe" : "tmux")}) {`,
+			"process.argv.splice(1);",
 			`require("node:fs").writeFileSync(${JSON.stringify(files.pid)}, String(process.pid));`,
 			...script(files),
+			"}",
 			"",
 		].join("\n"));
-		chmodSync(executable, 0o755);
 		process.env.PATH = `${directory}${delimiter}${originalPath ?? ""}`;
+		process.env.NODE_OPTIONS = [
+			originalNodeOptions,
+			`--require=${JSON.stringify(loader.replaceAll("\\", "/"))}`,
+		].filter(Boolean).join(" ");
 		await action(files);
 		completed = true;
 	} finally {
 		if (originalPath === undefined) delete process.env.PATH;
 		else process.env.PATH = originalPath;
+		if (originalNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+		else process.env.NODE_OPTIONS = originalNodeOptions;
 		try {
 			if (!completed && existsSync(files.pid)) {
 				const pid = Number(readFileSync(files.pid, "utf8"));
@@ -67,41 +80,35 @@ async function childHasExited(pid: number): Promise<boolean> {
 	return false;
 }
 
-test.skipIf(process.platform === "win32")(
-	"runTmux does not spawn a child for a pre-aborted signal",
-	async () => {
-		await withFakeTmux(() => [], async ({ pid }) => {
-			const controller = new AbortController();
-			const reason = new Error("cancelled");
-			controller.abort(reason);
-			await expect(runTmux([], controller.signal)).rejects.toMatchObject({
-				name: "AbortError",
-				code: "ABORT_ERR",
-				cause: reason,
-			});
-			expect(existsSync(pid)).toBe(false);
+test("runTmux does not spawn a child for a pre-aborted signal", async () => {
+	await withFakeTmux(() => [], async ({ pid }) => {
+		const controller = new AbortController();
+		const reason = new Error("cancelled");
+		controller.abort(reason);
+		await expect(runTmux([], controller.signal)).rejects.toMatchObject({
+			name: "AbortError",
+			code: "ABORT_ERR",
+			cause: reason,
 		});
-	},
-);
+		expect(existsSync(pid)).toBe(false);
+	});
+});
 
-test.skipIf(process.platform === "win32")(
-	"runTmux rejects and reaps a child that exceeds its output bound",
-	async () => {
-		await withFakeTmux(() => [
-			"process.stdout.write('x'.repeat(70 * 1024));",
-			"setInterval(() => {}, 1000);",
-		], async ({ pid }) => {
-			const command = runTmux([], new AbortController().signal).then(
-				() => undefined,
-				(error: unknown) => error,
-			);
-			const childPid = await waitForChild(pid);
-			const error = await command;
-			expect(error).toMatchObject({ code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" });
-			expect(await childHasExited(childPid)).toBe(true);
-		});
-	},
-);
+test("runTmux rejects and reaps a child that exceeds its output bound", async () => {
+	await withFakeTmux(() => [
+		"process.stdout.write('x'.repeat(70 * 1024));",
+		"setInterval(() => {}, 1000);",
+	], async ({ pid }) => {
+		const command = runTmux([], new AbortController().signal).then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		const childPid = await waitForChild(pid);
+		const error = await command;
+		expect(error).toMatchObject({ code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" });
+		expect(await childHasExited(childPid)).toBe(true);
+	});
+});
 
 test.skipIf(process.platform === "win32")(
 	"runTmux rejects a timed-out child that exits cleanly after SIGTERM",
@@ -123,20 +130,17 @@ test.skipIf(process.platform === "win32")(
 	},
 );
 
-test.skipIf(process.platform === "win32")(
-	"runTmux kills a child that ignores cancellation",
-	async () => {
-		await withFakeTmux(() => [
-			"process.on('SIGTERM', () => {});",
-			"setInterval(() => {}, 1000);",
-		], async ({ pid }) => {
-			const controller = new AbortController();
-			const command = runTmux([], controller.signal);
-			const rejected = observeRejection(command);
-			const childPid = await waitForChild(pid);
-			controller.abort();
-			expect(await rejected).toBe(true);
-			expect(await childHasExited(childPid)).toBe(true);
-		});
-	},
-);
+test("runTmux reaps a child on cancellation", async () => {
+	await withFakeTmux(() => [
+		"process.on('SIGTERM', () => {});",
+		"setInterval(() => {}, 1000);",
+	], async ({ pid }) => {
+		const controller = new AbortController();
+		const command = runTmux([], controller.signal);
+		const rejected = observeRejection(command);
+		const childPid = await waitForChild(pid);
+		controller.abort();
+		expect(await rejected).toBe(true);
+		expect(await childHasExited(childPid)).toBe(true);
+	});
+});
