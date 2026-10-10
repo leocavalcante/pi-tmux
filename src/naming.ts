@@ -159,7 +159,7 @@ function hasBearerToken(value: string): boolean {
 
 // Check only likely credentials before transmission; personal-data checks remain
 // output-only to avoid suppressing titles for ordinary dialogue that mentions people.
-function hasSensitiveNamingContext(text: string): boolean {
+export function hasSensitiveNamingContext(text: string): boolean {
 	const hasCredential = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 		|| hasBearerToken(value) || LABELED_CREDENTIAL_PATTERN.test(value);
 	const hasCredentialWithSeparatorsRemoved = (value: string) =>
@@ -409,9 +409,10 @@ export async function requestNamingTitle(
 	modelConfig: NamingModel,
 	signal: AbortSignal,
 	isCurrent: () => boolean,
+	contextAlreadyChecked = false,
 ): Promise<string | undefined> {
 	if (signal.aborted || !isCurrent()) return;
-	if (hasSensitiveNamingContext(text)) throw new UnsafeNamingContextError();
+	if (!contextAlreadyChecked && hasSensitiveNamingContext(text)) throw new UnsafeNamingContextError();
 	const model = ctx.modelRegistry.find(modelConfig.provider, modelConfig.id);
 	if (signal.aborted || !isCurrent()) return;
 	if (!model || !ctx.modelRegistry.hasConfiguredAuth(model)) {

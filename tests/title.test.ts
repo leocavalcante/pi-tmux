@@ -985,6 +985,24 @@ test("credential-looking prompts and recent history never reach the naming model
 	expect(nearMiss.warnings).toEqual([]);
 });
 
+test("safe naming can resume after a credential-looking context is blocked", async () => {
+	const token = ["ghp_", "C".repeat(20)].join("");
+	const f = fixture([Promise.resolve(response("fix auth tests"))]);
+	const find = spyOn(f.ctx.modelRegistry, "find");
+	f.input(`Review ${token}`);
+	await settle();
+	expect(find).not.toHaveBeenCalled();
+	expect(f.requests).toHaveLength(0);
+	expect(f.state.title).toBe("existing task");
+
+	f.input("Fix auth tests");
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.warnings).toEqual(["Sensitive-looking task context was not sent to the naming model; the current title was kept."]);
+	expect(f.warnings.join(" ")).not.toContain(token);
+});
+
 test("new credential-looking context cancels in-flight naming without sending it", async () => {
 	const result = deferred();
 	const f = fixture([result.promise]);

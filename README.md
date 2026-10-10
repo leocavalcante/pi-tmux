@@ -325,8 +325,9 @@ can still mention details from tool output. Before model lookup or provider
 transport, the bounded context is checked locally for recognizable credential
 formats and for long values explicitly assigned to common credential labels.
 If detected, the request is skipped and the current title is kept; warnings do
-not include matching text. This is a limited, best-effort check, not
-comprehensive secret redaction, so credentials that do not match can still be
+not include matching text, and blocked context is not kept in the extension's
+deduplication cache. This is a limited, best-effort check, not comprehensive
+secret redaction, so credentials that do not match can still be
 sent. Provider billing, subscription limits, and data handling
 apply to naming requests that proceed. A run can request a title on input and
 again at settlement when its context changes; an invalid length or word-count
