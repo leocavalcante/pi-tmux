@@ -958,6 +958,10 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`fixfw-${"B".repeat(40)}`,
 		["fw", "_", "\u200b", "C".repeat(40)].join(""),
 		["fpk_", "D".repeat(40)].join(""),
+		["csk_", "E".repeat(48)].join(""),
+		["csk-", "F".repeat(48)].join(""),
+		["CSK_", "G".repeat(48)].join(""),
+		["csk_", "G".repeat(23), "\u200b", "G".repeat(25)].join(""),
 		`fixgsk_${"a".repeat(24)}`,
 		["gsk", " ", "_", "a".repeat(24)].join(""),
 		["xai-", "a".repeat(20)].join(""),
@@ -1029,6 +1033,23 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 	expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+});
+
+test.each([
+	["Pinecone-style prefix", ["p", "csk_", "A".repeat(48)].join("")],
+	["alphanumeric leading glue", `x${["csk-", "B".repeat(48)].join("")}`],
+	["underscore leading glue", `_${["csk_", "C".repeat(48)].join("")}`],
+	["hyphen leading glue", `-${["csk-", "D".repeat(48)].join("")}`],
+	["short body", ["csk_", "E".repeat(47)].join("")],
+	["long body", ["csk-", "F".repeat(49)].join("")],
+	["trailing identifier glue", `${["csk_", "H".repeat(48)].join("")}x`],
+])("does not classify %s as a Cerebras API key", async (_shape, output) => {
+	const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("fix auth tests"))]);
+	f.input("Name a task");
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.warnings).toEqual([]);
 });
 
 test("email-address-like model output is rejected before normalization and not disclosed", async () => {
