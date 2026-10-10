@@ -979,6 +979,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(
 		fixture(), `Review the Kubernetes config ${kubeconfigClientKeyData}`, kubeconfigClientKeyData,
 	);
+	const kubeconfigBlockClientKeyData = `client-key-data: |-\n  ${"A".repeat(10)}\n  ${"A".repeat(10)}\n  ${"A".repeat(44)}`;
+	await suppressed(
+		fixture(), `Review the Kubernetes config ${kubeconfigBlockClientKeyData}`, kubeconfigBlockClientKeyData,
+	);
 	const wireGuardPresharedKey = `PresharedKey=${"A".repeat(43)}=`;
 	await suppressed(
 		fixture(), `Review the WireGuard configuration ${wireGuardPresharedKey}`, wireGuardPresharedKey,
@@ -1069,6 +1073,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		"Review docs with password=placeholder, passphrase=example, token: placeholder,",
 		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, PresharedKey=example,",
 		"client-key-data: example, Authorization: Basic example,",
+		"\nclient-key-data: |-\n  example\n",
 		`Authorization: Basic ${"A".repeat(20)}`,
 	].join(" "));
 	await settle();
@@ -1135,6 +1140,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`client-key-data: ${"A".repeat(44)}`,
+		`client-key-data: |2-\n  ${"A".repeat(10)}\n  ${"A".repeat(10)}\n  ${"A".repeat(44)}`,
 		`PresharedKey=${"A".repeat(43)}=`,
 		...basicAuthHeaders,
 		azureSasUrl,
@@ -3413,6 +3419,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`client-key-data: ${"A".repeat(44)}`,
+		`client-key-data: |-\n  ${"A".repeat(10)}\n  ${"A".repeat(10)}\n  ${"A".repeat(44)}`,
 		`PresharedKey=${"A".repeat(43)}=`,
 		basicAuthorizationHeader("Authorization", `u:${"p".repeat(20)}`),
 		basicAuthorizationHeader("Proxy-Authorization", `p:${"w".repeat(20)}`),

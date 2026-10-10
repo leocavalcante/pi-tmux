@@ -327,10 +327,10 @@ formats (including URL user-info, Azure Shared Access Signature URLs, and
 Base64 Basic credentials in HTTP `Authorization` or `Proxy-Authorization`
 headers), conventional email addresses, explicitly labeled U.S. SSN- and
 phone-shaped values, Luhn-valid payment-card values with explicit card labels,
-and long values assigned to common credential labels (including AWS `AWS_SECRET_ACCESS_KEY`,
-Azure `AccountKey`, WireGuard `PresharedKey`, and Kubernetes `client-key-data`
-fields), and shorter non-placeholder values assigned explicitly to
-password/passphrase labels.
+and long values assigned to common credential labels (including AWS
+`AWS_SECRET_ACCESS_KEY`, Azure `AccountKey`, WireGuard `PresharedKey`, and
+Kubernetes `client-key-data` fields, including YAML block scalars), and shorter
+non-placeholder values assigned explicitly to password/passphrase labels.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
 deduplication cache. This is a limited, best-effort check, not comprehensive
@@ -350,9 +350,10 @@ including Azure Shared Access Signature URLs and Base64 Basic credentials in
 HTTP `Authorization` or `Proxy-Authorization` headers, conventional email
 addresses, explicitly labeled U.S. SSN-shaped values, phone-labeled values with
 7–15 digits, Luhn-valid payment-card-shaped numbers with explicit card labels,
-long opaque values assigned to common credential labels (including AWS `AWS_SECRET_ACCESS_KEY`,
-Azure `AccountKey`, WireGuard `PresharedKey`, and Kubernetes `client-key-data`
-fields), and shorter non-placeholder password/passphrase assignments. It also checks a view with
+long opaque values assigned to common credential labels (including AWS
+`AWS_SECRET_ACCESS_KEY`, Azure `AccountKey`, WireGuard `PresharedKey`, and
+Kubernetes `client-key-data` fields, including YAML block scalars), and shorter
+non-placeholder password/passphrase assignments. It also checks a view with
 whitespace, control, and format characters removed, which catches some
 obfuscated values.
 Rejected responses are not included in warnings. These limited checks are
