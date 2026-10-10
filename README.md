@@ -329,8 +329,8 @@ and custom extension messages are excluded. Summaries and ordinary dialogue
 can still mention details from tool output. Before model lookup or provider
 transport, the bounded context is checked locally with limited patterns for
 recognizable credentials. These include selected provider-specific formats
-(for example GitHub and GitLab tokens, Azure DevOps PATs, Google OAuth/API keys,
-and other service tokens), credential-bearing URLs, Bearer and Base64 Basic
+(for example GitHub, GitLab, and PyPI tokens, Azure DevOps PATs, Google OAuth/API
+keys, and other service tokens), credential-bearing URLs, Bearer and Base64 Basic
 authorization values, and long values assigned to common credential labels.
 For supported credential labels, YAML block scalars with tags or anchors are
 also checked, as are shorter non-placeholder password/passphrase assignments.
