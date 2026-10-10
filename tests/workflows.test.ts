@@ -11,6 +11,14 @@ test("tmux integration fixtures require a Unix-like platform and a tmux executab
 	expect(supportsUnixTmux("darwin", null)).toBe(false);
 });
 
+test("README tmux compatibility versions stay aligned with version-checked CI", () => {
+	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8");
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
+	expect(workflow).toContain('tmux -V | grep -Fx "tmux 3.4"');
+	expect(workflow).toContain('test "$(tmux -V)" = "tmux 3.7c"');
+	expect(readme).toMatch(/Linux CI exercises tmux 3\.4 and a pinned tmux 3\.7c\nbuild/u);
+});
+
 test("npm publishing requires all release safety gates", () => {
 	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/publish.yml", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
 	const topLevelPermissions = /^permissions:\n((?:  [^\n]*\n)+)/m.exec(workflow)?.[1] ?? "";
