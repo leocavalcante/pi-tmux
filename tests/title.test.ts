@@ -1039,11 +1039,13 @@ test("email-address-like model output is rejected before normalization and not d
 });
 
 test("ordinary security-themed titles without credential values remain valid", async () => {
-	const f = fixture([Promise.resolve(response("review bearer auth flow"))]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("review bearer auth flow");
-	expect(f.warnings).toEqual([]);
+	for (const title of ["review bearer auth flow", "task-based development"]) {
+		const f = fixture([Promise.resolve(response(title))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe(title);
+		expect(f.warnings).toEqual([]);
+	}
 });
 
 test("ready marker fits within 24 cells and title text stays lowercase", () => {
