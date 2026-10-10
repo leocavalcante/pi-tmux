@@ -11,6 +11,7 @@ const MAX_NAMING_OUTPUT_LENGTH = 64 * 1024;
 const MAX_NAMING_CONTENT_BLOCKS = 128;
 const MAX_TEXT_SIGNATURE_LENGTH = 4 * 1024;
 const MAX_HISTORY_TEXT_LENGTH = 1_000;
+const MAX_NAMING_CONTEXT_BLOCKS = 128;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 export type NamingModel = { provider: string; id: string };
@@ -105,9 +106,12 @@ function trimTrailingWhitespace(text: string): string {
 function boundedText(content: unknown, maxLength: number): string {
 	let text = "";
 	let leading = true;
+	let leadingScanBudget = maxLength;
 	const append = (part: string): boolean => {
 		let index = 0;
 		while (leading && index < part.length) {
+			if (leadingScanBudget === 0) return true;
+			leadingScanBudget--;
 			if (!WHITESPACE.test(part[index])) leading = false;
 			else index++;
 		}
@@ -132,7 +136,9 @@ function boundedText(content: unknown, maxLength: number): string {
 	}
 	if (Array.isArray(content)) {
 		let foundText = false;
-		for (const candidate of content as unknown[]) {
+		const blocks = content as unknown[];
+		for (let blockIndex = 0; blockIndex < Math.min(blocks.length, MAX_NAMING_CONTEXT_BLOCKS); blockIndex++) {
+			const candidate = blocks[blockIndex];
 			if (!candidate || typeof candidate !== "object") continue;
 			const block = candidate as { type?: unknown; text?: unknown };
 			if (block.type !== "text") continue;

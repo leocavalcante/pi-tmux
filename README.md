@@ -184,7 +184,8 @@ Repeat the command to retry them.
   compacted originals, and text removed by Pi context edits are not used. To
   bound work in tool-heavy sessions, history selection inspects at most the
   latest 4,096 projected messages; the current prompt and compaction summary
-  are handled separately.
+  are handled separately. Per-message text extraction inspects at most 128
+  content blocks and scans no more than 1,000 leading whitespace code units.
 - Titles are forced to lowercase and clipped at a word boundary when possible.
 - If the provider supplies phase metadata, only `final_answer` blocks are
   considered. When metadata is present but no final block exists, output is
