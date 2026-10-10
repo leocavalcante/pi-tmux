@@ -4,6 +4,7 @@ import { cleanTitle, MAX_TITLE_LENGTH } from "./title.ts";
 export const MAX_PROMPT_LENGTH = 2_000;
 export const MAX_CONTEXT_LENGTH = 6_000;
 export const MAX_HISTORY_MESSAGES = 8;
+const MAX_HISTORY_MESSAGES_SCANNED = 4_096;
 export const NAMING_REQUEST_TIMEOUT_MS = 15_000;
 // Providers can ignore maxTokens; bound response traversal and selected-text processing.
 const MAX_NAMING_OUTPUT_LENGTH = 64 * 1024;
@@ -189,7 +190,12 @@ function assembleNamingContext(
 	const history: string[] = [];
 	let summary = knownSummary ?? "";
 	let foundSummary = !searchMessagesForSummary;
-	for (let i = messages.length - 1; i >= 0; i--) {
+	// Canonical projections carry the compaction summary separately. Bound the
+	// extra walk through their flat message arrays so long tool runs cannot make
+	// every naming refresh scan an unbounded amount of history. The compatibility
+	// messages-only helper still searches the full list for its summary.
+	const scanLimit = searchMessagesForSummary ? messages.length : MAX_HISTORY_MESSAGES_SCANNED;
+	for (let i = messages.length - 1, scanned = 0; i >= 0 && scanned < scanLimit; i--, scanned++) {
 		const message = messages[i];
 		if (message.role === "compactionSummary") {
 			if (!foundSummary) {
