@@ -962,7 +962,11 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["ASIA", "A".repeat(16)].join(""),
 		["AIza", "A".repeat(32)].join(""),
 		["sk", "-proj-", "a".repeat(32)].join(""),
+		["sk", "-ant-", "a".repeat(32)].join(""),
+		["sk", "-svcacct-", "a".repeat(32)].join(""),
 		["sk", "_live_", "a".repeat(24)].join(""),
+		`fixsk-${"a".repeat(16)}`,
+		`fixrk-${"a".repeat(16)}`,
 		["xoxb-", "a".repeat(24)].join(""),
 		["xoxc-", "a".repeat(24)].join(""),
 		["xoxd-", "a".repeat(24)].join(""),
@@ -1038,12 +1042,17 @@ test("email-address-like model output is rejected before normalization and not d
 	expect(f.warnings.join(" ")).not.toContain(splitAddress);
 });
 
-test("ordinary security-themed titles without credential values remain valid", async () => {
-	for (const title of ["review bearer auth flow", "task-based development"]) {
+test("ordinary security-themed and hyphenated task titles without credential values remain valid", async () => {
+	for (const [title, expected] of [
+		["review bearer auth flow", "review bearer auth flow"],
+		["task-based development", "task-based development"],
+		["task-based-development", "task-based-development"],
+		["work-based-development", "work-based-development"],
+	] as const) {
 		const f = fixture([Promise.resolve(response(title))]);
 		f.input("Name a task");
 		await settle();
-		expect(f.state.title).toBe(title);
+		expect(f.state.title).toBe(expected);
 		expect(f.warnings).toEqual([]);
 	}
 });
