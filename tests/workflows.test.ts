@@ -57,6 +57,20 @@ test("local verify script runs the same validation gates as CI", () => {
 	].join(" && "));
 });
 
+test("@types/node stays pinned to 22.20.5 in the manifest and lockfile", () => {
+	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
+		devDependencies?: Record<string, string>;
+	};
+	const lockfile = JSON.parse(readFileSync(fileURLToPath(new URL("../package-lock.json", import.meta.url)), "utf8")) as {
+		packages?: Record<string, { devDependencies?: Record<string, string>; version?: string }>;
+	};
+	const pinnedVersion = "22.20.5";
+
+	expect(manifest.devDependencies?.["@types/node"]).toBe(pinnedVersion);
+	expect(lockfile.packages?.[""]?.devDependencies?.["@types/node"]).toBe(pinnedVersion);
+	expect(lockfile.packages?.["node_modules/@types/node"]?.version).toBe(pinnedVersion);
+});
+
 test("external GitHub Actions use full commit SHAs with version comments", () => {
 	const workflowFiles = readdirSync(WORKFLOWS_DIRECTORY)
 		.filter((file) => /\.ya?ml$/i.test(file))
