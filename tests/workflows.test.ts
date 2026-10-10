@@ -37,6 +37,19 @@ test("npm publishing requires all release safety gates", () => {
 	expect(publish).toBeGreaterThan(tagValidation);
 });
 
+test("local verify script runs the same validation gates as CI", () => {
+	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
+		scripts?: Record<string, string>;
+	};
+	expect(manifest.scripts?.verify).toBe([
+		"npm run check",
+		"npm run check:tests",
+		"npm audit --audit-level=high",
+		"npm test",
+		"npm pack --dry-run --ignore-scripts",
+	].join(" && "));
+});
+
 test("external GitHub Actions use full commit SHAs with version comments", () => {
 	const workflowFiles = readdirSync(WORKFLOWS_DIRECTORY)
 		.filter((file) => /\.ya?ml$/i.test(file))
