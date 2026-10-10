@@ -977,6 +977,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Vault access ${vaultServiceToken}`, vaultServiceToken);
 	const sentryUserToken = `sntryu_${"a".repeat(64)}`;
 	await suppressed(fixture(), `Review Sentry access ${sentryUserToken}`, sentryUserToken);
+	const sentryOrgToken = `sntrys_eyJpYXQiO${"a".repeat(20)}LCJyZWdpb25fdXJs${"b".repeat(20)}_${"C".repeat(43)}`;
+	await suppressed(fixture(), `Review Sentry organization access ${sentryOrgToken}`, sentryOrgToken);
 	const labeledCredential = `client_secret=${"C".repeat(24)}`;
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 	const shortPassword = `password=${"S".repeat(12)}`;
@@ -1105,6 +1107,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithSentryToken = fixture();
 	historyWithSentryToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Sentry token: ${sentryUserToken}` }] });
 	await suppressed(historyWithSentryToken, "Continue the task", sentryUserToken);
+	const historyWithSentryOrgToken = fixture();
+	historyWithSentryOrgToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Sentry organization token: ${sentryOrgToken}` }] });
+	await suppressed(historyWithSentryOrgToken, "Continue the task", sentryOrgToken);
 	const historyWithEmail = fixture();
 	historyWithEmail.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous contact: ${emailAddress}` }] });
 	await suppressed(historyWithEmail, "Continue the task", emailAddress);
@@ -1550,6 +1555,60 @@ test("rejects Neon API keys without mistaking near-miss strings for keys", async
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("neon api setup");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Sentry organization tokens without mistaking near-misses for tokens", async () => {
+	const firstClaim = "eyJpYXQiO";
+	const regionClaim = "LCJyZWdpb25fdXJs";
+	const tokenFor = (first = "a".repeat(20), region = regionClaim, second = "b".repeat(20), suffix = "C".repeat(43)) =>
+		`sntrys_${firstClaim}${first}${region}${second}_${suffix}`;
+	const token = tokenFor();
+	const outputs = [
+		token,
+		tokenFor("a".repeat(20), "InJlZ2lvbl91cmwi"),
+		tokenFor("a".repeat(20), "cmVnaW9uX3VybCI6"),
+		`configure-${token}`,
+		token.replace("sntrys_", "sntry\u200bs_"),
+		token.replace(regionClaim, "LCJyZWdpb25fdXJ\u200bs"),
+		`${token.slice(0, 45)}\u200b${token.slice(45)}`,
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const shortName = fixture([Promise.resolve(response("sentry org setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("sentry org setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = [
+		tokenFor("a".repeat(9)),
+		tokenFor("a".repeat(20), "LCJyZWdpb25fdXJs", "b".repeat(9)),
+		tokenFor("a".repeat(20), "LCJyZWdpb25fdXls"),
+		tokenFor("a".repeat(20), regionClaim, "b".repeat(20), "C".repeat(42)),
+		tokenFor("a".repeat(20), regionClaim, "b".repeat(20), "C".repeat(44)),
+		token.replace("sntrys_", "sntryx_"),
+		`x${token}`,
+		`_${token}`,
+		`${token}_x`,
+		`${token}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("sentry org setup"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("sentry org setup");
 		expect(f.warnings).toEqual([]);
 	}
 });
