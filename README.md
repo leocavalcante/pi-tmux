@@ -305,8 +305,8 @@ tmux set-window-option -t "$TMUX_PANE" automatic-rename on
 
 ## Privacy and security
 
-With AI naming enabled, the configured naming model receives up to 6,000
-characters of task context:
+With AI naming enabled, a naming request can send up to 6,000 characters of
+task context to the configured model:
 
 - Up to 2,000 characters from your new prompt. Oversized prompts retain both
   ends around `[... middle of prompt omitted ...]`; shorter prompts are included
@@ -317,13 +317,19 @@ characters of task context:
 
 Images, thinking blocks, tool calls, tool results, shell output, system prompts,
 and custom extension messages are excluded. Summaries and ordinary dialogue
-can still mention details from tool output. Provider billing, subscription
-limits, and data handling apply to these additional requests. A run can request
-a title on input and again at settlement when its context changes; an invalid
-length or word-count result can trigger one short correction request. Each
-`/tmux-title` retry also makes a request when naming context is available.
-`PI_TMUX_MODEL=off` or an active manual pin prevents these naming requests.
-Manual title commands do not send the title or dialogue to a model.
+can still mention details from tool output. Before model lookup or provider
+transport, the bounded context is checked locally for recognizable credential
+formats and for long values explicitly assigned to common credential labels.
+If detected, the request is skipped and the current title is kept; warnings do
+not include matching text. This is a limited, best-effort check, not
+comprehensive secret redaction, so credentials that do not match can still be
+sent. Provider billing, subscription limits, and data handling
+apply to naming requests that proceed. A run can request a title on input and
+again at settlement when its context changes; an invalid length or word-count
+result can trigger one short correction request. Each `/tmux-title` retry also
+makes a request when naming context is available. `PI_TMUX_MODEL=off` or an
+active manual pin prevents these naming requests. Manual title commands do not
+send the title or dialogue to a model.
 
 The model is instructed not to include secrets or personal information in
 titles. Before applying a response, the extension checks raw and
