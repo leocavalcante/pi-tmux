@@ -969,8 +969,10 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["npm_", "a".repeat(24)].join(""),
 		["glpat-", "a".repeat(24)].join(""),
 		["hf_", "a".repeat(32)].join(""),
+		`hf_${"a".repeat(19)} a`,
 		["eyJ", "a".repeat(8), ".", "b".repeat(8), ".", "c".repeat(8)].join(""),
 		["Bearer ", "a".repeat(24)].join(""),
+		["Bearer ", "a".repeat(8), " ", "a".repeat(8)].join(""),
 		["-----BEGIN ", "PRIVATE KEY-----"].join(""),
 		["-----BEGIN ", "DSA PRIVATE KEY-----"].join(""),
 		["-----BEGIN ", "ENCRYPTED PRIVATE KEY-----"].join(""),
@@ -1005,7 +1007,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 
 test("email-address-like model output is rejected before normalization and not disclosed", async () => {
 	const address = ["person", "@", "example", ".", "invalid"].join("");
-	for (const output of [address, `${address}_x`]) {
+	for (const output of [address, `${address}_x`, "person @example.invalid"]) {
 		const f = fixture([Promise.resolve(response(output))]);
 		f.input("Name a task");
 		await settle();
