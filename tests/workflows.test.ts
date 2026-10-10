@@ -38,6 +38,12 @@ test("README tmux compatibility versions stay aligned with version-checked CI", 
 	expect(readme).toMatch(/Linux CI exercises tmux 3\.4 and a pinned tmux 3\.7c\nbuild/u);
 });
 
+test("README documents the bounded manual and idle-title input limit", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
+	expect(readme).toContain("values longer than 64 Ki UTF-16 code units");
+	expect(readme).toContain("Inputs longer than 64 Ki UTF-16 code units are rejected before screening");
+});
+
 test("npm publishing requires all release safety gates", () => {
 	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/publish.yml", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
 	const topLevelPermissions = /^permissions:\n((?:  [^\n]*\n)+)/m.exec(workflow)?.[1] ?? "";

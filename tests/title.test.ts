@@ -5,6 +5,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
 import { readWindowTitle, STATUS_SNAPSHOT_FORMAT, WINDOW_INFO_INTERNAL_FORMAT } from "../src/tmux.ts";
 import { hasSensitiveNamingContext, hasSensitiveOutput } from "../src/naming.ts";
+import { MAX_TITLE_INPUT_LENGTH } from "../src/title.ts";
 import {
 	buildQuitTitleFormat,
 	buildWindowBaseQuitTitleFormats,
@@ -173,7 +174,8 @@ function fixture(
 	};
 	const load = () => {
 		const setting = process.env.PI_TMUX_IDLE_TITLE ?? "zsh";
-		idleTitle = hasSensitiveOutput(setting) ? "zsh" : cleanTitle(setting) || "zsh";
+		idleTitle = setting.length > MAX_TITLE_INPUT_LENGTH || hasSensitiveOutput(setting)
+			? "zsh" : cleanTitle(setting) || "zsh";
 		return piTmux({
 			on: (event: string, handler: Function) => handlers.set(event, handler),
 			registerCommand: (name: string, command: { handler: Function; getArgumentCompletions?: Function }) => commands.set(name, command),
@@ -4094,6 +4096,16 @@ test("sensitive-looking idle titles are replaced by zsh before cleanup", async (
 	expect(f.warnings).toEqual([]);
 });
 
+test("oversized idle title settings fall back without screening or disclosure", async () => {
+	process.env.PI_TMUX_IDLE_TITLE = "x".repeat(MAX_TITLE_INPUT_LENGTH + 1);
+	const f = fixture([]);
+	await f.emit("session_start");
+	await f.emit("session_shutdown", "quit");
+	expect(f.state.title).toBe("zsh");
+	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat("zsh")]);
+	expect(f.warnings).toEqual([]);
+});
+
 test("credential-bearing URLs and npm settings in idle titles fall back without disclosure", async () => {
 	for (const idleTitle of [
 		"postgres://test-user:example-only-password@db.example.test/app",
@@ -5257,6 +5269,17 @@ test("manual titles work with AI disabled, and auto respects that setting", asyn
 	expect(f.requests).toHaveLength(0);
 	await f.emit("session_shutdown");
 	expect(f.state.title).toBe("zsh");
+});
+
+test("oversized manual title input is rejected before screening or writes", async () => {
+	const oversizedTitle = "x".repeat(MAX_TITLE_INPUT_LENGTH + 1);
+	const f = fixture();
+	await f.refresh(`set ${oversizedTitle}`);
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls).toEqual([]);
+	expect(f.requests).toEqual([]);
+	expect(f.warnings).toEqual(["Manual title input is too long to check safely; it was not applied."]);
+	expect(f.warnings.join(" ")).not.toContain(oversizedTitle);
 });
 
 test("manual titles reject sensitive text before normalization without disclosing it", async () => {

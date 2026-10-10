@@ -1,4 +1,6 @@
 export const MAX_TITLE_LENGTH = 24;
+// Bound raw user-controlled title text passed through screening and normalization.
+export const MAX_TITLE_INPUT_LENGTH = 64 * 1024;
 export const READY_PREFIX = "* ";
 
 // ASCII keeps the character cap equal to the status bar's display width.
