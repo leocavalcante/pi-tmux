@@ -1357,6 +1357,55 @@ test("rejects Cloudflare Origin CA keys without mistaking near-miss strings for 
 	}
 });
 
+test("rejects Doppler personal tokens without mistaking near-miss strings for tokens", async () => {
+	const prefix = ["dp", ".", "pt", "."].join("");
+	const token = `${prefix}${"a".repeat(43)}`;
+	const outputs = [
+		token,
+		token.toUpperCase(),
+		`configure-${token}`,
+		token.replace("pt.", "pt.\u200b"),
+		token.replace(prefix, `dp.\u200bpt.`),
+	];
+	for (const output of outputs) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("doppler client settings"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("doppler client settings");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`${prefix}${"a".repeat(42)}`,
+		`${prefix}${"a".repeat(44)}`,
+		`${prefix}${"a".repeat(42)}!`,
+		`${prefix}${"a".repeat(42)}_`,
+		`${prefix}${"a".repeat(42)}-`,
+		`x${token}`,
+		`_${token}`,
+		`${token}x`,
+		`${token}_x`,
+		`${token}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("doppler client settings"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("doppler client settings");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",
