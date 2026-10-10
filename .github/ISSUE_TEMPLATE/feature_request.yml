@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest a user-facing improvement for pi-tmux.
+title: "feature: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Privacy reminder:** Do not include credentials, prompts, conversation history, private window/session titles, or screenshots containing them. Use generated or redacted examples instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should this solve?
+      description: Describe the user need without sharing private task or conversation content.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: What behavior would help?
+      description: Explain the change from a user's perspective. Use synthetic examples where useful.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional workarounds or other approaches you have tried.
