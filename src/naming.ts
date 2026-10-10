@@ -60,16 +60,18 @@ const LABELED_CREDENTIAL_LABEL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|acc
 const LABELED_CREDENTIAL_PATTERN = new RegExp(
 	`${LABELED_CREDENTIAL_LABEL_PATTERN.source}\\s*["']?\\s*[:=]\\s*["']?[A-Za-z0-9._~+/=-]{20,}`, "i",
 );
+// YAML allows tags and anchors between a key and its block scalar indicator.
+const YAML_BLOCK_SCALAR_PROPERTIES = String.raw`(?:(?:![^\s#]+|&[^\s#]+)[ \t]+)*`;
 // YAML block scalars can wrap values assigned to common credential labels.
 const LABELED_CREDENTIAL_BLOCK_PATTERN = new RegExp(
-	`(?<![A-Za-z0-9_-])["']?(${LABELED_CREDENTIAL_LABEL_PATTERN.source})["']?[ \\t]*:[ \\t]*[|>](?:[1-9][+-]?|[+-][1-9]?)?[ \\t]*(?:#[^\\r\\n]*)?\\r?\\n((?:(?:[ \\t]+[A-Za-z0-9._~+/_=-]+[ \\t]*|[ \\t]*)(?:\\r?\\n|$))+)`,
+	`(?<![A-Za-z0-9_-])["']?(${LABELED_CREDENTIAL_LABEL_PATTERN.source})["']?[ \\t]*:[ \\t]*${YAML_BLOCK_SCALAR_PROPERTIES}[|>](?:[1-9][+-]?|[+-][1-9]?)?[ \\t]*(?:#[^\\r\\n]*)?\\r?\\n((?:(?:[ \\t]+[A-Za-z0-9._~+/_=-]+[ \\t]*|[ \\t]*)(?:\\r?\\n|$))+)`,
 	"i",
 );
 // Basic authorization values are base64 user-info, not provider-prefixed tokens.
 const BASIC_AUTHORIZATION_PATTERN = /(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
 // YAML block-scalar form of the same Authorization/Proxy-Authorization header.
 const BASIC_AUTHORIZATION_BLOCK_PATTERN = new RegExp(
-	String.raw`(?<![A-Za-z0-9_-])["']?(?:proxy[-_\s]?)?authorization["']?[ \t]*:[ \t]*[|>]`
+	String.raw`(?<![A-Za-z0-9_-])["']?(?:proxy[-_\s]?)?authorization["']?[ \t]*:[ \t]*${YAML_BLOCK_SCALAR_PROPERTIES}[|>]`
 		+ String.raw`(?:[1-9][+-]?|[+-][1-9]?)?[ \t]*(?:#[^\r\n]*)?\r?\n`
 		+ String.raw`((?:(?:[ \t]+[ \tA-Za-z0-9+/=]+[ \t]*|[ \t]*)(?:\r?\n|$))+)`,
 	"i",
