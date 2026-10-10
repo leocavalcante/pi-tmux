@@ -128,6 +128,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])glsa_[a-z0-9]{32}_[a-f0-9]{8}(?![A-Za-z0-9_-])/i,
 	// Doppler personal tokens use `dp.pt.` followed by 43 alphanumeric characters.
 	/(?<![A-Za-z0-9_])dp\.pt\.[a-z0-9]{43}(?![A-Za-z0-9_-])/i,
+	// Sentry organization tokens contain an encoded region claim and a 43-character suffix.
+	/(?<![A-Za-z0-9_])sntrys_eyJpYXQiO[A-Za-z0-9+/]{10,200}(?:LCJyZWdpb25fdXJs|InJlZ2lvbl91cmwi|cmVnaW9uX3VybCI6)[A-Za-z0-9+/]{10,200}={0,2}_[A-Za-z0-9+/]{43}(?![A-Za-z0-9_+/=-])/,
 	// Sentry user access tokens use `sntryu_` followed by 64 lowercase hex characters.
 	/(?<![A-Za-z0-9_])sntryu_[a-f0-9]{64}(?![A-Za-z0-9_-])/,
 	// Vault service and batch tokens use `hvs.` or `hvb.` followed by 24 URL-safe characters.
