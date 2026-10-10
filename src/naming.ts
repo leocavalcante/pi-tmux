@@ -105,6 +105,9 @@ const AZURE_SAS_PATTERN = /(?<![A-Za-z0-9_])(?:sv=\d{4}-\d{2}-\d{2}(?=[^#\s]{0,5
 const AZURE_DEVOPS_PAT_PATTERN = /(?<![A-Za-z0-9_])[A-Za-z0-9]{75}AZDO[A-Za-z0-9]{5}(?![A-Za-z0-9_])/;
 // GitLab Runner authentication tokens use `glrt-` followed by 20 URL-safe characters.
 const GITLAB_RUNNER_AUTH_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])glrt-[A-Za-z0-9_-]{20}(?![A-Za-z0-9_-])/;
+// Docker Hub personal and organization access tokens have fixed-length bodies.
+const DOCKER_HUB_PAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_pat_[A-Za-z0-9_-]{27}(?![A-Za-z0-9_-])/;
+const DOCKER_HUB_OAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_oat_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/;
 // Datadog API keys are 40 alphanumeric characters; require a nearby Datadog label.
 const DATADOG_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?datadog[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[A-Za-z0-9]{40}(?![A-Za-z0-9_-])/i;
 // Mailgun private API tokens use `key-` plus 32 hex characters and a Mailgun label.
@@ -126,6 +129,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	AZURE_SAS_PATTERN,
 	AZURE_DEVOPS_PAT_PATTERN,
 	GITLAB_RUNNER_AUTH_TOKEN_PATTERN,
+	DOCKER_HUB_PAT_PATTERN,
+	DOCKER_HUB_OAT_PATTERN,
 	DATADOG_API_KEY_PATTERN,
 	MAILGUN_PRIVATE_API_TOKEN_PATTERN,
 	ARTIFACTORY_API_KEY_PATTERN,
