@@ -46,6 +46,7 @@ export class InvalidNamingTitleError extends Error {
 const BEARER_TOKEN_PATTERN = /Bearer\s+([A-Za-z0-9._~+/=-](?:\s*[A-Za-z0-9._~+/=-]){15,})/i;
 const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
+	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,
 	/gsk_[A-Za-z0-9]{20,}/,
 	/xai-[A-Za-z0-9_-]{16,}/,
 	/pplx-[A-Za-z0-9]{48}/,
