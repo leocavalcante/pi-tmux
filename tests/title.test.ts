@@ -953,6 +953,9 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
 	const outputs = [
 		["gh", "p_", "a".repeat(36)].join(""),
+		["gsk_", "a".repeat(24)].join(""),
+		`fixgsk_${"a".repeat(24)}`,
+		["gsk", " ", "_", "a".repeat(24)].join(""),
 		`x${awsKey}`,
 		`${awsKey}_x`,
 		githubToken.toUpperCase(),
@@ -1050,6 +1053,7 @@ test("ordinary security-themed and hyphenated task titles without credential val
 	for (const [title, expected] of [
 		["review bearer auth flow", "review bearer auth flow"],
 		["bearer authentication v2", "bearer authentication v2"],
+		["groq api authentication", "groq api authentication"],
 		["task-based development", "task-based development"],
 		["task-based-development", "task-based-development"],
 		["work-based-development", "work-based-development"],
