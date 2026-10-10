@@ -1127,6 +1127,44 @@ test("rejects DigitalOcean tokens without mistaking near-miss strings for tokens
 	}
 });
 
+test("rejects Notion API tokens without mistaking near-miss strings for tokens", async () => {
+	const token = ["ntn_", "1".repeat(11), "a".repeat(35)].join("");
+	for (const output of [token, token.toUpperCase(), `configure-${token}`, token.replace("ntn_", "ntn_\u200b")]) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const shortName = fixture([Promise.resolve(response("ntn_api_setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("ntn_api_setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = [
+		["ntn_", "1".repeat(10), "a".repeat(35)].join(""),
+		["ntn_", "1".repeat(12), "a".repeat(35)].join(""),
+		["ntn_", "1".repeat(11), "a".repeat(34)].join(""),
+		["ntn_", "1".repeat(11), "a".repeat(36)].join(""),
+		["ntn_", "a".repeat(46)].join(""),
+		`${token}_x`,
+		`${token}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("notion api tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("notion api tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",

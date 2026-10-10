@@ -58,6 +58,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	// DigitalOcean access, personal, and refresh tokens share `_v1_` followed by
 	// 64 hexadecimal characters.
 	/(?<![A-Za-z0-9_])do[opr]_v1_[a-f0-9]{64}(?![A-Za-z0-9_-])/,
+	// Notion tokens use `ntn_`, 11 digits, then 35 alphanumeric characters.
+	/(?<![A-Za-z0-9_])ntn_[0-9]{11}[A-Za-z0-9]{35}(?![A-Za-z0-9_-])/,
 	/nvapi-[A-Za-z0-9_-]{32,}/,
 	/r8_[A-Za-z0-9]{37}(?![A-Za-z0-9_])/, // Replicate tokens are exactly 40 characters.
 	// Cerebras keys have exactly 48 URL-safe characters; boundaries avoid `pcsk_` collisions.
