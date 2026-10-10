@@ -60,9 +60,13 @@ export const WINDOW_BASE_NAME_TITLE_FORMAT =
 export const WINDOW_TITLE_MARKED_VALUE_FORMAT = `#{?${WINDOW_NAME_IS_MARKED_BASE_FORMAT},marked,unmarked}`;
 export const WINDOW_BASE_NAME_HAS_LITERAL_PREFIX_FORMAT =
 	`#{?#{==:#{s/^\\* //:${WINDOW_BASE_NAME_VALUE_FORMAT}},${WINDOW_BASE_NAME_VALUE_FORMAT}},0,1}`;
-// The fixed suffix advertises session-name base-option support; the PID scopes
-// numeric tmux IDs to the server process that produced this snapshot.
+// The session field advertises base-option support, server identity, and whether
+// the session name contains backslashes (including tmux's control-character escapes).
+export const SESSION_NAME_MAY_NOT_ROUND_TRIP_FORMAT = `#{?#{m:*\\\\*,#{session_name}},1,0}`;
 export const WINDOW_INFO_FORMAT = `#{session_id}:1:#{pid}\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
+// The controller's snapshot adds a name-safety bit without changing the public format.
+export const WINDOW_INFO_INTERNAL_FORMAT =
+	`#{session_id}:1:#{pid}:${SESSION_NAME_MAY_NOT_ROUND_TRIP_FORMAT}\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
 // Diagnostics omit names and dialogue, reading all flags in one server snapshot.
 export const STATUS_INFO_FORMAT = `#{session_id}\t#{window_id}\t${WAITING_FLAG_FORMAT}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{?${SESSION_WAITING_FORMAT},1,0}`;
 // Keep the public status format stable while including identity in the controller's private snapshot.
@@ -147,14 +151,15 @@ export type WindowSnapshot = {
 	title: string;
 	waiting: boolean;
 	sessionMetadataAvailable: boolean;
+	sessionNameMayNotRoundTrip?: boolean;
 	server?: string;
 };
 
 export async function readWindowTitle(tmux: RunTmux, target: string, signal: AbortSignal): Promise<WindowSnapshot> {
-	const info = await tmux(["display-message", "-p", "-t", target, WINDOW_INFO_FORMAT], signal);
+	const info = await tmux(["display-message", "-p", "-t", target, WINDOW_INFO_INTERNAL_FORMAT], signal);
 	const [sessionField, window, windowWaiting, ...titleParts] = info.split("\t");
 	// Keep an empty PID valid for older tmux servers and injected adapters.
-	const sessionMetadata = /^(\$\d+):1(?::(\d*))?$/.exec(sessionField);
+	const sessionMetadata = /^(\$\d+):1(?::(\d*))?(?::([01]))?$/.exec(sessionField);
 	const legacySession = /^(\$\d+)$/.exec(sessionField);
 	const session = sessionMetadata?.[1] ?? legacySession?.[1];
 	if (!session || !/^@\d+$/.test(window) || !/^[01]$/.test(windowWaiting) || !titleParts.length) {
@@ -163,6 +168,7 @@ export async function readWindowTitle(tmux: RunTmux, target: string, signal: Abo
 	return {
 		session, window, title: titleParts.join("\t"), waiting: windowWaiting === "1",
 		sessionMetadataAvailable: sessionMetadata !== null,
+		sessionNameMayNotRoundTrip: sessionMetadata?.[3] === undefined ? undefined : sessionMetadata[3] === "1",
 		server: sessionMetadata?.[2] || undefined,
 	};
 }
