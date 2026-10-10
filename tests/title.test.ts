@@ -670,6 +670,36 @@ test("ignores oversized commentary when a bounded final answer is available", as
 	expect(f.warnings).toEqual([]);
 });
 
+test("treats an oversized phase signature as unrecognized metadata without parsing it", async () => {
+	const textSignature = JSON.stringify({ v: 1, phase: "final_answer", extra: "x".repeat(4 * 1024) });
+	const result = {
+		...response(""),
+		content: [{ type: "text", text: "fix auth tests", textSignature }],
+	};
+	const f = fixture([Promise.resolve(result)]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(f.warnings).toEqual(["The naming model did not return a final answer; the current title was kept."]);
+});
+
+test("a normal final answer remains selectable beside oversized unrecognized metadata", async () => {
+	const textSignature = JSON.stringify({ v: 1, phase: "commentary", extra: "x".repeat(4 * 1024) });
+	const result = {
+		...response(""),
+		content: [
+			{ type: "text", text: "commentary not used", textSignature },
+			{ type: "text", text: "fix auth tests", textSignature: JSON.stringify({ v: 1, phase: "final_answer" }) },
+		],
+	};
+	const f = fixture([Promise.resolve(result)]);
+	f.input("Name a task");
+	await settle();
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.warnings).toEqual([]);
+});
+
 test("uses only final_answer text blocks when available", async () => {
 	const result = {
 		...response(""),

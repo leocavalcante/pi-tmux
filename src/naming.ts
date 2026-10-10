@@ -7,6 +7,7 @@ export const MAX_HISTORY_MESSAGES = 8;
 export const NAMING_REQUEST_TIMEOUT_MS = 15_000;
 // Providers can ignore maxTokens; keep response validation's extra string work bounded.
 const MAX_NAMING_OUTPUT_LENGTH = 64 * 1024;
+const MAX_TEXT_SIGNATURE_LENGTH = 4 * 1024;
 const MAX_HISTORY_TEXT_LENGTH = 1_000;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
@@ -59,6 +60,8 @@ function hasSensitiveOutput(text: string): boolean {
 
 function getTextPhase(textSignature: string | undefined): string | undefined {
 	if (!textSignature) return;
+	// Oversized metadata is unrecognized, but must still disable the metadata-free fallback.
+	if (textSignature.length > MAX_TEXT_SIGNATURE_LENGTH) return "unrecognized";
 	try {
 		const parsed: unknown = JSON.parse(textSignature);
 		if (typeof parsed !== "object" || parsed === null) return;
