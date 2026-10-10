@@ -2803,3 +2803,27 @@ test("tmux failures are contained and warn only once", async () => {
 	expect(f.warnings).toHaveLength(1);
 	expect(f.requests).toHaveLength(0);
 });
+
+test("a throwing warning notification does not poison later tmux updates", async () => {
+	process.env.PI_TMUX_MODEL = "off";
+	let failFirstLookup = true;
+	const f = fixture([], async (args) => {
+		if (failFirstLookup && args[0] === "display-message") {
+			failFirstLookup = false;
+			throw new Error("Synthetic tmux failure");
+		}
+	});
+	let throwWarning = true;
+	(f.ctx.ui as any).notify = (text: string, level: string) => {
+		if (throwWarning && level === "warning") throw new Error("UI is disposed");
+		(level === "warning" ? f.warnings : f.notices).push(text);
+	};
+
+	await f.emit("agent_settled");
+	expect(f.state.waitingPanes.size).toBe(0);
+	throwWarning = false;
+	await f.refresh("sync");
+	expect(f.state.waitingPanes.get("%1")).toBe("1");
+	expect(f.state.title).toBe("* existing task");
+	expect(f.notices).toContain("tmux title and waiting markers synchronized.");
+});
