@@ -127,7 +127,7 @@ const DYNATRACE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])dt0c01\.[A-Za-z0-9]{24}\.[
 const RESEND_API_KEY_PATTERN = /(?<![A-Za-z0-9_])re_[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-])/;
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
-	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/[^\s/:@]+:[^\s/@]+@/i,
+	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
 	AZURE_SAS_PATTERN,
 	AZURE_DEVOPS_PAT_PATTERN,
 	GITLAB_RUNNER_AUTH_TOKEN_PATTERN,
