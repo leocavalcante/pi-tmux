@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createController } from "./controller.ts";
+import { notifySafely } from "./notify.ts";
 import { cleanTitle } from "./title.ts";
 import { runTmux, type RunTmux } from "./tmux.ts";
 
@@ -26,12 +27,12 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			const command = args.trim();
 			const set = /^set(?:\s+([\s\S]*))?$/.exec(command);
 			if (command && !["auto", "status", "sync"].includes(command) && !set) {
-				ctx.ui.notify("Usage: /tmux-title [set <name> | auto | status | sync]", "warning");
+				notifySafely(ctx, "Usage: /tmux-title [set <name> | auto | status | sync]", "warning");
 				return;
 			}
 			const pane = controller.getPane(ctx);
 			if (!pane) {
-				ctx.ui.notify("Title commands require interactive Pi inside tmux.", "warning");
+				notifySafely(ctx, "Title commands require interactive Pi inside tmux.", "warning");
 				return;
 			}
 			if (command === "status") {
@@ -45,7 +46,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			if (set) {
 				const title = cleanTitle(set[1] ?? "");
 				if (!title) {
-					ctx.ui.notify("Provide a title containing letters or numbers: /tmux-title set <name>", "warning");
+					notifySafely(ctx, "Provide a title containing letters or numbers: /tmux-title set <name>", "warning");
 					return;
 				}
 				await controller.pinTitle(ctx, pane, title);

@@ -2932,3 +2932,31 @@ test("a throwing warning notification does not poison later tmux updates", async
 	expect(f.state.title).toBe("* existing task");
 	expect(f.notices).toContain("tmux title and waiting markers synchronized.");
 });
+
+test("a failed status notification is not misreported as a tmux failure", async () => {
+	const f = fixture();
+	let calls = 0;
+	(f.ctx.ui as any).notify = (text: string, level: string) => {
+		calls++;
+		if (level === "info") throw new Error("UI is disposed");
+		f.warnings.push(text);
+	};
+
+	await expect(f.refresh("status")).resolves.toBeUndefined();
+	expect(calls).toBe(1);
+	expect(f.warnings).toEqual([]);
+	expect(f.calls).toHaveLength(1);
+});
+
+test("disposed UI notifications do not reject successful title commands", async () => {
+	process.env.PI_TMUX_MODEL = "off";
+	const f = fixture([]);
+	(f.ctx.ui as any).notify = () => { throw new Error("UI is disposed"); };
+
+	await expect(f.refresh("set pinned task")).resolves.toBeUndefined();
+	expect(f.state.title).toBe("pinned task");
+	await expect(f.refresh("sync")).resolves.toBeUndefined();
+	await expect(f.refresh("status")).resolves.toBeUndefined();
+	await expect(f.refresh("unknown command")).resolves.toBeUndefined();
+	await expect(f.refresh("auto")).resolves.toBeUndefined();
+});
