@@ -967,6 +967,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 	const shortPassword = `password=${"S".repeat(12)}`;
 	await suppressed(fixture(), `Review the configuration ${shortPassword}`, shortPassword);
+	const awsSecretAccessKey = `AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`;
+	await suppressed(fixture(), `Review the deployment config ${awsSecretAccessKey}`, awsSecretAccessKey);
 	const obfuscatedPassword = `passphrase=${"P".repeat(5)}\u200b${"P".repeat(5)}`;
 	await suppressed(fixture(), `Review the configuration ${obfuscatedPassword}`, obfuscatedPassword);
 
@@ -1026,7 +1028,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	expect(unlabeledNumbers.warnings).toEqual([]);
 
 	const placeholderPassword = fixture([Promise.resolve(response("review docs"))]);
-	placeholderPassword.input("Review docs with password=placeholder, passphrase=example, and token: placeholder");
+	placeholderPassword.input("Review docs with password=placeholder, passphrase=example, token: placeholder, and AWS_SECRET_ACCESS_KEY=example");
 	await settle();
 	expect(placeholderPassword.requests).toHaveLength(1);
 	expect(placeholderPassword.state.title).toBe("review docs");
@@ -1081,6 +1083,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
 	const outputs = [
 		`password=${"S".repeat(12)}`,
+		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		["gh", "p_", "a".repeat(36)].join(""),
 		["gsk_", "a".repeat(24)].join(""),
@@ -3353,6 +3356,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		token,
 		`auth integration ${token}`,
 		`client_secret=${"B".repeat(24)}`,
+		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`password=${"P".repeat(12)}`,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		`ghp_${"C".repeat(10)}\u200b${"C".repeat(10)}`,
