@@ -41,9 +41,8 @@ export class InvalidNamingTitleError extends Error {
 
 // Defense in depth for common formats; this intentionally is not a general
 // secret or personal-information scanner. Check raw and compatibility-normalized
-// text because title cleanup can lowercase or clip recognizable tokens. Also
-// remove whitespace and invisible separators because cleanup turns them into spaces.
-// Do not use word boundaries in either detector: title cleanup preserves adjacent ASCII word chars.
+// text because title cleanup can lowercase or clip recognizable tokens. Raw patterns
+// match substrings to catch values adjacent to ASCII word characters.
 const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	/(?:AKIA|ASIA)[0-9A-Z]{16}/,
@@ -60,15 +59,20 @@ const CREDENTIAL_LIKE_PATTERNS = [
 ];
 
 const EMAIL_ADDRESS_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+// Compacted scans require a left boundary so unrelated title words do not combine into tokens.
+const SEPARATOR_TOLERANT_PATTERNS = [...CREDENTIAL_LIKE_PATTERNS, EMAIL_ADDRESS_PATTERN].map(
+	(pattern) => new RegExp(`(?<![A-Za-z0-9])(?:${pattern.source})`, pattern.flags),
+);
 
 function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value)) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) =>
-		hasPattern(value) || hasPattern(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, ""));
+		SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "")));
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
-	return hasPatternWithSeparatorsRemoved(text)
-		|| hasPatternWithSeparatorsRemoved(compatibilityNormalized)
+	return hasPattern(text) || hasPatternWithSeparatorsRemoved(text)
+		|| hasPattern(compatibilityNormalized) || hasPatternWithSeparatorsRemoved(compatibilityNormalized)
+		|| hasPattern(compatibilityNormalized.toLowerCase())
 		|| hasPatternWithSeparatorsRemoved(compatibilityNormalized.toLowerCase());
 }
 
