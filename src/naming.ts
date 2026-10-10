@@ -44,6 +44,7 @@ export class InvalidNamingTitleError extends Error {
 // text because title cleanup can lowercase or clip recognizable tokens. Raw patterns
 // match substrings to catch values adjacent to ASCII word characters.
 const BEARER_TOKEN_PATTERN = /Bearer\s+([A-Za-z0-9._~+/=-](?:\s*[A-Za-z0-9._~+/=-]){15,})/i;
+const US_SSN_PATTERN = /(?<![A-Za-z0-9])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?\d{3}[-\s]?\d{2}[-\s]?\d{4}(?![A-Za-z0-9_])/i;
 // Require an explicit assignment and a long token-like value; don't compact ordinary spaces.
 const LABELED_CREDENTIAL_PATTERN = /(?:api[-_\s]?key|access[-_\s]?token|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|secret(?:[-_\s]?key)?|passphrase|password|credential|token)\s*["']?\s*[:=]\s*["']?[A-Za-z0-9._~+/=-]{20,}/i;
 const CREDENTIAL_LIKE_PATTERNS = [
@@ -74,7 +75,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 
 const EMAIL_ADDRESS_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 // Compacted scans require a left boundary so unrelated title words do not combine into tokens.
-const SEPARATOR_TOLERANT_PATTERNS = [...CREDENTIAL_LIKE_PATTERNS, BEARER_TOKEN_PATTERN, EMAIL_ADDRESS_PATTERN].map(
+const SEPARATOR_TOLERANT_PATTERNS = [...CREDENTIAL_LIKE_PATTERNS, BEARER_TOKEN_PATTERN, US_SSN_PATTERN, EMAIL_ADDRESS_PATTERN].map(
 	(pattern) => new RegExp(`(?<![A-Za-z0-9])(?:${pattern.source})`, pattern.flags),
 );
 
@@ -96,7 +97,7 @@ function hasBearerToken(value: string): boolean {
 function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
-			|| hasBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value);
+			|| hasBearerToken(value) || US_SSN_PATTERN.test(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) =>
 		SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "")));
 	const hasLabeledCredential = (value: string) => LABELED_CREDENTIAL_PATTERN.test(value)
