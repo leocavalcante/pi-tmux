@@ -1148,6 +1148,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 
 	const databaseUrl = "postgres://test-user:example-only-password@db.example.test/app";
 	await suppressed(fixture(), `Review the database connection ${databaseUrl}`, databaseUrl);
+	const redisUrlWithoutUsername = "redis://:example-only-password@localhost:6379/0";
+	await suppressed(
+		fixture(), `Review the database connection ${redisUrlWithoutUsername}`, redisUrlWithoutUsername,
+	);
 	const obfuscatedUrl = "postgres://test-user:example-only-\u200bpassword@db.example.test/app";
 	await suppressed(fixture(), `Review the database connection ${obfuscatedUrl}`, obfuscatedUrl);
 	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
@@ -1277,6 +1281,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	expect(uriWithoutPassword.state.title).toBe("review database");
 	expect(uriWithoutPassword.warnings).toEqual([]);
 
+	for (const uri of ["redis://@localhost:6379/0", "redis://:@localhost:6379/0"]) {
+		expect(hasSensitiveNamingContext(uri)).toBe(false);
+		expect(hasSensitiveOutput(uri)).toBe(false);
+	}
+
 	const unlabeledNumbers = fixture([Promise.resolve(response("review record"))]);
 	unlabeledNumbers.input("Review record 000-00-0000 and 0000000");
 	await settle();
@@ -1397,6 +1406,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		...basicAuthHeaders,
 		azureSasUrl,
 		"postgres://test-user:example-only-password@db.example.test/app",
+		"redis://:example-only-password@localhost:6379/0",
 		["gh", "p_", "a".repeat(36)].join(""),
 		["gsk_", "a".repeat(24)].join(""),
 		["fw_", "A".repeat(40)].join(""),
@@ -4029,12 +4039,17 @@ test("sensitive-looking idle titles are replaced by zsh before cleanup", async (
 });
 
 test("credential-bearing URLs in idle titles fall back without disclosure", async () => {
-	process.env.PI_TMUX_IDLE_TITLE = "postgres://test-user:example-only-password@db.example.test/app";
-	const f = fixture([]);
-	await f.emit("session_start");
-	await f.emit("session_shutdown", "quit");
-	expect(f.state.title).toBe("zsh");
-	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat("zsh")]);
+	for (const idleTitle of [
+		"postgres://test-user:example-only-password@db.example.test/app",
+		"redis://:example-only-password@localhost:6379/0",
+	]) {
+		process.env.PI_TMUX_IDLE_TITLE = idleTitle;
+		const f = fixture([]);
+		await f.emit("session_start");
+		await f.emit("session_shutdown", "quit");
+		expect(f.state.title).toBe("zsh");
+		expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat("zsh")]);
+	}
 });
 
 test("obfuscated sensitive idle titles also fall back without disclosure", async () => {
