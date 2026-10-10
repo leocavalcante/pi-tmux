@@ -979,6 +979,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Google OAuth access ${googleOAuthAccessToken}`, googleOAuthAccessToken);
 	const obfuscatedGoogleOAuthAccessToken = `ya29.${"A".repeat(16)}\u200b${"B".repeat(16)}`;
 	await suppressed(fixture(), `Review Google OAuth access ${obfuscatedGoogleOAuthAccessToken}`, obfuscatedGoogleOAuthAccessToken);
+	const googleOAuthClientSecret = `GOCSPX-${"A".repeat(32)}`;
+	await suppressed(fixture(), `Review Google OAuth client ${googleOAuthClientSecret}`, googleOAuthClientSecret);
+	const obfuscatedGoogleOAuthClientSecret = `GOCSPX-${"A".repeat(16)}\u200b${"B".repeat(16)}`;
+	await suppressed(fixture(), `Review Google OAuth client ${obfuscatedGoogleOAuthClientSecret}`, obfuscatedGoogleOAuthClientSecret);
 	const datadogApiKey = "A1b2".repeat(10);
 	await suppressed(fixture(), `Review the config Datadog: ${datadogApiKey}`, datadogApiKey);
 	const mailgunPrivateApiToken = `key-${"a1b2".repeat(8)}`;
@@ -1805,6 +1809,44 @@ test("rejects Google API keys without mistaking near-misses for keys", async () 
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("google api tests");
 		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Google OAuth client secrets without mistaking near-misses for secrets", async () => {
+	const secretFor = (suffix = "A".repeat(32)) => `GOCSPX-${suffix}`;
+	const secret = secretFor("A1_b-".repeat(6));
+	const obfuscatedSecret = `GOCSPX-${"A".repeat(16)}\u200b${"B".repeat(16)}`;
+	const secretWithContext = `Review Google OAuth client ${obfuscatedSecret}`;
+	expect(hasSensitiveNamingContext(secretWithContext)).toBe(true);
+	expect(hasSensitiveOutput(secretWithContext)).toBe(true);
+	for (const sensitiveSecret of [secret, obfuscatedSecret]) {
+		expect(hasSensitiveNamingContext(sensitiveSecret)).toBe(true);
+		expect(hasSensitiveOutput(sensitiveSecret)).toBe(true);
+		const f = fixture([Promise.resolve(response(sensitiveSecret))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(sensitiveSecret);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("google oauth client"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("google oauth client");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		secretFor("A".repeat(19)),
+		secret.replace("GOCSPX", "GOCSPY"),
+		`x${secret}`,
+		`_${secret}`,
+	];
+	for (const nearMiss of nearMisses) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
 	}
 });
 
