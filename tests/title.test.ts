@@ -1534,6 +1534,38 @@ test("projection-aware naming context reads the checkpoint summary and skips old
 	expect(readDiscardedRole).toBe(false);
 });
 
+test("projection naming context bounds scans through long tool-only runs", () => {
+	let readOlderRole = false;
+	const older = {} as any;
+	Object.defineProperty(older, "role", {
+		get() {
+			readOlderRole = true;
+			throw new Error("A tool-heavy history scan should stop at its budget");
+		},
+	});
+	const recent = { role: "user", content: "recent task" };
+	const messages = [older, ...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })), recent];
+	const projection = {
+		entries: [{ sourceEntry: { type: "message" }, messages: [] }],
+		messages,
+		thinkingLevel: "off",
+		model: null,
+	} as any;
+
+	expect(buildNamingContext(projection, "continue")).toBe("user: recent task\n\nuser: continue");
+	expect(readOlderRole).toBe(false);
+});
+
+test("messages-only naming context still finds compaction summaries in long histories", () => {
+	const messages = [
+		{ role: "compactionSummary", summary: "preserved summary" },
+		...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })),
+		{ role: "user", content: "recent task" },
+	];
+
+	expect(buildNamingContext(messages as any)).toBe("summary: preserved summary\n\nuser: recent task");
+});
+
 test("naming context does not read text from history older than its retained window", () => {
 	let readDiscardedContent = false;
 	const discarded = { role: "user" } as any;
