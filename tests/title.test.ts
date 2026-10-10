@@ -991,6 +991,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	for (const token of shopifyTokens) {
 		await suppressed(fixture(), `Review Shopify access ${token}`, token);
 	}
+	const shippoTokens = ["live", "test"].map((mode) => `shippo_${mode}_${"a".repeat(40)}`);
+	for (const token of shippoTokens) {
+		await suppressed(fixture(), `Review Shippo access ${token}`, token);
+	}
 	const sourcegraphToken = `sgp_${"a".repeat(40)}`;
 	const sourcegraphSegmentedToken = `sgp_${"b".repeat(16)}_${"c".repeat(40)}`;
 	const sourcegraphLocalToken = `sgp_local_${"d".repeat(40)}`;
@@ -1143,6 +1147,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithShopifyToken = fixture();
 	historyWithShopifyToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${shopifyTokens[1]!}` }] });
 	await suppressed(historyWithShopifyToken, "Continue the task", shopifyTokens[1]!);
+	const historyWithShippoToken = fixture();
+	historyWithShippoToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${shippoTokens[0]!}` }] });
+	await suppressed(historyWithShippoToken, "Continue the task", shippoTokens[0]!);
 	const historyWithSourcegraphToken = fixture();
 	historyWithSourcegraphToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${sourcegraphSegmentedToken}` }] });
 	await suppressed(historyWithSourcegraphToken, "Continue the task", sourcegraphSegmentedToken);
@@ -1995,6 +2002,56 @@ test("rejects Shopify app tokens without mistaking near-miss strings for tokens"
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("shopify app tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Shippo API tokens without mistaking near-miss strings for tokens", async () => {
+	const tokenFor = (mode: string, body = "a".repeat(40)) => `shippo_${mode}_${body}`;
+	const tokens = [tokenFor("live"), tokenFor("test")];
+	for (const token of tokens) {
+		const outputs = [
+			token,
+			token.toUpperCase(),
+			`configure-${token}`,
+			token.replace("shippo", "shi\u200bppo"),
+			`${token.slice(0, 24)}\u200b${token.slice(24)}`,
+		];
+		for (const output of outputs) {
+			const f = fixture([Promise.resolve(response(output))]);
+			f.input("Name a task");
+			await settle();
+			expect(f.state.title).toBe("existing task");
+			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+			expect(f.warnings.join(" ")).not.toContain(token);
+		}
+	}
+
+	const shortName = fixture([Promise.resolve(response("shippo label setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("shippo label setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = [
+		tokenFor("live", "a".repeat(39)),
+		tokenFor("test", "a".repeat(41)),
+		tokenFor("live", "g".repeat(40)),
+		tokenFor("sandbox"),
+		`x${tokens[0]}`,
+		`_${tokens[0]}`,
+		`${tokens[0]}x`,
+		`${tokens[0]}_x`,
+		`${tokens[0]}-x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("shippo label tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("shippo label tests");
 		expect(f.warnings).toEqual([]);
 	}
 });
@@ -4127,6 +4184,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 	const sensitiveTitles = [
 		token,
 		`auth integration ${token}`,
+		`shippo_live_${"a".repeat(40)}`,
+		`shippo_test_${"b".repeat(40)}`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
