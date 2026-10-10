@@ -108,6 +108,8 @@ const GITLAB_RUNNER_AUTH_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])glrt-[A-Za-z0-9_-]{2
 // Docker Hub personal and organization access tokens have fixed-length bodies.
 const DOCKER_HUB_PAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_pat_[A-Za-z0-9_-]{27}(?![A-Za-z0-9_-])/;
 const DOCKER_HUB_OAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_oat_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/;
+// PyPI and TestPyPI API tokens encode their registry in a distinctive prefix.
+const PYPI_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])pypi-(?:AgEIcHlwaS5vcmc|AgENdGVzdC5weXBpLm9yZw)[A-Za-z0-9_-]{50,1000}(?![A-Za-z0-9_-])/;
 // Datadog API keys are 40 alphanumeric characters; require a nearby Datadog label.
 const DATADOG_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?datadog[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[A-Za-z0-9]{40}(?![A-Za-z0-9_-])/i;
 // Mailgun private API tokens use `key-` plus 32 hex characters and a Mailgun label.
@@ -131,6 +133,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	GITLAB_RUNNER_AUTH_TOKEN_PATTERN,
 	DOCKER_HUB_PAT_PATTERN,
 	DOCKER_HUB_OAT_PATTERN,
+	PYPI_API_TOKEN_PATTERN,
 	DATADOG_API_KEY_PATTERN,
 	MAILGUN_PRIVATE_API_TOKEN_PATTERN,
 	ARTIFACTORY_API_KEY_PATTERN,

@@ -1677,6 +1677,48 @@ test("rejects Docker Hub personal and organization tokens without mistaking near
 	}
 });
 
+test("rejects PyPI API tokens without mistaking near-misses for tokens", async () => {
+	const body = ("A1b2_-".repeat(12)).slice(0, 70);
+	const prefixes = ["pypi-AgEIcHlwaS5vcmc", "pypi-AgENdGVzdC5weXBpLm9yZw"];
+	const tokens = prefixes.map((prefix) => `${prefix}${body}`);
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const value of tokens) {
+		const obfuscated = value.replace("pypi-", "pyp\u200bi-");
+		for (const sensitiveToken of [value, obfuscated]) {
+			expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
+			expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
+
+			const input = fixture();
+			const find = spyOn(input.ctx.modelRegistry, "find");
+			input.input(`Review package publishing ${sensitiveToken}`);
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(input.requests).toHaveLength(0);
+			expect(input.warnings).toEqual([contextWarning]);
+			expect(input.warnings.join(" ")).not.toContain(value);
+
+			const output = fixture([Promise.resolve(response(sensitiveToken))]);
+			output.input("Name a task");
+			await settle();
+			expect(output.state.title).toBe("existing task");
+			expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+			expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+			expect(output.warnings.join(" ")).not.toContain(value);
+		}
+	}
+
+	for (const nearMiss of [
+		`${prefixes[0]}${body.slice(0, 49)}`,
+		`pypx-${body}`,
+		`x${tokens[0]}`,
+		`_${tokens[1]}`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("rejects labeled Datadog API keys without mistaking near-misses for keys", async () => {
 	const keyValue = "A1b2".repeat(10);
 	const outputs = [
