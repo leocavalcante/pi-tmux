@@ -57,6 +57,9 @@ const LABELED_PHONE_PATTERN = /(?<![A-Za-z0-9])(?:phone|telephone|mobile|cell(?:
 const LABELED_PAYMENT_CARD_PATTERN = /(?<![A-Za-z0-9])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no))?|card(?:[-_\s]?(?:number|no))?|cc[-_\s]?(?:number|no)|ccn)\s*["']?\s*[:=]\s*["']?(\d(?:[ .()-]?\d){12,18})(?![A-Za-z0-9_])/i;
 // Require an explicit assignment and a long token-like value; don't compact ordinary spaces.
 const LABELED_CREDENTIAL_PATTERN = /(?:api[-_\s]?key|access[-_\s]?token|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|secret(?:[-_\s]?key)?|passphrase|password|credential|token)\s*["']?\s*[:=]\s*["']?[A-Za-z0-9._~+/=-]{20,}/i;
+// Passwords are often shorter than API tokens. Catch non-placeholder values
+// from explicit password/passphrase assignments without broadening other labels.
+const LABELED_PASSWORD_PATTERN = /(?:passphrase|password)\s*["']?\s*[:=]\s*["']?(?!(?:placeholder|example|redacted|changeme|change[_-]?me|your[_-]?password)\b)[A-Za-z0-9._~+/=-]{8,}/i;
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/[^\s/:@]+:[^\s/@]+@/i,
@@ -159,18 +162,29 @@ function hasBearerToken(value: string): boolean {
 	return false;
 }
 
+function hasLabeledCredential(value: string): boolean {
+	const withoutControls = value.replace(/[\p{Cc}\p{Cf}]+/gu, "");
+	return LABELED_CREDENTIAL_PATTERN.test(value) || LABELED_PASSWORD_PATTERN.test(value)
+		|| LABELED_CREDENTIAL_PATTERN.test(withoutControls) || LABELED_PASSWORD_PATTERN.test(withoutControls);
+}
+
 // Check credentials and high-confidence personal-data formats before transmission.
 // These PII patterns require conventional email syntax or explicit labels; avoid
 // broad checks for names and other personal data that suppress ordinary titles.
 export function hasSensitiveNamingContext(text: string): boolean {
 	const hasSensitiveValue = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
-		|| hasBearerToken(value) || LABELED_CREDENTIAL_PATTERN.test(value) || EMAIL_ADDRESS_PATTERN.test(value)
+		|| hasBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
 		|| US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
-	const hasSensitiveValueWithSeparatorsRemoved = (value: string) =>
-		hasSensitiveValue(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, ""));
+	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
+		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
+		return CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
+			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_SSN_PATTERN.test(compacted)
+			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
+	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	return [text, compatibilityNormalized, compatibilityNormalized.toLowerCase()]
-		.some((value) => hasSensitiveValue(value) || hasSensitiveValueWithSeparatorsRemoved(value));
+		.some((value) => hasSensitiveValue(value) || hasSensitiveValueWithSeparatorsRemoved(value)
+			|| hasLabeledCredential(value));
 }
 
 export function hasSensitiveOutput(text: string): boolean {
@@ -183,8 +197,6 @@ export function hasSensitiveOutput(text: string): boolean {
 		return SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
 			|| hasLabeledPaymentCard(compacted);
 	};
-	const hasLabeledCredential = (value: string) => LABELED_CREDENTIAL_PATTERN.test(value)
-		|| LABELED_CREDENTIAL_PATTERN.test(value.replace(/[\p{Cc}\p{Cf}]+/gu, ""));
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	return hasPattern(text) || hasPatternWithSeparatorsRemoved(text) || hasLabeledCredential(text)
 		|| hasPattern(compatibilityNormalized) || hasPatternWithSeparatorsRemoved(compatibilityNormalized)
