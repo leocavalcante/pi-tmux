@@ -946,6 +946,65 @@ test("does not apply a short-looking response truncated by the token limit", asy
 	expect(f.warnings).toEqual(["The naming model hit its token limit before finishing a title; the current title was kept."]);
 });
 
+test("credential-looking prompts and recent history never reach the naming model", async () => {
+	const token = ["ghp_", "A".repeat(20)].join("");
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	const suppressed = async (f: ReturnType<typeof fixture>, prompt: string, sensitiveText = token) => {
+		const find = spyOn(f.ctx.modelRegistry, "find");
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(sensitiveText);
+	};
+
+	await suppressed(fixture(), `Review the auth flow with ${token}`);
+	const labeledCredential = `client_secret=${"C".repeat(24)}`;
+	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
+
+	const history = fixture();
+	history.messages.push({ role: "assistant", content: [{ type: "text", text: `The test fixture includes ${token}` }] });
+	await suppressed(history, "Continue the task");
+
+	const obfuscated = `ghp_${"A".repeat(10)}\u200b${"A".repeat(10)}`;
+	await suppressed(fixture(), `Review ${obfuscated}`);
+
+	const compatibilityToken = [...token]
+		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
+	await suppressed(fixture(), `Review ${compatibilityToken}`);
+
+	const nearMiss = fixture([Promise.resolve(response("fix auth tests"))]);
+	nearMiss.input(`Review ghp_${"A".repeat(19)}`);
+	await settle();
+	expect(nearMiss.requests).toHaveLength(1);
+	expect(nearMiss.state.title).toBe("fix auth tests");
+	expect(nearMiss.warnings).toEqual([]);
+});
+
+test("new credential-looking context cancels in-flight naming without sending it", async () => {
+	const result = deferred();
+	const f = fixture([result.promise]);
+	f.input("Fix auth tests");
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	const previousSignal = f.requests[0].options.signal as AbortSignal;
+	const find = spyOn(f.ctx.modelRegistry, "find");
+	const token = ["ghp_", "B".repeat(20)].join("");
+	f.input(`Use ${token} to test the integration`);
+	await settle();
+	expect(previousSignal.aborted).toBe(true);
+	expect(find).not.toHaveBeenCalled();
+	expect(f.requests).toHaveLength(1);
+	expect(f.state.title).toBe("existing task");
+	expect(f.warnings).toEqual(["Sensitive-looking task context was not sent to the naming model; the current title was kept."]);
+	expect(f.warnings.join(" ")).not.toContain(token);
+	result.resolve(response("fix auth tests"));
+	await settle();
+	expect(f.state.title).toBe("existing task");
+});
+
 test("credential-shaped model output is rejected without applying or disclosing it", async () => {
 	const githubToken = ["ghp_", "a".repeat(20)].join("");
 	const replicateToken = ["r8_", "M".repeat(37)].join("");

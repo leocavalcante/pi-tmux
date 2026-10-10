@@ -23,6 +23,13 @@ export class UnsafeNamingOutputError extends Error {
 	}
 }
 
+export class UnsafeNamingContextError extends Error {
+	constructor() {
+		super("Naming context looked like it contained a credential");
+		this.name = "UnsafeNamingContextError";
+	}
+}
+
 export type InvalidNamingTitleReason =
 	| "truncated"
 	| "no-final-answer"
@@ -148,6 +155,18 @@ function hasBearerToken(value: string): boolean {
 			|| /^(.)\1{7,}$/u.test(firstFragment)) return true;
 	}
 	return false;
+}
+
+// Check only likely credentials before transmission; personal-data checks remain
+// output-only to avoid suppressing titles for ordinary dialogue that mentions people.
+function hasSensitiveNamingContext(text: string): boolean {
+	const hasCredential = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
+		|| hasBearerToken(value) || LABELED_CREDENTIAL_PATTERN.test(value);
+	const hasCredentialWithSeparatorsRemoved = (value: string) =>
+		hasCredential(value.replace(/[\s\p{Cc}\p{Cf}]+/gu, ""));
+	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
+	return [text, compatibilityNormalized, compatibilityNormalized.toLowerCase()]
+		.some((value) => hasCredential(value) || hasCredentialWithSeparatorsRemoved(value));
 }
 
 function hasSensitiveOutput(text: string): boolean {
@@ -391,6 +410,8 @@ export async function requestNamingTitle(
 	signal: AbortSignal,
 	isCurrent: () => boolean,
 ): Promise<string | undefined> {
+	if (signal.aborted || !isCurrent()) return;
+	if (hasSensitiveNamingContext(text)) throw new UnsafeNamingContextError();
 	const model = ctx.modelRegistry.find(modelConfig.provider, modelConfig.id);
 	if (signal.aborted || !isCurrent()) return;
 	if (!model || !ctx.modelRegistry.hasConfiguredAuth(model)) {

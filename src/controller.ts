@@ -2,6 +2,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	buildNamingContext,
 	InvalidNamingTitleError,
+	UnsafeNamingContextError,
 	UnsafeNamingOutputError,
 	NAMING_REQUEST_TIMEOUT_MS,
 	parseNamingModel,
@@ -391,11 +392,17 @@ export function createController(tmux: RunTmux) {
 			void refreshTitle(ctx, pane, requestGeneration);
 		} catch (error) {
 			if (!isCurrent()) return;
-			warnOnce(ctx, error instanceof UnsafeNamingOutputError
-				? "Sensitive-looking naming output was not applied."
-				: error instanceof InvalidNamingTitleError
-					? INVALID_NAMING_TITLE_WARNINGS[error.reason]
-					: "tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.");
+			let warning: string;
+			if (error instanceof UnsafeNamingContextError) {
+				warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+			} else if (error instanceof UnsafeNamingOutputError) {
+				warning = "Sensitive-looking naming output was not applied.";
+			} else if (error instanceof InvalidNamingTitleError) {
+				warning = INVALID_NAMING_TITLE_WARNINGS[error.reason];
+			} else {
+				warning = "tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.";
+			}
+			warnOnce(ctx, warning);
 		} finally {
 			clearTimeout(timeout);
 			if (pending === controller) pending = undefined;
