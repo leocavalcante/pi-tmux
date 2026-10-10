@@ -25,6 +25,7 @@ import {
 	SESSION_BASE_NAME_OPTION,
 	SESSION_BASE_NAME_TITLE_FORMAT,
 	SESSION_BASE_NAME_UPDATE_FORMAT,
+	SESSION_NAME_MAY_NOT_ROUND_TRIP_FORMAT,
 	SESSION_TITLE_FORMAT,
 	SESSION_TITLE_MARKED_OPTION,
 	SESSION_TITLE_MARKED_VALUE_FORMAT,
@@ -36,6 +37,7 @@ import {
 	WINDOW_BASE_NAME_TITLE_FORMAT,
 	WINDOW_BASE_NAME_UPDATE_FORMAT,
 	WINDOW_TITLE_MARKED_OPTION,
+	WINDOW_TITLE_LITERAL_PREFIX_OPTION,
 	WINDOW_REPAIR_NEEDED_FORMAT,
 	writeOnServer,
 	type RunTmux,
@@ -95,6 +97,8 @@ export function createController(tmux: RunTmux) {
 		formerWindows.clear();
 		formerSessions.clear();
 		trackedSessions.clear();
+		unsafeSessions.clear();
+		sessionNameSafetyAvailable.clear();
 		lastLocation = undefined;
 		baseTitle = undefined;
 		manualTitle = false;
@@ -123,6 +127,22 @@ export function createController(tmux: RunTmux) {
 	};
 
 	const trackedSessions = new Set<string>();
+	const unsafeSessions = new Set<string>();
+	const sessionNameSafetyAvailable = new Set<string>();
+	const clearSessionBaseTracking = async (target: string, server: string | undefined, signal: AbortSignal) => {
+		await writeOnServer(tmux, server, [
+			"set-option", "-q", "-u", "-t", target, SESSION_BASE_NAME_OPTION,
+			";", "set-option", "-q", "-u", "-t", target, SESSION_TITLE_MARKED_OPTION,
+		], signal);
+	};
+	const clearWindowBaseTracking = async (target: string, server: string | undefined, signal: AbortSignal) => {
+		await writeOnServer(tmux, server, [
+			"set-option", "-q", "-u", "-w", "-t", target, WINDOW_BASE_NAME_OPTION,
+			";", "set-option", "-q", "-u", "-w", "-t", target, WINDOW_TITLE_MARKED_OPTION,
+			";", "set-option", "-q", "-u", "-w", "-t", target, WINDOW_TITLE_LITERAL_PREFIX_OPTION,
+		], signal);
+	};
+
 	const rememberLocation = (location: WindowSnapshot) => {
 		// Once the server changes, the inherited TMUX_PANE could name an unrelated
 		// reused pane. Discard cached IDs and stop writes rather than claim ownership.
@@ -131,6 +151,11 @@ export function createController(tmux: RunTmux) {
 			return;
 		}
 		if (location.sessionMetadataAvailable) trackedSessions.add(location.session);
+		if (location.sessionNameMayNotRoundTrip !== undefined) {
+			sessionNameSafetyAvailable.add(location.session);
+			if (location.sessionNameMayNotRoundTrip) unsafeSessions.add(location.session);
+			else unsafeSessions.delete(location.session);
+		}
 		const queue = (targets: Set<string>, target: string) => {
 			targets.add(target);
 			if (targets.size > MAX_FORMER_TARGETS) targets.delete(targets.values().next().value!);
@@ -141,7 +166,11 @@ export function createController(tmux: RunTmux) {
 				const evicted = formerSessions.values().next().value!;
 				formerSessions.delete(evicted);
 				// Keep metadata for a session that has become current again.
-				if (evicted !== location.session) trackedSessions.delete(evicted);
+				if (evicted !== location.session) {
+					trackedSessions.delete(evicted);
+					unsafeSessions.delete(evicted);
+					sessionNameSafetyAvailable.delete(evicted);
+				}
 			}
 		};
 		if (lastLocation && lastLocation.window !== location.window) queue(formerWindows, lastLocation.window);
@@ -155,25 +184,32 @@ export function createController(tmux: RunTmux) {
 		};
 	};
 
-	const repairFormerLocations = async (server: string | undefined, signal: AbortSignal, isCurrent: () => boolean) => {
+	const repairFormerLocations = async (ctx: ExtensionContext, server: string | undefined, signal: AbortSignal, isCurrent: () => boolean) => {
 		for (const window of [...formerWindows]) {
 			if (!isCurrent()) return;
 			try {
-				const literalPrefix = await hasWindowLiteralPrefix(tmux, window, signal);
+				const title = await tmux(["display-message", "-p", "-t", window, "#{window_name}"], signal);
 				if (!isCurrent()) return;
-				if (literalPrefix) {
-					await writeOnServer(tmux, server, buildWindowBaseTitleUpdateArgs(
-						window, WINDOW_BASE_NAME_UPDATE_FORMAT, true, WINDOW_BASE_NAME_TITLE_FORMAT,
-					), signal);
+				if (/[\p{Cc}\\]/u.test(title)) {
+					await clearWindowBaseTracking(window, server, signal);
+					warnOnce(ctx, "A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.");
 				} else {
-					// -F evaluates a format, not a shell command. Only validated numeric
-					// IDs enter this fixed tmux command; title text is expanded at rename.
-					// Skip unchanged names on the server, preserving automatic-rename even
-					// if a custom unmarked name replaced the stale marker after lookup.
-					await writeOnServer(tmux, server, [
-						"if-shell", "-F", "-t", window, WINDOW_REPAIR_NEEDED_FORMAT,
-						`rename-window -t ${window} -- '${SHARED_WINDOW_TITLE_FORMAT}'`,
-					], signal);
+					const literalPrefix = await hasWindowLiteralPrefix(tmux, window, signal);
+					if (!isCurrent()) return;
+					if (literalPrefix) {
+						await writeOnServer(tmux, server, buildWindowBaseTitleUpdateArgs(
+							window, WINDOW_BASE_NAME_UPDATE_FORMAT, true, WINDOW_BASE_NAME_TITLE_FORMAT,
+						), signal);
+					} else {
+						// -F evaluates a format, not a shell command. Only validated numeric
+						// IDs enter this fixed tmux command; title text is expanded at rename.
+						// Skip unchanged names on the server, preserving automatic-rename even
+						// if a custom unmarked name replaced the stale marker after lookup.
+						await writeOnServer(tmux, server, [
+							"if-shell", "-F", "-t", window, WINDOW_REPAIR_NEEDED_FORMAT,
+							`rename-window -t ${window} -- '${SHARED_WINDOW_TITLE_FORMAT}'`,
+						], signal);
+					}
 				}
 			} catch (error) {
 				// Forget vanished windows, but retry transient failures on the next update.
@@ -185,7 +221,17 @@ export function createController(tmux: RunTmux) {
 		for (const session of [...formerSessions]) {
 			if (!isCurrent()) return;
 			try {
-				if (trackedSessions.has(session)) {
+				let nameMayNotRoundTrip = unsafeSessions.has(session);
+				if (sessionNameSafetyAvailable.has(session)) {
+					nameMayNotRoundTrip = await tmux([
+						"display-message", "-p", "-t", session, SESSION_NAME_MAY_NOT_ROUND_TRIP_FORMAT,
+					], signal) === "1";
+					if (nameMayNotRoundTrip) unsafeSessions.add(session);
+					else unsafeSessions.delete(session);
+				}
+				if (nameMayNotRoundTrip) {
+					await clearSessionBaseTracking(session, server, signal);
+				} else if (trackedSessions.has(session)) {
 					await writeOnServer(tmux, server, [
 						"set-option", "-F", "-t", session, SESSION_BASE_NAME_OPTION, SESSION_BASE_NAME_UPDATE_FORMAT,
 						";", "set-option", "-t", session, SESSION_TITLE_MARKED_OPTION, "transition",
@@ -205,6 +251,8 @@ export function createController(tmux: RunTmux) {
 			if (!isCurrent()) return;
 			formerSessions.delete(session);
 			trackedSessions.delete(session);
+			unsafeSessions.delete(session);
+			sessionNameSafetyAvailable.delete(session);
 		}
 	};
 
@@ -232,7 +280,15 @@ export function createController(tmux: RunTmux) {
 				const before = current;
 				// Keep the user's session name intact, aggregating waiting panes on
 				// the server. Target the pane so writes follow moves after lookup.
-				if (current.sessionMetadataAvailable || trackedSessions.has(current.session)) {
+				if (current.sessionNameMayNotRoundTrip) {
+					await writeOnServer(tmux, current.server ?? lastLocation?.server, [
+						"set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
+						";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
+						";", "set-option", "-q", "-u", "-t", pane, SESSION_BASE_NAME_OPTION,
+						";", "set-option", "-q", "-u", "-t", pane, SESSION_TITLE_MARKED_OPTION,
+					], signal);
+					warnOnce(ctx, "A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.");
+				} else if (current.sessionMetadataAvailable || trackedSessions.has(current.session)) {
 					trackedSessions.add(current.session);
 					await writeOnServer(tmux, current.server ?? lastLocation?.server, [
 						"set-option", "-F", "-t", pane, SESSION_BASE_NAME_OPTION, SESSION_BASE_NAME_UPDATE_FORMAT,
@@ -257,7 +313,7 @@ export function createController(tmux: RunTmux) {
 				if (!isCurrent()) return;
 				const afterWrite = current;
 				if (formerWindows.size || formerSessions.size) {
-					await repairFormerLocations(current.server ?? lastLocation?.server, signal, isCurrent);
+					await repairFormerLocations(ctx, current.server ?? lastLocation?.server, signal, isCurrent);
 					if (!isCurrent()) return;
 					current = await readWindowTitle(tmux, pane, signal);
 					if (!isCurrent()) return;
@@ -290,12 +346,12 @@ export function createController(tmux: RunTmux) {
 				updated = isCurrent() && stable;
 				return;
 			}
-			// tmux's command parser rewrites control characters in names passed through
-			// rename-window (for example, a literal newline becomes the two characters
-			// `\n`). Preserve an existing custom name rather than corrupting it just to
-			// add a waiting prefix; session-level status was already updated above.
-			if (!hasTaskTitle && /[\t\n]/u.test(currentTitle)) {
-				warnOnce(ctx, "A custom window name contains a tab or line feed; its waiting marker was skipped.");
+			// tmux's command parser rewrites control characters and backslashes in names
+			// passed through rename-window. Preserve custom text rather than corrupting
+			// it just to add a waiting prefix; session status was already updated.
+			if (!hasTaskTitle && /[\p{Cc}\\]/u.test(currentTitle)) {
+				await clearWindowBaseTracking(pane, current.server ?? lastLocation?.server, signal);
+				warnOnce(ctx, "A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.");
 				return;
 			}
 			const useWindowBase = windowTitleMark !== undefined

@@ -8,7 +8,7 @@ import piTmux, { SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, type RunTm
 import { supportsUnixTmux } from "./tmux-support.ts";
 
 const hasTmux = supportsUnixTmux(process.platform, Bun.which("tmux"));
-const hasRoundTripUnsafeWindowNames = (() => {
+const supportsControlCharacterNames = (kind: "session" | "window") => {
 	if (!hasTmux) return false;
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-probe-"));
 	const socket = join(directory, "socket");
@@ -16,7 +16,8 @@ const hasRoundTripUnsafeWindowNames = (() => {
 		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
 	});
 	try {
-		run("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Probe", "-n", "probe\tline\n", "/bin/sleep 60");
+		const nameArgs = kind === "session" ? ["-s", "probe\tline\n", "-n", "probe"] : ["-s", "Probe", "-n", "probe\tline\n"];
+		run("new-session", "-d", "-P", "-F", "#{pane_id}", ...nameArgs, "/bin/sleep 60");
 		return true;
 	} catch {
 		return false;
@@ -24,7 +25,9 @@ const hasRoundTripUnsafeWindowNames = (() => {
 		try { run("kill-server"); } catch { /* The server may not have started. */ }
 		rmSync(directory, { recursive: true, force: true });
 	}
-})();
+};
+const hasRoundTripUnsafeWindowNames = supportsControlCharacterNames("window");
+const hasRoundTripUnsafeSessionNames = supportsControlCharacterNames("session");
 let originalModel: string | undefined;
 let originalIdleTitle: string | undefined;
 beforeEach(() => {
@@ -739,7 +742,7 @@ test.skipIf(!hasTmux)("tmux aggregates waiting panes across windows and preserve
 	}
 });
 
-test.skipIf(!hasTmux)("server-guarded waiting updates preserve session names with tmux punctuation", async () => {
+test.skipIf(!hasTmux)("server-guarded waiting updates preserve tmux-escaped session punctuation", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");
 	const originalPane = process.env.TMUX_PANE;
@@ -767,6 +770,7 @@ test.skipIf(!hasTmux)("server-guarded waiting updates preserve session names wit
 			await new Promise<void>((resolve) => setImmediate(resolve));
 		};
 		const sessionName = () => tmux("display-message", "-p", "-t", pane, "#{session_name}");
+		const windowName = () => tmux("display-message", "-p", "-t", pane, "#{window_name}");
 		const initialName = sessionName();
 		expect(initialName).toContain("Repo; \"quoted\"");
 		expect(initialName).toContain("\\");
@@ -774,11 +778,224 @@ test.skipIf(!hasTmux)("server-guarded waiting updates preserve session names wit
 
 		await emit("session_start");
 		expect(sessionName()).toBe(initialName);
+		expect(windowName()).toBe("initial");
 		await emit("agent_settled");
-		expect(sessionName()).toBe(`* ${initialName}`);
+		expect(sessionName()).toBe(initialName);
+		expect(windowName()).toBe("* initial");
 		await emit("agent_start");
 		expect(sessionName()).toBe(initialName);
-		expect(warnings).toEqual([]);
+		expect(windowName()).toBe("initial");
+		expect(warnings).toEqual([
+			"A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.",
+		]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
+test.skipIf(!hasTmux)("former-session repair preserves an escaped custom session name", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Custom\\path", "-n", "source", "/bin/sleep 60");
+		const sourceSession = tmux("display-message", "-p", "-t", pane, "#{session_id}");
+		const initialName = tmux("display-message", "-p", "-t", sourceSession, "#{session_name}");
+		tmux("new-window", "-d", "-t", sourceSession, "-n", "keep", "/bin/sleep 60");
+		const destinationPane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Destination", "-n", "destination", "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		const run: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
+		piTmux(mockPi(handlers), run);
+		const warnings: string[] = [];
+		const ctx = {
+			mode: "tui",
+			sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+			ui: { notify: (text: string) => warnings.push(text) },
+		} as unknown as ExtensionContext;
+		const emit = async (event: string) => {
+			await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+			await new Promise<void>((resolve) => setImmediate(resolve));
+		};
+
+		await emit("session_start");
+		tmux("move-pane", "-d", "-s", pane, "-t", destinationPane);
+		await emit("agent_settled");
+		expect(tmux("display-message", "-p", "-t", sourceSession, "#{session_name}")).toBe(initialName);
+		expect(tmux("display-message", "-p", "-t", destinationPane, "#{session_name}")).toBe("* Destination");
+		expect(tmux("display-message", "-p", "-t", destinationPane, "#{window_name}")).toBe("* destination");
+		expect(warnings).toEqual([
+			"A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.",
+		]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
+test.skipIf(!hasTmux || !hasRoundTripUnsafeSessionNames)("session markers preserve tmux-escaped control characters", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Custom\nSession", "-n", "window", "/bin/sleep 60");
+		const originalSessionName = tmux("display-message", "-p", "-t", pane, "#{session_name}");
+		expect(originalSessionName).toContain("\\");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		const run: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
+		piTmux(mockPi(handlers), run);
+		const warnings: string[] = [];
+		const ctx = {
+			mode: "tui",
+			sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+			ui: { notify: (text: string) => warnings.push(text) },
+		} as unknown as ExtensionContext;
+		const emit = async (event: string) => {
+			await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+			// agent_start intentionally schedules its status write without awaiting it.
+			await new Promise<void>((resolve) => setImmediate(resolve));
+		};
+		const sessionName = () => tmux("display-message", "-p", "-t", pane, "#{session_name}");
+		const title = () => tmux("display-message", "-p", "-t", pane, "#{window_name}");
+
+		await emit("session_start");
+		expect(sessionName()).toBe(originalSessionName);
+		await emit("agent_settled");
+		expect(sessionName()).toBe(originalSessionName);
+		expect(title()).toBe("* window");
+		expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe("1");
+		await emit("agent_start");
+		expect(sessionName()).toBe(originalSessionName);
+		expect(title()).toBe("window");
+		expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe("0");
+		expect(warnings).toEqual([
+			"A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.",
+		]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+		try { tmux("kill-server"); } catch { /* The server may already have exited. */ }
+		finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
+test.skipIf(!hasTmux)("former-window repair preserves tmux-escaped custom names", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Source", "-n", "Custom\\path", "/bin/sleep 60");
+		const sourceSession = tmux("display-message", "-p", "-t", pane, "#{session_id}");
+		const sourceWindow = tmux("display-message", "-p", "-t", pane, "#{window_id}");
+		const sourceAnchor = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep 60");
+		tmux("set-option", "-p", "-t", sourceAnchor, WAITING_OPTION, "1");
+		const sourceTitle = tmux("display-message", "-p", "-t", sourceWindow, "#{window_name}");
+		const destinationPane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Destination", "-n", "destination", "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		const run: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
+		piTmux(mockPi(handlers), run);
+		const warnings: string[] = [];
+		const ctx = {
+			mode: "tui",
+			sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+			ui: { notify: (text: string) => warnings.push(text) },
+		} as unknown as ExtensionContext;
+		const emit = async (event: string) => {
+			await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+			await new Promise<void>((resolve) => setImmediate(resolve));
+		};
+
+		await emit("session_start");
+		tmux("join-pane", "-d", "-s", pane, "-t", destinationPane);
+		await emit("agent_settled");
+		expect(tmux("display-message", "-p", "-t", sourceWindow, "#{window_name}")).toBe(sourceTitle);
+		expect(tmux("display-message", "-p", "-t", sourceSession, "#{session_name}")).toBe("* Source");
+		expect(tmux("display-message", "-p", "-t", destinationPane, "#{session_name}")).toBe("* Destination");
+		expect(tmux("display-message", "-p", "-t", destinationPane, "#{window_name}")).toBe("* destination");
+		expect(warnings).toEqual([
+			"A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.",
+		]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+		try { tmux("kill-server"); } finally { rmSync(directory, { recursive: true, force: true }); }
+	}
+});
+
+test.skipIf(!hasTmux).each([
+	{ requestedTitle: "Custom\\path" },
+])("waiting markers preserve tmux-escaped custom names without a task title: %j", async ({ requestedTitle }) => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "EscapedName", "-n", requestedTitle, "/bin/sleep 60");
+		const originalTitle = tmux("display-message", "-p", "-t", pane, "#{window_name}");
+		expect(originalTitle).toContain("\\");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		const run: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
+		piTmux(mockPi(handlers), run);
+		const warnings: string[] = [];
+		const ctx = {
+			mode: "tui",
+			sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+			ui: { notify: (text: string) => warnings.push(text) },
+		} as unknown as ExtensionContext;
+		const emit = async (event: string) => {
+			await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+			// agent_start intentionally schedules its status write without awaiting it.
+			await new Promise<void>((resolve) => setImmediate(resolve));
+		};
+		const title = () => tmux("display-message", "-p", "-t", pane, "#{window_name}");
+		const sessionName = () => tmux("display-message", "-p", "-t", pane, "#{session_name}");
+
+		await emit("session_start");
+		expect(title()).toBe(originalTitle);
+		await emit("agent_settled");
+		expect(title()).toBe(originalTitle);
+		expect(sessionName()).toBe("* EscapedName");
+		expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe("1");
+		await emit("agent_start");
+		expect(title()).toBe(originalTitle);
+		expect(sessionName()).toBe("EscapedName");
+		expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe("0");
+		expect(warnings).toEqual([
+			"A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.",
+		]);
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;
 		else process.env.TMUX_PANE = originalPane;
@@ -828,7 +1045,7 @@ test.skipIf(!hasTmux || !hasRoundTripUnsafeWindowNames)("server-guarded waiting 
 		expect(title()).toBe(customTitle);
 		expect(sessionName()).toBe("Newline");
 		expect(warnings).toEqual([
-			"A custom window name contains a tab or line feed; its waiting marker was skipped.",
+			"A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.",
 		]);
 	} finally {
 		if (originalPane === undefined) delete process.env.TMUX_PANE;

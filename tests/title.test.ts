@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { getEventListeners } from "node:events";
 import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_INFO_FORMAT, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
-import { STATUS_SNAPSHOT_FORMAT } from "../src/tmux.ts";
+import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
+import { readWindowTitle, STATUS_SNAPSHOT_FORMAT, WINDOW_INFO_INTERNAL_FORMAT } from "../src/tmux.ts";
 import { hasSensitiveNamingContext, hasSensitiveOutput } from "../src/naming.ts";
 import {
 	buildQuitTitleFormat,
@@ -112,6 +112,7 @@ function fixture(
 		if (args[0] === "display-message" && args[4] === STATUS_SNAPSHOT_FORMAT) {
 			return state.statusInfo ?? `123\t${state.session}\t${state.window}\t${state.waitingPanes.get("%1") === "1" ? "1" : "0"}\t${windowWaiting() ? "1" : "0"}\t${[...state.waitingPanes.values()].includes("1") ? "1" : "0"}`;
 		}
+		if (args[0] === "display-message" && args[4] === "#{window_name}") return state.title;
 		if (args[0] === "display-message") return state.windowInfo ?? `${state.session}\t${state.window}\t${windowWaiting() ? "1" : "0"}\t${state.title}`;
 		if (args[0] === "show-options" && args.at(-1) === WINDOW_TITLE_MARKED_OPTION) return state.windowTitleMarked ?? "";
 		if (args[0] === "set-option" && args.includes(WINDOW_BASE_NAME_OPTION)) {
@@ -271,9 +272,28 @@ test("an empty server-PID field remains compatible with older tmux adapters", as
 	const ctx = { mode: "tui", sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
 		ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
 	await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, ctx);
-	expect(calls[0]).toEqual(["display-message", "-p", "-t", "%1", WINDOW_INFO_FORMAT]);
+	expect(calls[0]).toEqual(["display-message", "-p", "-t", "%1", WINDOW_INFO_INTERNAL_FORMAT]);
 	expect(calls[1][0]).toBe("set-option");
 	expect(warnings).toEqual([]);
+});
+
+test.each([
+	["0", false],
+	["1", true],
+])("readWindowTitle reports whether a session name may not round-trip: %s", async (flag, expected) => {
+	const snapshot = await readWindowTitle(
+		async () => `$2:1:123:${flag}\t@4\t0\tcustom\tname`,
+		"%1",
+		new AbortController().signal,
+	);
+	expect(snapshot).toMatchObject({
+		session: "$2",
+		window: "@4",
+		title: "custom\tname",
+		server: "123",
+		sessionMetadataAvailable: true,
+		sessionNameMayNotRoundTrip: expected,
+	});
 });
 
 test.each([
@@ -300,7 +320,7 @@ test("passes input through immediately and renames the owning window", async () 
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
 		renameCommand("fix auth tests"),
 	]);
-	expect(f.calls[0]).toEqual(["display-message", "-p", "-t", "%1", WINDOW_INFO_FORMAT]);
+	expect(f.calls[0]).toEqual(["display-message", "-p", "-t", "%1", WINDOW_INFO_INTERNAL_FORMAT]);
 	expect(f.warnings).toEqual([]);
 });
 
@@ -5538,7 +5558,7 @@ test.each(["new status", "reload"])("superseded sync commands do not confirm sta
 test("sync does not report success when continuous moves exhaust its stabilization bound", async () => {
 	let reads = 0;
 	const f = fixture(undefined, async (args) => {
-		if (args[0] === "display-message") f.state.window = `@${++reads}`;
+		if (args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT) f.state.window = `@${++reads}`;
 	});
 	await f.refresh("sync");
 	expect(f.calls.filter((args) => args[0] === "set-option")).toHaveLength(4);
@@ -5717,7 +5737,7 @@ test("status reports completed model output waiting to be applied without changi
 	const gate = new Promise<void>((resolve) => { release = resolve; });
 	let held = false;
 	const f = fixture(undefined, async (args) => {
-		if (!held && args[0] === "display-message" && args[4] === WINDOW_INFO_FORMAT) {
+		if (!held && args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT) {
 			held = true;
 			await gate;
 		}

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { WAITING_OPTION, type RunTmux } from "../index";
-import { STATUS_SNAPSHOT_FORMAT } from "../src/tmux.ts";
+import { STATUS_SNAPSHOT_FORMAT, WINDOW_INFO_INTERNAL_FORMAT } from "../src/tmux.ts";
 import { supportsUnixTmux } from "./tmux-support.ts";
 
 const hasTmux = supportsUnixTmux(process.platform, Bun.which("tmux"));
@@ -252,7 +252,7 @@ test.skipIf(!hasTmux)("a guarded title rename skipped by a server restart is not
 	});
 });
 
-test.skipIf(!hasTmux).each(movingCases)("moving a waiting pane preserves literal session names and repairs former markers: %j", async ({ sameSession, peerWaiting, otherWindowWaiting }) => {
+test.skipIf(!hasTmux).each(movingCases)("moving a waiting pane preserves escaped source session names and repairs destination markers: %j", async ({ sameSession, peerWaiting, otherWindowWaiting }) => {
 	await withServer(async (f) => {
 		const requestedSourceName = 'My "Café", {group}: 🧪 Session \\\\ ' + "X".repeat(40) + " \\ #{session_id}\u2003  ";
 		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", requestedSourceName.replaceAll("#", "##"), "/bin/sleep 60");
@@ -269,18 +269,19 @@ test.skipIf(!hasTmux).each(movingCases)("moving a waiting pane preserves literal
 		await f.pin("move task");
 		await f.emit("agent_settled");
 		expect(f.tmux("display-message", "-p", "-t", anchor, "#{window_name}")).toBe("* move task");
-		expect(f.tmux("display-message", "-p", "-t", source, "#{session_name}")).toBe("* " + sourceName);
+		expect(f.tmux("display-message", "-p", "-t", source, "#{session_name}")).toBe(sourceName);
 
 		f.tmux("join-pane", "-d", "-s", pane, "-t", destination);
 		await f.emit("agent_settled");
 		expect(f.tmux("display-message", "-p", "-t", anchor, "#{window_name}")).toBe(peerWaiting ? "* move task" : "move task");
-		const sourceWaiting = sameSession || peerWaiting || otherWindowWaiting;
-		expect(f.tmux("display-message", "-p", "-t", source, "#{session_name}")).toBe((sourceWaiting ? "* " : "") + sourceName);
+		expect(f.tmux("display-message", "-p", "-t", source, "#{session_name}")).toBe(sourceName);
 		expect(f.tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("* move task");
-		expect(f.tmux("display-message", "-p", "-t", pane, "#{session_name}")).toBe("* " + (sameSession ? sourceName : "Destination"));
+		expect(f.tmux("display-message", "-p", "-t", pane, "#{session_name}")).toBe(sameSession ? sourceName : "* Destination");
 		expect(f.tmux("show-options", "-p", "-v", "-t", anchor, WAITING_OPTION)).toBe(peerWaiting ? "1" : "0");
 		expect(f.tmux("show-options", "-p", "-v", "-t", elsewhere, WAITING_OPTION)).toBe(otherWindowWaiting ? "1" : "0");
-		expect(f.warnings).toEqual([]);
+		expect(f.warnings).toEqual([
+			"A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.",
+		]);
 	});
 });
 
@@ -596,10 +597,11 @@ test("continuous moves and transient failures keep stabilization and repair queu
 			registerCommand: () => {},
 		} as unknown as ExtensionAPI, async (args) => {
 			calls.push(args);
-			if (args[0] === "display-message") {
+			if (args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT) {
 				location++;
 				return `$${location}\t@${location}\t0\tcustom name`;
 			}
+			if (args[0] === "display-message") return "custom name";
 			if (args[0] === "if-shell" || (sessionRenameTarget(args) && sessionRenameTarget(args) !== "%901")) {
 				throw new Error("Synthetic transient failure");
 			}
@@ -611,7 +613,10 @@ test("continuous moves and transient failures keep stabilization and repair queu
 		await handlers.get("session_start")!({ type: "session_start", reason: "reload" }, ctx);
 		const secondCalls = calls.slice(firstCalls);
 		expect(calls.filter((args) => args[0] === "set-option" && args[3] === "%901")).toHaveLength(8);
-		expect(calls.filter((args) => args[0] === "display-message")).toHaveLength(18);
+		expect(calls.filter((args) => args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT)).toHaveLength(18);
+		const formerWindowNameReads = calls.filter((args) => args[0] === "display-message" && args[4] === "#{window_name}");
+		expect(formerWindowNameReads.length).toBeGreaterThan(0);
+		expect(formerWindowNameReads.length).toBeLessThanOrEqual(48);
 		expect(secondCalls.filter((args) => args[0] === "if-shell")).toHaveLength(32);
 		expect(secondCalls.filter((args) => sessionRenameTarget(args) !== undefined && sessionRenameTarget(args) !== "%901")).toHaveLength(32);
 		expect(warnings).toEqual([]);
