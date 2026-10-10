@@ -971,6 +971,14 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 	const shortPassword = `password=${"S".repeat(12)}`;
 	await suppressed(fixture(), `Review the configuration ${shortPassword}`, shortPassword);
+	const quotedPasswordPhrase = `password: "secret phrase"`;
+	const inlinePasswordPhrase = `password=secret phrase`;
+	const plainPassphrase = `passphrase: silver owl`;
+	const foldedPlainPassword = `password: secret\n  phrase`;
+	await suppressed(fixture(), `Review the configuration ${quotedPasswordPhrase}`, quotedPasswordPhrase);
+	await suppressed(fixture(), `Review the configuration ${inlinePasswordPhrase}`, inlinePasswordPhrase);
+	await suppressed(fixture(), `Review the configuration ${plainPassphrase}`, plainPassphrase);
+	await suppressed(fixture(), `Review the configuration ${foldedPlainPassword}`, foldedPlainPassword);
 	const passwordBlock = `password: |-\n  ${"P".repeat(12)}`;
 	await suppressed(fixture(), `Review the configuration ${passwordBlock}`, passwordBlock);
 	const multiwordPasswordBlock = `password: |-\n  secret phrase`;
@@ -1107,6 +1115,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		"Review docs with password=placeholder, passphrase=example, token: placeholder,",
 		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, PresharedKey=example,",
 		"client-key-data: example, Authorization: Basic example,",
+		`password: "example value", passphrase: example value, password: example\n  value`,
 		"\nAuthorization: |-\n  Basic example\n",
 		"\nAuthorization: !!str |-\n  Basic example\n",
 		"\nProxy-Authorization: >-\n  Basic example\n",
@@ -1179,6 +1188,10 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	];
 	const outputs = [
 		`password=${"S".repeat(12)}`,
+		`password=secret phrase`,
+		`password: "secret phrase"`,
+		`passphrase: silver owl`,
+		`password: secret\n  phrase`,
 		`password: |-\n  ${"P".repeat(12)}`,
 		`password: |-\n  secret phrase`,
 		`passphrase: &words >-\n  moonlight\n  meadow`,
@@ -3483,6 +3496,10 @@ test("manual titles reject sensitive text before normalization without disclosin
 		basicAuthorizationHeader("Authorization", "u:p"),
 		basicAuthorizationHeader("Proxy-Authorization", "p:w"),
 		`https://storage.example.test/blob?sv=2023-11-03&sig=${"A".repeat(43)}=`,
+		`password=secret phrase`,
+		`password: "secret phrase"`,
+		`passphrase: silver owl`,
+		`password: secret\n  phrase`,
 		`password: |-\n  ${"P".repeat(12)}`,
 		`password: |-\n  secret phrase`,
 		`passphrase: &words >-\n  moonlight\n  meadow`,
