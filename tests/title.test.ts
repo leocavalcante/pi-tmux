@@ -948,6 +948,7 @@ test("does not apply a short-looking response truncated by the token limit", asy
 
 test("credential-shaped model output is rejected without applying or disclosing it", async () => {
 	const githubToken = ["ghp_", "a".repeat(20)].join("");
+	const replicateToken = ["r8_", "M".repeat(37)].join("");
 	const awsKey = ["AKIA", "A".repeat(16)].join("");
 	const compatibilityGithubToken = [...githubToken]
 		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
@@ -960,6 +961,10 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["fpk_", "D".repeat(40)].join(""),
 		["nvapi-", "I".repeat(40)].join(""),
 		`fixnvapi-${"J".repeat(40)}`,
+		replicateToken,
+		`fix${replicateToken}`,
+		["r8_", "N".repeat(18), "\u200b", "N".repeat(19)].join(""),
+		["R8_", "O".repeat(37)].join(""),
 		["nvapi-", "K".repeat(19), "\u200b", "K".repeat(21)].join(""),
 		["NVAPI-", "L".repeat(40)].join(""),
 		["csk_", "E".repeat(48)].join(""),
@@ -1040,6 +1045,19 @@ test("credential-shaped model output is rejected without applying or disclosing 
 });
 
 test.each([
+	["short suffix", ["r8_", "P".repeat(36)].join("")],
+	["long suffix", ["r8_", "Q".repeat(38)].join("")],
+	["trailing identifier glue", `${["r8_", "R".repeat(37)].join("")}_x`],
+])("does not classify %s as a Replicate API token", async (_shape, output) => {
+	const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("fix auth tests"))]);
+	f.input("Name a task");
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.warnings).toEqual([]);
+});
+
+test.each([
 	["Pinecone-style prefix", ["p", "csk_", "A".repeat(48)].join("")],
 	["alphanumeric leading glue", `x${["csk-", "B".repeat(48)].join("")}`],
 	["underscore leading glue", `_${["csk_", "C".repeat(48)].join("")}`],
@@ -1094,6 +1112,8 @@ test("ordinary security-themed and hyphenated task titles without credential val
 		["groq api authentication", "groq api authentication"],
 		["nvidia api keys", "nvidia api keys"],
 		["nvapi-short-token", "nvapi-short-token"],
+		["replicate api tests", "replicate api tests"],
+		["r8 token setup", "r8 token setup"],
 		["fireworks api keys", "fireworks api keys"],
 		["fw key setup", "fw key setup"],
 		["fpk file format", "fpk file format"],
