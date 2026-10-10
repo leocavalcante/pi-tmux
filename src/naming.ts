@@ -172,21 +172,28 @@ function boundedPrompt(prompt: string, maxLength: number): string {
 	return `${prefix}\n${PROMPT_TRUNCATION_MARKER}\n${suffix}`;
 }
 
-// Use Pi's active projection so abandoned branches, compacted originals, and
-// text removed by context edits never leak back into the naming request.
-export function buildNamingContext(messages: SessionProjection["messages"], prompt = ""): string {
+function boundedSummary(summary: string): string {
+	const text = boundedText(summary, MAX_HISTORY_TEXT_LENGTH);
+	return text ? `summary: ${text}` : "";
+}
+
+function assembleNamingContext(
+	messages: SessionProjection["messages"],
+	prompt: string,
+	knownSummary: string | undefined,
+	searchMessagesForSummary: boolean,
+): string {
 	// Walk backward so text from history older than the retained window is never
-	// copied into temporary strings. The latest compaction summary is independent
-	// of the dialogue limit, so keep scanning for it even after finding 8 entries.
+	// copied into temporary strings. Projection-aware callers supply the summary
+	// separately, allowing the walk to stop as soon as the recent window is full.
 	const history: string[] = [];
-	let summary = "";
-	let foundSummary = false;
+	let summary = knownSummary ?? "";
+	let foundSummary = !searchMessagesForSummary;
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const message = messages[i];
 		if (message.role === "compactionSummary") {
 			if (!foundSummary) {
-				const text = boundedText(message.summary, MAX_HISTORY_TEXT_LENGTH);
-				summary = text ? `summary: ${text}` : "";
+				summary = boundedSummary(message.summary);
 				foundSummary = true;
 			}
 		} else if (history.length < MAX_HISTORY_MESSAGES) {
@@ -214,6 +221,31 @@ export function buildNamingContext(messages: SessionProjection["messages"], prom
 	}
 	if (summary) parts.unshift(summary);
 	return parts.join("\n\n");
+}
+
+// Keep the messages-only helper compatible with arbitrary message lists. Without
+// source-entry provenance it must search for a compaction summary itself.
+export function buildNamingContext(messages: SessionProjection["messages"], prompt?: string): string;
+// Canonical projections expose the summary at the first projected entry, letting
+// long sessions avoid rescanning older messages once recent history is collected.
+export function buildNamingContext(projection: SessionProjection, prompt?: string): string;
+export function buildNamingContext(
+	input: SessionProjection["messages"] | SessionProjection,
+	prompt = "",
+): string {
+	if (Array.isArray(input)) return assembleNamingContext(input, prompt, undefined, true);
+	const projection = input as SessionProjection;
+	if (!Array.isArray(projection.entries)) {
+		return assembleNamingContext(projection.messages, prompt, undefined, true);
+	}
+	const firstEntry = projection.entries[0];
+	const summaryMessage = firstEntry?.sourceEntry.type === "compaction"
+		? firstEntry.messages.find((message) => message.role === "compactionSummary")
+		: undefined;
+	const summary = summaryMessage?.role === "compactionSummary"
+		? boundedSummary(summaryMessage.summary)
+		: undefined;
+	return assembleNamingContext(projection.messages, prompt, summary, false);
 }
 
 // Stop waiting even when a provider ignores its signal. The attached rejection
