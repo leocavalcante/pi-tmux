@@ -57,6 +57,8 @@ const LABELED_PHONE_PATTERN = /(?<![A-Za-z0-9])(?:phone|telephone|mobile|cell(?:
 const LABELED_PAYMENT_CARD_PATTERN = /(?<![A-Za-z0-9])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no))?|card(?:[-_\s]?(?:number|no))?|cc[-_\s]?(?:number|no)|ccn)\s*["']?\s*[:=]\s*["']?(\d(?:[ .()-]?\d){12,18})(?![A-Za-z0-9_])/i;
 // Require an explicit assignment and a long token-like value; don't compact ordinary spaces.
 const LABELED_CREDENTIAL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?token|client[-_\s]?key[-_\s]?data|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key)?|passphrase|password|credential|token)\s*["']?\s*[:=]\s*["']?[A-Za-z0-9._~+/=-]{20,}/i;
+// Kubeconfig YAML can express client-key-data as an indented block scalar.
+const KUBERNETES_CLIENT_KEY_DATA_BLOCK_PATTERN = /(?<![A-Za-z0-9_-])["']?client[-_\s]?key[-_\s]?data["']?[ \t]*:[ \t]*[|>](?:[1-9][+-]?|[+-][1-9]?)?[ \t]*\r?\n((?:[ \t]+[A-Za-z0-9+/=]+[ \t]*(?:\r?\n|$))+)/i;
 // Basic authorization values are base64 user-info, not provider-prefixed tokens.
 const BASIC_AUTHORIZATION_PATTERN = /(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
 // Passwords are often shorter than API tokens. Catch non-placeholder values
@@ -180,11 +182,17 @@ function hasBasicAuthorizationCredential(value: string): boolean {
 	return false;
 }
 
+function hasKubernetesClientKeyDataBlock(value: string): boolean {
+	const match = KUBERNETES_CLIENT_KEY_DATA_BLOCK_PATTERN.exec(value);
+	return !!match && match[1].replace(/[\s\p{Cc}\p{Cf}]+/gu, "").length >= 20;
+}
+
 function hasLabeledCredential(value: string): boolean {
 	const withoutControls = value.replace(/[\p{Cc}\p{Cf}]+/gu, "");
 	return hasBasicAuthorizationCredential(value) || LABELED_CREDENTIAL_PATTERN.test(value)
-		|| LABELED_PASSWORD_PATTERN.test(value) || hasBasicAuthorizationCredential(withoutControls)
-		|| LABELED_CREDENTIAL_PATTERN.test(withoutControls) || LABELED_PASSWORD_PATTERN.test(withoutControls);
+		|| LABELED_PASSWORD_PATTERN.test(value) || hasKubernetesClientKeyDataBlock(value)
+		|| hasBasicAuthorizationCredential(withoutControls) || LABELED_CREDENTIAL_PATTERN.test(withoutControls)
+		|| LABELED_PASSWORD_PATTERN.test(withoutControls) || hasKubernetesClientKeyDataBlock(withoutControls);
 }
 
 // Check credentials and high-confidence personal-data formats before transmission.
