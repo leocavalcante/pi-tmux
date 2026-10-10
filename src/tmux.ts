@@ -1,9 +1,8 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { execFile, type ChildProcess } from "node:child_process";
 import { formatTitle, READY_PREFIX } from "./title.ts";
 
-const execFileAsync = promisify(execFile);
 const TMUX_COMMAND_TIMEOUT_MS = 2_000;
+const TMUX_COMMAND_KILL_GRACE_MS = 500;
 // WINDOW_INFO_FORMAT includes a user-owned window name; allow long names while
 // keeping command output bounded.
 const MAX_TMUX_OUTPUT_BYTES = 64 * 1024;
@@ -124,21 +123,57 @@ export type RunTmux = ((args: string[], signal: AbortSignal) => Promise<string>)
 };
 
 export const runTmux: RunTmux = async (args, signal) => {
-	// execFile's `timeout` option only sends SIGTERM; a child that handles it and
-	// exits 0 can make a timed-out command look successful. Abort its signal too.
+	// The abort signal rejects even if a child handles SIGTERM and exits 0. Force-kill
+	// after a grace period so an unresponsive tmux client is not left running.
 	const timeoutController = new AbortController();
 	const timeout = setTimeout(() => timeoutController.abort(), TMUX_COMMAND_TIMEOUT_MS);
 	timeout.unref();
+	const commandSignal = AbortSignal.any([signal, timeoutController.signal]);
+	let child: ChildProcess | undefined;
+	let forceKillTimeout: ReturnType<typeof setTimeout> | undefined;
+	let childStopped = false;
+	const escalateTermination = () => {
+		if (childStopped || forceKillTimeout) return;
+		forceKillTimeout = setTimeout(() => {
+			try {
+				child?.kill("SIGKILL");
+			} catch {
+				// The process may have exited between the timer and the signal.
+			}
+		}, TMUX_COMMAND_KILL_GRACE_MS);
+		forceKillTimeout.unref();
+	};
+	const clearEscalation = () => {
+		childStopped = true;
+		if (forceKillTimeout) {
+			clearTimeout(forceKillTimeout);
+			forceKillTimeout = undefined;
+		}
+	};
+	commandSignal.addEventListener("abort", escalateTermination, { once: true });
 	try {
-		const { stdout } = await execFileAsync("tmux", args, {
-			signal: AbortSignal.any([signal, timeoutController.signal]),
-			maxBuffer: MAX_TMUX_OUTPUT_BYTES,
+		const { stdout } = await new Promise<{ stdout: string }>((resolve, reject) => {
+			child = execFile("tmux", args, {
+				encoding: "utf8",
+				signal: commandSignal,
+				maxBuffer: MAX_TMUX_OUTPUT_BYTES,
+			}, (error, stdout) => {
+				if (error) {
+					escalateTermination();
+					reject(error);
+				} else resolve({ stdout });
+			});
+			child.once("exit", clearEscalation);
+			child.once("close", clearEscalation);
+			// An already-aborted signal does not dispatch to newly added listeners.
+			if (commandSignal.aborted) escalateTermination();
 		});
 		// Remove the command's line terminator, not tabs or spaces in window names.
 		// In particular, a trailing tab is the empty title field in WINDOW_INFO_FORMAT.
 		return stdout.replace(/\r?\n$/, "");
 	} finally {
 		clearTimeout(timeout);
+		commandSignal.removeEventListener("abort", escalateTermination);
 	}
 };
 runTmux.supportsServerPidGuard = true;
