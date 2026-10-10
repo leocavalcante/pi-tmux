@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const WORKFLOWS_DIRECTORY = fileURLToPath(new URL("../.github/workflows/", import.meta.url));
 
 test("npm publishing requires all release safety gates", () => {
-	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/publish.yml", import.meta.url)), "utf8");
+	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/publish.yml", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
 	const publishJob = workflow.indexOf("  publish:\n");
 	const testDependency = workflow.indexOf("    needs: test", publishJob);
 	const stableReleaseOnly = workflow.indexOf("    if: github.event.release.prerelease == false", publishJob);
