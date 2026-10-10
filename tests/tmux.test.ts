@@ -48,6 +48,13 @@ async function waitForChild(pidFile: string): Promise<number> {
 	return pid;
 }
 
+function observeRejection(promise: Promise<unknown>): Promise<boolean> {
+	return promise.then(
+		() => false,
+		() => true,
+	);
+}
+
 async function childHasExited(pid: number): Promise<boolean> {
 	const deadline = Date.now() + 2_000;
 	while (Date.now() < deadline) {
@@ -71,8 +78,9 @@ test.skipIf(process.platform === "win32")(
 			"setInterval(() => {}, 1000);",
 		], async ({ pid, cleanExit }) => {
 			const command = runTmux([], new AbortController().signal);
+			const rejected = observeRejection(command);
 			const childPid = await waitForChild(pid);
-			await expect(command).rejects.toThrow();
+			expect(await rejected).toBe(true);
 			expect(await childHasExited(childPid)).toBe(true);
 			expect(readFileSync(cleanExit, "utf8")).toBe("clean");
 		});
@@ -88,9 +96,10 @@ test.skipIf(process.platform === "win32")(
 		], async ({ pid }) => {
 			const controller = new AbortController();
 			const command = runTmux([], controller.signal);
+			const rejected = observeRejection(command);
 			const childPid = await waitForChild(pid);
 			controller.abort();
-			await expect(command).rejects.toThrow();
+			expect(await rejected).toBe(true);
 			expect(await childHasExited(childPid)).toBe(true);
 		});
 	},
