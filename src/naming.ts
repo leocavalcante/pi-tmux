@@ -60,6 +60,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])do[opr]_v1_[a-f0-9]{64}(?![A-Za-z0-9_-])/,
 	// Notion tokens use `ntn_`, 11 digits, then 35 alphanumeric characters.
 	/(?<![A-Za-z0-9_])ntn_[0-9]{11}[A-Za-z0-9]{35}(?![A-Za-z0-9_-])/,
+	// Linear API tokens use `lin_api_` followed by exactly 40 alphanumeric characters.
+	/(?<![A-Za-z0-9_])lin_api_[A-Za-z0-9]{40}(?![A-Za-z0-9_-])/i,
 	// SendGrid API keys have the `SG.` prefix and exactly 66 URL-safe characters.
 	/(?<![A-Za-z0-9_])SG\.[A-Za-z0-9=_.-]{66}(?![A-Za-z0-9=_.-])/i,
 	// Twilio API keys use `SK` followed by exactly 32 hexadecimal characters.
