@@ -971,8 +971,12 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
 	const shortPassword = `password=${"S".repeat(12)}`;
 	await suppressed(fixture(), `Review the configuration ${shortPassword}`, shortPassword);
+	const passwordBlock = `password: |-\n  ${"P".repeat(12)}`;
+	await suppressed(fixture(), `Review the configuration ${passwordBlock}`, passwordBlock);
 	const awsSecretAccessKey = `AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`;
 	await suppressed(fixture(), `Review the deployment config ${awsSecretAccessKey}`, awsSecretAccessKey);
+	const awsBlockSecretAccessKey = `AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`;
+	await suppressed(fixture(), `Review the deployment config ${awsBlockSecretAccessKey}`, awsBlockSecretAccessKey);
 	const azureAccountKey = `AccountKey=${"A".repeat(86)}==`;
 	await suppressed(fixture(), `Review the storage connection ${azureAccountKey}`, azureAccountKey);
 	const kubeconfigClientKeyData = `client-key-data: ${"A".repeat(44)}`;
@@ -1074,6 +1078,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, PresharedKey=example,",
 		"client-key-data: example, Authorization: Basic example,",
 		"\nclient-key-data: |-\n  example\n",
+		"\npassword: |-\n  example\n",
+		"\ntoken: |-\n  example\n",
 		`Authorization: Basic ${"A".repeat(20)}`,
 	].join(" "));
 	await settle();
@@ -1137,7 +1143,9 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	];
 	const outputs = [
 		`password=${"S".repeat(12)}`,
+		`password: |-\n  ${"P".repeat(12)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
+		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`client-key-data: ${"A".repeat(44)}`,
 		`client-key-data: |2-\n  ${"A".repeat(10)}\n  ${"A".repeat(10)}\n  ${"A".repeat(44)}`,
@@ -3417,6 +3425,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`auth integration ${token}`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
+		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`client-key-data: ${"A".repeat(44)}`,
 		`client-key-data: |-\n  ${"A".repeat(10)}\n  ${"A".repeat(10)}\n  ${"A".repeat(44)}`,
@@ -3426,6 +3435,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		basicAuthorizationHeader("Authorization", "u:p"),
 		basicAuthorizationHeader("Proxy-Authorization", "p:w"),
 		`https://storage.example.test/blob?sv=2023-11-03&sig=${"A".repeat(43)}=`,
+		`password: |-\n  ${"P".repeat(12)}`,
 		`password=${"P".repeat(12)}`,
 		"postgres://test-user:example-only-password@db.example.test/app",
 		`ghp_${"C".repeat(10)}\u200b${"C".repeat(10)}`,
