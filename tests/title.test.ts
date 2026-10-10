@@ -985,6 +985,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the mail integration with ${brevoApiToken}`, brevoApiToken);
 	const atlassianApiToken = "ATATT3" + "a".repeat(183) + "_-=";
 	await suppressed(fixture(), `Review the integration with ${atlassianApiToken}`, atlassianApiToken);
+	const terraformCloudToken = `${"T".repeat(14)}.atlasv1.${"a".repeat(57)}_-=`;
+	await suppressed(fixture(), `Review Terraform access ${terraformCloudToken}`, terraformCloudToken);
 	const sourcegraphToken = `sgp_${"a".repeat(40)}`;
 	const sourcegraphSegmentedToken = `sgp_${"b".repeat(16)}_${"c".repeat(40)}`;
 	const sourcegraphLocalToken = `sgp_local_${"d".repeat(40)}`;
@@ -1131,6 +1133,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const historyWithAtlassianToken = fixture();
 	historyWithAtlassianToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${atlassianApiToken}` }] });
 	await suppressed(historyWithAtlassianToken, "Continue the task", atlassianApiToken);
+	const historyWithTerraformToken = fixture();
+	historyWithTerraformToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${terraformCloudToken}` }] });
+	await suppressed(historyWithTerraformToken, "Continue the task", terraformCloudToken);
 	const historyWithSourcegraphToken = fixture();
 	historyWithSourcegraphToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${sourcegraphSegmentedToken}` }] });
 	await suppressed(historyWithSourcegraphToken, "Continue the task", sourcegraphSegmentedToken);
@@ -1872,6 +1877,63 @@ test("rejects Atlassian API tokens without mistaking near-misses for tokens", as
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("atlassian api tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Terraform Cloud API tokens without mistaking near-misses for tokens", async () => {
+	const prefix = "T".repeat(14);
+	const token60 = `${prefix}.atlasv1.${"a".repeat(57)}_-=`;
+	const token70 = `${prefix}.atlasv1.${"b".repeat(67)}_-=`;
+	const mixedCaseToken = `${"q".repeat(14)}.atlasv1.${"A".repeat(60)}`;
+	const tokens = [token60, token70, mixedCaseToken];
+	for (const token of tokens) {
+		const outputs = [
+			token,
+			token.replace(".atlasv1.", ".ATLASV1."),
+			`${token}!`,
+			`deploy-${token}`,
+			token.replace(".atlasv1.", ".atla\u200bsv1."),
+			`${token.slice(0, 24)}\u200b${token.slice(24)}`,
+		];
+		for (const output of outputs) {
+			const f = fixture([Promise.resolve(response(output))]);
+			f.input("Name a task");
+			await settle();
+			expect(f.state.title).toBe("existing task");
+			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+			expect(f.warnings.join(" ")).not.toContain(token);
+		}
+	}
+
+	const shortName = fixture([Promise.resolve(response("terraform cloud setup"))]);
+	shortName.input("Name a task");
+	await settle();
+	expect(shortName.requests).toHaveLength(1);
+	expect(shortName.state.title).toBe("terraform cloud setup");
+	expect(shortName.warnings).toEqual([]);
+
+	const nearMisses = [
+		`${"a".repeat(13)}.atlasv1.${"c".repeat(60)}`,
+		`${"a".repeat(15)}.atlasv1.${"c".repeat(60)}`,
+		`${prefix}.atlasv1.${"c".repeat(59)}`,
+		`${prefix}.atlasv1.${"c".repeat(71)}`,
+		`${prefix}.atlasv1.${"c".repeat(30)}.${"c".repeat(30)}`,
+		`${prefix}.atlasv2.${"c".repeat(60)}`,
+		`x${token60}`,
+		`_${token60}`,
+		`${token70}x`,
+		`${token70}_x`,
+		`${token70}-x`,
+		`${token70}=x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("terraform cloud tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("terraform cloud tests");
 		expect(f.warnings).toEqual([]);
 	}
 });
