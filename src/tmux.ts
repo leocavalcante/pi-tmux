@@ -61,7 +61,7 @@ export const WINDOW_TITLE_MARKED_VALUE_FORMAT = `#{?${WINDOW_NAME_IS_MARKED_BASE
 export const WINDOW_BASE_NAME_HAS_LITERAL_PREFIX_FORMAT =
 	`#{?#{==:#{s/^\\* //:${WINDOW_BASE_NAME_VALUE_FORMAT}},${WINDOW_BASE_NAME_VALUE_FORMAT}},0,1}`;
 // The session field advertises base-option support, server identity, and whether
-// the session name contains backslashes (including tmux's control-character escapes).
+// tmux's formatted session name contains backslashes, including escaped controls.
 export const SESSION_NAME_MAY_NOT_ROUND_TRIP_FORMAT = `#{?#{m:*\\\\*,#{session_name}},1,0}`;
 export const WINDOW_INFO_FORMAT = `#{session_id}:1:#{pid}\t#{window_id}\t#{?${WINDOW_WAITING_FORMAT},1,0}\t#{window_name}`;
 // The controller's snapshot adds a name-safety bit without changing the public format.

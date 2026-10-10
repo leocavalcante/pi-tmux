@@ -234,13 +234,15 @@ Repeat the command to retry them.
   clear another pane's marker. Window renames choose the prefix and its length
   budget on the tmux server, even if another pane changed status after lookup.
   Session names are not summarized, lowercased, or clipped. A literal leading
-  `* ` is preserved, with the waiting marker added separately. Control
-  characters and backslashes may not round-trip through tmux rename commands. If
-  a custom session name contains either, its session marker is skipped; if a
-  custom window name does and no task title is available, its window marker is
-  skipped. Names are preserved, pane flags and any safe marker still update, and
-  a generic warning is shown. For names that can be safely renamed, the
-  extension keeps each session's unmarked name in the namespaced
+  `* ` is preserved, with the waiting marker added separately.
+  Control characters, backslashes, and other characters that tmux escapes in a
+  formatted name may not round-trip through rename commands; the exact escaping
+  can vary between tmux versions. If a custom session name's formatted value
+  contains unsafe escapes, its session marker is skipped; an unsafe formatted
+  window name skips its waiting marker when no task title is available. Names
+  are preserved, pane flags and any safe marker still update, and a generic
+  warning is shown. For names that can be safely renamed, the extension keeps
+  each session's unmarked name in the namespaced
   `@pi-tmux-session-base-name` tmux session option so it can distinguish a
   literal prefix from its marker across status updates. Window names use the
   same stored-base approach to distinguish a
