@@ -59,6 +59,18 @@ const BEARER_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"([A-Za-z0-9._~+/=-](?:\\s*[A-Za-z0-9._~+/=-]){15,})",
 	String.raw`([A-Za-z0-9._~+/=-](?:(?:(?!\p{White_Space})[\p{Cc}\p{Cf}])*[A-Za-z0-9._~+/=-]){15,})`,
 );
+// The Token authorization scheme carries an opaque API or session credential.
+const AUTHORIZATION_TOKEN_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?`
+		+ `${interleaveBoundaryFormattingControls("token")}`
+		+ String.raw`[\s\p{Cc}\p{Cf}]+([A-Za-z0-9._~+/_-]{20,}={0,2})(?![A-Za-z0-9._~+/_=-])`,
+	"iu",
+);
+const AUTHORIZATION_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	AUTHORIZATION_TOKEN_PATTERN,
+	"([A-Za-z0-9._~+/_-]{20,}={0,2})",
+	String.raw`([A-Za-z0-9._~+/_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9._~+/_-]){19,}(?:[\p{Cc}\p{Cf}]*=){0,2})`,
+);
 // Also match scheme labels split by whitespace/format characters. The ordinary
 // bearer heuristic validates values after this normalization to retain prose safeguards.
 const OBFUSCATED_BEARER_TOKEN_PATTERN = new RegExp(
@@ -1036,6 +1048,7 @@ const URI_USER_INFO_CREDENTIAL_PATTERN = /[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/((?:[
 const URI_USER_INFO_CREDENTIAL_BOUNDARY_PATTERN = /[A-Za-z](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+.-]){0,31}[\p{Cc}\p{Cf}]*:[\p{Cc}\p{Cf}]*\/[\p{Cc}\p{Cf}]*\/[\p{Cc}\p{Cf}]*((?:[^\s/:@]+)?:[^\s/@]+)@/iu;
 const CREDENTIAL_LIKE_PATTERNS = [
 	URI_USER_INFO_CREDENTIAL_PATTERN,
+	AUTHORIZATION_TOKEN_PATTERN,
 	AZURE_SAS_PATTERN,
 	AZURE_DEVOPS_PAT_PATTERN,
 	AZURE_AD_CLIENT_SECRET_PATTERN,
@@ -1158,10 +1171,10 @@ const EMAIL_ADDRESS_BOUNDARY_PATTERN = makeBoundaryPattern(
 	EMAIL_ADDRESS_PATTERN.source,
 	`(${EMAIL_ADDRESS_PATTERN.source})`,
 );
-// The broad `sk-`/`rk-` shape overlaps natural compounds after whitespace is removed
-// (for example, `task-based development`); its boundary pattern handles whitespace separately.
+// Avoid joining prose into credentials: generic `sk-` values overlap compounds such as
+// `task-based`, and compacted Authorization Token headers can absorb following sentences.
 const COMPACTED_CREDENTIAL_LIKE_PATTERNS = CREDENTIAL_LIKE_PATTERNS.filter(
-	(pattern) => pattern !== GENERIC_SK_RK_API_TOKEN_PATTERN,
+	(pattern) => pattern !== GENERIC_SK_RK_API_TOKEN_PATTERN && pattern !== AUTHORIZATION_TOKEN_PATTERN,
 );
 // Compacted scans require a left boundary so unrelated title words do not combine into tokens.
 const SEPARATOR_TOLERANT_PATTERNS = [
@@ -1531,6 +1544,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
 	EMAIL_ADDRESS_BOUNDARY_PATTERN,
 	BEARER_TOKEN_BOUNDARY_PATTERN,
+	AUTHORIZATION_TOKEN_BOUNDARY_PATTERN,
 	GITHUB_TOKEN_BOUNDARY_PATTERN,
 	VERCEL_API_TOKEN_BOUNDARY_PATTERN,
 	CLOUDFLARE_API_KEY_BOUNDARY_PATTERN,
@@ -1610,7 +1624,8 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 		&& pattern !== EMAIL_ADDRESS_BOUNDARY_PATTERN
-		&& pattern !== BEARER_TOKEN_BOUNDARY_PATTERN)
+		&& pattern !== BEARER_TOKEN_BOUNDARY_PATTERN
+		&& pattern !== AUTHORIZATION_TOKEN_BOUNDARY_PATTERN)
 	.flatMap((pattern) => {
 		const source = pattern.source.replaceAll(
 			String.raw`[\p{Cc}\p{Cf}]*`, String.raw`[\p{Cc}\p{Cf}\s]{0,2}`,

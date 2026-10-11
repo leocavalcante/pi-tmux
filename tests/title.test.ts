@@ -1196,6 +1196,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const truncatedBearerPrompt = `${"x".repeat(bearerTokenStart - 7)}Bearer ${bearerToken} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedBearerPrompt, bearerToken);
 	await suppressed(fixture(), `B e a r e r ${bearerToken}`, bearerToken);
+	const authorizationToken = `Authorization: Token ${"A1b2".repeat(6)}`;
+	await suppressed(fixture(), authorizationToken, authorizationToken);
 	const longBearerToken = "A1b2".repeat(20);
 	const spacedBearerToken = `${longBearerToken.slice(0, 10)} ${longBearerToken.slice(10)}`;
 	const suffixLength = Math.floor(retainedPromptLength / 2);
@@ -2837,6 +2839,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`hf_${"a".repeat(10)}\u0000${"a".repeat(10)}`,
 		["eyJ", "a".repeat(8), ".", "b".repeat(8), ".", "c".repeat(8)].join(""),
 		["Bearer ", "a".repeat(24)].join(""),
+		["Authorization: Token ", "A1b2".repeat(6)].join(""),
+		["Proxy-Authorization: Token ", "C3d4".repeat(6)].join(""),
 		["B e a r e r ", "A1b2".repeat(8)].join(""),
 		["Bearer ", "a".repeat(8), " ", "a".repeat(8)].join(""),
 		["Bearer ", "a".repeat(7), "1 ", "a".repeat(8)].join(""),
