@@ -1766,6 +1766,7 @@ test("screens private-key headers across retained-context truncation boundaries"
 		["-----BEGIN OPENSSH ", "PRIVATE KEY-----"].join(""),
 		["-----BEGIN ENCRYPTED ", "PRIVATE KEY-----"].join(""),
 		["-----BEGIN PGP ", "PRIVATE KEY BLOCK-----"].join(""),
+		"---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----",
 		"PuTTY-User-Key-File-2:",
 		"PuTTY-User-Key-File-3:",
 	];

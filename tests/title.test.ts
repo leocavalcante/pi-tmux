@@ -2550,23 +2550,26 @@ test("a Slack API token crossing prompt truncation is not sent to the naming mod
 	expect(f.warnings.join(" ")).not.toContain(token);
 });
 
-test("a PuTTY private-key file crossing prompt truncation is not sent to the naming model", async () => {
+test("private-key file markers crossing prompt truncation are not sent to the naming model", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
-	const header = "PuTTY-User-Key-File-3:";
-	const prompt = `${"x".repeat(prefixLength - 8)}${header} ${"x".repeat(1_200)}`;
+	const headers = ["PuTTY-User-Key-File-3:", "---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----"];
 	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	const f = fixture();
-	const find = spyOn(f.ctx.modelRegistry, "find");
 
-	f.input(prompt);
-	await settle();
-	expect(find).not.toHaveBeenCalled();
-	expect(f.requests).toHaveLength(0);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual([warning]);
-	expect(f.warnings.join(" ")).not.toContain("PRIVATE KEY");
+	for (const header of headers) {
+		const prompt = `${"x".repeat(prefixLength - 8)}${header} ${"x".repeat(1_200)}`;
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(header);
+	}
 });
 
 test("an age secret identity crossing prompt truncation is not sent to the naming model", async () => {
@@ -2820,6 +2823,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["-----BEGIN ", "DSA PRIVATE KEY-----"].join(""),
 		["-----BEGIN ", "ENCRYPTED PRIVATE KEY-----"].join(""),
 		["-----BEGIN PGP ", "PRIVATE KEY BLOCK-----"].join(""),
+		"---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----",
 		"PuTTY-User-Key-File-3: ssh-ed25519",
 	];
 	for (const output of outputs) {
