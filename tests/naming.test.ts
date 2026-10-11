@@ -512,6 +512,53 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 	}
 });
 
+test("screens Luhn-valid labeled payment cards across retained-context truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const label = " Card Number: ";
+	const value = "0000-0000-0000-0000";
+	const invalidLuhnValue = "0000-0000-0000-0001";
+	const prefixValueStart = prefixLength - 8;
+	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"x".repeat(1_200)}`;
+	const prefixContext = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+	expect(prefixContext.text).toBe(buildNamingContext([], prompt));
+
+	const obfuscatedValue = `${value.slice(0, 8)}\u0000${value.slice(8)}`;
+	const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const historyContent = `${"x".repeat(988 - label.length)}${label}${value} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+	const summary = buildNamingRequestContext([
+		{ role: "compactionSummary", summary: historyContent },
+	] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const suffixValueStart = suffixStart - 8;
+	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} ${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${value} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+	const labelOnlyPrompt = `${"x".repeat(prefixLength - label.length)}${label}${value} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], labelOnlyPrompt).hasSensitiveBoundary()).toBe(false);
+	const unlabeledPrompt = `${"x".repeat(prefixValueStart - 1)} ${value} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], unlabeledPrompt).hasSensitiveBoundary()).toBe(false);
+	const invalidLuhnPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${invalidLuhnValue} ${"x".repeat(1_200)}`;
+	expect(hasSensitiveNamingContext(`${label}${invalidLuhnValue}`)).toBe(false);
+	expect(buildNamingRequestContext([], invalidLuhnPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens email addresses across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
