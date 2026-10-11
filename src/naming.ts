@@ -157,6 +157,11 @@ const LABELED_PHONE_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"(\\+?\\d(?:[ .()-]?\\d){6,14})",
 	String.raw`(\+?\d(?:[\p{Cc}\p{Cf}\s]*[ .()-]?[\p{Cc}\p{Cf}\s]*\d){6,14})`,
 );
+const LABELED_PAYMENT_CARD_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_PAYMENT_CARD_PATTERN,
+	"(\\d(?:[ .()-]?\\d){12,18})",
+	String.raw`(\d(?:[\p{Cc}\p{Cf}\s]*[ .()-]?[\p{Cc}\p{Cf}\s]*\d){12,18})`,
+);
 const LABELED_CREDENTIAL_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_CREDENTIAL_PATTERN,
 	"([A-Za-z0-9._~+/=-]{20,})",
@@ -425,22 +430,27 @@ const SEPARATOR_TOLERANT_PATTERNS = [
 	EMAIL_ADDRESS_PATTERN,
 ].map((pattern) => new RegExp(`(?<![A-Za-z0-9])(?:${pattern.source})`, pattern.flags));
 
+function isLuhnValidPaymentCardNumber(value: string): boolean {
+	const digits = value.replace(/\D/gu, "");
+	if (digits.length < 13 || digits.length > 19) return false;
+	let sum = 0;
+	let doubleDigit = false;
+	for (let index = digits.length - 1; index >= 0; index--) {
+		let digit = digits.charCodeAt(index) - 48;
+		if (doubleDigit) {
+			digit *= 2;
+			if (digit > 9) digit -= 9;
+		}
+		sum += digit;
+		doubleDigit = !doubleDigit;
+	}
+	return sum % 10 === 0;
+}
+
 function hasLabeledPaymentCard(value: string): boolean {
 	const pattern = new RegExp(LABELED_PAYMENT_CARD_PATTERN.source, `${LABELED_PAYMENT_CARD_PATTERN.flags}g`);
 	for (const match of value.matchAll(pattern)) {
-		const digits = match[1].replace(/\D/gu, "");
-		let sum = 0;
-		let doubleDigit = false;
-		for (let index = digits.length - 1; index >= 0; index--) {
-			let digit = digits.charCodeAt(index) - 48;
-			if (doubleDigit) {
-				digit *= 2;
-				if (digit > 9) digit -= 9;
-			}
-			sum += digit;
-			doubleDigit = !doubleDigit;
-		}
-		if (sum % 10 === 0) return true;
+		if (isLuhnValidPaymentCardNumber(match[1])) return true;
 	}
 	return false;
 }
@@ -675,6 +685,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
 	US_SSN_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
+	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
 	EMAIL_ADDRESS_BOUNDARY_PATTERN,
 	BEARER_TOKEN_BOUNDARY_PATTERN,
 	GITHUB_TOKEN_BOUNDARY_PATTERN,
@@ -700,7 +711,11 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 				const tokenLength = match[1]!.length;
 				const tokenStart = match.index! + match[0].length - tokenLength;
 				const tokenEnd = tokenStart + tokenLength;
-				if (retainedSide === "left" ? tokenStart < boundary : tokenEnd > boundary) return true;
+				const overlapsRetainedContext = retainedSide === "left" ? tokenStart < boundary : tokenEnd > boundary;
+				if (!overlapsRetainedContext) continue;
+				if (sourcePattern === LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
+					&& !isLuhnValidPaymentCardNumber(match[1]!)) continue;
+				return true;
 			}
 		}
 	}
