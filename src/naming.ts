@@ -133,6 +133,8 @@ const RESEND_API_KEY_PATTERN = /(?<![A-Za-z0-9_])re_[A-Za-z0-9_-]{32,}(?![A-Za-z
 // The subtype separator must not prevent screening of the opaque key body.
 const TAILSCALE_KEY_PATTERN =
 	/(?<![A-Za-z0-9_-])tskey-(?:[A-Za-z0-9]{16,}|(?:auth|api|client)-[A-Za-z0-9][A-Za-z0-9_-]{15,})(?![A-Za-z0-9_-])/i;
+// Stripe webhook signing secrets use a distinctive prefix and long URL-safe value.
+const STRIPE_WEBHOOK_SECRET_PATTERN = /(?<![A-Za-z0-9_-])whsec_[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-])/i;
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -151,6 +153,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	DYNATRACE_API_TOKEN_PATTERN,
 	RESEND_API_KEY_PATTERN,
 	TAILSCALE_KEY_PATTERN,
+	STRIPE_WEBHOOK_SECRET_PATTERN,
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed
 	// by a 16-hex or `local` segment.
