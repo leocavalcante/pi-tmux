@@ -328,15 +328,18 @@ tmux set-window-option -t "$TMUX_PANE" automatic-rename on
 
 ## Privacy and security
 
-With AI naming enabled, a naming request can send up to 6,000 characters of
-task context to the configured model:
+With AI naming enabled, a naming request can send up to 6,000 UTF-16 code
+units of task context to the configured model. These limits count UTF-16 code
+units, so a supplementary Unicode character counts as two; truncation keeps
+such characters intact:
 
-- Up to 2,000 characters from your new prompt. Oversized prompts retain both
-  ends around `[... middle of prompt omitted ...]`; shorter prompts are included
-  in full.
+- Up to 2,000 UTF-16 code units from your new prompt. Oversized prompts retain
+  both ends around `[... middle of prompt omitted ...]`; shorter prompts are
+  included in full.
 - Up to eight recent user, assistant, or branch-summary text entries, each
-  capped at 1,000 characters. Older entries are omitted to fit the total cap.
-- The latest active compaction summary, capped at 1,000 characters.
+  capped at 1,000 UTF-16 code units. Older entries are omitted to fit the total
+  cap.
+- The latest active compaction summary, capped at 1,000 UTF-16 code units.
 
 Images, thinking blocks, tool calls, tool results, shell output, system prompts,
 and custom extension messages are excluded. Summaries and ordinary dialogue
