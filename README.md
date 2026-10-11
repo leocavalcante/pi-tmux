@@ -116,7 +116,9 @@ Type `/tmux-title ` to see argument suggestions in Pi's editor. Completion
 filters `status`, `sync`, `set <name>`, and `auto` as you type. Choosing `set`
 inserts `set ` so you can enter the name, not a literal `<name>` placeholder.
 Completion does not read dialogue or task names, make AI or tmux requests,
-or replace text after `set `.
+or replace text after `set `. Arguments longer than 128 Ki UTF-16 code units are
+rejected with a generic warning; autocomplete returns no suggestions for prefixes
+over the same limit. Rejected input is not echoed.
 
 ### Pin a manual title
 
