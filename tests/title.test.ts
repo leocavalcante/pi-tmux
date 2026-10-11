@@ -1043,6 +1043,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Provision Tailscale API access ${tailscaleApiKey}`, tailscaleApiKey);
 	const stripeWebhookSecret = `whsec_${"A1b2".repeat(8)}`;
 	await suppressed(fixture(), `Review the callback configuration ${stripeWebhookSecret}`, stripeWebhookSecret);
+	const slackWebhookUrl = `https://hooks.slack.com/services/${"A1b2".repeat(10)}A1b`;
+	await suppressed(fixture(), `Review callback delivery ${slackWebhookUrl}`, slackWebhookUrl);
 	const obfuscatedTailscaleKey = `tskey-auth-${"A1b2".repeat(2)}\u200b${"C3d4".repeat(2)}`;
 	await suppressed(fixture(), `Provision Tailscale auth ${obfuscatedTailscaleKey}`, obfuscatedTailscaleKey);
 	const supabaseSecretKey = `sb_secret_${"S".repeat(32)}`;
@@ -1438,6 +1440,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const npmrcPassword = npmrcPasswordSetting("pw1");
 	const obfuscatedNpmrcPassword = npmrcPassword.replace("_password", "_pass\u200bword");
 	const outputs = [
+		`https://hooks.slack.com/services/${"A1b2".repeat(10)}A1b`,
+		`https://hooks.slack.com/workflows/${"A1b2".repeat(5)}\u200b${"C3d4".repeat(5)}C3d`,
 		`whsec_${"A1b2".repeat(8)}`,
 		`whsec_${"A1b2".repeat(4)}\u200b${"C3d4".repeat(4)}`,
 		`password=${"S".repeat(12)}`,

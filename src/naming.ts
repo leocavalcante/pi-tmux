@@ -135,6 +135,9 @@ const TAILSCALE_KEY_PATTERN =
 	/(?<![A-Za-z0-9_-])tskey-(?:[A-Za-z0-9]{16,}|(?:auth|api|client)-[A-Za-z0-9][A-Za-z0-9_-]{15,})(?![A-Za-z0-9_-])/i;
 // Stripe webhook signing secrets use a distinctive prefix and long URL-safe value.
 const STRIPE_WEBHOOK_SECRET_PATTERN = /(?<![A-Za-z0-9_-])whsec_[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-])/i;
+// Slack webhook URLs carry a long token in one of the platform's webhook routes.
+const SLACK_WEBHOOK_URL_PATTERN =
+	/(?<![A-Za-z0-9.-])(?:https?:\/\/)?hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}(?![A-Za-z0-9+/=])/i;
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -154,6 +157,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	RESEND_API_KEY_PATTERN,
 	TAILSCALE_KEY_PATTERN,
 	STRIPE_WEBHOOK_SECRET_PATTERN,
+	SLACK_WEBHOOK_URL_PATTERN,
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed
 	// by a 16-hex or `local` segment.
