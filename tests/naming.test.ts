@@ -1783,6 +1783,22 @@ test("screens bearer credentials across retained-context truncation boundaries",
 	expect(hasSensitiveNamingContext(spacedContext.text)).toBe(false);
 	expect(spacedContext.hasSensitiveBoundary()).toBe(true);
 
+	const splitLabel = "Bea rer";
+	const splitLabelStart = suffixStart - 3;
+	const splitLabelPrompt = `${"x".repeat(splitLabelStart)}${splitLabel} ${token}`
+		+ "y".repeat(promptLength - splitLabelStart - splitLabel.length - 1 - token.length);
+	const splitLabelContext = buildNamingRequestContext([], splitLabelPrompt);
+	expect(hasSensitiveNamingContext(splitLabelContext.text)).toBe(false);
+	expect(splitLabelContext.hasSensitiveBoundary()).toBe(true);
+
+	const splitLabelProse = "B e a r e r authentication v2";
+	const splitLabelProseStart = suffixStart - 10;
+	const splitLabelProsePrompt = `${"x".repeat(splitLabelProseStart)}${splitLabelProse} `
+		+ "y".repeat(promptLength - splitLabelProseStart - `${splitLabelProse} `.length);
+	const splitLabelProseContext = buildNamingRequestContext([], splitLabelProsePrompt);
+	expect(hasSensitiveNamingContext(splitLabelProseContext.text)).toBe(false);
+	expect(splitLabelProseContext.hasSensitiveBoundary()).toBe(false);
+
 	for (const prose of ["Bearer authentication v2", "Bearer authentication\nv2"]) {
 		const proseSuffixStart = suffixStart - 10;
 		const proseSuffixPrompt = `${"x".repeat(proseSuffixStart)}${prose} `
@@ -1798,6 +1814,8 @@ test("screens bearer credentials across retained-context truncation boundaries",
 	expect(buildNamingRequestContext([], omittedSpacedPrompt).hasSensitiveBoundary()).toBe(false);
 	const shortPrompt = `${"x".repeat(tokenStart - label.length)}${label}${"A".repeat(15)} ${"x".repeat(1_200)}`;
 	expect(buildNamingRequestContext([], shortPrompt).hasSensitiveBoundary()).toBe(false);
+	const omittedSpacedLabelPrompt = `${"x".repeat(prefixLength + 20)}B e a r e r ${token} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedSpacedLabelPrompt).hasSensitiveBoundary()).toBe(false);
 
 	const prose = "Bearer authentication v2";
 	const proseStart = prefixLength - 10;
@@ -1805,6 +1823,18 @@ test("screens bearer credentials across retained-context truncation boundaries",
 	const proseContext = buildNamingRequestContext([], prosePrompt);
 	expect(hasSensitiveNamingContext(proseContext.text)).toBe(false);
 	expect(proseContext.hasSensitiveBoundary()).toBe(false);
+});
+
+test("screens bearer values with whitespace-obfuscated labels without blocking prose", () => {
+	const token = "A1b2".repeat(8);
+	for (const label of ["Bea rer", "B e a r e r", "Be\u200ba rer"]) {
+		const value = `${label} ${token}`;
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+	const prose = "B e a r e r authentication v2";
+	expect(hasSensitiveNamingContext(prose)).toBe(false);
+	expect(hasSensitiveOutput(prose)).toBe(false);
 });
 
 test("screens short labeled passwords and passphrases across retained-context truncation boundaries", () => {
