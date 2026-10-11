@@ -268,6 +268,33 @@ test("screens Stripe secret API keys in supported modes without flagging near-mi
 	}
 });
 
+test("screens Typeform API tokens by exact prefix and length without flagging near-misses", () => {
+	const body = `${"A1._-=".repeat(9)}A1._-`;
+	const token = `tfp_${body}`;
+	const obfuscatedTokens = [
+		token.replace("tfp_", "tf\u200bp_"),
+		`${token.slice(0, 30)}\u200b${token.slice(30)}`,
+	];
+
+	for (const value of [token, token.toUpperCase(), ...obfuscatedTokens]) {
+		expect(hasSensitiveNamingContext(`review survey integration ${value}`)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`tfp_${body.slice(0, 58)}`,
+		`tfp_${body}A`,
+		`tfq_${body}`,
+		`tfp_${body.slice(0, 20)}!${body.slice(20)}`,
+		`prefix${token}`,
+		`_${token}`,
+		"Typeform API token setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens synthetic Slack webhook URLs without flagging similar links", () => {
 	const token = "A1b2".repeat(10) + "A1b";
 	const legacySecret = "C3d4".repeat(6);
