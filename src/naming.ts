@@ -114,6 +114,11 @@ const LABELED_PASSWORD_PLAIN_PHRASE_PATTERN = new RegExp(
 const AZURE_SAS_PATTERN = /(?<![A-Za-z0-9_])(?:sv=\d{4}-\d{2}-\d{2}(?=[^#\s]{0,512}&sig=[A-Za-z0-9%+/_=-]{20,}(?:&|#|\s|$))|sig=[A-Za-z0-9%+/_=-]{20,}(?=&)(?=[^#\s]{0,512}&sv=\d{4}-\d{2}-\d{2}))/i;
 // Current Azure DevOps PATs are 84 alphanumeric characters with `AZDO` after 75 characters.
 const AZURE_DEVOPS_PAT_PATTERN = /(?<![A-Za-z0-9_])[A-Za-z0-9]{75}AZDO[A-Za-z0-9]{5}(?![A-Za-z0-9_])/;
+const AZURE_DEVOPS_PAT_BOUNDARY_PATTERN = makeBoundaryPattern(
+	AZURE_DEVOPS_PAT_PATTERN,
+	"[A-Za-z0-9]{75}AZDO[A-Za-z0-9]{5}",
+	String.raw`([A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){74}[\p{Cc}\p{Cf}]*A[\p{Cc}\p{Cf}]*Z[\p{Cc}\p{Cf}]*D[\p{Cc}\p{Cf}]*O[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){4})`,
+);
 // Azure AD application client secrets use a three-character prefix, digit-Q~, and a fixed-length body.
 const AZURE_AD_CLIENT_SECRET_PATTERN = /(?<![A-Za-z0-9_~.])[A-Za-z0-9_~.]{3}\dQ~[A-Za-z0-9_~.-]{31,34}(?![A-Za-z0-9_~.-])/;
 // Alibaba Cloud AccessKey IDs use the `LTAI` prefix and exactly 20 alphanumeric characters.
@@ -126,6 +131,11 @@ const AIRTABLE_PERSONAL_ACCESS_TOKEN_PATTERN = /(?<![A-Za-z0-9_])pat[A-Za-z0-9]{
 const CLICKHOUSE_CLOUD_API_KEY_PATTERN = /(?<![A-Za-z0-9_])4b1d[A-Za-z0-9]{38}(?![A-Za-z0-9_])/;
 // GitLab Runner authentication tokens use `glrt-` followed by 20 URL-safe characters.
 const GITLAB_RUNNER_AUTH_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])glrt-[A-Za-z0-9_-]{20}(?![A-Za-z0-9_-])/;
+const GITLAB_RUNNER_AUTH_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GITLAB_RUNNER_AUTH_TOKEN_PATTERN,
+	"glrt-[A-Za-z0-9_-]{20}",
+	String.raw`(g[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){19})`,
+);
 // Docker Hub personal and organization access tokens have fixed-length bodies.
 const DOCKER_HUB_PAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_pat_[A-Za-z0-9_-]{27}(?![A-Za-z0-9_-])/;
 const DOCKER_HUB_OAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_oat_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/;
@@ -761,6 +771,8 @@ type NamingContextBoundary = {
 // Capture group 1 must contain only the sensitive value, not its contextual label.
 const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
+	AZURE_DEVOPS_PAT_BOUNDARY_PATTERN,
+	GITLAB_RUNNER_AUTH_TOKEN_BOUNDARY_PATTERN,
 	US_SSN_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
