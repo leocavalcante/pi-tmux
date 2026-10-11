@@ -1315,7 +1315,9 @@ test("screens framework, WordPress, and cryptographic key assignments across bot
 	const prefixLength = Math.ceil(retainedLength / 2);
 	const credential = "K3y4".repeat(8);
 	const assignments = [
-		"APP_KEY", "AES_KEY", "AES_256_KEY", "AES-256-KEY", "SECRET_KEY_BASE", "ENCRYPTION_KEY", "FERNET_KEY", "HMAC_KEY", "MASTER_KEY",
+		"APP_KEY", "AES_KEY", "AES_256_KEY", "AES-256-KEY",
+		"SECRET_KEY_BASE", "ENCRYPTION_KEY", "FERNET_KEY",
+		"HMAC_KEY", "SIGNING_KEY", "JWT_SIGNING_KEY", "TOKEN_SIGNING_KEY", "MASTER_KEY",
 		"AUTH_KEY", "SECURE_AUTH_KEY", "LOGGED_IN_KEY", "NONCE_KEY",
 		"AUTH_SALT", "SECURE_AUTH_SALT", "LOGGED_IN_SALT", "NONCE_SALT",
 	]
@@ -1324,6 +1326,7 @@ test("screens framework, WordPress, and cryptographic key assignments across bot
 	assignments.push({ name: "FERNET_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
 	assignments.push({ name: "HMAC_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
 	assignments.push({ name: "AES_256_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
+	assignments.push({ name: "JWT_SIGNING_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
 
 	for (const { name, valuePrefix, value } of assignments) {
 		const assignment = `${name}=${valuePrefix}${value}`;
@@ -1360,6 +1363,9 @@ test("screens framework, WordPress, and cryptographic key assignments across bot
 		`HMAC_KEY=${"H".repeat(19)}`,
 		"AES_256_KEY=redacted",
 		"AES-256 key rotation in a synthetic project",
+		"SIGNING_KEY=placeholder",
+		"JWT_SIGNING_KEY rollover in a synthetic project",
+		`TOKEN_SIGNING_KEY=${"S".repeat(19)}`,
 		`AES_256_KEY=${"A".repeat(19)}`,
 		`ENCRYPTION_KEY=${"A".repeat(19)}`,
 		`MASTER_KEY=${"B".repeat(19)}`,
