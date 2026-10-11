@@ -1074,6 +1074,12 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(
 		fixture(), `Review Pinecone access ${obfuscatedPineconeApiKey}`, obfuscatedPineconeApiKey,
 	);
+	const railwayApiToken = ["a".repeat(8), "b".repeat(4), "c".repeat(4), "d".repeat(4), "e".repeat(12)].join("-");
+	await suppressed(fixture(), `Railway: ${railwayApiToken}`, railwayApiToken);
+	const obfuscatedRailwayApiToken = `${railwayApiToken.slice(0, 16)}\u200b${railwayApiToken.slice(16)}`;
+	await suppressed(
+		fixture(), `Railway: ${obfuscatedRailwayApiToken}`, obfuscatedRailwayApiToken,
+	);
 	const datadogApiKey = "A1b2".repeat(10);
 	await suppressed(fixture(), `Review the config Datadog: ${datadogApiKey}`, datadogApiKey);
 	const mailgunPrivateApiToken = `key-${"a1b2".repeat(8)}`;
@@ -6336,6 +6342,50 @@ test("disposed UI notifications do not reject successful title commands", async 
 	await expect(f.refresh("status")).resolves.toBeUndefined();
 	await expect(f.refresh("unknown command")).resolves.toBeUndefined();
 	await expect(f.refresh("auto")).resolves.toBeUndefined();
+});
+
+test("rejects Railway tokens only when a Railway label is present", async () => {
+	const token = ["a".repeat(8), "b".repeat(4), "c".repeat(4), "d".repeat(4), "e".repeat(12)].join("-");
+	const labeledOutput = `Railway: ${token}`;
+	const obfuscatedToken = `${token.slice(0, 16)}\u200b${token.slice(16)}`;
+	for (const output of [
+		labeledOutput,
+		labeledOutput.replace("Railway", "Rail\u200bway"),
+		`Railway: ${obfuscatedToken}`,
+	]) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(1);
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("railway deployment tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("railway deployment tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		token,
+		`project id: ${token}`,
+		`Railway ${token}`,
+		`Railway: ${token.slice(1)}`,
+		`Railway: ${token.replace("a", "g")}`,
+		`Railway: ${token}x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("railway deployment tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("railway deployment tests");
+		expect(f.warnings).toEqual([]);
+	}
 });
 
 test("rejects labeled Cloudflare API keys without mistaking near-misses for keys", async () => {

@@ -140,6 +140,13 @@ const CLOUDFLARE_GLOBAL_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?cloudf
 const DATADOG_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?datadog[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[A-Za-z0-9]{40}(?![A-Za-z0-9_-])/i;
 // Mailgun private API tokens use `key-` plus 32 hex characters and a Mailgun label.
 const MAILGUN_PRIVATE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?mailgun[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}key-[a-f0-9]{32}(?![A-Za-z0-9_-])/i;
+// Railway tokens are UUID-shaped; require a nearby Railway label and delimiter.
+const RAILWAY_API_TOKEN_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])[\w.-]{0,50}?railway[ \t\w.-]{0,20}`
+		+ String.raw`[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[\x60'"\s=]{0,5}`
+		+ String.raw`[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}(?![A-Za-z0-9_-])`,
+	"i",
+);
 // Artifactory tokens have distinctive fixed prefixes and exact body lengths.
 const ARTIFACTORY_API_KEY_PATTERN = /(?<![A-Za-z0-9_])AKCp[A-Za-z0-9]{69}(?![A-Za-z0-9_])/;
 const ARTIFACTORY_REFERENCE_TOKEN_PATTERN = /(?<![A-Za-z0-9_])cmVmd[A-Za-z0-9]{59}(?![A-Za-z0-9_])/;
@@ -208,6 +215,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	CLOUDFLARE_GLOBAL_API_KEY_PATTERN,
 	DATADOG_API_KEY_PATTERN,
 	MAILGUN_PRIVATE_API_TOKEN_PATTERN,
+	RAILWAY_API_TOKEN_PATTERN,
 	ARTIFACTORY_API_KEY_PATTERN,
 	ARTIFACTORY_REFERENCE_TOKEN_PATTERN,
 	FLY_IO_ORG_TOKEN_PATTERN,
