@@ -2492,6 +2492,47 @@ test("screens alternate AWS access IDs and ABSK bearer tokens across retained bo
 	}
 });
 
+test("screens fixed-format Bedrock API-key matches across both retained prompt boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const token = `bedrock-api-key-${Buffer.from("bedrock.amazonaws.com").toString("base64")}`;
+	const candidates = [
+		token,
+		token.replace("bedrock", "bed\u200brock"),
+		`${token.slice(0, 22)}\u0000${token.slice(22)}`,
+	];
+	const tokenStarts = [prefixLength - 10, suffixStart - 10];
+
+	for (const candidate of candidates) {
+		expect(hasSensitiveNamingContext(candidate)).toBe(true);
+		expect(hasSensitiveOutput(candidate)).toBe(true);
+		for (const tokenStart of tokenStarts) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${candidate} ${"y".repeat(promptLength - prefix.length - candidate.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	for (const nearMiss of [token.slice(0, -1), token.slice(0, -1) + "x"]) {
+		for (const tokenStart of tokenStarts) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${nearMiss} ${"y".repeat(promptLength - prefix.length - nearMiss.length - 1)}`;
+			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+
+	const omittedTokenStart = prefixLength + 20;
+	const omittedPrefix = `${"x".repeat(omittedTokenStart - 1)} `;
+	const omittedPrompt = `${omittedPrefix}${token} ${"y".repeat(promptLength - omittedPrefix.length - token.length - 1)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Sentry organization tokens across both retained prompt boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
