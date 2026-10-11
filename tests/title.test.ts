@@ -1969,6 +1969,8 @@ test("AI provider and model API tokens crossing prompt truncation skip model loo
 		`gsk_${"c".repeat(24)}`,
 		`xai-${"d".repeat(20)}`,
 		`pplx-${"e".repeat(48)}`,
+		`sk-${"m".repeat(32)}`,
+		`rk-${"n".repeat(16)}_stage-1`,
 		`sk-proj-${"f".repeat(32)}`,
 		`sk-ant-${"g".repeat(32)}`,
 		`sk-svcacct-${"h".repeat(32)}`,
