@@ -1309,19 +1309,20 @@ test("screens explicit credential assignments across retained-context truncation
 	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
-test("screens framework, WordPress, and service key assignments across both prompt truncation boundaries", () => {
+test("screens framework, WordPress, and cryptographic key assignments across both prompt truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
 	const credential = "K3y4".repeat(8);
 	const assignments = [
-		"APP_KEY", "SECRET_KEY_BASE", "ENCRYPTION_KEY", "FERNET_KEY", "MASTER_KEY",
+		"APP_KEY", "SECRET_KEY_BASE", "ENCRYPTION_KEY", "FERNET_KEY", "HMAC_KEY", "MASTER_KEY",
 		"AUTH_KEY", "SECURE_AUTH_KEY", "LOGGED_IN_KEY", "NONCE_KEY",
 		"AUTH_SALT", "SECURE_AUTH_SALT", "LOGGED_IN_SALT", "NONCE_SALT",
 	]
 		.map((name) => ({ name, valuePrefix: "", value: credential }));
 	assignments.push({ name: "APP_KEY", valuePrefix: "base64:", value: Buffer.from(credential).toString("base64") });
 	assignments.push({ name: "FERNET_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
+	assignments.push({ name: "HMAC_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
 
 	for (const { name, valuePrefix, value } of assignments) {
 		const assignment = `${name}=${valuePrefix}${value}`;
@@ -1353,6 +1354,9 @@ test("screens framework, WordPress, and service key assignments across both prom
 		"AUTH_KEY=put your unique phrase here",
 		"LOGGED_IN_SALT=example",
 		"FERNET_KEY=example",
+		"HMAC_KEY=placeholder",
+		"HMAC_KEY rotation in a synthetic project",
+		`HMAC_KEY=${"H".repeat(19)}`,
 		`ENCRYPTION_KEY=${"A".repeat(19)}`,
 		`MASTER_KEY=${"B".repeat(19)}`,
 		`NONCE_SALT=${"N".repeat(19)}`,
