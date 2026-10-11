@@ -1644,6 +1644,45 @@ test("webhook and Discord auth credentials crossing prompt truncation skip model
 	}
 });
 
+test("platform tokens crossing prompt truncation skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const telegramSecret = `A${"a".repeat(34)}`;
+	const telegramToken = `123456789:${telegramSecret}`;
+	const vaultServiceToken = `hvs.${"V".repeat(24)}`;
+	const vaultBatchToken = `hvb.${"B".repeat(24)}`;
+	const notionToken = `ntn_${"1".repeat(11)}${"a".repeat(35)}`;
+	const supabaseToken = `sb_secret_${"S".repeat(32)}`;
+	const values = [
+		{ value: telegramToken, secret: telegramSecret },
+		{ value: vaultServiceToken, secret: vaultServiceToken },
+		{ value: vaultBatchToken, secret: vaultBatchToken },
+		{ value: notionToken, secret: notionToken },
+		{ value: supabaseToken, secret: supabaseToken },
+	];
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const { value, secret } of values) {
+		const obfuscated = value.replace(secret, `${secret.slice(0, 10)}\u0000${secret.slice(10)}`);
+		for (const candidate of [value, obfuscated]) {
+			const valueStart = prefixLength - 10 - candidate.indexOf(secret.slice(0, 10));
+			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+			const f = fixture();
+			const find = spyOn(f.ctx.modelRegistry, "find");
+
+			f.input(prompt);
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(f.requests).toHaveLength(0);
+			expect(f.state.title).toBe("existing task");
+			expect(f.warnings).toEqual([warning]);
+			expect(f.warnings.join(" ")).not.toContain(secret);
+			expect(f.warnings.join(" ")).not.toContain(value);
+		}
+	}
+});
+
 test("additional fixed-format tokens crossing prompt truncation skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

@@ -84,6 +84,68 @@ test("screens webhook and Discord auth credentials across retained-context bound
 	}
 });
 
+test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const telegramSecret = `A${"a".repeat(34)}`;
+	const telegramToken = `123456789:${telegramSecret}`;
+	const vaultServiceToken = `hvs.${"V".repeat(24)}`;
+	const vaultBatchToken = `hvb.${"B".repeat(24)}`;
+	const notionToken = `ntn_${"1".repeat(11)}${"a".repeat(35)}`;
+	const supabaseToken = `sb_secret_${"S".repeat(32)}`;
+	const values = [
+		{ value: telegramToken, secret: telegramSecret },
+		{ value: vaultServiceToken, secret: vaultServiceToken },
+		{ value: vaultBatchToken, secret: vaultBatchToken },
+		{ value: notionToken, secret: notionToken },
+		{ value: supabaseToken, secret: supabaseToken },
+	];
+
+	for (const { value, secret } of values) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+		const obfuscated = value.replace(secret, `${secret.slice(0, 10)}\u0000${secret.slice(10)}`);
+		for (const candidate of [value, obfuscated]) {
+			const valueStart = prefixLength - 10 - candidate.indexOf(secret.slice(0, 10));
+			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const historyValue = values[3]!;
+	const historyValueStart = 990 - historyValue.value.indexOf(historyValue.secret);
+	const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue.value} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+
+	const summaryContent = `${"x".repeat(989)} ${supabaseToken} y`;
+	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+
+	// The Telegram bot ID may straddle a boundary while the API secret remains omitted.
+	const telegramValueStart = prefixLength + 5 - telegramToken.indexOf(telegramSecret);
+	const telegramIdOnlyPrompt = `${"x".repeat(telegramValueStart - 1)} ${telegramToken} ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], telegramIdOnlyPrompt).hasSensitiveBoundary()).toBe(false);
+
+	const nearMisses = [
+		`123456789:A${"a".repeat(33)}`,
+		`hvs.${"V".repeat(23)}`,
+		`hvb.${"B".repeat(25)}`,
+		`ntn_${"1".repeat(11)}${"a".repeat(34)}`,
+		`sb_secret_${"S".repeat(31)}`,
+	];
+	for (const nearMiss of nearMisses) {
+		const tokenStart = prefixLength - 10;
+		const prompt = `${"x".repeat(tokenStart - 1)} ${nearMiss} ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens additional supported fixed-format tokens across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
