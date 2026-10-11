@@ -119,7 +119,17 @@ const LABELED_PASSWORD_PLAIN_PHRASE_PATTERN = new RegExp(
 	"i",
 );
 // Azure Storage SAS URLs require both a dated version field and a long signature.
-const AZURE_SAS_PATTERN = /(?<![A-Za-z0-9_])(?:sv=\d{4}-\d{2}-\d{2}(?=[^#\s]{0,512}&sig=[A-Za-z0-9%+/_=-]{20,}(?:&|#|\s|$))|sig=[A-Za-z0-9%+/_=-]{20,}(?=&)(?=[^#\s]{0,512}&sv=\d{4}-\d{2}-\d{2}))/i;
+const AZURE_SAS_SIGNATURE_SOURCE = String.raw`[A-Za-z0-9%+/_=-]{20,}`;
+const AZURE_SAS_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_])(?:sv=\d{4}-\d{2}-\d{2}(?=[^#\s]{0,512}&sig=${AZURE_SAS_SIGNATURE_SOURCE}(?:&|#|\s|$))|sig=${AZURE_SAS_SIGNATURE_SOURCE}(?=&)(?=[^#\s]{0,512}&sv=\d{4}-\d{2}-\d{2}))`,
+	"i",
+);
+// Capture only the SAS signature so blocking depends on it crossing into retained context,
+// while still requiring the same version/signature relationship as the full-context scan.
+const AZURE_SAS_BOUNDARY_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_])(?:sv=\d{4}-\d{2}-\d{2}[^#\s]{0,512}&sig=(?=${AZURE_SAS_SIGNATURE_SOURCE}(?:&|#|\s|$))|sig=(?=${AZURE_SAS_SIGNATURE_SOURCE}(?=&)(?=[^#\s]{0,512}&sv=\d{4}-\d{2}-\d{2})))(${AZURE_SAS_SIGNATURE_SOURCE})`,
+	"i",
+);
 // Current Azure DevOps PATs are 84 alphanumeric characters with `AZDO` after 75 characters.
 const AZURE_DEVOPS_PAT_PATTERN = /(?<![A-Za-z0-9_])[A-Za-z0-9]{75}AZDO[A-Za-z0-9]{5}(?![A-Za-z0-9_])/;
 const AZURE_DEVOPS_PAT_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -1153,6 +1163,7 @@ type NamingContextBoundary = {
 const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
 	LABELED_PASSWORD_BOUNDARY_PATTERN,
+	AZURE_SAS_BOUNDARY_PATTERN,
 	REPLICATE_API_TOKEN_BOUNDARY_PATTERN,
 	PINECONE_API_KEY_BOUNDARY_PATTERN,
 	LINEAR_API_TOKEN_BOUNDARY_PATTERN,
