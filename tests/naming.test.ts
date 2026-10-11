@@ -2186,13 +2186,16 @@ test("screens bearer values with whitespace-obfuscated labels without blocking p
 	expect(hasSensitiveOutput(prose)).toBe(false);
 });
 
-test("screens Token authorization credentials across retained-context boundaries", () => {
+test("screens Token and ApiKey authorization credentials across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
 	const values = [
 		{ label: "Authorization: Token ", token: "A1b2".repeat(6) },
 		{ label: "Proxy-Authorization: Token ", token: "C3d4".repeat(6) },
+		{ label: "Authorization: ApiKey ", token: "E5f6".repeat(6) },
+		{ label: "Proxy-Authorization: API-Key ", token: "G7h8".repeat(6) },
+		{ label: "Authorization: A\u200bpiKey ", token: "J9k0".repeat(6) },
 	];
 
 	for (const { label, token } of values) {
@@ -2236,7 +2239,11 @@ test("screens Token authorization credentials across retained-context boundaries
 		`Authorization: Token ${"A".repeat(19)}`,
 		`Authorization: Token authentication is supported`,
 		`Authorization: Tokenish ${"A".repeat(24)}`,
+		`Authorization: ApiKey ${"A".repeat(19)}`,
+		`Authorization: ApiKey authentication is supported`,
+		`Authorization: ApiKeyish ${"A".repeat(24)}`,
 		`prefixAuthorization: Token ${"A".repeat(24)}`,
+		`prefixAuthorization: ApiKey ${"A".repeat(24)}`,
 	]) {
 		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
 		expect(hasSensitiveOutput(nearMiss)).toBe(false);

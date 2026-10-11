@@ -1198,6 +1198,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `B e a r e r ${bearerToken}`, bearerToken);
 	const authorizationToken = `Authorization: Token ${"A1b2".repeat(6)}`;
 	await suppressed(fixture(), authorizationToken, authorizationToken);
+	const authorizationApiKey = `Authorization: ApiKey ${"C3d4".repeat(6)}`;
+	await suppressed(fixture(), authorizationApiKey, authorizationApiKey);
 	const longBearerToken = "A1b2".repeat(20);
 	const spacedBearerToken = `${longBearerToken.slice(0, 10)} ${longBearerToken.slice(10)}`;
 	const suffixLength = Math.floor(retainedPromptLength / 2);
@@ -2841,6 +2843,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["Bearer ", "a".repeat(24)].join(""),
 		["Authorization: Token ", "A1b2".repeat(6)].join(""),
 		["Proxy-Authorization: Token ", "C3d4".repeat(6)].join(""),
+		["Authorization: ApiKey ", "E5f6".repeat(6)].join(""),
+		["Proxy-Authorization: API-Key ", "G7h8".repeat(6)].join(""),
 		["B e a r e r ", "A1b2".repeat(8)].join(""),
 		["Bearer ", "a".repeat(8), " ", "a".repeat(8)].join(""),
 		["Bearer ", "a".repeat(7), "1 ", "a".repeat(8)].join(""),
