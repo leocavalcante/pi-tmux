@@ -517,11 +517,13 @@ function getTextPhase(textSignature: string | undefined): string | undefined {
 export function parseNamingModel(value?: string): NamingModel | null {
 	const setting = value?.trim();
 	if (!setting) return { ...DEFAULT_NAMING_MODEL };
+	// Reject before splitting so oversized settings do not create more large strings.
+	if (setting.length > 256) throw new Error("PI_TMUX_MODEL must be provider/model or off");
 	if (setting.toLowerCase() === "off") return null;
 	const slash = setting.indexOf("/");
 	const provider = setting.slice(0, slash);
 	const id = setting.slice(slash + 1);
-	if (slash < 1 || !/^[\x21-\x2e\x30-\x7e]+$/.test(provider) || !/^[\x21-\x7e]+$/.test(id) || setting.length > 256) {
+	if (slash < 1 || !/^[\x21-\x2e\x30-\x7e]+$/.test(provider) || !/^[\x21-\x7e]+$/.test(id)) {
 		throw new Error("PI_TMUX_MODEL must be provider/model or off");
 	}
 	return { provider, id };
