@@ -139,6 +139,8 @@ const FLY_IO_MACHINE_TOKEN_PATTERN = /(?<![A-Za-z0-9_])(?:fm1[ar]|fm2)_[A-Za-z0-
 const DYNATRACE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])dt0c01\.[A-Za-z0-9]{24}\.[A-Za-z0-9]{64}(?![A-Za-z0-9_])/;
 // Resend API keys have the distinctive `re_` prefix and a long URL-safe body.
 const RESEND_API_KEY_PATTERN = /(?<![A-Za-z0-9_])re_[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-])/;
+// New Relic user API keys use `NRAK-` followed by exactly 27 alphanumeric characters.
+const NEW_RELIC_USER_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])NRAK-[A-Za-z0-9]{27}(?![A-Za-z0-9_-])/i;
 // Tailscale key values can be untyped or include an auth/api/client subtype.
 // The subtype separator must not prevent screening of the opaque key body.
 const TAILSCALE_KEY_PATTERN =
@@ -190,6 +192,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	FLY_IO_MACHINE_TOKEN_PATTERN,
 	DYNATRACE_API_TOKEN_PATTERN,
 	RESEND_API_KEY_PATTERN,
+	NEW_RELIC_USER_API_KEY_PATTERN,
 	TAILSCALE_KEY_PATTERN,
 	STRIPE_WEBHOOK_SECRET_PATTERN,
 	SLACK_WEBHOOK_URL_PATTERN,
