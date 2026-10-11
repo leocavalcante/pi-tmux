@@ -3963,6 +3963,22 @@ test("waiting status still works when the naming model is unavailable", async ()
 	expect(f.requests).toHaveLength(0);
 });
 
+test("naming model failures show a generic warning without disclosing error details", async () => {
+	let rejectWork!: (error: Error) => void;
+	const work = new Promise<ReturnType<typeof response>>((_resolve, reject) => { rejectWork = reject; });
+	const f = fixture([work]);
+	f.input("Task");
+	rejectWork(new Error("Synthetic provider failure detail"));
+	await settle();
+
+	expect(f.requests).toHaveLength(1);
+	expect(f.state.title).toBe("existing task");
+	expect(f.warnings).toEqual([
+		"tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.",
+	]);
+	expect(f.warnings.join("\n")).not.toContain("Synthetic provider failure detail");
+});
+
 test("an aborted run is settled and waiting, without implying task success", async () => {
 	const f = fixture([]);
 	await f.handlers.get("agent_settled")!({ type: "agent_settled", aborted: true }, f.ctx);
