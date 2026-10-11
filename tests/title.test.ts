@@ -1086,6 +1086,12 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(
 		fixture(), `${obfuscatedVercelLabel}: ${vercelApiToken}`, vercelApiToken,
 	);
+	const promptMarker = "[... middle of prompt omitted ...]";
+	const retainedPromptLength = MAX_PROMPT_LENGTH - promptMarker.length - 2;
+	const prefixLength = Math.ceil(retainedPromptLength / 2);
+	const tokenStart = prefixLength - 10;
+	const truncatedVercelPrompt = `${"x".repeat(tokenStart - 9)} Vercel: ${vercelApiToken} ${"x".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedVercelPrompt, vercelApiToken);
 	const datadogApiKey = "A1b2".repeat(10);
 	await suppressed(fixture(), `Review the config Datadog: ${datadogApiKey}`, datadogApiKey);
 	const mailgunPrivateApiToken = `key-${"a1b2".repeat(8)}`;
@@ -1460,6 +1466,34 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	expect(placeholderCredentials.requests).toHaveLength(1);
 	expect(placeholderCredentials.state.title).toBe("review docs");
 	expect(placeholderCredentials.warnings).toEqual([]);
+});
+
+test("a boundary-detected credential bypasses unchanged-context deduplication", async () => {
+	const token = "A1b2".repeat(6);
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixLength = Math.floor(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffix = "y".repeat(suffixLength);
+	const prefix = `${"x".repeat(prefixLength - 19)} Vercel: ${token.slice(0, 10)}`;
+	const middleLength = promptLength - prefix.length - suffix.length;
+	const safePrompt = `${prefix}.${"m".repeat(middleLength - 1)}${suffix}`;
+	const sensitivePrompt = `${prefix}${token.slice(10)} ${"m".repeat(middleLength - token.slice(10).length - 1)}${suffix}`;
+	const f = fixture();
+
+	f.input(safePrompt);
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	expect(f.warnings).toEqual([]);
+
+	f.input(sensitivePrompt);
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	expect(f.warnings).toEqual([
+		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+	]);
+	expect(f.warnings.join(" ")).not.toContain(token);
 });
 
 test("safe naming can resume after a credential-looking context is blocked", async () => {

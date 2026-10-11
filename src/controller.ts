@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
-	buildNamingContext,
+	buildNamingRequestContext,
 	hasSensitiveNamingContext,
 	hasSensitiveOutput,
 	InvalidNamingTitleError,
@@ -496,8 +496,11 @@ export function createController(tmux: RunTmux) {
 		}
 		if (!namingModel) return false;
 		let text: string;
+		let hasSensitiveBoundary = () => false;
 		try {
-			text = buildNamingContext(ctx.sessionManager.buildSessionProjection(), prompt);
+			const namingContext = buildNamingRequestContext(ctx.sessionManager.buildSessionProjection(), prompt);
+			text = namingContext.text;
+			hasSensitiveBoundary = namingContext.hasSensitiveBoundary;
 		} catch {
 			// Do not let a transient session-projection failure escape a Pi event or
 			// leave an older request eligible to rename the window with stale context.
@@ -506,10 +509,11 @@ export function createController(tmux: RunTmux) {
 			warnOnce(ctx, "Pi session context could not be read. The tmux title was not updated.");
 			return undefined;
 		}
-		if (!force && text === lastNamingContext) return false;
+		const sensitiveContext = hasSensitiveNamingContext(text) || hasSensitiveBoundary();
+		if (!force && text === lastNamingContext && !sensitiveContext) return false;
 		// Empty or sensitive context still supersedes work based on prior dialogue.
 		cancel();
-		if (hasSensitiveNamingContext(text)) {
+		if (sensitiveContext) {
 			// Do not retain a rejected credential-bearing context for deduplication.
 			lastNamingContext = undefined;
 			warnOnce(ctx, "Sensitive-looking task context was not sent to the naming model; the current title was kept.");

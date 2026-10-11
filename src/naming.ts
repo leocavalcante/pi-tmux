@@ -12,6 +12,7 @@ const MAX_NAMING_CONTENT_BLOCKS = 128;
 const MAX_TEXT_SIGNATURE_LENGTH = 4 * 1024;
 const MAX_HISTORY_TEXT_LENGTH = 1_000;
 const MAX_NAMING_CONTEXT_BLOCKS = 128;
+const MAX_VERCEL_BOUNDARY_SCAN_LENGTH = 128;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 export type NamingModel = { provider: string; id: string };
@@ -141,7 +142,8 @@ const DATADOG_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?datadog[ \t\w.-]
 // Mailgun private API tokens use `key-` plus 32 hex characters and a Mailgun label.
 const MAILGUN_PRIVATE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?mailgun[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}key-[a-f0-9]{32}(?![A-Za-z0-9_-])/i;
 // Vercel tokens use exactly 24 alphanumeric characters; require a nearby Vercel label.
-const VERCEL_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?vercel[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[A-Za-z0-9]{24}(?![A-Za-z0-9_-])/i;
+const VERCEL_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?vercel[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}([A-Za-z0-9]{24})(?![A-Za-z0-9_-])/i;
+const VERCEL_API_TOKEN_BOUNDARY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?vercel[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}([A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){23})(?![A-Za-z0-9_-])/iu;
 // Railway tokens are UUID-shaped; require a nearby Railway label and delimiter.
 const RAILWAY_API_TOKEN_PATTERN = new RegExp(
 	String.raw`(?<![A-Za-z0-9_-])[\w.-]{0,50}?railway[ \t\w.-]{0,20}`
@@ -591,6 +593,31 @@ export function parseNamingModel(value?: string): NamingModel | null {
 
 const WHITESPACE = /[\s\p{White_Space}]/u;
 
+type NamingContextBoundary = {
+	left: string;
+	right: string;
+	retainedSide: "left" | "right";
+};
+
+function hasVercelTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {
+	const stripFormatting = (value: string) => value.normalize("NFKD").replace(/[\p{M}\p{Cf}]/gu, "");
+	const variants: Array<[string, string]> = [
+		[left, right],
+		[stripFormatting(left), stripFormatting(right)],
+	];
+	for (const [prefix, suffix] of variants) {
+		const boundary = prefix.length;
+		const pattern = new RegExp(VERCEL_API_TOKEN_BOUNDARY_PATTERN.source, `${VERCEL_API_TOKEN_BOUNDARY_PATTERN.flags}g`);
+		for (const match of (prefix + suffix).matchAll(pattern)) {
+			const tokenLength = match[1]!.length;
+			const tokenStart = match.index! + match[0].length - tokenLength;
+			const tokenEnd = tokenStart + tokenLength;
+			if (retainedSide === "left" ? tokenStart < boundary : tokenEnd > boundary) return true;
+		}
+	}
+	return false;
+}
+
 function trimTrailingWhitespace(text: string): string {
 	return text.replace(/[\s\p{White_Space}]+$/u, "");
 }
@@ -645,9 +672,28 @@ function boundedText(content: unknown, maxLength: number): string {
 	return trimTrailingWhitespace(text);
 }
 
+function boundedTextWithBoundary(
+	content: unknown,
+	maxLength: number,
+	boundaries?: NamingContextBoundary[],
+): string {
+	const text = boundedText(content, maxLength);
+	if (!boundaries || !text) return text;
+	const extended = boundedText(content, maxLength + MAX_VERCEL_BOUNDARY_SCAN_LENGTH);
+	if (extended.length <= maxLength) return text;
+	const left = text.slice(-MAX_VERCEL_BOUNDARY_SCAN_LENGTH);
+	const right = extended.slice(text.length, text.length + MAX_VERCEL_BOUNDARY_SCAN_LENGTH);
+	if (left && right) boundaries.push({ left, right, retainedSide: "left" });
+	return text;
+}
+
 const PROMPT_TRUNCATION_MARKER = "[... middle of prompt omitted ...]";
 
-function boundedPrompt(prompt: string, maxLength: number): string {
+function boundedPrompt(
+	prompt: string,
+	maxLength: number,
+	boundaries?: NamingContextBoundary[],
+): string {
 	if (prompt.length <= maxLength) return boundedText(prompt, maxLength);
 	const retainedLength = maxLength - PROMPT_TRUNCATION_MARKER.length - 2;
 	let prefixLength = Math.ceil(retainedLength / 2);
@@ -661,6 +707,13 @@ function boundedPrompt(prompt: string, maxLength: number): string {
 		suffixLength--;
 	}
 	const prefix = boundedText(prompt.slice(0, prefixLength), prefixLength);
+	if (boundaries && prefix) {
+		boundaries.push({
+			left: prefix.slice(-MAX_VERCEL_BOUNDARY_SCAN_LENGTH),
+			right: prompt.slice(prefixLength, prefixLength + MAX_VERCEL_BOUNDARY_SCAN_LENGTH),
+			retainedSide: "left",
+		});
+	}
 	let suffixStart = prompt.length - suffixLength;
 	// Do not start the suffix with half of a supplementary Unicode character.
 	if (suffixStart > 0 && suffixStart < prompt.length
@@ -669,13 +722,20 @@ function boundedPrompt(prompt: string, maxLength: number): string {
 		suffixStart++;
 	}
 	const suffix = boundedText(prompt.slice(suffixStart), suffixLength);
+	if (boundaries && suffix) {
+		boundaries.push({
+			left: prompt.slice(Math.max(0, suffixStart - MAX_VERCEL_BOUNDARY_SCAN_LENGTH), suffixStart),
+			right: suffix.slice(0, MAX_VERCEL_BOUNDARY_SCAN_LENGTH),
+			retainedSide: "right",
+		});
+	}
 	if (!prefix) return suffix;
 	if (!suffix) return prefix;
 	return `${prefix}\n${PROMPT_TRUNCATION_MARKER}\n${suffix}`;
 }
 
-function boundedSummary(summary: string): string {
-	const text = boundedText(summary, MAX_HISTORY_TEXT_LENGTH);
+function boundedSummary(summary: string, boundaries?: NamingContextBoundary[]): string {
+	const text = boundedTextWithBoundary(summary, MAX_HISTORY_TEXT_LENGTH, boundaries);
 	return text ? `summary: ${text}` : "";
 }
 
@@ -684,53 +744,80 @@ function assembleNamingContext(
 	prompt: string,
 	knownSummary: string | undefined,
 	searchMessagesForSummary: boolean,
+	boundaries?: NamingContextBoundary[],
 ): string {
 	// Walk backward so text from history older than the retained window is never
 	// copied into temporary strings. Projection-aware callers supply the summary
 	// separately, allowing the walk to stop as soon as the recent window is full.
-	const history: string[] = [];
-	let summary = knownSummary ?? "";
+	const history: Array<{ text: string; boundaries: NamingContextBoundary[] }> = [];
+	let summaryBoundaries: NamingContextBoundary[] = [];
+	let summary = knownSummary === undefined ? "" : boundedSummary(knownSummary, boundaries && summaryBoundaries);
 	let foundSummary = !searchMessagesForSummary;
 	// Messages-only compatibility inputs lack projection provenance, so a
 	// compaction summary may need to be found in the flat array. Preserve the
 	// common first-entry summary, then bound the backward search for recent text
 	// and any newer summary instead of scanning arbitrarily long tool histories.
 	if (searchMessagesForSummary && messages[0]?.role === "compactionSummary") {
-		summary = boundedSummary(messages[0].summary);
+		summaryBoundaries = [];
+		summary = boundedSummary(messages[0].summary, boundaries && summaryBoundaries);
 	}
 	const scanLimit = MAX_HISTORY_MESSAGES_SCANNED;
 	for (let i = messages.length - 1, scanned = 0; i >= 0 && scanned < scanLimit; i--, scanned++) {
 		const message = messages[i];
 		if (message.role === "compactionSummary") {
 			if (!foundSummary) {
-				summary = boundedSummary(message.summary);
+				summaryBoundaries = [];
+				summary = boundedSummary(message.summary, boundaries && summaryBoundaries);
 				foundSummary = true;
 			}
 		} else if (history.length < MAX_HISTORY_MESSAGES) {
+			const entryBoundaries = boundaries ? [] : undefined;
 			if (message.role === "branchSummary") {
-				const text = boundedText(message.summary, MAX_HISTORY_TEXT_LENGTH);
-				if (text) history.push(`branch summary: ${text}`);
+				const text = boundedTextWithBoundary(message.summary, MAX_HISTORY_TEXT_LENGTH, entryBoundaries);
+				if (text) history.push({ text: `branch summary: ${text}`, boundaries: entryBoundaries ?? [] });
 			} else if (message.role === "user" || message.role === "assistant") {
-				const text = boundedText(message.content, MAX_HISTORY_TEXT_LENGTH);
-				if (text) history.push(`${message.role}: ${text}`);
+				const text = boundedTextWithBoundary(message.content, MAX_HISTORY_TEXT_LENGTH, entryBoundaries);
+				if (text) history.push({ text: `${message.role}: ${text}`, boundaries: entryBoundaries ?? [] });
 			}
 		}
 		if (foundSummary && history.length >= MAX_HISTORY_MESSAGES) break;
 	}
 
-	const latest = boundedPrompt(prompt, MAX_PROMPT_LENGTH);
+	const latest = boundedPrompt(prompt, MAX_PROMPT_LENGTH, boundaries);
 	const parts = latest ? [`user: ${latest}`] : [];
 	let remaining = MAX_CONTEXT_LENGTH - parts.join("\n\n").length - (summary ? summary.length + 2 : 0);
 	// The backward scan already selected recent entries, newest first. Prepending
 	// them preserves chronological context while prioritizing the latest dialogue.
-	for (const text of history) {
+	for (const entry of history) {
 		const separator = parts.length ? 2 : 0;
-		if (text.length + separator > remaining) break;
-		parts.unshift(text);
-		remaining -= text.length + separator;
+		if (entry.text.length + separator > remaining) break;
+		parts.unshift(entry.text);
+		boundaries?.push(...entry.boundaries);
+		remaining -= entry.text.length + separator;
 	}
-	if (summary) parts.unshift(summary);
+	if (summary) {
+		parts.unshift(summary);
+		boundaries?.push(...summaryBoundaries);
+	}
 	return parts.join("\n\n");
+}
+
+function createNamingContext(
+	input: SessionProjection["messages"] | SessionProjection,
+	prompt: string,
+	boundaries?: NamingContextBoundary[],
+): string {
+	if (Array.isArray(input)) return assembleNamingContext(input, prompt, undefined, true, boundaries);
+	const projection = input as SessionProjection;
+	if (!Array.isArray(projection.entries)) {
+		return assembleNamingContext(projection.messages, prompt, undefined, true, boundaries);
+	}
+	const firstEntry = projection.entries[0];
+	const summaryMessage = firstEntry?.sourceEntry.type === "compaction"
+		? firstEntry.messages.find((message) => message.role === "compactionSummary")
+		: undefined;
+	const summary = summaryMessage?.role === "compactionSummary" ? summaryMessage.summary : undefined;
+	return assembleNamingContext(projection.messages, prompt, summary, false, boundaries);
 }
 
 // Keep the messages-only helper compatible with arbitrary message lists. Without
@@ -743,19 +830,18 @@ export function buildNamingContext(
 	input: SessionProjection["messages"] | SessionProjection,
 	prompt = "",
 ): string {
-	if (Array.isArray(input)) return assembleNamingContext(input, prompt, undefined, true);
-	const projection = input as SessionProjection;
-	if (!Array.isArray(projection.entries)) {
-		return assembleNamingContext(projection.messages, prompt, undefined, true);
-	}
-	const firstEntry = projection.entries[0];
-	const summaryMessage = firstEntry?.sourceEntry.type === "compaction"
-		? firstEntry.messages.find((message) => message.role === "compactionSummary")
-		: undefined;
-	const summary = summaryMessage?.role === "compactionSummary"
-		? boundedSummary(summaryMessage.summary)
-		: undefined;
-	return assembleNamingContext(projection.messages, prompt, summary, false);
+	return createNamingContext(input, prompt);
+}
+
+// Keep boundary snippets private to the naming path; they are only inspected
+// locally and never added to the text sent to the model.
+export function buildNamingRequestContext(
+	input: SessionProjection["messages"] | SessionProjection,
+	prompt = "",
+): { text: string; hasSensitiveBoundary: () => boolean } {
+	const boundaries: NamingContextBoundary[] = [];
+	const text = createNamingContext(input, prompt, boundaries);
+	return { text, hasSensitiveBoundary: () => boundaries.some(hasVercelTokenAcrossBoundary) };
 }
 
 // Stop waiting even when a provider ignores its signal. The attached rejection
