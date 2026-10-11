@@ -1112,6 +1112,65 @@ test("screens Google API keys across retained-context truncation boundaries", ()
 	}
 });
 
+test("screens Google OAuth tokens across retained-context truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const tokens = [
+		`GOCSPX-${"A1b_-".repeat(7)}`,
+		`1//${"B2c_-".repeat(7)}`,
+		`ya29.${"C3d_-".repeat(7)}`,
+	];
+	const prefixTokenStart = prefixLength - 8;
+
+	for (const token of tokens) {
+		const prompt = `${"x".repeat(prefixTokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
+		const context = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+		expect(context.text).toBe(buildNamingContext([], prompt));
+
+		const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+		const obfuscatedPrompt = `${"x".repeat(prefixTokenStart - 1)} ${controlObfuscated} ${"x".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+		const historyContent = `${"x".repeat(991)} ${token} y`;
+		const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+		expect(hasSensitiveNamingContext(history.text)).toBe(false);
+		expect(history.hasSensitiveBoundary()).toBe(true);
+		const summary = buildNamingRequestContext([
+			{ role: "compactionSummary", summary: historyContent },
+		] as any);
+		expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+		expect(summary.hasSensitiveBoundary()).toBe(true);
+
+		const promptLength = MAX_PROMPT_LENGTH + 300;
+		const suffixLength = Math.floor(retainedLength / 2);
+		const suffixStart = promptLength - suffixLength;
+		const suffixTokenStart = suffixStart - token.length + 8;
+		const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
+		const suffixContext = buildNamingRequestContext([], suffixPrompt);
+		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+		const omittedPrompt = `${"x".repeat(prefixLength + 19)} ${token} ${"y".repeat(3_000)}`;
+		expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+	}
+
+	for (const nearMiss of [
+		`GOCSPX-${"A".repeat(19)}`,
+		`1//${"B".repeat(19)}`,
+		`ya29.${"C".repeat(19)}`,
+		`GOCSPY-${"A".repeat(20)}`,
+		`1//${"B".repeat(10)}!${"B".repeat(10)}`,
+		`ya28.${"C".repeat(20)}`,
+		`x${tokens[0]}`,
+	]) {
+		const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens additional AWS access-key ID prefixes without flagging near-misses", () => {
 	const keys = [
 		`A3TA${"B".repeat(16)}`,

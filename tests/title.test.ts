@@ -1100,6 +1100,16 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const googleApiKeyStart = prefixLength - 8;
 	const truncatedGoogleApiPrompt = `${"x".repeat(googleApiKeyStart - 1)} ${truncatedGoogleApiKey} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedGoogleApiPrompt, truncatedGoogleApiKey);
+	const googleOAuthTokens = [
+		`GOCSPX-${"A1b_-".repeat(7)}`,
+		`1//${"B2c_-".repeat(7)}`,
+		`ya29.${"C3d_-".repeat(7)}`,
+	];
+	for (const googleOAuthToken of googleOAuthTokens) {
+		const tokenStart = prefixLength - 8;
+		const truncatedOAuthPrompt = `${"x".repeat(tokenStart - 1)} ${googleOAuthToken} ${"x".repeat(1_200)}`;
+		await suppressed(fixture(), truncatedOAuthPrompt, googleOAuthToken);
+	}
 	const githubToken = `ghp_${"A".repeat(36)}`;
 	const githubTokenStart = prefixLength - 8;
 	const truncatedGithubPrompt = `${"x".repeat(githubTokenStart)}${githubToken} ${"x".repeat(1_200)}`;
