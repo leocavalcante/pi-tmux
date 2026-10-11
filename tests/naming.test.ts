@@ -153,6 +153,40 @@ test("screens synthetic Discord webhook URLs without flagging similar links", ()
 	}
 });
 
+test("screens synthetic Discord authentication and MFA tokens without flagging near-misses", () => {
+	const first = "A1b_".repeat(6);
+	const middle = "cD9_-Z";
+	const last = "QwErTy9_-".repeat(3);
+	const authToken = `${first}.${middle}.${last}`;
+	const mfaToken = `mfa.${"a1B_".repeat(21)}`;
+	const obfuscatedTokens = [
+		authToken.replace(`${first}.`, `${first}.\u200b`),
+		mfaToken.replace("mfa.", "mfa.\u200b"),
+	];
+
+	for (const value of [authToken, mfaToken, ...obfuscatedTokens]) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`${first.slice(1)}.${middle}.${last}`,
+		`${first}.${middle.slice(1)}.${last}`,
+		`${first}.${middle}.${last.slice(1)}`,
+		`${authToken}x`,
+		`x${authToken}`,
+		`mfa.${"a1B_".repeat(20)}`,
+		`mfa.${"a1B_".repeat(21)}A`,
+		mfaToken.slice(1),
+		`${mfaToken}x`,
+		`x${mfaToken}`,
+		"Discord bot authentication setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens synthetic Microsoft Teams incoming webhook URLs without flagging similar links", () => {
 	const guid = "01234567-89ab-cdef-0123-456789abcdef";
 	const otherGuid = "fedcba98-7654-3210-fedc-ba9876543210";
@@ -181,27 +215,34 @@ test("screens synthetic Microsoft Teams incoming webhook URLs without flagging s
 	}
 });
 
-test("requestNamingTitle screens context before model-registry access", async () => {
-	const contextText = "task: pi-tmux@example.invalid";
+test("requestNamingTitle screens sensitive context before model-registry access", async () => {
+	const contextTexts = [
+		"task: pi-tmux@example.invalid",
+		`${"A1b_".repeat(6)}.${"cD9_-Z"}.${"QwErTy9_-".repeat(3)}`,
+		`mfa.${"a1B_".repeat(21)}`,
+	];
 	const context = {
 		get modelRegistry() {
 			throw new Error("Sensitive context must be rejected before model-registry access");
 		},
 	} as unknown as ExtensionContext;
-	let error: unknown;
-	try {
-		await requestNamingTitle(
-			contextText,
-			context,
-			{ provider: "openai-codex", id: "gpt-6-luna" },
-			new AbortController().signal,
-			() => true,
-		);
-	} catch (caught) {
-		error = caught;
-	}
 
-	expect(error).toBeInstanceOf(UnsafeNamingContextError);
-	expect((error as Error).message).toBe("Naming context looked like it contained sensitive data");
-	expect((error as Error).message).not.toContain("example.invalid");
+	for (const contextText of contextTexts) {
+		let error: unknown;
+		try {
+			await requestNamingTitle(
+				contextText,
+				context,
+				{ provider: "openai-codex", id: "gpt-6-luna" },
+				new AbortController().signal,
+				() => true,
+			);
+		} catch (caught) {
+			error = caught;
+		}
+
+		expect(error).toBeInstanceOf(UnsafeNamingContextError);
+		expect((error as Error).message).toBe("Naming context looked like it contained sensitive data");
+		expect((error as Error).message).not.toContain(contextText);
+	}
 });

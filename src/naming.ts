@@ -146,6 +146,10 @@ const SLACK_LEGACY_WEBHOOK_URL_PATTERN =
 // Accept both current and legacy API hostnames.
 const DISCORD_WEBHOOK_URL_PATTERN =
 	/(?<![A-Za-z0-9.-])https:\/\/(?:discord\.com|discordapp\.com)\/api\/webhooks\/[0-9]{18,19}\/[A-Za-z0-9_-]{68}(?![A-Za-z0-9_-])/i;
+// Discord authentication tokens use three fixed-length URL-safe segments; MFA
+// tokens use a distinct prefix and an 84-character URL-safe body.
+const DISCORD_AUTH_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{24}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27}(?![A-Za-z0-9_-])/;
+const DISCORD_MFA_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])mfa\.[A-Za-z0-9_-]{84}(?![A-Za-z0-9_-])/i;
 // Teams incoming webhook URLs embed multiple GUIDs and a long webhook token.
 const MICROSOFT_TEAMS_GUID_PATTERN = String.raw`[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}`;
 const MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN = new RegExp(
@@ -176,6 +180,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	SLACK_WEBHOOK_URL_PATTERN,
 	SLACK_LEGACY_WEBHOOK_URL_PATTERN,
 	DISCORD_WEBHOOK_URL_PATTERN,
+	DISCORD_AUTH_TOKEN_PATTERN,
+	DISCORD_MFA_TOKEN_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN,
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed
