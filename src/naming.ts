@@ -12,7 +12,7 @@ const MAX_NAMING_CONTENT_BLOCKS = 128;
 const MAX_TEXT_SIGNATURE_LENGTH = 4 * 1024;
 const MAX_HISTORY_TEXT_LENGTH = 1_000;
 const MAX_NAMING_CONTEXT_BLOCKS = 128;
-const MAX_VERCEL_BOUNDARY_SCAN_LENGTH = 128;
+const MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH = 128;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 export type NamingModel = { provider: string; id: string };
@@ -135,8 +135,19 @@ const HEROKU_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])HRKU-AA[A-Za-z0-9_-]{58}(?![A
 const EASYPOST_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])EZ(?:AK|TK)[A-Za-z0-9]{54}(?![A-Za-z0-9_])/i;
 // Cloudflare API keys have 40 URL-safe characters; global keys have 37 hex characters.
 // Require a nearby Cloudflare label to avoid flagging unrelated opaque values.
-const CLOUDFLARE_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?cloudflare[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[a-z0-9_-]{40}(?![A-Za-z0-9_-])/i;
-const CLOUDFLARE_GLOBAL_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?cloudflare[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[a-f0-9]{37}(?![A-Za-z0-9_-])/i;
+const CLOUDFLARE_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?cloudflare[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}([a-z0-9_-]{40})(?![A-Za-z0-9_-])/i;
+const CLOUDFLARE_GLOBAL_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?cloudflare[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}([a-f0-9]{37})(?![A-Za-z0-9_-])/i;
+// Boundary variants keep exact token lengths while allowing embedded format controls.
+const CLOUDFLARE_API_KEY_BOUNDARY_PATTERN = new RegExp(
+	CLOUDFLARE_API_KEY_PATTERN.source.replace(
+		"([a-z0-9_-]{40})", String.raw`([a-z0-9_-](?:[\p{Cc}\p{Cf}]*[a-z0-9_-]){39})`,
+	), `${CLOUDFLARE_API_KEY_PATTERN.flags}u`,
+);
+const CLOUDFLARE_GLOBAL_API_KEY_BOUNDARY_PATTERN = new RegExp(
+	CLOUDFLARE_GLOBAL_API_KEY_PATTERN.source.replace(
+		"([a-f0-9]{37})", String.raw`([a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){36})`,
+	), `${CLOUDFLARE_GLOBAL_API_KEY_PATTERN.flags}u`,
+);
 // Datadog API keys are 40 alphanumeric characters; require a nearby Datadog label.
 const DATADOG_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?datadog[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[A-Za-z0-9]{40}(?![A-Za-z0-9_-])/i;
 // Mailgun private API tokens use `key-` plus 32 hex characters and a Mailgun label.
@@ -599,7 +610,14 @@ type NamingContextBoundary = {
 	retainedSide: "left" | "right";
 };
 
-function hasVercelTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {
+// Capture group 1 must contain only the credential value, not its contextual label.
+const SENSITIVE_BOUNDARY_PATTERNS = [
+	VERCEL_API_TOKEN_BOUNDARY_PATTERN,
+	CLOUDFLARE_API_KEY_BOUNDARY_PATTERN,
+	CLOUDFLARE_GLOBAL_API_KEY_BOUNDARY_PATTERN,
+];
+
+function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {
 	const stripFormatting = (value: string) => value.normalize("NFKD").replace(/[\p{M}\p{Cf}]/gu, "");
 	const variants: Array<[string, string]> = [
 		[left, right],
@@ -607,12 +625,14 @@ function hasVercelTokenAcrossBoundary({ left, right, retainedSide }: NamingConte
 	];
 	for (const [prefix, suffix] of variants) {
 		const boundary = prefix.length;
-		const pattern = new RegExp(VERCEL_API_TOKEN_BOUNDARY_PATTERN.source, `${VERCEL_API_TOKEN_BOUNDARY_PATTERN.flags}g`);
-		for (const match of (prefix + suffix).matchAll(pattern)) {
-			const tokenLength = match[1]!.length;
-			const tokenStart = match.index! + match[0].length - tokenLength;
-			const tokenEnd = tokenStart + tokenLength;
-			if (retainedSide === "left" ? tokenStart < boundary : tokenEnd > boundary) return true;
+		for (const sourcePattern of SENSITIVE_BOUNDARY_PATTERNS) {
+			const pattern = new RegExp(sourcePattern.source, `${sourcePattern.flags}g`);
+			for (const match of (prefix + suffix).matchAll(pattern)) {
+				const tokenLength = match[1]!.length;
+				const tokenStart = match.index! + match[0].length - tokenLength;
+				const tokenEnd = tokenStart + tokenLength;
+				if (retainedSide === "left" ? tokenStart < boundary : tokenEnd > boundary) return true;
+			}
 		}
 	}
 	return false;
@@ -679,10 +699,10 @@ function boundedTextWithBoundary(
 ): string {
 	const text = boundedText(content, maxLength);
 	if (!boundaries || !text) return text;
-	const extended = boundedText(content, maxLength + MAX_VERCEL_BOUNDARY_SCAN_LENGTH);
+	const extended = boundedText(content, maxLength + MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH);
 	if (extended.length <= maxLength) return text;
-	const left = text.slice(-MAX_VERCEL_BOUNDARY_SCAN_LENGTH);
-	const right = extended.slice(text.length, text.length + MAX_VERCEL_BOUNDARY_SCAN_LENGTH);
+	const left = text.slice(-MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH);
+	const right = extended.slice(text.length, text.length + MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH);
 	if (left && right) boundaries.push({ left, right, retainedSide: "left" });
 	return text;
 }
@@ -709,8 +729,8 @@ function boundedPrompt(
 	const prefix = boundedText(prompt.slice(0, prefixLength), prefixLength);
 	if (boundaries && prefix) {
 		boundaries.push({
-			left: prefix.slice(-MAX_VERCEL_BOUNDARY_SCAN_LENGTH),
-			right: prompt.slice(prefixLength, prefixLength + MAX_VERCEL_BOUNDARY_SCAN_LENGTH),
+			left: prefix.slice(-MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH),
+			right: prompt.slice(prefixLength, prefixLength + MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH),
 			retainedSide: "left",
 		});
 	}
@@ -724,8 +744,8 @@ function boundedPrompt(
 	const suffix = boundedText(prompt.slice(suffixStart), suffixLength);
 	if (boundaries && suffix) {
 		boundaries.push({
-			left: prompt.slice(Math.max(0, suffixStart - MAX_VERCEL_BOUNDARY_SCAN_LENGTH), suffixStart),
-			right: suffix.slice(0, MAX_VERCEL_BOUNDARY_SCAN_LENGTH),
+			left: prompt.slice(Math.max(0, suffixStart - MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH), suffixStart),
+			right: suffix.slice(0, MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH),
 			retainedSide: "right",
 		});
 	}
@@ -841,7 +861,7 @@ export function buildNamingRequestContext(
 ): { text: string; hasSensitiveBoundary: () => boolean } {
 	const boundaries: NamingContextBoundary[] = [];
 	const text = createNamingContext(input, prompt, boundaries);
-	return { text, hasSensitiveBoundary: () => boundaries.some(hasVercelTokenAcrossBoundary) };
+	return { text, hasSensitiveBoundary: () => boundaries.some(hasSensitiveTokenAcrossBoundary) };
 }
 
 // Stop waiting even when a provider ignores its signal. The attached rejection

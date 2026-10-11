@@ -1092,6 +1092,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const tokenStart = prefixLength - 10;
 	const truncatedVercelPrompt = `${"x".repeat(tokenStart - 9)} Vercel: ${vercelApiToken} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedVercelPrompt, vercelApiToken);
+	const cloudflareApiKey = "a1b2".repeat(10);
+	const truncatedCloudflarePrompt = `${"x".repeat(tokenStart - 13)} Cloudflare: ${cloudflareApiKey} ${"x".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedCloudflarePrompt, cloudflareApiKey);
 	const datadogApiKey = "A1b2".repeat(10);
 	await suppressed(fixture(), `Review the config Datadog: ${datadogApiKey}`, datadogApiKey);
 	const mailgunPrivateApiToken = `key-${"a1b2".repeat(8)}`;
