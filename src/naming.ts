@@ -807,6 +807,13 @@ const PERPLEXITY_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`pplx-[A-Za-z0-9]{48}`,
 	String.raw`(p[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*x[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){47})`,
 );
+// Older OpenAI-compatible `sk-`/`rk-` keys use a generic alphanumeric body.
+const GENERIC_SK_RK_API_TOKEN_PATTERN = /(?:(?<!c)sk|rk)-[A-Za-z0-9]{16,}(?:[-_][A-Za-z0-9_-]+)*/i;
+const GENERIC_SK_RK_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GENERIC_SK_RK_API_TOKEN_PATTERN,
+	GENERIC_SK_RK_API_TOKEN_PATTERN.source,
+	String.raw`((?:(?<!c)s[\p{Cc}\p{Cf}]*k|r[\p{Cc}\p{Cf}]*k)[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){15,}(?:[\p{Cc}\p{Cf}]*[-_][\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-])*)*)`,
+);
 const OPENAI_COMPATIBLE_API_TOKEN_PATTERN = /(?:(?<!c)sk|rk)-(?:proj-|ant-|svcacct-|or-v1-)[A-Za-z0-9_-]{16,}/i;
 const OPENAI_COMPATIBLE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	OPENAI_COMPATIBLE_API_TOKEN_PATTERN,
@@ -994,7 +1001,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	GOOGLE_OAUTH_ACCESS_TOKEN_PATTERN,
 	// `csk-` is Cerebras; do not mistake its `sk-` suffix for an OpenAI key.
 	OPENAI_COMPATIBLE_API_TOKEN_PATTERN,
-	/(?:(?<!c)sk|rk)-[A-Za-z0-9]{16,}(?:[-_][A-Za-z0-9_-]+)*/i,
+	GENERIC_SK_RK_API_TOKEN_PATTERN,
 	// Stripe API secret keys use sk_/rk_ with live, test, or prod mode and a long alphanumeric body.
 	STRIPE_API_TOKEN_PATTERN,
 	NPM_ACCESS_TOKEN_PATTERN,
@@ -1397,6 +1404,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	XAI_API_TOKEN_BOUNDARY_PATTERN,
 	PERPLEXITY_API_TOKEN_BOUNDARY_PATTERN,
 	OPENAI_COMPATIBLE_API_TOKEN_BOUNDARY_PATTERN,
+	GENERIC_SK_RK_API_TOKEN_BOUNDARY_PATTERN,
 	STRIPE_API_TOKEN_BOUNDARY_PATTERN,
 	SOURCEGRAPH_API_TOKEN_BOUNDARY_PATTERN,
 	PLANETSCALE_API_TOKEN_BOUNDARY_PATTERN,
@@ -1425,6 +1433,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== NPM_PASSWORD_BOUNDARY_PATTERN
 		&& pattern !== BASIC_AUTHORIZATION_BOUNDARY_PATTERN
 		&& pattern !== BASIC_AUTHORIZATION_BLOCK_BOUNDARY_PATTERN
+		&& pattern !== GENERIC_SK_RK_API_TOKEN_BOUNDARY_PATTERN
 		&& pattern !== DOCKER_AUTH_BOUNDARY_PATTERN
 		&& pattern !== US_SSN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN

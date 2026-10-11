@@ -937,6 +937,40 @@ test("screens short Basic Authorization and npm password values across truncatio
 	}
 });
 
+test("screens generic sk/rk API keys across prompt truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const tokens = [
+		`sk-${"A".repeat(32)}`,
+		`rk-${"B".repeat(16)}_stage-1`,
+		`sk-${"C".repeat(8)}\u200b${"C".repeat(16)}`,
+	];
+	const promptWithTokenAt = (token: string, tokenStart: number) => {
+		const prefix = `${"x".repeat(tokenStart - 1)} `;
+		return `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+	};
+	for (const token of tokens) {
+		expect(hasSensitiveNamingContext(token)).toBe(true);
+		for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
+			const context = buildNamingRequestContext([], promptWithTokenAt(token, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const nearMisses = [`csk-${"D".repeat(24)}`, `sk-${"E".repeat(15)}`];
+	for (const token of nearMisses) {
+		expect(hasSensitiveNamingContext(token)).toBe(false);
+		for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
+			const context = buildNamingRequestContext([], promptWithTokenAt(token, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens explicit credential assignments across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
