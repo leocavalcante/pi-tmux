@@ -1588,22 +1588,60 @@ test("fixed-format tokens crossing prompt truncation skip model lookup", async (
 		`pypi-AgEIcHlwaS5vcmc${"A".repeat(70)}`,
 		`pypi-AgENdGVzdC5weXBpLm9yZw${"b".repeat(70)}`,
 		`pyp\u200bi-AgEIcHlwaS5vcmc${"c".repeat(70)}`,
+		`EZAK${"D".repeat(54)}`,
+		`EZ\u200bTK${"E".repeat(54)}`,
+		`fm1a_${"A1b+/".repeat(20)}`,
+		`fm1\u200br_${"B2c+/".repeat(20)}===`,
+		`re_${"C3d4".repeat(8)}`,
+		`r\u200be_${"D5e6".repeat(8)}`,
+		`tskey-${"E7f8".repeat(4)}`,
+		`tskey-auth-${"G9h0".repeat(4)}`,
+		`tskey-cl\u200bient-${"I1j2".repeat(4)}`,
+		`EAAA${"K3l4-".repeat(4)}K3`,
+		`sq0atp-${"M5n6_".repeat(4)}M5`,
+		`sq0\u200batp-${"O7p8-".repeat(4)}O7`,
 	];
 	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
 	for (const token of tokens) {
 		const tokenStart = prefixLength - 10;
-		const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_200)}`;
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
+		const prefixBoundaryPrompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_200)}`;
+		const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+		const suffixPrefixLength = suffixStart - 11;
+		const suffixBoundaryPrompt = `${"x".repeat(suffixPrefixLength)} ${token} ${"y".repeat(3_000 - suffixPrefixLength - token.length - 2)}`;
 
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(token);
+		for (const prompt of [prefixBoundaryPrompt, suffixBoundaryPrompt]) {
+			const f = fixture();
+			const find = spyOn(f.ctx.modelRegistry, "find");
+
+			f.input(prompt);
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(f.requests).toHaveLength(0);
+			expect(f.state.title).toBe("existing task");
+			expect(f.warnings).toEqual([warning]);
+			expect(f.warnings.join(" ")).not.toContain(token);
+		}
+	}
+});
+
+test("boundary scans preserve minimum lengths for other supported token formats", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const nearMisses = [
+		`EZAK${"A".repeat(53)}`,
+		`fm1a_${"A".repeat(99)}`,
+		`re_${"A".repeat(31)}`,
+		`tskey-${"A".repeat(15)}`,
+		`EAAA${"A".repeat(21)}`,
+		`sq0atp-${"A".repeat(21)}`,
+	];
+
+	for (const value of nearMisses) {
+		const tokenStart = prefixLength - 10;
+		const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
 	}
 });
 
