@@ -1197,6 +1197,16 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const genericLabel = " access_key: ";
 	const genericBoundaryPrompt = `${"x".repeat(tokenStart - genericLabel.length)}${genericLabel}${genericAssignedKey} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), genericBoundaryPrompt, genericAssignedKey);
+	const dockerAuth = Buffer.from("synthetic-user:synthetic-password").toString("base64");
+	const dockerAuthConfig = `{"auths":{"registry.example.test":{"auth":"${dockerAuth}"}}}`;
+	await suppressed(fixture(), `Review the Docker registry config ${dockerAuthConfig}`, dockerAuthConfig);
+	const obfuscatedDockerAuth = dockerAuthConfig.replace('"auth":', '"au\u200bth":')
+		.replace(dockerAuth, `${dockerAuth.slice(0, 12)}\u0000${dockerAuth.slice(12)}`);
+	await suppressed(fixture(), `Review the Docker registry config ${obfuscatedDockerAuth}`, obfuscatedDockerAuth);
+	const dockerAuthValueOffset = dockerAuthConfig.indexOf(dockerAuth);
+	const dockerAuthStart = prefixLength - 10 - dockerAuthValueOffset;
+	const truncatedDockerAuthPrompt = `${"x".repeat(dockerAuthStart - 1)} ${dockerAuthConfig} ${"x".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedDockerAuthPrompt, dockerAuthConfig);
 	const artifactoryApiKey = `AKCp${"A1b2".repeat(17)}A`;
 	const artifactoryReferenceToken = `cmVmd${"C1d2".repeat(14)}AbC`;
 	await suppressed(fixture(), `Review the artifact repository ${artifactoryApiKey}`, artifactoryApiKey);
@@ -2567,6 +2577,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	];
 	const npmrcAuth = npmrcAuthSetting("fixture-user:fixture-password");
 	const obfuscatedNpmrcAuth = npmrcAuth.replace("_auth", "_au\u200bth");
+	const dockerRegistryAuth = `"auth": "${Buffer.from("synthetic-user:synthetic-password").toString("base64")}"`;
+	const obfuscatedDockerRegistryAuth = dockerRegistryAuth.replace("auth", "au\u200bth");
 	const npmrcPassword = npmrcPasswordSetting("pw1");
 	const obfuscatedNpmrcPassword = npmrcPassword.replace("_password", "_pass\u200bword");
 	const discordWebhookId = "123456789".repeat(2);
@@ -2623,6 +2635,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		npmrcAuth,
 		obfuscatedNpmrcAuth,
 		npmrcAuthSetting("u:p"),
+		dockerRegistryAuth,
+		obfuscatedDockerRegistryAuth,
 		npmrcPassword,
 		obfuscatedNpmrcPassword,
 		"postgres://test-user:example-only-password@db.example.test/app",

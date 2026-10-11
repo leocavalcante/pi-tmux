@@ -714,6 +714,67 @@ test("screens assigned access-key values without mistaking placeholders or short
 	}
 });
 
+test("screens Docker registry auth fields only when they encode user/password pairs", () => {
+	const encoded = Buffer.from("synthetic-user:synthetic-password").toString("base64");
+	const candidates = [
+		{ value: `"auth": "${encoded}"`, tokenOffset: `"auth": "`.length },
+		{
+			value: `a\u200buth: ${encoded.slice(0, 10)}\u0000${encoded.slice(10)}`,
+			tokenOffset: "a\u200buth: ".length,
+		},
+	];
+	for (const { value } of candidates) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	const nearMisses = [
+		`"auth": "${Buffer.from("registry login").toString("base64")}"`,
+		`auth=${Buffer.from("ordinary configuration").toString("base64")}`,
+		"auth=not-a-base64-value!",
+	];
+	for (const value of nearMisses) {
+		expect(hasSensitiveNamingContext(value)).toBe(false);
+		expect(hasSensitiveOutput(value)).toBe(false);
+	}
+
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const tokenStarts = [prefixLength - 10, suffixStart - 10];
+	const promptWithCredentialAt = (candidate: typeof candidates[number], tokenStart: number) => {
+		const prefix = `${"x".repeat(tokenStart - candidate.tokenOffset - 1)} `;
+		const prompt = `${prefix}${candidate.value} ${"y".repeat(promptLength - prefix.length - candidate.value.length - 1)}`;
+		expect(prompt).toHaveLength(promptLength);
+		return prompt;
+	};
+
+	for (const candidate of candidates) {
+		for (const tokenStart of tokenStarts) {
+			const context = buildNamingRequestContext([], promptWithCredentialAt(candidate, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+	const ordinaryAuth = { value: `auth: ${Buffer.from("registry login").toString("base64")}`, tokenOffset: "auth: ".length };
+	for (const tokenStart of tokenStarts) {
+		const context = buildNamingRequestContext([], promptWithCredentialAt(ordinaryAuth, tokenStart));
+		expect(context.hasSensitiveBoundary()).toBe(false);
+	}
+
+	const historyContent = `${"x".repeat(981)}${candidates[0]!.value} trailing text`;
+	for (const input of [
+		[{ role: "user", content: historyContent }],
+		[{ role: "compactionSummary", summary: historyContent }],
+	] as any[]) {
+		const context = buildNamingRequestContext(input);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+	}
+});
+
 test("screens explicit credential assignments across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
