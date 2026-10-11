@@ -48,7 +48,7 @@ npm test
 - `tests/status.test.ts` verifies read-only diagnostic snapshots and waiting-flag aggregation on an isolated tmux server. It skips if tmux is unavailable.
 - `tests/package.test.ts` runs `npm pack` in a temporary directory, inspects the packed manifest and entrypoint, then imports the extracted file after Bun's TypeScript erasure and exercises status-only lifecycle behavior without a runtime SDK dependency. It requires `npm` and `tar` on `PATH`; on Windows the npm command shim is launched through the command shell.
 - `tests/tmux.test.ts` uses a Node-based fake tmux executable to test `runTmux` output bounds, timeouts, cancellation, forced termination, and pre-aborted signals on all platforms. The graceful-SIGTERM assertion skips on native Windows, where child termination semantics differ; no tmux server is required.
-- `tests/naming.test.ts` verifies the standalone naming helper rejects synthetic sensitive-looking context before model-registry access and does not expose matching text in its error.
+- `tests/naming.test.ts` checks synthetic Tailscale key screening in naming context and output, including invisible-character variants and near-misses, and verifies context screening happens before model-registry access without echoing matches.
 - `tests/issue-templates.test.ts` parses the issue-form YAML, checks supported field structures and privacy reminders, and keeps blank issues enabled.
 - `tests/workflows.test.ts` keeps third-party GitHub Actions pinned to full commit SHAs with version comments, while allowing local reusable workflows.
 

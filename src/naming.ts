@@ -129,6 +129,8 @@ const FLY_IO_MACHINE_TOKEN_PATTERN = /(?<![A-Za-z0-9_])(?:fm1[ar]|fm2)_[A-Za-z0-
 const DYNATRACE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])dt0c01\.[A-Za-z0-9]{24}\.[A-Za-z0-9]{64}(?![A-Za-z0-9_])/;
 // Resend API keys have the distinctive `re_` prefix and a long URL-safe body.
 const RESEND_API_KEY_PATTERN = /(?<![A-Za-z0-9_])re_[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-])/;
+// Tailscale key values use a `tskey-` prefix followed by at least 16 alphanumeric characters.
+const TAILSCALE_KEY_PATTERN = /(?<![A-Za-z0-9_-])tskey-[A-Za-z0-9]{16,}(?![A-Za-z0-9_-])/i;
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -146,6 +148,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	FLY_IO_MACHINE_TOKEN_PATTERN,
 	DYNATRACE_API_TOKEN_PATTERN,
 	RESEND_API_KEY_PATTERN,
+	TAILSCALE_KEY_PATTERN,
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed
 	// by a 16-hex or `local` segment.
