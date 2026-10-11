@@ -2250,6 +2250,66 @@ test("screens Token and ApiKey authorization credentials across retained-context
 	}
 });
 
+test("screens common session-cookie IDs in Set-Cookie headers across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const cookies = [
+		{ name: "JSESSIONID", token: "A1b2".repeat(8) },
+		{ name: "PHPSESSID", token: "C3d4".repeat(8) },
+		{ name: "connect.sid", token: `s%3A${"E5f6".repeat(7)}` },
+		{ name: "__Host-session_id", token: "G7h8".repeat(8) },
+	];
+
+	for (const { name, token } of cookies) {
+		const label = `Set-Cookie: ${name}=`;
+		const obfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+		for (const candidate of [token, obfuscated]) {
+			const value = `${label}${candidate}; Path=/; HttpOnly`;
+			expect(hasSensitiveNamingContext(value)).toBe(true);
+			expect(hasSensitiveOutput(value)).toBe(true);
+
+			const tokenStart = prefixLength - 8;
+			const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+			const prompt = `${prefix}${label}${candidate}; Path=/ ${"y".repeat(1_200)}`;
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+
+			const promptLength = MAX_PROMPT_LENGTH + 300;
+			const suffixStart = promptLength - Math.floor(retainedLength / 2);
+			const suffixTokenStart = suffixStart - 8;
+			const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+			const suffixPrompt = `${suffixPrefix}${label}${candidate}; Path=/ ${"y".repeat(
+				promptLength - suffixPrefix.length - label.length - candidate.length - "; Path=/ ".length,
+			)}`;
+			const suffixContext = buildNamingRequestContext([], suffixPrompt);
+			expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+			expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const historyContent = `${"x".repeat(990 - label.length - 1)} ${label}${token}; Path=/`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const context = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	for (const nearMiss of [
+		`Set-Cookie: PHPSESSID=${"A".repeat(19)}`,
+		`Set-Cookie: PHPSESSID authentication is recommended`,
+		`Set-Cookie: tracking_id=${"A".repeat(32)}`,
+		`X-Set-Cookie: JSESSIONID=${"A".repeat(32)}`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens short labeled passwords and passphrases across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
