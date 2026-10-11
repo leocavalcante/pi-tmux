@@ -4,7 +4,7 @@ import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
 import { readWindowTitle, STATUS_SNAPSHOT_FORMAT, WINDOW_INFO_INTERNAL_FORMAT } from "../src/tmux.ts";
-import { hasSensitiveNamingContext, hasSensitiveOutput } from "../src/naming.ts";
+import { buildNamingRequestContext, hasSensitiveNamingContext, hasSensitiveOutput } from "../src/naming.ts";
 import { MAX_TITLE_INPUT_LENGTH } from "../src/title.ts";
 import {
 	buildQuitTitleFormat,
@@ -1562,6 +1562,18 @@ test("a boundary-detected credential bypasses unchanged-context deduplication", 
 		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
 	]);
 	expect(f.warnings.join(" ")).not.toContain(token);
+});
+
+test("repeated prompt-boundary scans reuse regexes without retaining match state", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const token = `sk-proj-${"f".repeat(32)}`;
+	const prompt = `${"x".repeat(prefixLength - 11)} ${token} ${"y".repeat(1_200)}`;
+	const context = buildNamingRequestContext([], prompt);
+
+	expect(context.hasSensitiveBoundary()).toBe(true);
+	expect(context.hasSensitiveBoundary()).toBe(true);
 });
 
 test("fixed-format tokens crossing prompt truncation skip model lookup", async () => {

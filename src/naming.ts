@@ -88,6 +88,9 @@ const BASIC_AUTHORIZATION_PATTERN = /(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authoriz
 const NPM_AUTH_PATTERN = /(?<![A-Za-z0-9_-])_auth\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
 // Legacy npm .npmrc `_password` settings store a base64-encoded password.
 const NPM_PASSWORD_PATTERN = /(?<![A-Za-z0-9_-])_password\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{2,}={0,2})(?![A-Za-z0-9+/=])/i;
+const NPM_PASSWORD_PLACEHOLDER_SCAN_PATTERN = new RegExp(
+	NPM_PASSWORD_PATTERN.source, `${NPM_PASSWORD_PATTERN.flags}g`,
+);
 // YAML block-scalar form of the same Authorization/Proxy-Authorization header.
 const BASIC_AUTHORIZATION_BLOCK_PATTERN = new RegExp(
 	String.raw`(?<![A-Za-z0-9_-])["']?(?:proxy[-_\s]?)?authorization["']?[ \t]*:[ \t]*${YAML_BLOCK_SCALAR_PROPERTIES}[|>]`
@@ -232,6 +235,12 @@ const LABELED_PASSWORD_PHRASE_BOUNDARY_PATTERNS = [
 	{ pattern: LABELED_PASSWORD_PLAIN_PHRASE_PATTERN, captureIndex: 1 },
 	{ pattern: LABELED_PASSWORD_BLOCK_PATTERN, captureIndex: 1 },
 ] as const;
+const LABELED_PASSWORD_PHRASE_BOUNDARY_SCAN_PATTERNS = LABELED_PASSWORD_PHRASE_BOUNDARY_PATTERNS.map(
+	({ pattern, captureIndex }) => ({
+		pattern: new RegExp(pattern.source, `${pattern.flags}g`),
+		captureIndex,
+	}),
+);
 const GITHUB_TOKEN_PATTERN = /((?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}))/;
 const GITHUB_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	GITHUB_TOKEN_PATTERN,
@@ -916,8 +925,7 @@ function hasNpmPasswordCredential(value: string): boolean {
 
 function npmPasswordPlaceholderValueStarts(value: string): Set<number> {
 	const starts = new Set<number>();
-	const pattern = new RegExp(NPM_PASSWORD_PATTERN.source, `${NPM_PASSWORD_PATTERN.flags}g`);
-	for (const match of value.matchAll(pattern)) {
+	for (const match of value.matchAll(NPM_PASSWORD_PLACEHOLDER_SCAN_PATTERN)) {
 		const password = decodeNpmPassword(match[1]!);
 		// The generic password-label pattern also sees npm's `_password` setting.
 		// Preserve the existing behavior that decodes and ignores placeholders.
@@ -1176,6 +1184,10 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	OPENAI_COMPATIBLE_API_TOKEN_BOUNDARY_PATTERN,
 	STRIPE_API_TOKEN_BOUNDARY_PATTERN,
 ];
+const SENSITIVE_BOUNDARY_SCAN_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS.map((sourcePattern) => ({
+	sourcePattern,
+	pattern: new RegExp(sourcePattern.source, `${sourcePattern.flags}dg`),
+}));
 
 // Also recognize up to two control/whitespace separators between characters in
 // distinctive token formats. Exclude generic labels and prose-sensitive patterns;
@@ -1199,15 +1211,15 @@ const WHITESPACE_TOLERANT_LABELED_PASSWORD_PATTERN = new RegExp(
 		String.raw`[\p{Cc}\p{Cf}]*`, String.raw`[\p{Cc}\p{Cf}\s]{0,2}`,
 	), LABELED_PASSWORD_BOUNDARY_PATTERN.flags,
 );
+const WHITESPACE_TOLERANT_LABELED_PASSWORD_SCAN_PATTERN = new RegExp(
+	WHITESPACE_TOLERANT_LABELED_PASSWORD_PATTERN.source,
+	`${WHITESPACE_TOLERANT_LABELED_PASSWORD_PATTERN.flags}g`,
+);
 
 function hasWhitespaceSeparatedCredential(value: string): boolean {
 	if (WHITESPACE_TOLERANT_BOUNDARY_PATTERNS.some((pattern) => pattern.test(value))) return true;
 	const placeholderStarts = npmPasswordPlaceholderValueStarts(value);
-	const pattern = new RegExp(
-		WHITESPACE_TOLERANT_LABELED_PASSWORD_PATTERN.source,
-		`${WHITESPACE_TOLERANT_LABELED_PASSWORD_PATTERN.flags}g`,
-	);
-	for (const match of value.matchAll(pattern)) {
+	for (const match of value.matchAll(WHITESPACE_TOLERANT_LABELED_PASSWORD_SCAN_PATTERN)) {
 		if (!placeholderStarts.has(match.index!)) return true;
 	}
 	return false;
@@ -1225,8 +1237,7 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 		const npmPasswordPlaceholderStarts = npmPasswordPlaceholderValueStarts(joined);
 		const overlapsRetainedContext = (tokenStart: number, tokenEnd: number) =>
 			retainedSide === "left" ? tokenStart < boundary : tokenEnd > boundary;
-		for (const sourcePattern of SENSITIVE_BOUNDARY_PATTERNS) {
-			const pattern = new RegExp(sourcePattern.source, `${sourcePattern.flags}dg`);
+		for (const { sourcePattern, pattern } of SENSITIVE_BOUNDARY_SCAN_PATTERNS) {
 			for (const match of joined.matchAll(pattern)) {
 				if (sourcePattern === LABELED_PASSWORD_BOUNDARY_PATTERN
 					&& npmPasswordPlaceholderStarts.has(match.index!)) continue;
@@ -1237,8 +1248,7 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 				return true;
 			}
 		}
-		for (const { pattern: sourcePattern, captureIndex } of LABELED_PASSWORD_PHRASE_BOUNDARY_PATTERNS) {
-			const pattern = new RegExp(sourcePattern.source, `${sourcePattern.flags}g`);
+		for (const { pattern, captureIndex } of LABELED_PASSWORD_PHRASE_BOUNDARY_SCAN_PATTERNS) {
 			for (const match of joined.matchAll(pattern)) {
 				const value = match[captureIndex]!;
 				const normalizedValue = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, " ").trim();
