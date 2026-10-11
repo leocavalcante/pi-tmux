@@ -12,6 +12,9 @@ test("screens synthetic Tailscale key strings in context and output", () => {
 		`tskey-${"A1b2".repeat(4)}`,
 		`tskey-${"C3d4".repeat(9)}`,
 		`tskey-${"E5f6".repeat(9)}`,
+		`tskey-auth-${"A1b2".repeat(4)}`,
+		`tskey-api-${"C3d4".repeat(5)}`,
+		`tskey-client-${"E5f6".repeat(5)}`,
 	];
 
 	for (const key of keys) {
@@ -25,6 +28,8 @@ test("screens Tailscale keys with invisible formatting without flagging ordinary
 	const obfuscatedKeys = [
 		`ts\u200bkey-${body}`,
 		`tskey-${body.slice(0, 8)}\u200b${body.slice(8)}`,
+		`tskey-auth-${body.slice(0, 8)}\u200b${body.slice(8)}`,
+		`tskey-\u200bauth-${body}`,
 	];
 	for (const key of obfuscatedKeys) {
 		expect(hasSensitiveNamingContext(key)).toBe(true);
@@ -33,10 +38,17 @@ test("screens Tailscale keys with invisible formatting without flagging ordinary
 
 	for (const ordinaryText of [
 		"tskey-123456789012345",
+		"tskey-auth-________________",
+		`tskey-other-${"A1b2".repeat(5)}`,
 		"Tailscale auth-key setup",
 	]) {
 		expect(hasSensitiveNamingContext(ordinaryText)).toBe(false);
 		expect(hasSensitiveOutput(ordinaryText)).toBe(false);
+	}
+	for (const subtype of ["auth", "api"]) {
+		const shortTypedValue = ["tskey", subtype, "123456789012345"].join("-");
+		expect(hasSensitiveNamingContext(shortTypedValue)).toBe(false);
+		expect(hasSensitiveOutput(shortTypedValue)).toBe(false);
 	}
 });
 
