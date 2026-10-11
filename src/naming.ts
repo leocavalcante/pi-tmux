@@ -84,8 +84,9 @@ const LABELED_PASSWORD_BLOCK_PATTERN = new RegExp(
 );
 // Basic authorization values are base64 user-info, not provider-prefixed tokens.
 const BASIC_AUTHORIZATION_PATTERN = /(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
-// npm .npmrc `_auth` settings contain a base64 username:password pair.
+// npm .npmrc `_auth` and Docker config `auth` settings contain Base64 user:password pairs.
 const NPM_AUTH_PATTERN = /(?<![A-Za-z0-9_-])_auth\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
+const DOCKER_AUTH_PATTERN = /(?<![A-Za-z0-9_-])auth\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
 // Legacy npm .npmrc `_password` settings store a base64-encoded password.
 const NPM_PASSWORD_PATTERN = /(?<![A-Za-z0-9_-])_password\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{2,}={0,2})(?![A-Za-z0-9+/=])/i;
 const NPM_PASSWORD_PLACEHOLDER_SCAN_PATTERN = new RegExp(
@@ -247,6 +248,12 @@ function makeBoundaryPattern(pattern: RegExp, token: string, boundaryToken: stri
 	const flags = pattern.flags.includes("u") ? pattern.flags : `${pattern.flags}u`;
 	return new RegExp(source, flags);
 }
+
+const DOCKER_AUTH_BOUNDARY_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])${interleaveBoundaryFormattingControls("auth")}\s*["']?\s*[:=]\s*["']?`
+		+ String.raw`([A-Za-z0-9+/](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+/]){3,}[\p{Cc}\p{Cf}]*(?:=(?:[\p{Cc}\p{Cf}]*=)?)?)(?![A-Za-z0-9+/=])`,
+	"iu",
+);
 
 const US_SSN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	US_SSN_PATTERN,
@@ -1027,18 +1034,18 @@ function hasBearerToken(value: string): boolean {
 	return false;
 }
 
-function isBasicAuthorizationCredential(encoded: string): boolean {
+function isBase64UserPasswordPair(encoded: string): boolean {
 	const decoded = Buffer.from(encoded, "base64");
 	const canonical = decoded.toString("base64");
-	// Basic credentials encode a user-pass pair separated by a colon. Accept
-	// canonical padded or unpadded Base64, not arbitrary Basic-scheme prose.
+	// Basic HTTP, npm, and Docker auth values encode a user:password pair.
+	// Accept canonical padded or unpadded Base64, not arbitrary auth-like prose.
 	return (encoded === canonical || encoded === canonical.replace(/=+$/u, "")) && decoded.includes(0x3a);
 }
 
 function hasBasicAuthorizationCredential(value: string): boolean {
 	const pattern = new RegExp(BASIC_AUTHORIZATION_PATTERN.source, `${BASIC_AUTHORIZATION_PATTERN.flags}g`);
 	for (const match of value.matchAll(pattern)) {
-		if (isBasicAuthorizationCredential(match[1])) return true;
+		if (isBase64UserPasswordPair(match[1])) return true;
 	}
 	return false;
 }
@@ -1046,7 +1053,15 @@ function hasBasicAuthorizationCredential(value: string): boolean {
 function hasNpmAuthCredential(value: string): boolean {
 	const pattern = new RegExp(NPM_AUTH_PATTERN.source, `${NPM_AUTH_PATTERN.flags}g`);
 	for (const match of value.matchAll(pattern)) {
-		if (isBasicAuthorizationCredential(match[1])) return true;
+		if (isBase64UserPasswordPair(match[1])) return true;
+	}
+	return false;
+}
+
+function hasDockerAuthCredential(value: string): boolean {
+	const pattern = new RegExp(DOCKER_AUTH_PATTERN.source, `${DOCKER_AUTH_PATTERN.flags}g`);
+	for (const match of value.matchAll(pattern)) {
+		if (isBase64UserPasswordPair(match[1])) return true;
 	}
 	return false;
 }
@@ -1099,7 +1114,7 @@ function hasBasicAuthorizationCredentialBlock(value: string): boolean {
 	for (const match of value.matchAll(pattern)) {
 		const scalar = match[1].replace(/[\s\p{Cc}\p{Cf}]+/gu, " ").trim();
 		const basic = /^Basic\s+([A-Za-z0-9+/]{4,}={0,2})$/iu.exec(scalar);
-		if (basic && isBasicAuthorizationCredential(basic[1])) return true;
+		if (basic && isBase64UserPasswordPair(basic[1])) return true;
 	}
 	return false;
 }
@@ -1154,7 +1169,8 @@ function hasLabeledCredential(value: string): boolean {
 		|| hasLabeledCredentialBlock(passwordPlaceholdersReplaced) || hasLabeledPasswordBlock(passwordPlaceholdersReplaced)
 		|| hasLabeledPasswordPhrase(passwordPlaceholdersReplaced)
 		|| hasBasicAuthorizationCredential(withoutControls) || hasNpmAuthCredential(withoutControls)
-		|| hasNpmPasswordCredential(withoutControls) || LABELED_CREDENTIAL_PATTERN.test(withoutControls)
+		|| hasNpmPasswordCredential(withoutControls) || hasDockerAuthCredential(withoutControls)
+		|| LABELED_CREDENTIAL_PATTERN.test(withoutControls)
 		|| LABELED_PASSWORD_PATTERN.test(withoutControls) || hasLabeledCredentialBlock(withoutControls)
 		|| hasLabeledPasswordBlock(withoutControls) || hasLabeledPasswordPhrase(withoutControls);
 }
@@ -1327,6 +1343,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	AWS_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 	AWS_ADDITIONAL_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 	AWS_BEARER_TOKEN_BOUNDARY_PATTERN,
+	DOCKER_AUTH_BOUNDARY_PATTERN,
 	AWS_BEDROCK_API_KEY_BOUNDARY_PATTERN,
 	GOOGLE_API_KEY_BOUNDARY_PATTERN,
 	GOOGLE_OAUTH_CLIENT_SECRET_BOUNDARY_PATTERN,
@@ -1373,6 +1390,7 @@ const SENSITIVE_BOUNDARY_SCAN_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS.map((source
 const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 	.filter((pattern) => pattern !== LABELED_CREDENTIAL_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PASSWORD_BOUNDARY_PATTERN
+		&& pattern !== DOCKER_AUTH_BOUNDARY_PATTERN
 		&& pattern !== US_SSN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
@@ -1423,6 +1441,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 				if (!overlapsRetainedContext(tokenStart, tokenEnd)) continue;
 				if (sourcePattern === LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 					&& !isLuhnValidPaymentCardNumber(match[1]!)) continue;
+				if (sourcePattern === DOCKER_AUTH_BOUNDARY_PATTERN
+					&& !isBase64UserPasswordPair(match[1]!.replace(/[\p{Cc}\p{Cf}]/gu, ""))) continue;
 				return true;
 			}
 		}

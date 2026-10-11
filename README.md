@@ -349,9 +349,9 @@ recognizable credentials. These include selected provider-specific formats
 (for example GitHub, GitLab, Docker Hub, PyPI, and Tailscale tokens, Stripe webhook
 signing secrets, Slack API tokens, Discord and Slack webhook URLs, Microsoft Teams webhook URLs,
 Azure DevOps PATs, Google OAuth/API keys, and other service tokens), npm `.npmrc` `_auth`
-username/password pairs and legacy Base64 `_password` values, credential-bearing
-URLs, Bearer and Base64 Basic authorization values, and long values assigned to
-common credential labels.
+username/password pairs, Docker config `auth` values encoding username/password pairs,
+and legacy Base64 `_password` values, credential-bearing URLs, Bearer and Base64
+Basic authorization values, and long values assigned to common credential labels.
 For supported credential labels, YAML block scalars with tags or anchors are
 also checked, as are shorter non-placeholder password/passphrase assignments.
 The context scanner also checks conventional email addresses and explicitly
