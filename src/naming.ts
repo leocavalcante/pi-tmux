@@ -395,6 +395,13 @@ const PINECONE_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"pcsk_[A-Za-z0-9]{5,6}_[A-Za-z0-9]{63}",
 	String.raw`(p[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*k[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){4,5}[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){62})`,
 );
+// Linear API tokens use `lin_api_` followed by exactly 40 alphanumeric characters.
+const LINEAR_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])lin_api_[A-Za-z0-9]{40}(?![A-Za-z0-9_-])/i;
+const LINEAR_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LINEAR_API_TOKEN_PATTERN,
+	"lin_api_[A-Za-z0-9]{40}",
+	String.raw`(l[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*n[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){39})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -498,8 +505,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])sb_secret_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/,
 	// Neon API keys use a fixed prefix and 32 URL-safe characters.
 	/(?<![A-Za-z0-9_])neon_api_key_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/,
-	// Linear API tokens use `lin_api_` followed by exactly 40 alphanumeric characters.
-	/(?<![A-Za-z0-9_])lin_api_[A-Za-z0-9]{40}(?![A-Za-z0-9_-])/i,
+	LINEAR_API_TOKEN_PATTERN,
 	// SendGrid API keys have the `SG.` prefix and exactly 66 URL-safe characters.
 	/(?<![A-Za-z0-9_])SG\.[A-Za-z0-9=_.-]{66}(?![A-Za-z0-9=_.-])/i,
 	// Brevo (formerly Sendinblue) API keys use a 64-hex body and a 16-character suffix.
@@ -811,6 +817,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
 	REPLICATE_API_TOKEN_BOUNDARY_PATTERN,
 	PINECONE_API_KEY_BOUNDARY_PATTERN,
+	LINEAR_API_TOKEN_BOUNDARY_PATTERN,
 	AIRTABLE_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	CLICKHOUSE_CLOUD_API_KEY_BOUNDARY_PATTERN,
 	AZURE_DEVOPS_PAT_BOUNDARY_PATTERN,
