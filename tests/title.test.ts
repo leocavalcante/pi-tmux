@@ -1013,6 +1013,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review ClickHouse access ${clickhouseKey}`, clickhouseKey);
 	const obfuscatedClickhouseKey = clickhouseKey.replace("4b1d", "4b\u200b1d");
 	await suppressed(fixture(), `Review ClickHouse access ${obfuscatedClickhouseKey}`, obfuscatedClickhouseKey);
+	const azureAdClientSecret = `AbC7Q~${"Aa0_-.".repeat(5)}C3`;
+	await suppressed(fixture(), `Review Azure AD app registration ${azureAdClientSecret}`, azureAdClientSecret);
+	const obfuscatedAzureAdClientSecret = azureAdClientSecret.replace("Q~", "Q\u200b~");
+	await suppressed(fixture(), `Review Azure AD app registration ${obfuscatedAzureAdClientSecret}`, obfuscatedAzureAdClientSecret);
 	const awsAlternateAccessKeys = [
 		`A3TA${"B".repeat(16)}`,
 		`ABIA${"C".repeat(16)}`,
@@ -1462,6 +1466,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const clickhouseKey = `4b1d${"A1b2".repeat(9)}A1`;
 	const obfuscatedClickhouseKey = clickhouseKey.replace("4b1d", "4b\u200b1d");
 	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
+	const azureAdClientSecret = `AbC7Q~${"Aa0_-.".repeat(5)}C3`;
+	const obfuscatedAzureAdClientSecret = azureAdClientSecret.replace("Q~", "Q\u200b~");
 	const compatibilityGithubToken = [...githubToken]
 		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
 	const basicAuthHeaders = [
@@ -1518,6 +1524,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`PresharedKey=${"A".repeat(43)}=`,
 		...basicAuthHeaders,
 		azureSasUrl,
+		azureAdClientSecret,
+		obfuscatedAzureAdClientSecret,
 		npmrcAuth,
 		obfuscatedNpmrcAuth,
 		npmrcAuthSetting("u:p"),
