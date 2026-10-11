@@ -1585,6 +1585,9 @@ test("fixed-format tokens crossing prompt truncation skip model lookup", async (
 		`CLOJARS_${"A".repeat(60)}`,
 		`tfp_${"A".repeat(59)}`,
 		`eyJ${"a".repeat(12)}.${"b".repeat(12)}.${"c".repeat(12)}`,
+		`pypi-AgEIcHlwaS5vcmc${"A".repeat(70)}`,
+		`pypi-AgENdGVzdC5weXBpLm9yZw${"b".repeat(70)}`,
+		`pyp\u200bi-AgEIcHlwaS5vcmc${"c".repeat(70)}`,
 	];
 	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 

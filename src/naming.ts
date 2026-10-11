@@ -174,6 +174,17 @@ const DOCKER_HUB_PAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_pat_[A-Za-z0-9_-]{27}(?![
 const DOCKER_HUB_OAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_oat_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/;
 // PyPI and TestPyPI API tokens encode their registry in a distinctive prefix.
 const PYPI_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])pypi-(?:AgEIcHlwaS5vcmc|AgENdGVzdC5weXBpLm9yZw)[A-Za-z0-9_-]{50,1000}(?![A-Za-z0-9_-])/;
+// PyPI registry markers stay recognizable when formatting controls split their characters.
+const PYPI_FORMAT_SEPARATOR = String.raw`[\p{Cc}\p{Cf}]*`;
+const PYPI_API_TOKEN_BOUNDARY_PREFIX = `(?:${[
+	"pypi-AgEIcHlwaS5vcmc",
+	"pypi-AgENdGVzdC5weXBpLm9yZw",
+].map((prefix) => prefix.split("").join(PYPI_FORMAT_SEPARATOR)).join("|")})`;
+const PYPI_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	PYPI_API_TOKEN_PATTERN,
+	String.raw`pypi-(?:AgEIcHlwaS5vcmc|AgENdGVzdC5weXBpLm9yZw)[A-Za-z0-9_-]{50,1000}`,
+	`(${PYPI_API_TOKEN_BOUNDARY_PREFIX}${PYPI_FORMAT_SEPARATOR}[A-Za-z0-9_-](?:${PYPI_FORMAT_SEPARATOR}[A-Za-z0-9_-]){49,999})`,
+);
 // Clojars API tokens use the `CLOJARS_` prefix and an exact 60-character body.
 const CLOJARS_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])CLOJARS_[A-Za-z0-9]{60}(?![A-Za-z0-9_])/i;
 const CLOJARS_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -1173,6 +1184,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	ONE_PASSWORD_SERVICE_ACCOUNT_TOKEN_BOUNDARY_PATTERN,
 	DOCKER_HUB_PAT_BOUNDARY_PATTERN,
 	DOCKER_HUB_OAT_BOUNDARY_PATTERN,
+	PYPI_API_TOKEN_BOUNDARY_PATTERN,
 	SLACK_API_TOKEN_BOUNDARY_PATTERN,
 	PRIVATE_KEY_HEADER_BOUNDARY_PATTERN,
 	JWT_LIKE_TOKEN_BOUNDARY_PATTERN,
