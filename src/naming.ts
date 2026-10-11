@@ -140,6 +140,8 @@ const CLOUDFLARE_GLOBAL_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?cloudf
 const DATADOG_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?datadog[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[A-Za-z0-9]{40}(?![A-Za-z0-9_-])/i;
 // Mailgun private API tokens use `key-` plus 32 hex characters and a Mailgun label.
 const MAILGUN_PRIVATE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?mailgun[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}key-[a-f0-9]{32}(?![A-Za-z0-9_-])/i;
+// Vercel tokens use exactly 24 alphanumeric characters; require a nearby Vercel label.
+const VERCEL_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?vercel[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[A-Za-z0-9]{24}(?![A-Za-z0-9_-])/i;
 // Railway tokens are UUID-shaped; require a nearby Railway label and delimiter.
 const RAILWAY_API_TOKEN_PATTERN = new RegExp(
 	String.raw`(?<![A-Za-z0-9_-])[\w.-]{0,50}?railway[ \t\w.-]{0,20}`
@@ -215,6 +217,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	CLOUDFLARE_GLOBAL_API_KEY_PATTERN,
 	DATADOG_API_KEY_PATTERN,
 	MAILGUN_PRIVATE_API_TOKEN_PATTERN,
+	VERCEL_API_TOKEN_PATTERN,
 	RAILWAY_API_TOKEN_PATTERN,
 	ARTIFACTORY_API_KEY_PATTERN,
 	ARTIFACTORY_REFERENCE_TOKEN_PATTERN,

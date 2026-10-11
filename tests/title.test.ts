@@ -1080,6 +1080,12 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(
 		fixture(), `Railway: ${obfuscatedRailwayApiToken}`, obfuscatedRailwayApiToken,
 	);
+	const vercelApiToken = "A1b2".repeat(6);
+	await suppressed(fixture(), `Vercel: ${vercelApiToken}`, vercelApiToken);
+	const obfuscatedVercelLabel = "Ver\u200bcel";
+	await suppressed(
+		fixture(), `${obfuscatedVercelLabel}: ${vercelApiToken}`, vercelApiToken,
+	);
 	const datadogApiKey = "A1b2".repeat(10);
 	await suppressed(fixture(), `Review the config Datadog: ${datadogApiKey}`, datadogApiKey);
 	const mailgunPrivateApiToken = `key-${"a1b2".repeat(8)}`;
@@ -6342,6 +6348,33 @@ test("disposed UI notifications do not reject successful title commands", async 
 	await expect(f.refresh("status")).resolves.toBeUndefined();
 	await expect(f.refresh("unknown command")).resolves.toBeUndefined();
 	await expect(f.refresh("auto")).resolves.toBeUndefined();
+});
+
+test("rejects Vercel tokens only when a Vercel label is present", async () => {
+	const token = "A1b2".repeat(6);
+	const labeledOutput = `Vercel: ${token}`;
+	const obfuscatedToken = `${token.slice(0, 12)}\u200b${token.slice(12)}`;
+	for (const output of [
+		labeledOutput,
+		labeledOutput.replace("Vercel", "Ver\u200bcel"),
+		`Vercel: ${obfuscatedToken}`,
+	]) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(1);
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("vercel deployment tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("vercel deployment tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("rejects Railway tokens only when a Railway label is present", async () => {
