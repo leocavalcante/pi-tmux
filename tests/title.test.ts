@@ -1564,6 +1564,33 @@ test("a boundary-detected credential bypasses unchanged-context deduplication", 
 	expect(f.warnings.join(" ")).not.toContain(token);
 });
 
+test("fixed-format tokens crossing prompt truncation skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const tokens = [
+		`rubygems_${"a".repeat(48)}`,
+		`CLOJARS_${"A".repeat(60)}`,
+		`tfp_${"A".repeat(59)}`,
+	];
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const token of tokens) {
+		const tokenStart = prefixLength - 10;
+		const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_200)}`;
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+});
+
 test("a Docker Hub token crossing prompt truncation is not sent to the naming model", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

@@ -173,8 +173,18 @@ const DOCKER_HUB_OAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_oat_[A-Za-z0-9_-]{32}(?![
 const PYPI_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])pypi-(?:AgEIcHlwaS5vcmc|AgENdGVzdC5weXBpLm9yZw)[A-Za-z0-9_-]{50,1000}(?![A-Za-z0-9_-])/;
 // Clojars API tokens use the `CLOJARS_` prefix and an exact 60-character body.
 const CLOJARS_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])CLOJARS_[A-Za-z0-9]{60}(?![A-Za-z0-9_])/i;
+const CLOJARS_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	CLOJARS_API_TOKEN_PATTERN,
+	"CLOJARS_[A-Za-z0-9]{60}",
+	String.raw`(C[\p{Cc}\p{Cf}]*L[\p{Cc}\p{Cf}]*O[\p{Cc}\p{Cf}]*J[\p{Cc}\p{Cf}]*A[\p{Cc}\p{Cf}]*R[\p{Cc}\p{Cf}]*S[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){59})`,
+);
 // RubyGems API tokens use `rubygems_` followed by exactly 48 hexadecimal characters.
 const RUBYGEMS_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])rubygems_[a-f0-9]{48}(?![A-Za-z0-9_-])/i;
+const RUBYGEMS_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	RUBYGEMS_API_TOKEN_PATTERN,
+	"rubygems_[a-f0-9]{48}",
+	String.raw`(r[\p{Cc}\p{Cf}]*u[\p{Cc}\p{Cf}]*b[\p{Cc}\p{Cf}]*y[\p{Cc}\p{Cf}]*g[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*m[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){47})`,
+);
 // Heroku API tokens use `HRKU-AA` followed by exactly 58 URL-safe characters.
 const HEROKU_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])HRKU-AA[A-Za-z0-9_-]{58}(?![A-Za-z0-9_-])/i;
 // EasyPost test and production API keys use `EZTK` or `EZAK` plus 54 alphanumeric characters.
@@ -303,6 +313,11 @@ const DYNATRACE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])dt0c01\.[A-Za-z0-9]{24}\.[
 const RESEND_API_KEY_PATTERN = /(?<![A-Za-z0-9_])re_[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-])/;
 // Typeform API tokens use `tfp_` followed by exactly 59 URL-safe characters.
 const TYPEFORM_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])tfp_[A-Za-z0-9_.=-]{59}(?![A-Za-z0-9_.=-])/i;
+const TYPEFORM_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	TYPEFORM_API_TOKEN_PATTERN,
+	"tfp_[A-Za-z0-9_.=-]{59}",
+	String.raw`(t[\p{Cc}\p{Cf}]*f[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9_.=-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_.=-]){58})`,
+);
 // New Relic user API keys use `NRAK-` followed by exactly 27 alphanumeric characters.
 const NEW_RELIC_USER_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])NRAK-[A-Za-z0-9]{27}(?![A-Za-z0-9_-])/i;
 // Tailscale key values can be untyped or include an auth/api/client subtype.
@@ -875,6 +890,9 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	ALIBABA_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 	TENCENT_CLOUD_SECRET_ID_BOUNDARY_PATTERN,
 	GITLAB_RUNNER_AUTH_TOKEN_BOUNDARY_PATTERN,
+	CLOJARS_API_TOKEN_BOUNDARY_PATTERN,
+	RUBYGEMS_API_TOKEN_BOUNDARY_PATTERN,
+	TYPEFORM_API_TOKEN_BOUNDARY_PATTERN,
 	US_SSN_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
