@@ -1086,7 +1086,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review payment integration ${legacySquareAccessToken}`, legacySquareAccessToken);
 	const genericAccessKeyAssignment = `access_key=${"M3n4".repeat(6)}`;
 	await suppressed(fixture(), `Review cloud configuration ${genericAccessKeyAssignment}`, genericAccessKeyAssignment);
-	for (const label of ["APP_KEY", "SECRET_KEY_BASE", "ENCRYPTION_KEY", "MASTER_KEY"]) {
+	for (const label of [
+		"APP_KEY", "SECRET_KEY_BASE", "ENCRYPTION_KEY", "MASTER_KEY",
+		"AUTH_KEY", "SECURE_AUTH_KEY", "LOGGED_IN_KEY", "NONCE_KEY",
+		"AUTH_SALT", "SECURE_AUTH_SALT", "LOGGED_IN_SALT", "NONCE_SALT",
+	]) {
 		const assignment = `${label}=${"K3y4".repeat(8)}`;
 		await suppressed(fixture(), `Review deployment settings ${assignment}`, assignment);
 	}
