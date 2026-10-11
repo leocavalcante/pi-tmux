@@ -135,7 +135,7 @@ test("screens Vercel tokens only when a Vercel label is present", () => {
 	}
 });
 
-test("screens Vercel tokens that overlap retained-context truncation boundaries", () => {
+test("screens Vercel and Cloudflare keys across retained-context truncation boundaries", () => {
 	const token = "A1b2".repeat(6);
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
@@ -152,6 +152,19 @@ test("screens Vercel tokens that overlap retained-context truncation boundaries"
 	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
 	const controlObfuscatedPrompt = prefixPrompt.replace(token.slice(0, 5), `${token.slice(0, 5)}\u0000`);
 	expect(buildNamingRequestContext([], controlObfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const cloudflareApiKey = "a1b2".repeat(10);
+	const cloudflareLabel = " Cloudflare API key: ";
+	const cloudflarePrompt = `${"x".repeat(prefixTokenStart - cloudflareLabel.length)}${cloudflareLabel}${cloudflareApiKey} ${"x".repeat(1_200)}`;
+	const cloudflareContext = buildNamingRequestContext([], cloudflarePrompt);
+	expect(hasSensitiveNamingContext(cloudflareContext.text)).toBe(false);
+	expect(cloudflareContext.hasSensitiveBoundary()).toBe(true);
+	expect(cloudflareContext.text).toBe(buildNamingContext([], cloudflarePrompt));
+
+	const cloudflareGlobalKey = "a".repeat(37);
+	const globalLabel = " Cloudflare global key: ";
+	const globalPrompt = `${"x".repeat(prefixTokenStart - globalLabel.length)}${globalLabel}${cloudflareGlobalKey} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], globalPrompt).hasSensitiveBoundary()).toBe(true);
 
 	const promptLength = MAX_PROMPT_LENGTH + 300;
 	const suffixStart = promptLength - suffixLength;
@@ -172,10 +185,22 @@ test("screens Vercel tokens that overlap retained-context truncation boundaries"
 	expect(hasSensitiveNamingContext(summaryContext.text)).toBe(false);
 	expect(summaryContext.hasSensitiveBoundary()).toBe(true);
 
+	const cloudflareHistoryContent = `${"x".repeat(960)}${cloudflareLabel}${cloudflareApiKey} y`;
+	const cloudflareHistory = buildNamingRequestContext([{ role: "user", content: cloudflareHistoryContent }] as any);
+	expect(hasSensitiveNamingContext(cloudflareHistory.text)).toBe(false);
+	expect(cloudflareHistory.hasSensitiveBoundary()).toBe(true);
+	const cloudflareSummary = buildNamingRequestContext([
+		{ role: "compactionSummary", summary: cloudflareHistoryContent },
+	] as any);
+	expect(hasSensitiveNamingContext(cloudflareSummary.text)).toBe(false);
+	expect(cloudflareSummary.hasSensitiveBoundary()).toBe(true);
+
 	const omittedPrompt = `${"x".repeat(prefixLength + 20)} Vercel: ${token} ${"y".repeat(3_000)}`;
 	const omittedContext = buildNamingRequestContext([], omittedPrompt);
 	expect(hasSensitiveNamingContext(omittedContext.text)).toBe(false);
 	expect(omittedContext.hasSensitiveBoundary()).toBe(false);
+	const omittedCloudflarePrompt = `${"x".repeat(prefixLength + 20)}${cloudflareLabel}${cloudflareApiKey} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedCloudflarePrompt).hasSensitiveBoundary()).toBe(false);
 	const omittedHistoryContent = `${"x".repeat(1_010)} Vercel: ${token} y`;
 	const omittedHistory = buildNamingRequestContext([{ role: "user", content: omittedHistoryContent }] as any);
 	expect(omittedHistory.hasSensitiveBoundary()).toBe(false);
