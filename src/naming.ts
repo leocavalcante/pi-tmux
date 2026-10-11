@@ -315,6 +315,12 @@ const HUGGING_FACE_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"hf_[A-Za-z0-9]{20,}",
 	String.raw`(h[\p{Cc}\p{Cf}]*f[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){19,})`,
 );
+const AGE_SECRET_KEY_PATTERN = /(?<![A-Za-z0-9_])AGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]{58}(?![A-Za-z0-9_-])/i;
+const AGE_SECRET_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	AGE_SECRET_KEY_PATTERN,
+	"AGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]{58}",
+	String.raw`(A[\p{Cc}\p{Cf}]*G[\p{Cc}\p{Cf}]*E[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*S[\p{Cc}\p{Cf}]*E[\p{Cc}\p{Cf}]*C[\p{Cc}\p{Cf}]*R[\p{Cc}\p{Cf}]*E[\p{Cc}\p{Cf}]*T[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*E[\p{Cc}\p{Cf}]*Y[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*1[\p{Cc}\p{Cf}]*[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L](?:[\p{Cc}\p{Cf}]*[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]){57})`,
+);
 const GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN = /glpat-[A-Za-z0-9_-]{20,}/;
 const GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN,
@@ -398,7 +404,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	// 1Password service account tokens use `ops_eyJ` and a long Base64-form body.
 	/(?<![A-Za-z0-9_])ops_eyJ[A-Za-z0-9+/]{250,}={0,3}(?![A-Za-z0-9+/=])/,
 	// Age identities use `AGE-SECRET-KEY-1` followed by 58 Bech32 characters.
-	/(?<![A-Za-z0-9_])AGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]{58}(?![A-Za-z0-9_-])/i,
+	AGE_SECRET_KEY_PATTERN,
 	// Atlassian API tokens use `ATATT3` followed by 186 URL-safe characters.
 	/(?<![A-Za-z0-9_])ATATT3[A-Za-z0-9_=-]{186}(?![A-Za-z0-9_=-])/i,
 	// Adobe OAuth client secrets use `p8e-` followed by 32 alphanumeric characters.
@@ -758,6 +764,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	NPM_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	HUGGING_FACE_TOKEN_BOUNDARY_PATTERN,
+	AGE_SECRET_KEY_BOUNDARY_PATTERN,
 	PRIVATE_KEY_HEADER_BOUNDARY_PATTERN,
 ];
 
