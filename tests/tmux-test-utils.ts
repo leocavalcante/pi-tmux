@@ -22,7 +22,8 @@ export async function withFakeTmux(
 		writeFileSync(loader, [
 			`if (require("node:path").basename(process.execPath).toLowerCase() === ${JSON.stringify(process.platform === "win32" ? "tmux.exe" : "tmux")}) {`,
 			"process.argv.splice(1);",
-			`require("node:fs").writeFileSync(${JSON.stringify(files.pid)}, String(process.pid));`,
+			`require("node:fs").writeFileSync(${JSON.stringify(files.pid + ".tmp")}, String(process.pid));`,
+			`require("node:fs").renameSync(${JSON.stringify(files.pid + ".tmp")}, ${JSON.stringify(files.pid)});`,
 			...script(files),
 			"}",
 			"",
