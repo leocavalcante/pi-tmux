@@ -1591,6 +1591,36 @@ test("fixed-format tokens crossing prompt truncation skip model lookup", async (
 	}
 });
 
+test("additional fixed-format tokens crossing prompt truncation skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const tokens = [
+		`NRAK-${"A1b2".repeat(6)}abc`,
+		`HRKU-AA${"A1_b".repeat(14)}AB`,
+		`AKCp${"A1b2".repeat(17)}A`,
+		`cmVmd${"C1d2".repeat(14)}AbC`,
+		`dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
+		`fo1_${"A1_b".repeat(10)}ABC`,
+	];
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const token of tokens) {
+		const tokenStart = prefixLength - 10;
+		const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_200)}`;
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+});
+
 test("a Docker Hub token crossing prompt truncation is not sent to the naming model", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

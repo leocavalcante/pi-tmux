@@ -10,6 +10,49 @@ import {
 	UnsafeNamingContextError,
 } from "../src/naming.ts";
 
+test("screens additional supported fixed-format tokens across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const tokens = [
+		`NRAK-${"A1b2".repeat(6)}abc`,
+		`HRKU-AA${"A1_b".repeat(14)}AB`,
+		`AKCp${"A1b2".repeat(17)}A`,
+		`cmVmd${"C1d2".repeat(14)}AbC`,
+		`dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
+		`fo1_${"A1_b".repeat(10)}ABC`,
+	];
+
+	for (const token of tokens) {
+		expect(hasSensitiveNamingContext(`review the integration ${token}`)).toBe(true);
+		expect(hasSensitiveOutput(token)).toBe(true);
+		for (const value of [token, `${token.slice(0, 10)}\u0000${token.slice(10)}`]) {
+			const tokenStart = prefixLength - 10;
+			const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
+			const promptContext = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(promptContext.text)).toBe(false);
+			expect(promptContext.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const historyContent = `${"x".repeat(989)} ${tokens[0]} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+
+	const summaryContent = `${"x".repeat(989)} ${tokens[2]} y`;
+	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+
+	const invalidNewRelicToken = `NRAK-${"A1b2".repeat(6)}ab`;
+	const invalidPrompt = `${"x".repeat(prefixLength - 11)} ${invalidNewRelicToken} ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+
+	const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${tokens[5]} ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens supported fixed-format tokens across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
