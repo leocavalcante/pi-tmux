@@ -314,7 +314,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	// `csk-` is Cerebras; do not mistake its `sk-` suffix for an OpenAI key.
 	/(?:(?<!c)sk|rk)-(?:proj-|ant-|svcacct-|or-v1-)[A-Za-z0-9_-]{16,}/i,
 	/(?:(?<!c)sk|rk)-[A-Za-z0-9]{16,}(?:[-_][A-Za-z0-9_-]+)*/i,
-	/(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}/i,
+	// Stripe API secret keys use sk_/rk_ with live, test, or prod mode and a long alphanumeric body.
+	/(?:sk|rk)_(?:live|test|prod)_[A-Za-z0-9]{16,}/i,
 	/(?:xox[baprcds]|xapp)-[A-Za-z0-9-]{10,}/,
 	/npm_[A-Za-z0-9]{20,}/,
 	/glpat-[A-Za-z0-9_-]{20,}/,

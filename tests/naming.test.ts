@@ -238,6 +238,36 @@ test("screens synthetic Stripe webhook signing secrets without flagging short or
 	}
 });
 
+test("screens Stripe secret API keys in supported modes without flagging near-misses", () => {
+	const keys = [
+		...(["live", "test", "prod"] as const).flatMap((mode) => [
+			`sk_${mode}_${"A1b2".repeat(6)}`,
+			`rk_${mode}_${"C3d4".repeat(6)}`,
+		]),
+	];
+	const obfuscatedKeys = [
+		keys[4]!.replace("prod", "pr\u200bod"),
+		keys[5]!.replace("C3d4".repeat(3), `${"C3d4".repeat(3)}\u200b`),
+	];
+
+	for (const value of [...keys, ...obfuscatedKeys, `sk_prod_${"A".repeat(16)}`]) {
+		expect(hasSensitiveNamingContext(`review payment processing ${value}`)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`sk_prod_${"A".repeat(15)}`,
+		`rk_prod_${"C".repeat(15)}`,
+		`pk_prod_${"A".repeat(24)}`,
+		`sk_production_${"A".repeat(24)}`,
+		`sk_prod_${"A".repeat(10)}!${"A".repeat(14)}`,
+		"Stripe production API key setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens synthetic Slack webhook URLs without flagging similar links", () => {
 	const token = "A1b2".repeat(10) + "A1b";
 	const legacySecret = "C3d4".repeat(6);
