@@ -1765,6 +1765,22 @@ test("a control-obfuscated Neon key embedded in prose skips model lookup", async
 	expect(f.warnings.join(" ")).not.toContain(obfuscated);
 });
 
+test("a whitespace-obfuscated Neon key embedded in prose skips model lookup", async () => {
+	const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
+	const obfuscated = `${token.slice(0, 20)} ${token.slice(20)}`;
+	const f = fixture();
+	const find = spyOn(f.ctx.modelRegistry, "find");
+	f.input(`Review Neon access ${obfuscated} before deployment`);
+	await settle();
+	expect(find).not.toHaveBeenCalled();
+	expect(f.requests).toHaveLength(0);
+	expect(f.state.title).toBe("existing task");
+	expect(f.warnings).toEqual([
+		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+	]);
+	expect(f.warnings.join(" ")).not.toContain(obfuscated);
+});
+
 test("a Replicate API token crossing prompt truncation skips model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

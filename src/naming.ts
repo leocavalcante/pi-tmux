@@ -747,7 +747,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		// The fully compacted view below remains useful for credentials split by whitespace.
 		const withoutFormatCharacters = stripNonWhitespaceControls(value);
 		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
-		return hasSensitiveValue(withoutFormatCharacters)
+		return hasSensitiveValue(withoutFormatCharacters) || hasWhitespaceSeparatedCredential(value)
 			|| CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
 			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_SSN_PATTERN.test(compacted)
 			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
@@ -771,7 +771,7 @@ export function hasSensitiveOutput(text: string): boolean {
 		// Keep ordinary whitespace as a boundary while stripping invisible controls.
 		const withoutFormatCharacters = stripNonWhitespaceControls(value);
 		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
-		return hasPattern(withoutFormatCharacters)
+		return hasPattern(withoutFormatCharacters) || hasWhitespaceSeparatedCredential(value)
 			|| SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
 			|| hasLabeledPaymentCard(compacted);
 	};
@@ -863,6 +863,27 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	SLACK_API_TOKEN_BOUNDARY_PATTERN,
 	PRIVATE_KEY_HEADER_BOUNDARY_PATTERN,
 ];
+
+// Also recognize up to two control/whitespace separators between characters in
+// distinctive token formats. Exclude generic labels and prose-sensitive patterns;
+// scan original text so surrounding prose remains available to boundary checks.
+const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
+	.filter((pattern) => pattern !== LABELED_CREDENTIAL_BOUNDARY_PATTERN
+		&& pattern !== US_SSN_BOUNDARY_PATTERN
+		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
+		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
+		&& pattern !== EMAIL_ADDRESS_BOUNDARY_PATTERN
+		&& pattern !== BEARER_TOKEN_BOUNDARY_PATTERN)
+	.flatMap((pattern) => {
+		const source = pattern.source.replaceAll(
+			String.raw`[\p{Cc}\p{Cf}]*`, String.raw`[\p{Cc}\p{Cf}\s]{0,2}`,
+		);
+		return source === pattern.source ? [] : [new RegExp(source, pattern.flags)];
+	});
+
+function hasWhitespaceSeparatedCredential(value: string): boolean {
+	return WHITESPACE_TOLERANT_BOUNDARY_PATTERNS.some((pattern) => pattern.test(value));
+}
 
 function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {
 	const stripFormatting = (value: string) => value.normalize("NFKD").replace(/[\p{M}\p{Cf}]/gu, "");
