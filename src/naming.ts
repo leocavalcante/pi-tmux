@@ -826,6 +826,14 @@ const TWILIO_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`SK[a-f0-9]{32}`,
 	String.raw`(S[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){31})`,
 );
+const FIREWORKS_API_TOKEN_PATTERN = /(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/;
+const FIREWORKS_API_TOKEN_BOUNDARY_PREFIX = `(?:${["fw-", "fw_", "fpk_"]
+	.map(interleaveBoundaryFormattingControls).join("|")})`;
+const FIREWORKS_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	FIREWORKS_API_TOKEN_PATTERN,
+	String.raw`(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}`,
+	`(${FIREWORKS_API_TOKEN_BOUNDARY_PREFIX}[\\p{Cc}\\p{Cf}]*[A-Za-z0-9_-](?:[\\p{Cc}\\p{Cf}]*[A-Za-z0-9_-]){19,})`,
+);
 // Capture URI user-info separately so boundary checks can ensure credential text overlaps retained context.
 const URI_USER_INFO_CREDENTIAL_PATTERN = /[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/((?:[^\s/:@]+)?:[^\s/@]+)@/i;
 const URI_USER_INFO_CREDENTIAL_BOUNDARY_PATTERN = /[A-Za-z](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+.-]){0,31}[\p{Cc}\p{Cf}]*:[\p{Cc}\p{Cf}]*\/[\p{Cc}\p{Cf}]*\/[\p{Cc}\p{Cf}]*((?:[^\s/:@]+)?:[^\s/@]+)@/iu;
@@ -880,7 +888,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	PREFECT_API_TOKEN_PATTERN,
 	OCTOPUS_API_KEY_PATTERN,
 	PULUMI_API_TOKEN_PATTERN,
-	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,
+	FIREWORKS_API_TOKEN_PATTERN,
 	DATABRICKS_API_TOKEN_PATTERN,
 	DIGITALOCEAN_API_TOKEN_PATTERN,
 	CLOUDFLARE_ORIGIN_CA_KEY_PATTERN,
@@ -1323,6 +1331,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	ONE_PASSWORD_SECRET_KEY_BOUNDARY_PATTERN,
 	CLOUDFLARE_ORIGIN_CA_KEY_BOUNDARY_PATTERN,
 	ADOBE_CLIENT_SECRET_BOUNDARY_PATTERN,
+	FIREWORKS_API_TOKEN_BOUNDARY_PATTERN,
 	SENDGRID_API_KEY_BOUNDARY_PATTERN,
 	BREVO_API_KEY_BOUNDARY_PATTERN,
 	TWILIO_API_KEY_BOUNDARY_PATTERN,
