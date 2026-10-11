@@ -6551,10 +6551,7 @@ test.each([
 	{ prefix: "sy", values: ["sync"] },
 	{ prefix: "se", values: ["set "] },
 	{ prefix: "a", values: ["auto"] },
-	{ prefix: "status", values: ["status"] },
-	{ prefix: "sync", values: ["sync"] },
 	{ prefix: "set", values: ["set "] },
-	{ prefix: "auto", values: ["auto"] },
 	{ prefix: " \ts", values: ["status", "sync", "set "] },
 	{ prefix: " \t", values: ["status", "sync", "set ", "auto"] },
 ])("argument completion matches only supported subcommands: %j", ({ prefix, values }) => {
@@ -6562,6 +6559,13 @@ test.each([
 	const items = f.complete(prefix);
 	expect(items.map((item: any) => item.value)).toEqual(values);
 	expect(items.every((item: any) => item.label && item.description)).toBe(true);
+	expect(f.calls).toEqual([]);
+	expect(f.requests).toEqual([]);
+});
+
+test.each(["status", "sync", "auto", " \tstatus"])("argument completion leaves exact subcommands runnable: %j", (prefix) => {
+	const f = fixture();
+	expect(f.complete(prefix)).toBeNull();
 	expect(f.calls).toEqual([]);
 	expect(f.requests).toEqual([]);
 });
