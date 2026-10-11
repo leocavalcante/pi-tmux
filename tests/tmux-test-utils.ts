@@ -50,7 +50,8 @@ export async function withFakeTmux(
 }
 
 export async function waitForChild(pidFile: string): Promise<number> {
-	const deadline = Date.now() + 1_000;
+	// Allow a cold Node.exe start on Windows, but leave room before tmux's 2-second timeout.
+	const deadline = Date.now() + 1_800;
 	while (!existsSync(pidFile) && Date.now() < deadline) {
 		await new Promise((resolve) => setTimeout(resolve, 10));
 	}
