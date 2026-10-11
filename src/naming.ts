@@ -230,6 +230,17 @@ function interleaveBoundaryFormattingControls(value: string): string {
 	return value.split("").join(String.raw`[\p{Cc}\p{Cf}]*`);
 }
 
+// Keep fixed encoded signatures escaped in source while deriving a control-tolerant matcher.
+function makeHexEscapedLiteralBoundaryPattern(pattern: RegExp): RegExp {
+	const literal = pattern.source.replace(/\\x([0-9a-f]{2})/gi, (_escape, hex: string) =>
+		String.fromCodePoint(Number.parseInt(hex, 16)));
+	if (!/^[A-Za-z0-9-]+$/u.test(literal)) throw new Error("Expected a fixed escaped ASCII signature");
+	const source = [...literal]
+		.map((character) => `\\u{${character.codePointAt(0)!.toString(16)}}`)
+		.join(String.raw`[\p{Cc}\p{Cf}]*`);
+	return new RegExp(`(${source})`, "u");
+}
+
 function makeBoundaryPattern(pattern: RegExp, token: string, boundaryToken: string): RegExp {
 	const source = pattern.source.replace(token, boundaryToken);
 	if (source === pattern.source) throw new Error("Boundary token did not match its source pattern");
@@ -509,6 +520,8 @@ const AWS_BEARER_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`ABSK[A-Za-z0-9+/]{109,269}={0,2}`,
 	String.raw`(A[\p{Cc}\p{Cf}]*B[\p{Cc}\p{Cf}]*S[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*[A-Za-z0-9+/](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+/]){108,268}[\p{Cc}\p{Cf}]*(?:=(?:[\p{Cc}\p{Cf}]*=)?)?)`,
 );
+const AWS_BEDROCK_API_KEY_PATTERN = /bedrock-api-key-\x59\x6d\x56\x6b\x63\x6d\x39\x6a\x61\x79\x35\x68\x62\x57\x46\x36\x62\x32\x35\x68\x64\x33\x4d\x75\x59\x32\x39\x74/;
+const AWS_BEDROCK_API_KEY_BOUNDARY_PATTERN = makeHexEscapedLiteralBoundaryPattern(AWS_BEDROCK_API_KEY_PATTERN);
 // Google Cloud API keys use `AIza` followed by exactly 35 URL-safe characters.
 const GOOGLE_API_KEY_PATTERN = /(?<![A-Za-z0-9_])AIza[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])/;
 const GOOGLE_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -936,7 +949,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	AWS_ACCESS_KEY_ID_PATTERN,
 	AWS_ADDITIONAL_ACCESS_KEY_ID_PATTERN,
 	AWS_BEARER_TOKEN_PATTERN,
-	/bedrock-api-key-\x59\x6d\x56\x6b\x63\x6d\x39\x6a\x61\x79\x35\x68\x62\x57\x46\x36\x62\x32\x35\x68\x64\x33\x4d\x75\x59\x32\x39\x74/,
+	AWS_BEDROCK_API_KEY_PATTERN,
 	// Google Cloud API keys use `AIza` followed by exactly 35 alphanumeric, underscore, or hyphen characters.
 	GOOGLE_API_KEY_PATTERN,
 	// Google OAuth client secrets use a `GOCSPX-` prefix and a long URL-safe value.
@@ -1314,6 +1327,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	AWS_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 	AWS_ADDITIONAL_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 	AWS_BEARER_TOKEN_BOUNDARY_PATTERN,
+	AWS_BEDROCK_API_KEY_BOUNDARY_PATTERN,
 	GOOGLE_API_KEY_BOUNDARY_PATTERN,
 	GOOGLE_OAUTH_CLIENT_SECRET_BOUNDARY_PATTERN,
 	GOOGLE_OAUTH_REFRESH_TOKEN_BOUNDARY_PATTERN,
