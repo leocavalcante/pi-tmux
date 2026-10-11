@@ -1003,6 +1003,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	};
 
 	await suppressed(fixture(), `Review the auth flow with ${token}`);
+	const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
+	await suppressed(fixture(), `Review Airtable data access ${airtableToken}`, airtableToken);
 	const awsAlternateAccessKeys = [
 		`A3TA${"B".repeat(16)}`,
 		`ABIA${"C".repeat(16)}`,
@@ -1445,6 +1447,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const resendApiKey = `re_${"A1b2".repeat(7)}_C3d4`;
 	const replicateToken = ["r8_", "M".repeat(37)].join("");
 	const awsKey = ["AKIA", "A".repeat(16)].join("");
+	const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
+	const obfuscatedAirtableToken = airtableToken.replace(".", "\u200b.");
 	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
 	const compatibilityGithubToken = [...githubToken]
 		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
@@ -1550,6 +1554,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["github", "_pat_", "a".repeat(30)].join(""),
 		["AKIA", "A".repeat(16)].join(""),
 		["ASIA", "A".repeat(16)].join(""),
+		airtableToken,
+		obfuscatedAirtableToken,
 		`A3TA${"B".repeat(16)}`,
 		`ABIA${"C".repeat(16)}`,
 		`ACCA${"D".repeat(16)}`,

@@ -107,6 +107,8 @@ const LABELED_PASSWORD_PLAIN_PHRASE_PATTERN = new RegExp(
 const AZURE_SAS_PATTERN = /(?<![A-Za-z0-9_])(?:sv=\d{4}-\d{2}-\d{2}(?=[^#\s]{0,512}&sig=[A-Za-z0-9%+/_=-]{20,}(?:&|#|\s|$))|sig=[A-Za-z0-9%+/_=-]{20,}(?=&)(?=[^#\s]{0,512}&sv=\d{4}-\d{2}-\d{2}))/i;
 // Current Azure DevOps PATs are 84 alphanumeric characters with `AZDO` after 75 characters.
 const AZURE_DEVOPS_PAT_PATTERN = /(?<![A-Za-z0-9_])[A-Za-z0-9]{75}AZDO[A-Za-z0-9]{5}(?![A-Za-z0-9_])/;
+// Airtable personal access tokens use `pat`, 14 alphanumeric characters, then 64 lowercase hex characters.
+const AIRTABLE_PERSONAL_ACCESS_TOKEN_PATTERN = /(?<![A-Za-z0-9_])pat[A-Za-z0-9]{14}\.[a-f0-9]{64}(?![A-Za-z0-9_])/;
 // GitLab Runner authentication tokens use `glrt-` followed by 20 URL-safe characters.
 const GITLAB_RUNNER_AUTH_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])glrt-[A-Za-z0-9_-]{20}(?![A-Za-z0-9_-])/;
 // Docker Hub personal and organization access tokens have fixed-length bodies.
@@ -177,6 +179,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
 	AZURE_SAS_PATTERN,
 	AZURE_DEVOPS_PAT_PATTERN,
+	AIRTABLE_PERSONAL_ACCESS_TOKEN_PATTERN,
 	GITLAB_RUNNER_AUTH_TOKEN_PATTERN,
 	DOCKER_HUB_PAT_PATTERN,
 	DOCKER_HUB_OAT_PATTERN,
