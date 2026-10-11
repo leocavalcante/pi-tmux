@@ -102,6 +102,35 @@ test("screens synthetic Slack webhook URLs without flagging similar links", () =
 	}
 });
 
+test("screens synthetic Discord webhook URLs without flagging similar links", () => {
+	const id = "123456789012345678";
+	const token = "A1b2".repeat(17);
+	const url = `https://discord.com/api/webhooks/${id}/${token}`;
+	const obfuscatedUrls = [
+		url.replace("discord.com", "dis\u200bcord.com"),
+		url.replace(token, `${token.slice(0, 34)}\u200b${token.slice(34)}`),
+	];
+
+	for (const value of [url, ...obfuscatedUrls]) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		url.replace(id, id.slice(1)),
+		url.replace(token, token.slice(0, -1)),
+		url.replace(token, `${token}a`),
+		url.replace("discord.com", "discord.com.evil.test"),
+		url.replace("/api/webhooks/", "/api/webhook/"),
+		url.replace("https://", "http://"),
+		`prefix${url}`,
+		"Discord webhook setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens synthetic Microsoft Teams incoming webhook URLs without flagging similar links", () => {
 	const guid = "01234567-89ab-cdef-0123-456789abcdef";
 	const otherGuid = "fedcba98-7654-3210-fedc-ba9876543210";
