@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
+	buildNamingContext,
+	buildNamingRequestContext,
 	hasSensitiveNamingContext,
 	hasSensitiveOutput,
+	MAX_PROMPT_LENGTH,
 	requestNamingTitle,
 	UnsafeNamingContextError,
 } from "../src/naming.ts";
@@ -130,6 +133,54 @@ test("screens Vercel tokens only when a Vercel label is present", () => {
 		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
 		expect(hasSensitiveOutput(nearMiss)).toBe(false);
 	}
+});
+
+test("screens Vercel tokens that overlap retained-context truncation boundaries", () => {
+	const token = "A1b2".repeat(6);
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixLength = Math.floor(retainedLength / 2);
+
+	const prefixTokenStart = prefixLength - 10;
+	const prefixPrompt = `${"x".repeat(prefixTokenStart - 9)} Vercel: ${token} ${"x".repeat(1_200)}`;
+	const prefixContext = buildNamingRequestContext([], prefixPrompt);
+	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+	expect(prefixContext.text).toBe(buildNamingContext([], prefixPrompt));
+	const obfuscatedPrompt = prefixPrompt.replace(token.slice(0, 5), `${token.slice(0, 5)}\u200b`);
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+	const controlObfuscatedPrompt = prefixPrompt.replace(token.slice(0, 5), `${token.slice(0, 5)}\u0000`);
+	expect(buildNamingRequestContext([], controlObfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixStart = promptLength - suffixLength;
+	const suffixTokenStart = suffixStart - 10;
+	const suffixPrompt = `${"x".repeat(suffixTokenStart - 9)} Vercel: ${token} ${"y".repeat(promptLength - suffixTokenStart - 25)}`;
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+	expect(suffixContext.text).toBe(buildNamingContext([], suffixPrompt));
+
+	const historyContent = `${"x".repeat(981)} Vercel: ${token} y`;
+	const historyContext = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
+	expect(historyContext.hasSensitiveBoundary()).toBe(true);
+
+	const summaryContent = `${"x".repeat(981)} Vercel: ${token} y`;
+	const summaryContext = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
+	expect(hasSensitiveNamingContext(summaryContext.text)).toBe(false);
+	expect(summaryContext.hasSensitiveBoundary()).toBe(true);
+
+	const omittedPrompt = `${"x".repeat(prefixLength + 20)} Vercel: ${token} ${"y".repeat(3_000)}`;
+	const omittedContext = buildNamingRequestContext([], omittedPrompt);
+	expect(hasSensitiveNamingContext(omittedContext.text)).toBe(false);
+	expect(omittedContext.hasSensitiveBoundary()).toBe(false);
+	const omittedHistoryContent = `${"x".repeat(1_010)} Vercel: ${token} y`;
+	const omittedHistory = buildNamingRequestContext([{ role: "user", content: omittedHistoryContent }] as any);
+	expect(omittedHistory.hasSensitiveBoundary()).toBe(false);
+	const omittedSummary = buildNamingRequestContext([{ role: "compactionSummary", summary: omittedHistoryContent }] as any);
+	expect(omittedSummary.hasSensitiveBoundary()).toBe(false);
 });
 
 test("screens Alibaba Cloud AccessKey IDs without flagging near-misses", () => {
