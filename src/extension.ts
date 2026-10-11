@@ -15,6 +15,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	pi.registerCommand("tmux-title", {
 		description: "Refresh, pin with set <name>, resume with auto, inspect status, or sync without AI",
 		getArgumentCompletions: (prefix) => {
+			if (prefix.length > MAX_TITLE_COMMAND_ARGUMENT_LENGTH) return null;
 			const token = prefix.trimStart();
 			// Complete only the subcommand, never free-form title text or extra args.
 			if (/\s/.test(token)) return null;

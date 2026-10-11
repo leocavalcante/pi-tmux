@@ -5056,6 +5056,13 @@ test.each([
 	expect(f.requests).toEqual([]);
 });
 
+test("argument completion rejects oversized prefixes before trimming", () => {
+	const f = fixture();
+	expect(f.complete(" ".repeat(MAX_TITLE_INPUT_LENGTH * 2 + 1))).toBeNull();
+	expect(f.calls).toEqual([]);
+	expect(f.requests).toEqual([]);
+});
+
 test.each(["unknown", "S", "set ", "set private title", "set\n", "set\tname", "status ", "status extra", "sync extra", "auto extra", "set café", "\u001b"])("argument completion leaves free-form titles and invalid prefixes alone: %j", (prefix) => {
 	const f = fixture();
 	expect(f.complete(prefix)).toBeNull();
