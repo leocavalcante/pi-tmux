@@ -631,6 +631,12 @@ const OCTOPUS_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"API-[A-Z0-9]{26}",
 	String.raw`(A[\p{Cc}\p{Cf}]*P[\p{Cc}\p{Cf}]*I[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Z0-9](?:[\p{Cc}\p{Cf}]*[A-Z0-9]){25})`,
 );
+const JWT_LIKE_TOKEN_PATTERN = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/;
+const JWT_LIKE_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	JWT_LIKE_TOKEN_PATTERN,
+	String.raw`eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}`,
+	String.raw`(e[\p{Cc}\p{Cf}]*y[\p{Cc}\p{Cf}]*J[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){7,}[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){7,}[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){7,})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -750,7 +756,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	NPM_ACCESS_TOKEN_PATTERN,
 	GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN,
 	HUGGING_FACE_TOKEN_PATTERN,
-	/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/,
+	JWT_LIKE_TOKEN_PATTERN,
 	PRIVATE_KEY_HEADER_PATTERN,
 ];
 
@@ -1115,6 +1121,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	DOCKER_HUB_OAT_BOUNDARY_PATTERN,
 	SLACK_API_TOKEN_BOUNDARY_PATTERN,
 	PRIVATE_KEY_HEADER_BOUNDARY_PATTERN,
+	JWT_LIKE_TOKEN_BOUNDARY_PATTERN,
 ];
 
 // Also recognize up to two control/whitespace separators between characters in
