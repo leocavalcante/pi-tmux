@@ -1087,7 +1087,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const genericAccessKeyAssignment = `access_key=${"M3n4".repeat(6)}`;
 	await suppressed(fixture(), `Review cloud configuration ${genericAccessKeyAssignment}`, genericAccessKeyAssignment);
 	for (const label of [
-		"APP_KEY", "SECRET_KEY_BASE", "ENCRYPTION_KEY", "FERNET_KEY", "HMAC_KEY", "MASTER_KEY",
+		"APP_KEY", "AES_KEY", "AES_256_KEY", "AES-256-KEY", "SECRET_KEY_BASE", "ENCRYPTION_KEY", "FERNET_KEY", "HMAC_KEY", "MASTER_KEY",
 		"AUTH_KEY", "SECURE_AUTH_KEY", "LOGGED_IN_KEY", "NONCE_KEY",
 		"AUTH_SALT", "SECURE_AUTH_SALT", "LOGGED_IN_SALT", "NONCE_SALT",
 	]) {
