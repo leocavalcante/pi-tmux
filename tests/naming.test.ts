@@ -100,6 +100,38 @@ test("screens Railway UUID tokens only when Railway context is present", () => {
 	}
 });
 
+test("screens Vercel tokens only when a Vercel label is present", () => {
+	const token = "A1b2".repeat(6);
+	const labeledValues = [
+		`Vercel: ${token}`,
+		`Vercel API token: ${token}`,
+		`VERCEL_TOKEN=${token}`,
+	];
+	const obfuscatedValues = [
+		labeledValues[0]!.replace("Vercel", "Ver\u200bcel"),
+		`Vercel: ${token.slice(0, 12)}\u200b${token.slice(12)}`,
+	];
+
+	for (const value of [...labeledValues, ...obfuscatedValues]) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		token,
+		`release ${token}`,
+		`Vercel ${token}`,
+		`Vercel: ${token.slice(1)}`,
+		`Vercel: ${token}x`,
+		`Vercel: ${token.replace("A", "!")}`,
+		`Vercel: ${token}_`,
+		"Vercel deployment setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens Alibaba Cloud AccessKey IDs without flagging near-misses", () => {
 	const key = `LTAI${"A1b2".repeat(5)}`;
 	const obfuscatedKeys = [
