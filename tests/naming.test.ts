@@ -244,6 +244,32 @@ test("screens synthetic EasyPost API keys without flagging near-misses", () => {
 	}
 });
 
+test("screens additional AWS access-key ID prefixes without flagging near-misses", () => {
+	const keys = [
+		`A3TA${"B".repeat(16)}`,
+		`ABIA${"C".repeat(16)}`,
+		`ACCA${"D".repeat(16)}`,
+	];
+	const obfuscatedKey = `${keys[0]!.slice(0, 10)}\u200b${keys[0]!.slice(10)}`;
+
+	for (const key of [...keys, obfuscatedKey]) {
+		expect(hasSensitiveNamingContext(`review AWS access ${key}`)).toBe(true);
+		expect(hasSensitiveOutput(key)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`ABIA${"C".repeat(15)}`,
+		`ACCA${"D".repeat(17)}`,
+		`ABIA${"C".repeat(15)}0`,
+		`prefixABIA${"C".repeat(16)}`,
+		`ACCA${"D".repeat(16)}x`,
+		"AWS temporary access key configuration",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("requestNamingTitle screens sensitive context before model-registry access", async () => {
 	const contextTexts = [
 		"task: pi-tmux@example.invalid",
