@@ -1994,7 +1994,7 @@ test("Azure SAS boundary scans preserve short-signature and invalid-version near
 	}
 });
 
-test("AI provider and model API tokens crossing prompt truncation skip model lookup", async () => {
+test("provider API tokens crossing prompt truncation skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
@@ -2017,6 +2017,8 @@ test("AI provider and model API tokens crossing prompt truncation skip model loo
 		`tvly-prod-${"s".repeat(32)}`,
 		`jina_${"T".repeat(60)}`,
 		`fc-${"a".repeat(24)}`,
+		`bb_live_${"B".repeat(24)}`,
+		`bb_test_${"C".repeat(24)}`,
 		`nva\u200bpi-${"L".repeat(40)}`,
 	];
 	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
