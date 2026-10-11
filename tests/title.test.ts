@@ -1092,6 +1092,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const tokenStart = prefixLength - 10;
 	const truncatedVercelPrompt = `${"x".repeat(tokenStart - 9)} Vercel: ${vercelApiToken} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedVercelPrompt, vercelApiToken);
+	const awsAccessKeyId = `AKIA${"A".repeat(16)}`;
+	const awsAccessKeyStart = prefixLength - 8;
+	const truncatedAwsPrompt = `${"x".repeat(awsAccessKeyStart)}${awsAccessKeyId} ${"x".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedAwsPrompt, awsAccessKeyId);
 	const githubToken = `ghp_${"A".repeat(36)}`;
 	const githubTokenStart = prefixLength - 8;
 	const truncatedGithubPrompt = `${"x".repeat(githubTokenStart)}${githubToken} ${"x".repeat(1_200)}`;
