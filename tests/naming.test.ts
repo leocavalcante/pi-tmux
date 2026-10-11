@@ -373,6 +373,42 @@ test("screens LangSmith personal and service API keys across retained-context bo
 	}
 });
 
+test("screens Tavily API keys across retained-context boundaries without flagging near-misses", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const prefixes = ["tvly-", "tvly-dev-", "tvly-prod-"];
+	const tokens = prefixes.map((prefix) => ({
+		prefix,
+		value: `${prefix}${"a1B2c3D4".repeat(3)}`,
+	}));
+
+	for (const { prefix, value } of tokens) {
+		const obfuscated = `${value.slice(0, prefix.length)}\u200b${value.slice(prefix.length)}`;
+		for (const candidate of [value, obfuscated]) {
+			expect(hasSensitiveNamingContext(candidate)).toBe(true);
+			expect(hasSensitiveOutput(candidate)).toBe(true);
+			const tokenStart = prefixLength - 10;
+			const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const nearMisses = [
+		`tvly-${"a".repeat(15)}`,
+		`tvly-dev-${"a".repeat(15)}`,
+		`tvly-qa-${"a".repeat(32)}`,
+		`notvly-${"a".repeat(32)}`,
+		`${tokens[0]!.value}_suffix`,
+	];
+	for (const nearMiss of nearMisses) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens synthetic 1Password service-account tokens without mistaking near-misses", () => {
 	const body = "Aa0+/".repeat(50);
 	const token = `ops_eyJ${body}`;
