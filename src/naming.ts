@@ -381,6 +381,13 @@ const GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 );
 const PRIVATE_KEY_HEADER_PATTERN = /-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/;
 const PRIVATE_KEY_HEADER_BOUNDARY_PATTERN = new RegExp(`(${PRIVATE_KEY_HEADER_PATTERN.source})`, "u");
+// Replicate API tokens use the fixed `r8_` prefix and 37 alphanumeric characters.
+const REPLICATE_API_TOKEN_PATTERN = /r8_[A-Za-z0-9]{37}(?![A-Za-z0-9_])/;
+const REPLICATE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	REPLICATE_API_TOKEN_PATTERN,
+	"r8_[A-Za-z0-9]{37}",
+	String.raw`(r[\p{Cc}\p{Cf}]*8[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){36})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -493,7 +500,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	// Twilio API keys use `SK` followed by exactly 32 hexadecimal characters.
 	/(?<![A-Za-z0-9_])SK[a-f0-9]{32}(?![A-Za-z0-9_-])/i,
 	/nvapi-[A-Za-z0-9_-]{32,}/,
-	/r8_[A-Za-z0-9]{37}(?![A-Za-z0-9_])/, // Replicate tokens are exactly 40 characters.
+	REPLICATE_API_TOKEN_PATTERN,
 	// Pinecone API keys use `pcsk_`, a 5–6 character key ID, and a 63-character secret.
 	/(?<![A-Za-z0-9_-])pcsk_[A-Za-z0-9]{5,6}_[A-Za-z0-9]{63}(?![A-Za-z0-9_-])/,
 	// Cerebras keys have exactly 48 URL-safe characters; boundaries avoid `pcsk_` collisions.
@@ -796,6 +803,7 @@ type NamingContextBoundary = {
 // Capture group 1 must contain only the sensitive value, not its contextual label.
 const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
+	REPLICATE_API_TOKEN_BOUNDARY_PATTERN,
 	AIRTABLE_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	CLICKHOUSE_CLOUD_API_KEY_BOUNDARY_PATTERN,
 	AZURE_DEVOPS_PAT_BOUNDARY_PATTERN,
