@@ -106,7 +106,8 @@ const OBFUSCATED_BASIC_AUTHORIZATION_SCAN_PATTERN = new RegExp(
 	OBFUSCATED_BASIC_AUTHORIZATION_PATTERN.source, `${OBFUSCATED_BASIC_AUTHORIZATION_PATTERN.flags}g`,
 );
 const OBFUSCATED_AUTHORIZATION_HEADER_PATTERN = new RegExp(
-	String.raw`(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?`
+	String.raw`(?<![A-Za-z0-9_-])`
+		+ `(?:(${interleaveWhitespaceAndFormattingControls("proxy")})[-_\\s]?)?`
 		+ `(${interleaveWhitespaceAndFormattingControls("authorization")})`
 		+ String.raw`\s*["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{4,}={0,2})`
 		+ String.raw`(?![A-Za-z0-9+/=])`,
@@ -1139,7 +1140,8 @@ function hasBasicAuthorizationCredential(value: string): boolean {
 		if (isBase64UserPasswordPair(match[2]!)) return true;
 	}
 	for (const match of value.matchAll(OBFUSCATED_AUTHORIZATION_HEADER_SCAN_PATTERN)) {
-		if (OBFUSCATION_SEPARATOR_PATTERN.test(match[1]!) && isBase64UserPasswordPair(match[2]!)) return true;
+		const headerLabel = `${match[1] ?? ""}${match[2]!}`;
+		if (OBFUSCATION_SEPARATOR_PATTERN.test(headerLabel) && isBase64UserPasswordPair(match[3]!)) return true;
 	}
 	return false;
 }
@@ -1597,11 +1599,14 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 			if (isBase64UserPasswordPair(match[2]!)) return true;
 		}
 		for (const match of joined.matchAll(OBFUSCATED_AUTHORIZATION_HEADER_BOUNDARY_SCAN_PATTERN)) {
-			const headerRange = match.indices![1]!;
-			const encodedRange = match.indices![2]!;
-			if (!overlapsRetainedContext(encodedRange[0], encodedRange[1])
-				|| !OBFUSCATION_SEPARATOR_PATTERN.test(joined.slice(headerRange[0], headerRange[1]))) continue;
-			if (isBase64UserPasswordPair(match[2]!)) return true;
+			const proxyRange = match.indices![1];
+			const authorizationRange = match.indices![2]!;
+			const encodedRange = match.indices![3]!;
+			const hasObfuscatedLabel = (proxyRange
+				&& OBFUSCATION_SEPARATOR_PATTERN.test(joined.slice(proxyRange[0], proxyRange[1])))
+				|| OBFUSCATION_SEPARATOR_PATTERN.test(joined.slice(authorizationRange[0], authorizationRange[1]));
+			if (!overlapsRetainedContext(encodedRange[0], encodedRange[1]) || !hasObfuscatedLabel) continue;
+			if (isBase64UserPasswordPair(match[3]!)) return true;
 		}
 		for (const pattern of WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS) {
 			for (const match of joined.matchAll(pattern)) {

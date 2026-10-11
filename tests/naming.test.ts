@@ -942,11 +942,13 @@ test("screens short Basic Authorization and npm password values across truncatio
 	}
 });
 
-test("screens whitespace-obfuscated Authorization field names with valid Basic pairs", () => {
+test("screens whitespace-obfuscated Authorization and proxy header names with valid Basic pairs", () => {
 	const encoded = Buffer.from("synthetic-user:synthetic-password").toString("base64");
 	for (const value of [
 		`Author ization: Basic ${encoded}`,
 		`Proxy-Author ization: Basic ${encoded}`,
+		`Pro xy-Authorization: Basic ${encoded}`,
+		`Prox y-Authorization: Basic ${encoded}`,
 	]) {
 		expect(hasSensitiveNamingContext(value)).toBe(true);
 		expect(hasSensitiveOutput(value)).toBe(true);
@@ -963,15 +965,15 @@ test("screens whitespace-obfuscated Authorization field names with valid Basic p
 		return `${prefix}${value}${padding}`;
 	};
 
-	const credential = `Proxy-Author ization: Basic ${encoded}`;
-	const context = buildNamingRequestContext([], promptAtBoundary(credential, "Proxy-Author ".length));
+	const credential = `Pro xy-Authorization: Basic ${encoded}`;
+	const context = buildNamingRequestContext([], promptAtBoundary(credential, "Pro ".length));
 	expect(hasSensitiveNamingContext(context.text)).toBe(false);
 	expect(context.hasSensitiveBoundary()).toBe(true);
 
-	const nearMiss = "Proxy-Author ization: Basic ordinary auth prose";
+	const nearMiss = "Pro xy-Authorization: Basic ordinary auth prose";
 	expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
 	expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	expect(buildNamingRequestContext([], promptAtBoundary(nearMiss, "Proxy-Author ".length)).hasSensitiveBoundary()).toBe(false);
+	expect(buildNamingRequestContext([], promptAtBoundary(nearMiss, "Pro ".length)).hasSensitiveBoundary()).toBe(false);
 });
 
 test("screens whitespace-split Basic authorization labels across suffix truncation", () => {
