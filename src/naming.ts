@@ -12,8 +12,8 @@ const MAX_NAMING_CONTENT_BLOCKS = 128;
 const MAX_TEXT_SIGNATURE_LENGTH = 4 * 1024;
 const MAX_HISTORY_TEXT_LENGTH = 1_000;
 const MAX_NAMING_CONTEXT_BLOCKS = 128;
-// Cover tokens with a 250-character minimum body when a truncation cuts near either edge.
-const MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH = 512;
+// Cover the full retained side of a truncated history item and prompt half.
+const MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH = MAX_HISTORY_TEXT_LENGTH;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 export type NamingModel = { provider: string; id: string };

@@ -2965,6 +2965,29 @@ test("screens Fireworks AI tokens across both retained prompt boundaries", () =>
 	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("long variable-length tokens stay detectable when a retained suffix starts mid-token", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const suffixLength = Math.floor(retainedLength / 2);
+	const promptLength = 6_000;
+	const suffixStart = promptLength - suffixLength;
+	const token = `fm2_${"A".repeat(1_100)}`;
+	const tokenStart = suffixStart - 800;
+	const prompt = `${"x".repeat(tokenStart - 1)} ${token}${"x".repeat(promptLength - tokenStart - token.length)}`;
+	const context = buildNamingRequestContext([], prompt);
+
+	expect(prompt).toHaveLength(promptLength);
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(true);
+
+	const omittedTokenStart = 1_500;
+	const omittedPrompt = `${"x".repeat(omittedTokenStart - 1)} ${token}`
+		+ `${"x".repeat(promptLength - omittedTokenStart - token.length)}`;
+	const omittedContext = buildNamingRequestContext([], omittedPrompt);
+	expect(hasSensitiveNamingContext(omittedContext.text)).toBe(false);
+	expect(omittedContext.hasSensitiveBoundary()).toBe(false);
+});
+
 test("requestNamingTitle screens sensitive context before model-registry access", async () => {
 	const contextTexts = [
 		"task: pi-tmux@example.invalid",
