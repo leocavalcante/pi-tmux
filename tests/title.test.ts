@@ -1591,6 +1591,55 @@ test("fixed-format tokens crossing prompt truncation skip model lookup", async (
 	}
 });
 
+test("webhook credentials crossing prompt truncation skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const teamsGuid = "01234567-89ab-cdef-0123-456789abcdef";
+	const teamsOtherGuid = "fedcba98-7654-3210-fedc-ba9876543210";
+	const slackToken = `${"A1b2".repeat(10)}A1b`;
+	const legacySlackToken = "C3d4".repeat(6);
+	const discordToken = "D5e6".repeat(17);
+	const teamsToken = "a1b2c3d4".repeat(4);
+	const values = [
+		{ value: `whsec_${"F7g8".repeat(6)}`, secret: `whsec_${"F7g8".repeat(6)}` },
+		{ value: `https://hooks.slack.com/services/${slackToken}`, secret: slackToken },
+		{
+			value: `https://hooks.slack.com/services/T00000000/B11111111/${legacySlackToken}`,
+			secret: legacySlackToken,
+		},
+		{
+			value: `https://discord.com/api/webhooks/123456789012345678/${discordToken}`,
+			secret: discordToken,
+		},
+		{
+			value: `https://tenant.webhook.office.com/webhookb2/${teamsGuid}@${teamsOtherGuid}/IncomingWebhook/${teamsToken}/${teamsGuid}`,
+			secret: teamsToken,
+		},
+	];
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const { value, secret } of values) {
+		const obfuscated = value.replace(secret, `${secret.slice(0, 10)}\u0000${secret.slice(10)}`);
+		for (const candidate of [value, obfuscated]) {
+			const secretStart = prefixLength - 10;
+			const valueStart = secretStart - candidate.indexOf(secret.slice(0, 10));
+			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+			const f = fixture();
+			const find = spyOn(f.ctx.modelRegistry, "find");
+
+			f.input(prompt);
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(f.requests).toHaveLength(0);
+			expect(f.state.title).toBe("existing task");
+			expect(f.warnings).toEqual([warning]);
+			expect(f.warnings.join(" ")).not.toContain(secret);
+			expect(f.warnings.join(" ")).not.toContain(value);
+		}
+	}
+});
+
 test("additional fixed-format tokens crossing prompt truncation skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
