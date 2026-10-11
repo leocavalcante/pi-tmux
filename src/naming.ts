@@ -187,6 +187,11 @@ const RUBYGEMS_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 );
 // Heroku API tokens use `HRKU-AA` followed by exactly 58 URL-safe characters.
 const HEROKU_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])HRKU-AA[A-Za-z0-9_-]{58}(?![A-Za-z0-9_-])/i;
+const HEROKU_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	HEROKU_API_TOKEN_PATTERN,
+	"HRKU-AA[A-Za-z0-9_-]{58}",
+	String.raw`(H[\p{Cc}\p{Cf}]*R[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*U[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*A[\p{Cc}\p{Cf}]*A[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){57})`,
+);
 // EasyPost test and production API keys use `EZTK` or `EZAK` plus 54 alphanumeric characters.
 const EASYPOST_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])EZ(?:AK|TK)[A-Za-z0-9]{54}(?![A-Za-z0-9_])/i;
 
@@ -294,7 +299,17 @@ const RAILWAY_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 );
 // Artifactory tokens have distinctive fixed prefixes and exact body lengths.
 const ARTIFACTORY_API_KEY_PATTERN = /(?<![A-Za-z0-9_])AKCp[A-Za-z0-9]{69}(?![A-Za-z0-9_])/;
+const ARTIFACTORY_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	ARTIFACTORY_API_KEY_PATTERN,
+	"AKCp[A-Za-z0-9]{69}",
+	String.raw`(A[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*C[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){68})`,
+);
 const ARTIFACTORY_REFERENCE_TOKEN_PATTERN = /(?<![A-Za-z0-9_])cmVmd[A-Za-z0-9]{59}(?![A-Za-z0-9_])/;
+const ARTIFACTORY_REFERENCE_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	ARTIFACTORY_REFERENCE_TOKEN_PATTERN,
+	"cmVmd[A-Za-z0-9]{59}",
+	String.raw`(c[\p{Cc}\p{Cf}]*m[\p{Cc}\p{Cf}]*V[\p{Cc}\p{Cf}]*m[\p{Cc}\p{Cf}]*d[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){58})`,
+);
 // 1Password service-account tokens use `ops_eyJ` and a long Base64-form body.
 const ONE_PASSWORD_SERVICE_ACCOUNT_TOKEN_PATTERN =
 	/(?<![A-Za-z0-9_])ops_eyJ[A-Za-z0-9+/]{250,}={0,3}(?![A-Za-z0-9+/=])/;
@@ -306,9 +321,19 @@ const ONE_PASSWORD_SERVICE_ACCOUNT_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 // Fly.io org tokens use `fo1_` plus 43 URL-safe characters; machine tokens use
 // `fm1a_`, `fm1r_`, or `fm2_` plus at least 100 Base64 characters.
 const FLY_IO_ORG_TOKEN_PATTERN = /(?<![A-Za-z0-9_])fo1_[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/;
+const FLY_IO_ORG_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	FLY_IO_ORG_TOKEN_PATTERN,
+	"fo1_[A-Za-z0-9_-]{43}",
+	String.raw`(f[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*1[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){42})`,
+);
 const FLY_IO_MACHINE_TOKEN_PATTERN = /(?<![A-Za-z0-9_])(?:fm1[ar]|fm2)_[A-Za-z0-9+/]{100,}={0,3}(?![A-Za-z0-9_+/=-])/;
 // Dynatrace API tokens use `dt0c01.` and two fixed-length alphanumeric segments.
 const DYNATRACE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])dt0c01\.[A-Za-z0-9]{24}\.[A-Za-z0-9]{64}(?![A-Za-z0-9_])/;
+const DYNATRACE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DYNATRACE_API_TOKEN_PATTERN,
+	String.raw`dt0c01\.[A-Za-z0-9]{24}\.[A-Za-z0-9]{64}`,
+	String.raw`(d[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*0[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*0[\p{Cc}\p{Cf}]*1[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){23}[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){63})`,
+);
 // Resend API keys have the distinctive `re_` prefix and a long URL-safe body.
 const RESEND_API_KEY_PATTERN = /(?<![A-Za-z0-9_])re_[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-])/;
 // Typeform API tokens use `tfp_` followed by exactly 59 URL-safe characters.
@@ -320,6 +345,11 @@ const TYPEFORM_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 );
 // New Relic user API keys use `NRAK-` followed by exactly 27 alphanumeric characters.
 const NEW_RELIC_USER_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])NRAK-[A-Za-z0-9]{27}(?![A-Za-z0-9_-])/i;
+const NEW_RELIC_USER_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	NEW_RELIC_USER_API_KEY_PATTERN,
+	"NRAK-[A-Za-z0-9]{27}",
+	String.raw`(N[\p{Cc}\p{Cf}]*R[\p{Cc}\p{Cf}]*A[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){26})`,
+);
 // Tailscale key values can be untyped or include an auth/api/client subtype.
 // The subtype separator must not prevent screening of the opaque key body.
 const TAILSCALE_KEY_PATTERN =
@@ -890,6 +920,12 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	ALIBABA_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 	TENCENT_CLOUD_SECRET_ID_BOUNDARY_PATTERN,
 	GITLAB_RUNNER_AUTH_TOKEN_BOUNDARY_PATTERN,
+	HEROKU_API_TOKEN_BOUNDARY_PATTERN,
+	ARTIFACTORY_API_KEY_BOUNDARY_PATTERN,
+	ARTIFACTORY_REFERENCE_TOKEN_BOUNDARY_PATTERN,
+	DYNATRACE_API_TOKEN_BOUNDARY_PATTERN,
+	FLY_IO_ORG_TOKEN_BOUNDARY_PATTERN,
+	NEW_RELIC_USER_API_KEY_BOUNDARY_PATTERN,
 	CLOJARS_API_TOKEN_BOUNDARY_PATTERN,
 	RUBYGEMS_API_TOKEN_BOUNDARY_PATTERN,
 	TYPEFORM_API_TOKEN_BOUNDARY_PATTERN,
