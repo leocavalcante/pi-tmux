@@ -338,6 +338,41 @@ test("screens supported fixed-format tokens across retained-context boundaries",
 	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens LangSmith personal and service API keys across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const tokens = ["lsv2_pt_", "LSV2_SK_"].map((prefix) =>
+		`${prefix}${"a1b2".repeat(8)}_${"c3d4a1b2c3"}`);
+
+	for (const token of tokens) {
+		expect(hasSensitiveNamingContext(`configure LangSmith ${token}`)).toBe(true);
+		expect(hasSensitiveOutput(token)).toBe(true);
+		const obfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+		for (const value of [token, obfuscated]) {
+			expect(hasSensitiveNamingContext(value)).toBe(true);
+			expect(hasSensitiveOutput(value)).toBe(true);
+			const tokenStart = prefixLength - 10;
+			const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const nearMisses = [
+		`lsv2_pt_${"a".repeat(31)}_${"c".repeat(10)}`,
+		`lsv2_sk_${"a".repeat(32)}_${"c".repeat(9)}`,
+		`lsv2_pt_${"g".repeat(32)}_${"c".repeat(10)}`,
+		`prefix${tokens[0]}`,
+		`${tokens[1]}x`,
+	];
+	for (const nearMiss of nearMisses) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens synthetic 1Password service-account tokens without mistaking near-misses", () => {
 	const body = "Aa0+/".repeat(50);
 	const token = `ops_eyJ${body}`;
