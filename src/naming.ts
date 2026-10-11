@@ -57,7 +57,15 @@ const BEARER_TOKEN_PATTERN = /Bearer\s+([A-Za-z0-9._~+/=-](?:\s*[A-Za-z0-9._~+/=
 const BEARER_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	BEARER_TOKEN_PATTERN,
 	"([A-Za-z0-9._~+/=-](?:\\s*[A-Za-z0-9._~+/=-]){15,})",
-	String.raw`([A-Za-z0-9._~+/=-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9._~+/=-]){15,})`,
+	String.raw`([A-Za-z0-9._~+/=-](?:(?:(?!\p{White_Space})[\p{Cc}\p{Cf}])*[A-Za-z0-9._~+/=-]){15,})`,
+);
+// A separate boundary-only variant catches spaces inserted within a bearer value.
+// The ordinary prose heuristic below still validates matches before they block naming.
+const WHITESPACE_TOLERANT_BEARER_TOKEN_BOUNDARY_PATTERN = new RegExp(
+	BEARER_TOKEN_PATTERN.source.replaceAll(
+		String.raw`\s*`, String.raw`[\p{Cc}\p{Cf}\s]{0,2}`,
+	) + String.raw`(?![A-Za-z0-9._~+/=-])`,
+	`${BEARER_TOKEN_PATTERN.flags}u`,
 );
 const US_SSN_PATTERN = /(?<![A-Za-z0-9])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?(\d{3}[-\s]?\d{2}[-\s]?\d{4})(?![A-Za-z0-9_])/i;
 // Require a phone-related label and a phone-number-shaped value of 7–15 digits.
@@ -1433,6 +1441,10 @@ const SENSITIVE_BOUNDARY_SCAN_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS.map((source
 	sourcePattern,
 	pattern: new RegExp(sourcePattern.source, `${sourcePattern.flags}dg`),
 }));
+const WHITESPACE_TOLERANT_BEARER_TOKEN_BOUNDARY_SCAN_PATTERN = new RegExp(
+	WHITESPACE_TOLERANT_BEARER_TOKEN_BOUNDARY_PATTERN.source,
+	`${WHITESPACE_TOLERANT_BEARER_TOKEN_BOUNDARY_PATTERN.flags}dg`,
+);
 
 // Also recognize up to two control/whitespace separators between characters in
 // distinctive token formats. Exclude generic labels and prose-sensitive patterns;
@@ -1517,6 +1529,13 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 				}
 				return true;
 			}
+		}
+		for (const match of joined.matchAll(WHITESPACE_TOLERANT_BEARER_TOKEN_BOUNDARY_SCAN_PATTERN)) {
+			const tokenRange = match.indices![1]!;
+			if (!overlapsRetainedContext(tokenRange[0], tokenRange[1])
+				|| !hasSeparatorInRetainedContext(tokenRange[0], tokenRange[1])) continue;
+			const bearerValue = stripNonWhitespaceControls(match[1]!);
+			if (hasBearerToken(`Bearer ${bearerValue}`)) return true;
 		}
 		for (const pattern of WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS) {
 			for (const match of joined.matchAll(pattern)) {
