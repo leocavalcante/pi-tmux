@@ -268,6 +268,13 @@ const MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN = new RegExp(
 		+ String.raw`\/IncomingWebhook\/[a-f0-9]{32}\/${MICROSOFT_TEAMS_GUID_PATTERN}(?![A-Za-z0-9_-])`,
 	"i",
 );
+// Classic AWS access-key IDs use `AKIA` or `ASIA` plus exactly 16 uppercase letters/digits.
+const AWS_ACCESS_KEY_ID_PATTERN = /(?:AKIA|ASIA)[0-9A-Z]{16}/;
+const AWS_ACCESS_KEY_ID_BOUNDARY_PATTERN = makeBoundaryPattern(
+	AWS_ACCESS_KEY_ID_PATTERN,
+	"(?:AKIA|ASIA)[0-9A-Z]{16}",
+	String.raw`((?:A[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*I[\p{Cc}\p{Cf}]*A|A[\p{Cc}\p{Cf}]*S[\p{Cc}\p{Cf}]*I[\p{Cc}\p{Cf}]*A)[\p{Cc}\p{Cf}]*[0-9A-Z](?:[\p{Cc}\p{Cf}]*[0-9A-Z]){15})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -387,7 +394,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/gsk_[A-Za-z0-9]{20,}/,
 	/xai-[A-Za-z0-9_-]{16,}/,
 	/pplx-[A-Za-z0-9]{48}/,
-	/(?:AKIA|ASIA)[0-9A-Z]{16}/,
+	AWS_ACCESS_KEY_ID_PATTERN,
 	// Additional AWS access-key ID prefixes use a 16-character base32-like suffix.
 	/(?<![A-Za-z0-9_])(?:A3T[A-Z0-9]|ABIA|ACCA)[A-Z2-7]{16}(?![A-Za-z0-9_])/,
 	/ABSK[A-Za-z0-9+/]{109,269}={0,2}/,
@@ -695,6 +702,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	DATADOG_API_KEY_BOUNDARY_PATTERN,
 	MAILGUN_PRIVATE_API_TOKEN_BOUNDARY_PATTERN,
 	RAILWAY_API_TOKEN_BOUNDARY_PATTERN,
+	AWS_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 ];
 
 function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {
