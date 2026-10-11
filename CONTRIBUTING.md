@@ -2,7 +2,7 @@
 
 ## Setup
 
-Development uses Node.js 22.19 or newer and npm for dependencies and checks; tests run on Bun 1.4.2. `npm test` delegates to `bun test` and does not fall back to Node's test runner. Install Bun using the [Bun installation guide](https://bun.sh/docs/installation).
+Development uses Node.js 22.19 or newer and npm for dependencies and checks. Most tests run on Bun 1.4.2, with focused tmux subprocess tests also run under Node's native test runner. `npm test` runs both suites; install Bun using the [Bun installation guide](https://bun.sh/docs/installation).
 
 ```sh
 git clone https://github.com/leocavalcante/pi-tmux.git
@@ -47,12 +47,13 @@ npm test
 - `tests/move.test.ts` checks former-location marker repair, remaining peers, custom names, vanished targets, repeated moves, explicit sync retries, superseded repairs, and a server restart between lookup and write with reused numeric IDs on isolated tmux servers. Those checks skip if tmux is unavailable; the queue and stabilization bounds also have a mock-only regression.
 - `tests/status.test.ts` verifies read-only diagnostic snapshots and waiting-flag aggregation on an isolated tmux server. It skips if tmux is unavailable.
 - `tests/package.test.ts` runs `npm pack` in a temporary directory, inspects the packed manifest and entrypoint, then imports the extracted file after Bun's TypeScript erasure and exercises status-only lifecycle behavior without a runtime SDK dependency. It requires `npm` and `tar` on `PATH`; on Windows the npm command shim is launched through the command shell.
-- `tests/tmux.test.ts` uses a Node-based fake tmux executable to test `runTmux` output bounds, timeouts, cancellation, forced termination, and pre-aborted signals on all platforms. The graceful-SIGTERM assertion skips on native Windows, where child termination semantics differ; no tmux server is required.
+- `tests/tmux.test.ts` runs under Bun and uses a Node-based fake tmux executable to test `runTmux` output bounds, timeouts, cancellation, forced termination, and pre-aborted signals. The graceful-SIGTERM assertion skips on native Windows, where child termination semantics differ; no tmux server is required.
+- `tests/tmux-node.mjs` runs the focused `runTmux` subprocess cases under Node's native `node:child_process` implementation, covering pre-aborted signals, output-bound cleanup, cancellation, and graceful timeout exit. Run it alone with `npm run test:node`; it does not need a tmux server.
 - `tests/naming.test.ts` checks synthetic Tailscale key screening in naming context and output, including invisible-character variants and near-misses, and verifies context screening happens before model-registry access without echoing matches.
 - `tests/issue-templates.test.ts` parses the issue-form YAML, checks supported field structures and privacy reminders, and keeps blank issues enabled.
 - `tests/workflows.test.ts` keeps third-party GitHub Actions pinned to full commit SHAs with version comments, while allowing local reusable workflows.
 
-Tmux integration tests use separate temporary servers and skip automatically when `tmux` is unavailable or on native Windows. To run them, install tmux on a Unix-like host: the fixtures use Unix paths (`/dev/null` and `/bin/sleep`), so use Linux, macOS, or WSL. Mock-only tests, including empty window-name parsing and the Node-based fake subprocess tests, do not need tmux. GitHub Actions runs the full tmux suite on Ubuntu 24.04 with Node.js 22.19.0 (the declared minimum), 24, and 26, and on macOS 15 with Node.js 22.19.0 and Homebrew tmux. A Windows Server 2022 job with Node.js 22 runs the type checks, mock-capable test suite, and package-content check; tmux integration tests are skipped on native Windows. All jobs use Bun 1.4.2. Maintainers can also run the full Tests workflow on demand from GitHub Actions or with `gh workflow run Tests --ref main`. Tests make no model API calls and do not rename your windows or sessions.
+Tmux integration tests use separate temporary servers and skip automatically when `tmux` is unavailable or on native Windows. To run them, install tmux on a Unix-like host: the fixtures use Unix paths (`/dev/null` and `/bin/sleep`), so use Linux, macOS, or WSL. Mock-only tests, including empty window-name parsing and both fake-subprocess suites, do not need tmux. GitHub Actions runs the full tmux suite on Ubuntu 24.04 with Node.js 22.19.0 (the declared minimum), 24, and 26, and on macOS 15 with Node.js 22.19.0 and Homebrew tmux. A Windows Server 2022 job with Node.js 22 runs the type checks, mock-capable test suite, and package-content check; tmux integration tests are skipped on native Windows. All jobs use Bun 1.4.2. Maintainers can also run the full Tests workflow on demand from GitHub Actions or with `gh workflow run Tests --ref main`. Tests make no model API calls and do not rename your windows or sessions.
 
 ## Before submitting
 
