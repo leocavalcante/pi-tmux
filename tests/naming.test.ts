@@ -727,6 +727,53 @@ test("screens Airtable and ClickHouse keys across retained-context boundaries", 
 	}
 });
 
+test("screens Replicate API tokens across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const token = `r8_${"A1b2".repeat(9)}A`;
+	const obfuscated = token.replace("r8_", "r\u200b8_");
+	const controlObfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
+	const tokenStart = prefixLength - Math.floor(token.length / 2);
+	const prompt = (value: string) => `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+	const context = buildNamingRequestContext([], prompt(token));
+	expect(hasSensitiveNamingContext(token)).toBe(true);
+	expect(hasSensitiveOutput(token)).toBe(true);
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(true);
+	expect(buildNamingRequestContext([], prompt(obfuscated)).hasSensitiveBoundary()).toBe(true);
+	expect(buildNamingRequestContext([], prompt(controlObfuscated)).hasSensitiveBoundary()).toBe(true);
+
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
+	const leading = `${"x".repeat(suffixTokenStart - 1)} `;
+	const tokenAndSpace = `${token} `;
+	const suffixPrompt = leading + tokenAndSpace
+		+ "y".repeat(promptLength - leading.length - tokenAndSpace.length);
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+	const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+	const summary = buildNamingRequestContext([
+		{ role: "compactionSummary", summary: historyContent },
+	] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+
+	const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+	for (const nearMiss of [
+		token.slice(0, -1), `${token}A`, token.replace("r8_", "r9_"),
+	]) {
+		expect(buildNamingRequestContext([], prompt(nearMiss)).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens Slack API tokens across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
