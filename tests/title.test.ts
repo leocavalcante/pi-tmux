@@ -1781,6 +1781,26 @@ test("a whitespace-obfuscated Neon key embedded in prose skips model lookup", as
 	expect(f.warnings.join(" ")).not.toContain(obfuscated);
 });
 
+test("a long 1Password token crossing prompt truncation skips model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const token = `ops_eyJ${"Aa0+/".repeat(50)}`;
+	const tokenStart = prefixLength - 20;
+	const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_300)}`;
+	const f = fixture();
+	const find = spyOn(f.ctx.modelRegistry, "find");
+	f.input(prompt);
+	await settle();
+	expect(find).not.toHaveBeenCalled();
+	expect(f.requests).toHaveLength(0);
+	expect(f.state.title).toBe("existing task");
+	expect(f.warnings).toEqual([
+		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+	]);
+	expect(f.warnings.join(" ")).not.toContain(token);
+});
+
 test("a Replicate API token crossing prompt truncation skips model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

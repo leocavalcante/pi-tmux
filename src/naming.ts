@@ -12,7 +12,8 @@ const MAX_NAMING_CONTENT_BLOCKS = 128;
 const MAX_TEXT_SIGNATURE_LENGTH = 4 * 1024;
 const MAX_HISTORY_TEXT_LENGTH = 1_000;
 const MAX_NAMING_CONTEXT_BLOCKS = 128;
-const MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH = 128;
+// Cover tokens with a 250-character minimum body when a truncation cuts near either edge.
+const MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH = 512;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 export type NamingModel = { provider: string; id: string };
@@ -270,6 +271,14 @@ const RAILWAY_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 // Artifactory tokens have distinctive fixed prefixes and exact body lengths.
 const ARTIFACTORY_API_KEY_PATTERN = /(?<![A-Za-z0-9_])AKCp[A-Za-z0-9]{69}(?![A-Za-z0-9_])/;
 const ARTIFACTORY_REFERENCE_TOKEN_PATTERN = /(?<![A-Za-z0-9_])cmVmd[A-Za-z0-9]{59}(?![A-Za-z0-9_])/;
+// 1Password service-account tokens use `ops_eyJ` and a long Base64-form body.
+const ONE_PASSWORD_SERVICE_ACCOUNT_TOKEN_PATTERN =
+	/(?<![A-Za-z0-9_])ops_eyJ[A-Za-z0-9+/]{250,}={0,3}(?![A-Za-z0-9+/=])/;
+const ONE_PASSWORD_SERVICE_ACCOUNT_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	ONE_PASSWORD_SERVICE_ACCOUNT_TOKEN_PATTERN,
+	"ops_eyJ[A-Za-z0-9+/]{250,}={0,3}",
+	String.raw`(o[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*y[\p{Cc}\p{Cf}]*J[\p{Cc}\p{Cf}]*[A-Za-z0-9+/](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+/]){249,}[\p{Cc}\p{Cf}]*={0,3})`,
+);
 // Fly.io org tokens use `fo1_` plus 43 URL-safe characters; machine tokens use
 // `fm1a_`, `fm1r_`, or `fm2_` plus at least 100 Base64 characters.
 const FLY_IO_ORG_TOKEN_PATTERN = /(?<![A-Za-z0-9_])fo1_[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/;
@@ -482,8 +491,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])v1\.0-[a-f0-9]{24}-[a-f0-9]{146}(?![A-Za-z0-9_-])/i,
 	// 1Password Secret Keys have an `A3-` prefix and fixed-length grouped characters.
 	/(?<![A-Za-z0-9_])A3-[A-Z0-9]{6}-(?:[A-Z0-9]{11}|[A-Z0-9]{6}-[A-Z0-9]{5})-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}(?![A-Za-z0-9_-])/i,
-	// 1Password service account tokens use `ops_eyJ` and a long Base64-form body.
-	/(?<![A-Za-z0-9_])ops_eyJ[A-Za-z0-9+/]{250,}={0,3}(?![A-Za-z0-9+/=])/,
+	ONE_PASSWORD_SERVICE_ACCOUNT_TOKEN_PATTERN,
 	// Age identities use `AGE-SECRET-KEY-1` followed by 58 Bech32 characters.
 	AGE_SECRET_KEY_PATTERN,
 	// Atlassian API tokens use `ATATT3` followed by 186 URL-safe characters.
@@ -858,6 +866,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	NPM_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	HUGGING_FACE_TOKEN_BOUNDARY_PATTERN,
 	AGE_SECRET_KEY_BOUNDARY_PATTERN,
+	ONE_PASSWORD_SERVICE_ACCOUNT_TOKEN_BOUNDARY_PATTERN,
 	DOCKER_HUB_PAT_BOUNDARY_PATTERN,
 	DOCKER_HUB_OAT_BOUNDARY_PATTERN,
 	SLACK_API_TOKEN_BOUNDARY_PATTERN,
