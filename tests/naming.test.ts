@@ -848,6 +848,10 @@ test("screens short Basic Authorization and npm password values across truncatio
 			tokenOffset: "Proxy-Authorization: Basic ".length,
 		},
 		{
+			value: `Authorization: B a s i c ${Buffer.from("u:p").toString("base64")}`,
+			tokenOffset: `Authorization: B a s i c `.length,
+		},
+		{
 			value: `Autho\u200brization: Ba\u200bsic dT\u0000pw`,
 			tokenOffset: `Autho\u200brization: Ba\u200bsic `.length,
 		},
@@ -869,6 +873,7 @@ test("screens short Basic Authorization and npm password values across truncatio
 		`//registry.npmjs.org/:_password=${Buffer.from("example").toString("base64")}`,
 		"//registry.npmjs.org/:_password=a!",
 		`Authorization: Basic ${Buffer.from("no-pair").toString("base64")}`,
+		`Authorization: B a s i c ordinary auth prose`,
 		`Authorization: |-\n  Basic ${Buffer.from("no-pair").toString("base64")}`,
 		`Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}\n\n  x`,
 	];
@@ -935,6 +940,30 @@ test("screens short Basic Authorization and npm password values across truncatio
 			expect(context.hasSensitiveBoundary()).toBe(false);
 		}
 	}
+});
+
+test("screens whitespace-split Basic authorization labels across suffix truncation", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const encoded = Buffer.from("synthetic-user:synthetic-password").toString("base64");
+	const promptAtBoundary = (value: string) => {
+		const schemeStart = suffixStart - 3;
+		const prefix = `${"x".repeat(schemeStart - "Authorization: ".length - 1)} `;
+		const padding = ` ${"x".repeat(promptLength - prefix.length - value.length - 1)}`;
+		return `${prefix}${value}${padding}`;
+	};
+
+	const credential = `Authorization: B a s i c ${encoded}`;
+	const context = buildNamingRequestContext([], promptAtBoundary(credential));
+	expect(hasSensitiveNamingContext(credential)).toBe(true);
+	expect(hasSensitiveOutput(credential)).toBe(true);
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(true);
+
+	const nearMiss = buildNamingRequestContext([], promptAtBoundary("Authorization: B a s i c ordinary auth prose"));
+	expect(nearMiss.hasSensitiveBoundary()).toBe(false);
 });
 
 test("screens generic sk/rk API keys across prompt truncation boundaries", () => {
