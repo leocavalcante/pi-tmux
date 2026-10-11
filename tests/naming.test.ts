@@ -2408,6 +2408,51 @@ test("screens additional AWS access-key ID prefixes without flagging near-misses
 	}
 });
 
+test("screens alternate AWS access IDs and ABSK bearer tokens across retained boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const tokens = [
+		`A3TA${"B".repeat(16)}`,
+		`A3T7${"C".repeat(16)}`,
+		`ABIA${"D".repeat(16)}`,
+		`ACCA${"E".repeat(16)}`,
+		`ABSK${"A".repeat(109)}`,
+		`ABSK${"B".repeat(269)}==`,
+	];
+	const candidates = tokens.flatMap((token) => [
+		token,
+		`${token.slice(0, 10)}\u0000${token.slice(10)}`,
+	]);
+	const tokenStarts = [prefixLength - 10, suffixStart - 10];
+
+	for (const token of candidates) {
+		for (const tokenStart of tokenStarts) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const nearMisses = [
+		`A3TA${"B".repeat(15)}`,
+		`ABIA${"C".repeat(16)}x`,
+		`prefixACCA${"D".repeat(16)}`,
+		`ACCA${"D".repeat(15)}0`,
+		`ABSK${"A".repeat(108)}`,
+	];
+	for (const token of nearMisses) {
+		for (const tokenStart of tokenStarts) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("requestNamingTitle screens sensitive context before model-registry access", async () => {
 	const contextTexts = [
 		"task: pi-tmux@example.invalid",
