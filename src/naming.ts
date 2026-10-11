@@ -59,13 +59,16 @@ const BEARER_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"([A-Za-z0-9._~+/=-](?:\\s*[A-Za-z0-9._~+/=-]){15,})",
 	String.raw`([A-Za-z0-9._~+/=-](?:(?:(?!\p{White_Space})[\p{Cc}\p{Cf}])*[A-Za-z0-9._~+/=-]){15,})`,
 );
-// A separate boundary-only variant catches spaces inserted within a bearer value.
-// The ordinary prose heuristic below still validates matches before they block naming.
-const WHITESPACE_TOLERANT_BEARER_TOKEN_BOUNDARY_PATTERN = new RegExp(
-	BEARER_TOKEN_PATTERN.source.replaceAll(
-		String.raw`\s*`, String.raw`[\p{Cc}\p{Cf}\s]{0,2}`,
-	) + String.raw`(?![A-Za-z0-9._~+/=-])`,
-	`${BEARER_TOKEN_PATTERN.flags}u`,
+// Also match scheme labels split by whitespace/format characters. The ordinary
+// bearer heuristic validates values after this normalization to retain prose safeguards.
+const OBFUSCATED_BEARER_TOKEN_PATTERN = new RegExp(
+	String.raw`(B[\p{Cc}\p{Cf}\s]*e[\p{Cc}\p{Cf}\s]*a[\p{Cc}\p{Cf}\s]*r[\p{Cc}\p{Cf}\s]*e[\p{Cc}\p{Cf}\s]*r)`
+		+ String.raw`[\p{Cc}\p{Cf}\s]+([A-Za-z0-9._~+/=-](?:[\p{Cc}\p{Cf}\s]*[A-Za-z0-9._~+/=-]){15,})`
+		+ String.raw`(?![A-Za-z0-9._~+/=-])`,
+	"iu",
+);
+const OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN = new RegExp(
+	OBFUSCATED_BEARER_TOKEN_PATTERN.source, `${OBFUSCATED_BEARER_TOKEN_PATTERN.flags}g`,
 );
 const US_SSN_PATTERN = /(?<![A-Za-z0-9])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?(\d{3}[-\s]?\d{2}[-\s]?\d{4})(?![A-Za-z0-9_])/i;
 // Require a phone-related label and a phone-number-shaped value of 7–15 digits.
@@ -1236,12 +1239,20 @@ function stripNonWhitespaceControls(value: string): string {
 		/\p{White_Space}/u.test(character) ? character : "");
 }
 
+function hasObfuscatedBearerToken(value: string): boolean {
+	for (const match of value.matchAll(OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN)) {
+		const bearerValue = stripNonWhitespaceControls(match[2]!);
+		if (hasBearerToken(`Bearer ${bearerValue}`)) return true;
+	}
+	return false;
+}
+
 // Check credentials and high-confidence personal-data formats before transmission.
 // These PII patterns require conventional email syntax or explicit labels; avoid
 // broad checks for names and other personal data that suppress ordinary titles.
 export function hasSensitiveNamingContext(text: string): boolean {
 	const hasSensitiveValue = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
-		|| hasBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
+		|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
 		|| US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Strip invisible non-whitespace controls without joining a preceding word to the token.
@@ -1266,7 +1277,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 export function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
-			|| hasBearerToken(value) || US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value)
+			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value)
 			|| hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
 		// Keep ordinary whitespace as a boundary while stripping invisible controls.
@@ -1441,9 +1452,9 @@ const SENSITIVE_BOUNDARY_SCAN_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS.map((source
 	sourcePattern,
 	pattern: new RegExp(sourcePattern.source, `${sourcePattern.flags}dg`),
 }));
-const WHITESPACE_TOLERANT_BEARER_TOKEN_BOUNDARY_SCAN_PATTERN = new RegExp(
-	WHITESPACE_TOLERANT_BEARER_TOKEN_BOUNDARY_PATTERN.source,
-	`${WHITESPACE_TOLERANT_BEARER_TOKEN_BOUNDARY_PATTERN.flags}dg`,
+const OBFUSCATED_BEARER_TOKEN_BOUNDARY_SCAN_PATTERN = new RegExp(
+	OBFUSCATED_BEARER_TOKEN_PATTERN.source,
+	`${OBFUSCATED_BEARER_TOKEN_PATTERN.flags}dg`,
 );
 
 // Also recognize up to two control/whitespace separators between characters in
@@ -1530,11 +1541,13 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 				return true;
 			}
 		}
-		for (const match of joined.matchAll(WHITESPACE_TOLERANT_BEARER_TOKEN_BOUNDARY_SCAN_PATTERN)) {
-			const tokenRange = match.indices![1]!;
+		for (const match of joined.matchAll(OBFUSCATED_BEARER_TOKEN_BOUNDARY_SCAN_PATTERN)) {
+			const labelRange = match.indices![1]!;
+			const tokenRange = match.indices![2]!;
 			if (!overlapsRetainedContext(tokenRange[0], tokenRange[1])
-				|| !hasSeparatorInRetainedContext(tokenRange[0], tokenRange[1])) continue;
-			const bearerValue = stripNonWhitespaceControls(match[1]!);
+				|| (!hasSeparatorInRetainedContext(labelRange[0], labelRange[1])
+					&& !hasSeparatorInRetainedContext(tokenRange[0], tokenRange[1]))) continue;
+			const bearerValue = stripNonWhitespaceControls(match[2]!);
 			if (hasBearerToken(`Bearer ${bearerValue}`)) return true;
 		}
 		for (const pattern of WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS) {
