@@ -146,6 +146,12 @@ const LABELED_CREDENTIAL_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"([A-Za-z0-9._~+/=-]{20,})",
 	String.raw`([A-Za-z0-9._~+/=-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9._~+/=-]){19,})`,
 );
+const GITHUB_TOKEN_PATTERN = /((?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}))/;
+const GITHUB_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GITHUB_TOKEN_PATTERN,
+	"((?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}))",
+	String.raw`((?:gh[pousr]_[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){19,}|github_pat_[A-Za-z0-9_](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_]){19,}))`,
+);
 
 // Cloudflare API keys have 40 URL-safe characters; global keys have 37 hex characters.
 // Require a nearby Cloudflare label to avoid flagging unrelated opaque values.
@@ -282,7 +288,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	DISCORD_AUTH_TOKEN_PATTERN,
 	DISCORD_MFA_TOKEN_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN,
-	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
+	GITHUB_TOKEN_PATTERN,
 	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed
 	// by a 16-hex or `local` segment.
 	/(?<![A-Za-z0-9_])sgp_(?:[a-f0-9]{40}|(?:[a-f0-9]{16}|local)_[a-f0-9]{40})(?![A-Za-z0-9_-])/i,
@@ -646,6 +652,7 @@ type NamingContextBoundary = {
 // Capture group 1 must contain only the credential value, not its contextual label.
 const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
+	GITHUB_TOKEN_BOUNDARY_PATTERN,
 	VERCEL_API_TOKEN_BOUNDARY_PATTERN,
 	CLOUDFLARE_API_KEY_BOUNDARY_PATTERN,
 	CLOUDFLARE_GLOBAL_API_KEY_BOUNDARY_PATTERN,

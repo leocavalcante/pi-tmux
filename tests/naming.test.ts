@@ -415,6 +415,53 @@ test("screens explicit credential assignments across retained-context truncation
 	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens GitHub tokens across retained-context truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const tokens = [`ghp_${"A".repeat(36)}`, `github_pat_${"B".repeat(30)}`];
+
+	for (const token of tokens) {
+		const prefixTokenStart = prefixLength - 8;
+		const prompt = `${"x".repeat(prefixTokenStart)}${token} ${"x".repeat(1_200)}`;
+		const prefixContext = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+		expect(prefixContext.text).toBe(buildNamingContext([], prompt));
+
+		const controlObfuscatedToken = `${token.slice(0, 18)}\u0000${token.slice(18)}`;
+		const obfuscatedPrompt = `${"x".repeat(prefixTokenStart)}${controlObfuscatedToken} ${"x".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+		const historyContent = `${"x".repeat(992)}${token} y`;
+		const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+		expect(hasSensitiveNamingContext(history.text)).toBe(false);
+		expect(history.hasSensitiveBoundary()).toBe(true);
+		const summary = buildNamingRequestContext([
+			{ role: "compactionSummary", summary: historyContent },
+		] as any);
+		expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+		expect(summary.hasSensitiveBoundary()).toBe(true);
+
+		const promptLength = MAX_PROMPT_LENGTH + 300;
+		const suffixLength = Math.floor(retainedLength / 2);
+		const suffixStart = promptLength - suffixLength;
+		const suffixTokenStart = suffixStart - token.length + 8;
+		const suffixPrompt = `${"x".repeat(suffixTokenStart)}${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
+		const suffixContext = buildNamingRequestContext([], suffixPrompt);
+		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+	}
+
+	const omittedToken = tokens[0]!;
+	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${omittedToken} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+	for (const shortToken of [`ghp_${"A".repeat(19)}`, `github_pat_${"B".repeat(19)}`]) {
+		const shortPrompt = `${"x".repeat(prefixLength - 8)}${shortToken} ${"x".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], shortPrompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens Azure AD client-secret formats without flagging near-misses", () => {
 	const body = `${"Aa0_-.".repeat(5)}C3`;
 	const secrets = [`AbC7Q~${body}`, `AbC7Q~${body.slice(0, 31)}`, `AbC7Q~${body}${"x".repeat(2)}`];
