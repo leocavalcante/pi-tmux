@@ -118,12 +118,16 @@ test("screens synthetic Discord webhook URLs without flagging similar links", ()
 	const token = "A1b2".repeat(17);
 	const url = `https://discord.com/api/webhooks/${id}/${token}`;
 	const legacyUrl = url.replace("discord.com", "discordapp.com");
+	const underscoreToken = "A1b_".repeat(17);
+	const underscoreUrl = url.replace(token, underscoreToken);
 	const screenedUrls = [
 		url.replace("discord.com", "dis\u200bcord.com"),
 		url.replace(token, `${token.slice(0, 34)}\u200b${token.slice(34)}`),
 		legacyUrl,
 		legacyUrl.replace("discordapp.com", "discordapp.\u200bcom"),
 		legacyUrl.replace(token, `${token.slice(0, 34)}\u200b${token.slice(34)}`),
+		underscoreUrl,
+		underscoreUrl.replace(underscoreToken, `${underscoreToken.slice(0, 34)}\u200b${underscoreToken.slice(34)}`),
 	];
 
 	for (const value of [url, ...screenedUrls]) {
@@ -137,6 +141,8 @@ test("screens synthetic Discord webhook URLs without flagging similar links", ()
 		url.replace(token, `${token}a`),
 		url.replace("discord.com", "discord.com.evil.test"),
 		legacyUrl.replace("discordapp.com", "discordapp.com.evil.test"),
+		underscoreUrl.replace(underscoreToken, underscoreToken.slice(1)),
+		underscoreUrl.replace(underscoreToken, `${underscoreToken}_`),
 		url.replace("/api/webhooks/", "/api/webhook/"),
 		url.replace("https://", "http://"),
 		`prefix${url}`,
