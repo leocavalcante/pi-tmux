@@ -259,6 +259,15 @@ const EASYPOST_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"EZ(?:AK|TK)[A-Za-z0-9]{54}",
 	`(${EASYPOST_API_TOKEN_BOUNDARY_PREFIX}[\\p{Cc}\\p{Cf}]*[A-Za-z0-9](?:[\\p{Cc}\\p{Cf}]*[A-Za-z0-9]){53})`,
 );
+// LangSmith personal and service API keys use a prefix, 32 hex characters, and a 10-hex suffix.
+const LANGSMITH_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])lsv2_(?:pt|sk)_[a-f0-9]{32}_[a-f0-9]{10}(?![A-Za-z0-9_])/i;
+const LANGSMITH_API_TOKEN_BOUNDARY_PREFIX = `(?:${["lsv2_pt_", "lsv2_sk_"]
+	.map(interleaveBoundaryFormattingControls).join("|")})`;
+const LANGSMITH_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LANGSMITH_API_TOKEN_PATTERN,
+	String.raw`lsv2_(?:pt|sk)_[a-f0-9]{32}_[a-f0-9]{10}`,
+	`(${LANGSMITH_API_TOKEN_BOUNDARY_PREFIX}[\\p{Cc}\\p{Cf}]*[a-f0-9](?:[\\p{Cc}\\p{Cf}]*[a-f0-9]){31}[\\p{Cc}\\p{Cf}]*_[\\p{Cc}\\p{Cf}]*[a-f0-9](?:[\\p{Cc}\\p{Cf}]*[a-f0-9]){9})`,
+);
 
 function interleaveBoundaryFormattingControls(value: string): string {
 	return value.split("").join(String.raw`[\p{Cc}\p{Cf}]*`);
@@ -970,6 +979,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	RUBYGEMS_API_TOKEN_PATTERN,
 	HEROKU_API_TOKEN_PATTERN,
 	EASYPOST_API_TOKEN_PATTERN,
+	LANGSMITH_API_TOKEN_PATTERN,
 	CLOUDFLARE_API_KEY_PATTERN,
 	CLOUDFLARE_GLOBAL_API_KEY_PATTERN,
 	DATADOG_API_KEY_PATTERN,
@@ -1405,6 +1415,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	TAILSCALE_KEY_BOUNDARY_PATTERN,
 	SQUARE_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	EASYPOST_API_TOKEN_BOUNDARY_PATTERN,
+	LANGSMITH_API_TOKEN_BOUNDARY_PATTERN,
 	CLOJARS_API_TOKEN_BOUNDARY_PATTERN,
 	RUBYGEMS_API_TOKEN_BOUNDARY_PATTERN,
 	TYPEFORM_API_TOKEN_BOUNDARY_PATTERN,
