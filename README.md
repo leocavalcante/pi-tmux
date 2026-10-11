@@ -353,8 +353,9 @@ username/password pairs, Docker config `auth` values encoding username/password 
 and legacy Base64 `_password` values, credential-bearing URLs, Bearer and Base64
 Basic authorization values, and long values assigned to common credential labels.
 For supported credential labels, YAML block scalars with tags or anchors are
-also checked, as are shorter non-placeholder password/passphrase assignments.
-The context scanner also checks conventional email addresses and explicitly
+also checked, as are shorter non-placeholder password/passphrase assignments
+and recognizable PEM, OpenSSH, PGP, and PuTTY private-key file markers. The
+context scanner also checks conventional email addresses and explicitly
 labeled U.S. SSN-, phone-, and Luhn-valid payment-card-shaped values.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
@@ -371,7 +372,8 @@ send the title or dialogue to a model.
 The model is instructed not to include secrets or personal information in
 titles. Before applying a response, the extension checks raw and
 compatibility-normalized output against the same limited set of selected
-provider-specific credential formats, credential-bearing URLs, authorization
+provider-specific credential formats and private-key file markers,
+credential-bearing URLs, authorization
 values, and labeled credential patterns. It also checks conventional email
 addresses and explicitly labeled U.S. SSN-, phone-, and Luhn-valid
 payment-card-shaped values. Supported YAML block-scalar forms with tags or

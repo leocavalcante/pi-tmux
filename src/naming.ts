@@ -653,8 +653,8 @@ const GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"glpat-[A-Za-z0-9_-]{20,}",
 	String.raw`(g[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){19,})`,
 );
-const PRIVATE_KEY_HEADER_PATTERN = /-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/;
-const PRIVATE_KEY_HEADER_BOUNDARY_PATTERN = new RegExp(`(${PRIVATE_KEY_HEADER_PATTERN.source})`, "u");
+const PRIVATE_KEY_HEADER_PATTERN = /-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----|PuTTY-User-Key-File-[23]:/i;
+const PRIVATE_KEY_HEADER_BOUNDARY_PATTERN = new RegExp(`(${PRIVATE_KEY_HEADER_PATTERN.source})`, `${PRIVATE_KEY_HEADER_PATTERN.flags}u`);
 // Replicate API tokens use the fixed `r8_` prefix and 37 alphanumeric characters.
 const REPLICATE_API_TOKEN_PATTERN = /r8_[A-Za-z0-9]{37}(?![A-Za-z0-9_])/;
 const REPLICATE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
