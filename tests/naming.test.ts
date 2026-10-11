@@ -367,6 +367,54 @@ test("screens assigned access-key values without mistaking placeholders or short
 	}
 });
 
+test("screens explicit credential assignments across retained-context truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const tokenStart = prefixLength - 10;
+	const label = " access_key: ";
+	const credential = "M3n4".repeat(8);
+	const prompt = `${"x".repeat(tokenStart - label.length)}${label}${credential} ${"x".repeat(1_200)}`;
+	const context = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(true);
+	expect(context.text).toBe(buildNamingContext([], prompt));
+
+	const controlObfuscated = `${credential.slice(0, 8)}\u0000${credential.slice(8)}`;
+	const obfuscatedPrompt = `${"x".repeat(tokenStart - label.length)}${label}${controlObfuscated} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const nineteenCharacters = "A".repeat(19);
+	const shortPrompt = `${"x".repeat(tokenStart - label.length)}${label}${nineteenCharacters} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], shortPrompt).hasSensitiveBoundary()).toBe(false);
+	const twentyCharacterCredential = "M3n4".repeat(5);
+	const minimumLengthPrompt = `${"x".repeat(tokenStart - label.length)}${label}${twentyCharacterCredential} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], minimumLengthPrompt).hasSensitiveBoundary()).toBe(true);
+	const unlabeledPrompt = `${"x".repeat(tokenStart)}${credential} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], unlabeledPrompt).hasSensitiveBoundary()).toBe(false);
+
+	const historyContent = `${"x".repeat(985)}${label}${credential} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+	const summaryContent = `${"x".repeat(970)}${label}${credential} y`;
+	const summary = buildNamingRequestContext([
+		{ role: "compactionSummary", summary: summaryContent },
+	] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const suffixTokenStart = suffixStart - 10;
+	const suffixPrompt = `${"x".repeat(suffixTokenStart - label.length)}${label}${credential} ${"y".repeat(promptLength - suffixTokenStart - credential.length - 1)}`;
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${credential} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Azure AD client-secret formats without flagging near-misses", () => {
 	const body = `${"Aa0_-.".repeat(5)}C3`;
 	const secrets = [`AbC7Q~${body}`, `AbC7Q~${body.slice(0, 31)}`, `AbC7Q~${body}${"x".repeat(2)}`];
