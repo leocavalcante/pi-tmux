@@ -249,6 +249,11 @@ function makeBoundaryPattern(pattern: RegExp, token: string, boundaryToken: stri
 	return new RegExp(source, flags);
 }
 
+const NPM_AUTH_BOUNDARY_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])${interleaveBoundaryFormattingControls("_auth")}\s*["']?\s*[:=]\s*["']?`
+		+ String.raw`([A-Za-z0-9+/](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+/]){3,}[\p{Cc}\p{Cf}]*(?:=(?:[\p{Cc}\p{Cf}]*=)?)?)(?![A-Za-z0-9+/=])`,
+	"iu",
+);
 const DOCKER_AUTH_BOUNDARY_PATTERN = new RegExp(
 	String.raw`(?<![A-Za-z0-9_-])${interleaveBoundaryFormattingControls("auth")}\s*["']?\s*[:=]\s*["']?`
 		+ String.raw`([A-Za-z0-9+/](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+/]){3,}[\p{Cc}\p{Cf}]*(?:=(?:[\p{Cc}\p{Cf}]*=)?)?)(?![A-Za-z0-9+/=])`,
@@ -1343,6 +1348,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	AWS_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 	AWS_ADDITIONAL_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 	AWS_BEARER_TOKEN_BOUNDARY_PATTERN,
+	NPM_AUTH_BOUNDARY_PATTERN,
 	DOCKER_AUTH_BOUNDARY_PATTERN,
 	AWS_BEDROCK_API_KEY_BOUNDARY_PATTERN,
 	GOOGLE_API_KEY_BOUNDARY_PATTERN,
@@ -1390,6 +1396,7 @@ const SENSITIVE_BOUNDARY_SCAN_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS.map((source
 const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 	.filter((pattern) => pattern !== LABELED_CREDENTIAL_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PASSWORD_BOUNDARY_PATTERN
+		&& pattern !== NPM_AUTH_BOUNDARY_PATTERN
 		&& pattern !== DOCKER_AUTH_BOUNDARY_PATTERN
 		&& pattern !== US_SSN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
@@ -1441,7 +1448,7 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 				if (!overlapsRetainedContext(tokenStart, tokenEnd)) continue;
 				if (sourcePattern === LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 					&& !isLuhnValidPaymentCardNumber(match[1]!)) continue;
-				if (sourcePattern === DOCKER_AUTH_BOUNDARY_PATTERN
+				if ((sourcePattern === NPM_AUTH_BOUNDARY_PATTERN || sourcePattern === DOCKER_AUTH_BOUNDARY_PATTERN)
 					&& !isBase64UserPasswordPair(match[1]!.replace(/[\p{Cc}\p{Cf}]/gu, ""))) continue;
 				return true;
 			}
