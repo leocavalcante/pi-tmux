@@ -442,6 +442,37 @@ test("screens Jina AI API keys across retained-context boundaries without flaggi
 	}
 });
 
+test("screens Firecrawl API keys across retained-context boundaries without flagging near-misses", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const tokens = [`fc-${"a1B2c3D4".repeat(3)}`, `FC-${"A1b2C3d4".repeat(3)}`];
+
+	for (const token of tokens) {
+		const obfuscated = `${token.slice(0, 2)}\u200b${token.slice(2)}`;
+		for (const candidate of [token, obfuscated]) {
+			expect(hasSensitiveNamingContext(candidate)).toBe(true);
+			expect(hasSensitiveOutput(candidate)).toBe(true);
+			const tokenStart = prefixLength - 10;
+			const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const nearMisses = [
+		`fc-${"a".repeat(19)}`,
+		`notfc-${"a".repeat(24)}`,
+		`fc-${"a".repeat(24)}_suffix`,
+		"00000000-0000-0000-0000-fc-0123456789ab",
+	];
+	for (const nearMiss of nearMisses) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens synthetic 1Password service-account tokens without mistaking near-misses", () => {
 	const body = "Aa0+/".repeat(50);
 	const token = `ops_eyJ${body}`;
