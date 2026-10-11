@@ -1092,6 +1092,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const tokenStart = prefixLength - 10;
 	const truncatedVercelPrompt = `${"x".repeat(tokenStart - 9)} Vercel: ${vercelApiToken} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedVercelPrompt, vercelApiToken);
+	const githubToken = `ghp_${"A".repeat(36)}`;
+	const githubTokenStart = prefixLength - 8;
+	const truncatedGithubPrompt = `${"x".repeat(githubTokenStart)}${githubToken} ${"x".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedGithubPrompt, githubToken);
 	const cloudflareApiKey = "a1b2".repeat(10);
 	const truncatedCloudflarePrompt = `${"x".repeat(tokenStart - 13)} Cloudflare: ${cloudflareApiKey} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedCloudflarePrompt, cloudflareApiKey);
