@@ -511,6 +511,75 @@ test("screens Docker Hub tokens across retained-context truncation boundaries", 
 	}
 });
 
+test("screens Azure DevOps and GitLab Runner tokens across retained-context truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const azureToken = `${"a".repeat(75)}AZDO${"B".repeat(5)}`;
+	const runnerToken = `glrt-${"A1b2_-".repeat(3)}Z9`;
+	const cases = [
+		{
+			token: azureToken,
+			obfuscated: azureToken.replace("AZDO", "AZ\u200bDO"),
+			controlObfuscated: `${azureToken.slice(0, 42)}\u0000${azureToken.slice(42)}`,
+			nearMisses: [
+				azureToken.slice(0, -1), azureToken.replace("AZDO", "AZDX"), `${azureToken}Z`, `x${azureToken}`, `_${azureToken}`,
+			],
+		},
+		{
+			token: runnerToken,
+			obfuscated: runnerToken.replace("glrt", "gl\u200brt"),
+			controlObfuscated: `${runnerToken.slice(0, 12)}\u0000${runnerToken.slice(12)}`,
+			nearMisses: [
+				runnerToken.slice(0, -1), `${runnerToken}Z`, runnerToken.replace("glrt", "glrx"), `x${runnerToken}`, `_${runnerToken}`,
+			],
+		},
+	];
+
+	for (const { token, obfuscated, controlObfuscated, nearMisses } of cases) {
+		expect(hasSensitiveNamingContext(token)).toBe(true);
+		expect(hasSensitiveOutput(token)).toBe(true);
+
+		const promptAtPrefixBoundary = (value: string) => {
+			const tokenStart = prefixLength - Math.floor(value.length / 2);
+			return `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+		};
+		const prefixPrompt = promptAtPrefixBoundary(token);
+		const prefixContext = buildNamingRequestContext([], prefixPrompt);
+		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+		expect(buildNamingRequestContext([], promptAtPrefixBoundary(obfuscated)).hasSensitiveBoundary()).toBe(true);
+		expect(buildNamingRequestContext([], promptAtPrefixBoundary(controlObfuscated)).hasSensitiveBoundary()).toBe(true);
+
+		const promptLength = MAX_PROMPT_LENGTH + 300;
+		const suffixStart = promptLength - Math.floor(retainedLength / 2);
+		const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
+		const leading = `${"x".repeat(suffixTokenStart - 1)} `;
+		const tokenAndSpace = `${token} `;
+		const suffixPrompt = leading + tokenAndSpace
+			+ "y".repeat(promptLength - leading.length - tokenAndSpace.length);
+		const suffixContext = buildNamingRequestContext([], suffixPrompt);
+		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+		const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
+		const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+		expect(hasSensitiveNamingContext(history.text)).toBe(false);
+		expect(history.hasSensitiveBoundary()).toBe(true);
+		const summary = buildNamingRequestContext([
+			{ role: "compactionSummary", summary: historyContent },
+		] as any);
+		expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+		expect(summary.hasSensitiveBoundary()).toBe(true);
+
+		const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
+		expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+		for (const nearMiss of nearMisses) {
+			expect(buildNamingRequestContext([], promptAtPrefixBoundary(nearMiss)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Slack API tokens across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
