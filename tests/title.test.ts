@@ -2550,11 +2550,11 @@ test("a Slack API token crossing prompt truncation is not sent to the naming mod
 	expect(f.warnings.join(" ")).not.toContain(token);
 });
 
-test("a private-key header crossing prompt truncation is not sent to the naming model", async () => {
+test("a PuTTY private-key file crossing prompt truncation is not sent to the naming model", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
-	const header = ["-----BEGIN OPENSSH ", "PRIVATE KEY-----"].join("");
+	const header = "PuTTY-User-Key-File-3:";
 	const prompt = `${"x".repeat(prefixLength - 8)}${header} ${"x".repeat(1_200)}`;
 	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 	const f = fixture();
@@ -2820,6 +2820,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["-----BEGIN ", "DSA PRIVATE KEY-----"].join(""),
 		["-----BEGIN ", "ENCRYPTED PRIVATE KEY-----"].join(""),
 		["-----BEGIN PGP ", "PRIVATE KEY BLOCK-----"].join(""),
+		"PuTTY-User-Key-File-3: ssh-ed25519",
 	];
 	for (const output of outputs) {
 		const f = fixture([Promise.resolve(response(output))]);

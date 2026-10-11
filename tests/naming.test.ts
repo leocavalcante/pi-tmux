@@ -1766,6 +1766,8 @@ test("screens private-key headers across retained-context truncation boundaries"
 		["-----BEGIN OPENSSH ", "PRIVATE KEY-----"].join(""),
 		["-----BEGIN ENCRYPTED ", "PRIVATE KEY-----"].join(""),
 		["-----BEGIN PGP ", "PRIVATE KEY BLOCK-----"].join(""),
+		"PuTTY-User-Key-File-2:",
+		"PuTTY-User-Key-File-3:",
 	];
 
 	for (const header of headers) {
