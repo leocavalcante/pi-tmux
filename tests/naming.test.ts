@@ -33,6 +33,40 @@ test("screens synthetic 1Password service-account tokens without mistaking near-
 	}
 });
 
+test("screens Pinecone API keys without flagging near-misses", () => {
+	const secret = "A".repeat(63);
+	const keyFor = (keyId = "id123", value = secret) => `pcsk_${keyId}_${value}`;
+	const keys = [keyFor(), keyFor("id1234")];
+	const obfuscatedKeys = [
+		keys[0]!.toUpperCase(),
+		keys[0]!.replace("pcsk_", "pc\u200bsk_"),
+		keys[0]!.replace("id123", "id\u200b123"),
+		keys[0]!.replace(secret.slice(0, 31), `${secret.slice(0, 31)}\u200b`),
+	];
+
+	for (const value of [...keys, ...obfuscatedKeys]) {
+		expect(hasSensitiveNamingContext(`review Pinecone access ${value}`)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		keyFor("id12"),
+		keyFor("id12345"),
+		keyFor("id123", "A".repeat(62)),
+		keyFor("id123", "A".repeat(64)),
+		keyFor("id123", `${"A".repeat(62)}!`),
+		`prefix${keys[0]}`,
+		`_${keys[0]}`,
+		`-${keys[0]}`,
+		`${keys[0]}x`,
+		`${keys[0]}_suffix`,
+		"Pinecone index setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens Alibaba Cloud AccessKey IDs without flagging near-misses", () => {
 	const key = `LTAI${"A1b2".repeat(5)}`;
 	const obfuscatedKeys = [

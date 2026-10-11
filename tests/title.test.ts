@@ -1068,6 +1068,12 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Google OAuth client ${googleOAuthClientSecret}`, googleOAuthClientSecret);
 	const obfuscatedGoogleOAuthClientSecret = `GOCSPX-${"A".repeat(16)}\u200b${"B".repeat(16)}`;
 	await suppressed(fixture(), `Review Google OAuth client ${obfuscatedGoogleOAuthClientSecret}`, obfuscatedGoogleOAuthClientSecret);
+	const pineconeApiKey = `pcsk_test1_${"A".repeat(63)}`;
+	await suppressed(fixture(), `Review Pinecone access ${pineconeApiKey}`, pineconeApiKey);
+	const obfuscatedPineconeApiKey = pineconeApiKey.replace("pcsk_", "pc\u200bsk_");
+	await suppressed(
+		fixture(), `Review Pinecone access ${obfuscatedPineconeApiKey}`, obfuscatedPineconeApiKey,
+	);
 	const datadogApiKey = "A1b2".repeat(10);
 	await suppressed(fixture(), `Review the config Datadog: ${datadogApiKey}`, datadogApiKey);
 	const mailgunPrivateApiToken = `key-${"a1b2".repeat(8)}`;
@@ -2367,6 +2373,42 @@ test("rejects Fly.io token formats without mistaking near-misses for tokens", as
 		await settle();
 		expect(f.requests).toHaveLength(2);
 		expect(f.state.title).toBe("fly.io tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
+
+test("rejects Pinecone API keys without disclosing them or mistaking near-misses for keys", async () => {
+	const key = `pcsk_test1_${"A".repeat(63)}`;
+	const obfuscatedKey = key.replace("pcsk_", "pc\u200bsk_");
+	for (const output of [key, obfuscatedKey]) {
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(output);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("pinecone index tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("pinecone index tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`pcsk_id12_${"A".repeat(63)}`,
+		`pcsk_test1_${"A".repeat(62)}`,
+		`x${key}`,
+		`${key}x`,
+	];
+	for (const output of nearMisses) {
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("pinecone index tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("pinecone index tests");
 		expect(f.warnings).toEqual([]);
 	}
 });
