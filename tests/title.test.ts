@@ -1003,6 +1003,14 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	};
 
 	await suppressed(fixture(), `Review the auth flow with ${token}`);
+	const awsAlternateAccessKeys = [
+		`A3TA${"B".repeat(16)}`,
+		`ABIA${"C".repeat(16)}`,
+		`ACCA${"D".repeat(16)}`,
+	];
+	for (const awsKey of awsAlternateAccessKeys) {
+		await suppressed(fixture(), `Review AWS temporary access ${awsKey}`, awsKey);
+	}
 	const googleApiKey = `AIza${"A".repeat(35)}`;
 	await suppressed(fixture(), `Review Google API access ${googleApiKey}`, googleApiKey);
 	const googleOAuthAccessToken = `ya29.${"A".repeat(32)}`;
@@ -1542,6 +1550,9 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["github", "_pat_", "a".repeat(30)].join(""),
 		["AKIA", "A".repeat(16)].join(""),
 		["ASIA", "A".repeat(16)].join(""),
+		`A3TA${"B".repeat(16)}`,
+		`ABIA${"C".repeat(16)}`,
+		`ACCA${"D".repeat(16)}`,
 		["ABSK", "A".repeat(109)].join(""),
 		["bedrock-api-key-", Buffer.from("bedrock.amazonaws.com").toString("base64")].join(""),
 		["ABSK", "A".repeat(54), "\u200b", "A".repeat(55)].join(""),

@@ -279,6 +279,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/xai-[A-Za-z0-9_-]{16,}/,
 	/pplx-[A-Za-z0-9]{48}/,
 	/(?:AKIA|ASIA)[0-9A-Z]{16}/,
+	// Additional AWS access-key ID prefixes use a 16-character base32-like suffix.
+	/(?<![A-Za-z0-9_])(?:A3T[A-Z0-9]|ABIA|ACCA)[A-Z2-7]{16}(?![A-Za-z0-9_])/,
 	/ABSK[A-Za-z0-9+/]{109,269}={0,2}/,
 	/bedrock-api-key-\x59\x6d\x56\x6b\x63\x6d\x39\x6a\x61\x79\x35\x68\x62\x57\x46\x36\x62\x32\x35\x68\x64\x33\x4d\x75\x59\x32\x39\x74/,
 	// Google Cloud API keys use `AIza` followed by exactly 35 alphanumeric, underscore, or hyphen characters.
