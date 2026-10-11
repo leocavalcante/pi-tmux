@@ -57,6 +57,15 @@ test("README documents the bounded manual and idle-title input limit", () => {
 	expect(readme).toContain("Inputs longer than 64 Ki UTF-16 code units are rejected before screening");
 });
 
+test("README specifies UTF-16 code-unit limits for naming context sent to the model", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
+	expect(readme).toContain("up to 6,000 UTF-16 code units of task context");
+	expect(readme).toContain("a supplementary Unicode character counts as two");
+	expect(readme).toContain("Up to 2,000 UTF-16 code units from your new prompt");
+	expect(readme).toContain("capped at 1,000 UTF-16 code units");
+	expect(readme).toContain("truncation keeps such characters intact");
+});
+
 test("CI history secret scanning verifies its pinned binary and redacts findings", () => {
 	type WorkflowStep = { name?: string; if?: string; env?: Record<string, string>; run?: string };
 	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8")) as {
