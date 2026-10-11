@@ -326,6 +326,15 @@ test("passes input through immediately and renames the owning window", async () 
 	expect(f.warnings).toEqual([]);
 });
 
+test("task-based development prompts are not mistaken for generic API keys", async () => {
+	const f = fixture([Promise.resolve(response("task based development"))]);
+	f.input("task-based development");
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	expect(f.state.title).toBe("task based development");
+	expect(f.warnings).toEqual([]);
+});
+
 test("a descriptive first prompt can be titled without answering it", async () => {
 	const prompt = "Explain in two short sentences what a tmux window title is. Do not use any tools.";
 	const f = fixture([Promise.resolve(response("explain tmux titles"))]);

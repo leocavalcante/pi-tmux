@@ -809,10 +809,15 @@ const PERPLEXITY_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 );
 // Older OpenAI-compatible `sk-`/`rk-` keys use a generic alphanumeric body.
 const GENERIC_SK_RK_API_TOKEN_PATTERN = /(?:(?<!c)sk|rk)-[A-Za-z0-9]{16,}(?:[-_][A-Za-z0-9_-]+)*/i;
-const GENERIC_SK_RK_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+const GENERIC_SK_RK_API_TOKEN_RAW_BOUNDARY_PATTERN = makeBoundaryPattern(
 	GENERIC_SK_RK_API_TOKEN_PATTERN,
 	GENERIC_SK_RK_API_TOKEN_PATTERN.source,
 	String.raw`((?:(?<!c)s[\p{Cc}\p{Cf}]*k|r[\p{Cc}\p{Cf}]*k)[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){15,}(?:[\p{Cc}\p{Cf}]*[-_][\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-])*)*)`,
+);
+// Require a real token boundary for whitespace-tolerant matching: `task-based` contains `sk-` internally.
+const GENERIC_SK_RK_API_TOKEN_BOUNDARY_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])${GENERIC_SK_RK_API_TOKEN_RAW_BOUNDARY_PATTERN.source}`,
+	GENERIC_SK_RK_API_TOKEN_RAW_BOUNDARY_PATTERN.flags,
 );
 const OPENAI_COMPATIBLE_API_TOKEN_PATTERN = /(?:(?<!c)sk|rk)-(?:proj-|ant-|svcacct-|or-v1-)[A-Za-z0-9_-]{16,}/i;
 const OPENAI_COMPATIBLE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -1019,9 +1024,14 @@ const EMAIL_ADDRESS_BOUNDARY_PATTERN = makeBoundaryPattern(
 	EMAIL_ADDRESS_PATTERN.source,
 	`(${EMAIL_ADDRESS_PATTERN.source})`,
 );
+// The broad `sk-`/`rk-` shape overlaps natural compounds after whitespace is removed
+// (for example, `task-based development`); its boundary pattern handles whitespace separately.
+const COMPACTED_CREDENTIAL_LIKE_PATTERNS = CREDENTIAL_LIKE_PATTERNS.filter(
+	(pattern) => pattern !== GENERIC_SK_RK_API_TOKEN_PATTERN,
+);
 // Compacted scans require a left boundary so unrelated title words do not combine into tokens.
 const SEPARATOR_TOLERANT_PATTERNS = [
-	...CREDENTIAL_LIKE_PATTERNS,
+	...COMPACTED_CREDENTIAL_LIKE_PATTERNS,
 	BEARER_TOKEN_PATTERN,
 	US_SSN_PATTERN,
 	LABELED_PHONE_PATTERN,
@@ -1231,7 +1241,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		const withoutFormatCharacters = stripNonWhitespaceControls(value);
 		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
 		return hasSensitiveValue(withoutFormatCharacters) || hasWhitespaceSeparatedCredential(value)
-			|| CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
+			|| COMPACTED_CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
 			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_SSN_PATTERN.test(compacted)
 			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
@@ -1433,7 +1443,6 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== NPM_PASSWORD_BOUNDARY_PATTERN
 		&& pattern !== BASIC_AUTHORIZATION_BOUNDARY_PATTERN
 		&& pattern !== BASIC_AUTHORIZATION_BLOCK_BOUNDARY_PATTERN
-		&& pattern !== GENERIC_SK_RK_API_TOKEN_BOUNDARY_PATTERN
 		&& pattern !== DOCKER_AUTH_BOUNDARY_PATTERN
 		&& pattern !== US_SSN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN

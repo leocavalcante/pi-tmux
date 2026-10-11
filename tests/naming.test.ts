@@ -971,6 +971,36 @@ test("screens generic sk/rk API keys across prompt truncation boundaries", () =>
 	}
 });
 
+test("generic sk/rk matching does not compact task-based prose into API keys", () => {
+	for (const prompt of [
+		"task-based development",
+		"task-based development with tests",
+		"task-based\ndevelopment",
+		"work-based development",
+	]) {
+		expect(hasSensitiveNamingContext(prompt)).toBe(false);
+		expect(hasSensitiveOutput(prompt)).toBe(false);
+	}
+
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const promptLength = 3_000;
+	const tokenStart = Math.ceil(retainedLength / 2) - 2;
+	const prefix = `${"x".repeat(tokenStart - 1)} `;
+	const prompt = `${prefix}task-based development ${"y".repeat(promptLength - prefix.length - "task-based development ".length)}`;
+	const context = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(false);
+
+	const token = `sk-${"A".repeat(24)}`;
+	expect(hasSensitiveNamingContext(`task-based development using ${token}`)).toBe(true);
+	expect(hasSensitiveNamingContext(`prefix${token}`)).toBe(true);
+
+	const whitespaceObfuscatedToken = `sk-${"W".repeat(8)} ${"W".repeat(16)}`;
+	expect(hasSensitiveNamingContext(whitespaceObfuscatedToken)).toBe(true);
+	expect(hasSensitiveOutput(whitespaceObfuscatedToken)).toBe(true);
+});
+
 test("screens explicit credential assignments across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
