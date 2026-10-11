@@ -52,6 +52,12 @@ export class InvalidNamingTitleError extends Error {
 // text because title cleanup can lowercase or clip recognizable tokens. Raw patterns
 // match substrings to catch values adjacent to ASCII word characters.
 const BEARER_TOKEN_PATTERN = /Bearer\s+([A-Za-z0-9._~+/=-](?:\s*[A-Za-z0-9._~+/=-]){15,})/i;
+// Keep boundary matching contiguous apart from controls to retain the ordinary-prose safeguard.
+const BEARER_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	BEARER_TOKEN_PATTERN,
+	"([A-Za-z0-9._~+/=-](?:\\s*[A-Za-z0-9._~+/=-]){15,})",
+	String.raw`([A-Za-z0-9._~+/=-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9._~+/=-]){15,})`,
+);
 const US_SSN_PATTERN = /(?<![A-Za-z0-9])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?\d{3}[-\s]?\d{2}[-\s]?\d{4}(?![A-Za-z0-9_])/i;
 // Require a phone-related label and a phone-number-shaped value of 7–15 digits.
 const LABELED_PHONE_PATTERN = /(?<![A-Za-z0-9])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?number)?\s*["']?\s*[:=]\s*["']?[\s(]*\+?\d(?:[ .()-]?\d){6,14}(?![A-Za-z0-9_])/i;
@@ -652,6 +658,7 @@ type NamingContextBoundary = {
 // Capture group 1 must contain only the credential value, not its contextual label.
 const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
+	BEARER_TOKEN_BOUNDARY_PATTERN,
 	GITHUB_TOKEN_BOUNDARY_PATTERN,
 	VERCEL_API_TOKEN_BOUNDARY_PATTERN,
 	CLOUDFLARE_API_KEY_BOUNDARY_PATTERN,
