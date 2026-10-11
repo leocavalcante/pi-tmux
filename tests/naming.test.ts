@@ -1142,6 +1142,66 @@ test("screens bearer credentials across retained-context truncation boundaries",
 	expect(proseContext.hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens short labeled passwords and passphrases across retained-context truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const cases = [
+		{ label: " password: ", value: "R4nd0mxZ;" },
+		{ label: ' password: "', value: 'my strong phrase";' },
+		{ label: " passphrase: ", value: "my strong phrase;" },
+		{ label: " password: |-\n  ", value: "R4nd0mxZ\n" },
+	];
+	const promptAtPrefixBoundary = (label: string, value: string) => {
+		const valueStart = prefixLength - 3;
+		return `${"x".repeat(valueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
+	};
+
+	for (const { label, value } of cases) {
+		const prompt = promptAtPrefixBoundary(label, value);
+		const context = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+		expect(context.text).toBe(buildNamingContext([], prompt));
+
+		const promptLength = MAX_PROMPT_LENGTH + 300;
+		const suffixStart = promptLength - Math.floor(retainedLength / 2);
+		const suffixValueStart = suffixStart - 3;
+		const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value}`
+			+ `${"y".repeat(promptLength - suffixValueStart - value.length)}`;
+		const suffixContext = buildNamingRequestContext([], suffixPrompt);
+		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+		const historyContent = `${"x".repeat(993 - label.length)}${label}${value} y`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const history = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(history.text)).toBe(false);
+			expect(history.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const controlObfuscated = promptAtPrefixBoundary(" password: ", "R4nd0m\u0000xZ;");
+	expect(buildNamingRequestContext([], controlObfuscated).hasSensitiveBoundary()).toBe(true);
+	for (const [label, value] of [
+		[" password: ", "placeholder;"],
+		[" password: ", "R4nd0mx;"],
+		[" passphrase: ", "example phrase;"],
+		[" password: |-\n  ", "placeholder\n"],
+	] as const) {
+		expect(buildNamingRequestContext([], promptAtPrefixBoundary(label, value)).hasSensitiveBoundary()).toBe(false);
+	}
+	const npmPasswordLabel = "//registry.npmjs.org/:_password=";
+	const encodedPlaceholder = Buffer.from("example").toString("base64");
+	const npmPlaceholderStart = prefixLength - 3;
+	const npmPlaceholderPrompt = `${"x".repeat(npmPlaceholderStart - npmPasswordLabel.length)}`
+		+ `${npmPasswordLabel}${encodedPlaceholder}; ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], npmPlaceholderPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens labeled SSNs and phone numbers across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
