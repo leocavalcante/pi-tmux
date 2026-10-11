@@ -388,6 +388,13 @@ const REPLICATE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"r8_[A-Za-z0-9]{37}",
 	String.raw`(r[\p{Cc}\p{Cf}]*8[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){36})`,
 );
+// Pinecone API keys use `pcsk_`, a 5–6 character key ID, and a 63-character secret.
+const PINECONE_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])pcsk_[A-Za-z0-9]{5,6}_[A-Za-z0-9]{63}(?![A-Za-z0-9_-])/;
+const PINECONE_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	PINECONE_API_KEY_PATTERN,
+	"pcsk_[A-Za-z0-9]{5,6}_[A-Za-z0-9]{63}",
+	String.raw`(p[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*k[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){4,5}[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){62})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -501,8 +508,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])SK[a-f0-9]{32}(?![A-Za-z0-9_-])/i,
 	/nvapi-[A-Za-z0-9_-]{32,}/,
 	REPLICATE_API_TOKEN_PATTERN,
-	// Pinecone API keys use `pcsk_`, a 5–6 character key ID, and a 63-character secret.
-	/(?<![A-Za-z0-9_-])pcsk_[A-Za-z0-9]{5,6}_[A-Za-z0-9]{63}(?![A-Za-z0-9_-])/,
+	PINECONE_API_KEY_PATTERN,
 	// Cerebras keys have exactly 48 URL-safe characters; boundaries avoid `pcsk_` collisions.
 	/(?<![A-Za-z0-9_-])csk[-_][A-Za-z0-9_-]{48}(?![A-Za-z0-9_-])/,
 	/gsk_[A-Za-z0-9]{20,}/,
@@ -804,6 +810,7 @@ type NamingContextBoundary = {
 const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
 	REPLICATE_API_TOKEN_BOUNDARY_PATTERN,
+	PINECONE_API_KEY_BOUNDARY_PATTERN,
 	AIRTABLE_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	CLICKHOUSE_CLOUD_API_KEY_BOUNDARY_PATTERN,
 	AZURE_DEVOPS_PAT_BOUNDARY_PATTERN,
