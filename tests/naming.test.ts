@@ -117,12 +117,16 @@ test("screens synthetic Discord webhook URLs without flagging similar links", ()
 	const id = "123456789012345678";
 	const token = "A1b2".repeat(17);
 	const url = `https://discord.com/api/webhooks/${id}/${token}`;
-	const obfuscatedUrls = [
+	const legacyUrl = url.replace("discord.com", "discordapp.com");
+	const screenedUrls = [
 		url.replace("discord.com", "dis\u200bcord.com"),
 		url.replace(token, `${token.slice(0, 34)}\u200b${token.slice(34)}`),
+		legacyUrl,
+		legacyUrl.replace("discordapp.com", "discordapp.\u200bcom"),
+		legacyUrl.replace(token, `${token.slice(0, 34)}\u200b${token.slice(34)}`),
 	];
 
-	for (const value of [url, ...obfuscatedUrls]) {
+	for (const value of [url, ...screenedUrls]) {
 		expect(hasSensitiveNamingContext(value)).toBe(true);
 		expect(hasSensitiveOutput(value)).toBe(true);
 	}
@@ -132,6 +136,7 @@ test("screens synthetic Discord webhook URLs without flagging similar links", ()
 		url.replace(token, token.slice(0, -1)),
 		url.replace(token, `${token}a`),
 		url.replace("discord.com", "discord.com.evil.test"),
+		legacyUrl.replace("discordapp.com", "discordapp.com.evil.test"),
 		url.replace("/api/webhooks/", "/api/webhook/"),
 		url.replace("https://", "http://"),
 		`prefix${url}`,
