@@ -52,6 +52,30 @@ test("screens Tailscale keys with invisible formatting without flagging ordinary
 	}
 });
 
+test("screens synthetic Stripe webhook signing secrets without flagging short or prefixed near-misses", () => {
+	const body = "A1b2".repeat(8);
+	const secret = `whsec_${body}`;
+	const obfuscatedValues = [
+		`whsec_${body.slice(0, 16)}\u200b${body.slice(16)}`,
+		`whsec\u200b_${body}`,
+	];
+
+	for (const value of [secret, ...obfuscatedValues]) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`whsec_${"A1b2".repeat(5)}`,
+		"whsec_example_secret",
+		"Stripe webhook signing secret",
+		`prefixwhsec_${body}`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("requestNamingTitle screens context before model-registry access", async () => {
 	const contextText = "task: pi-tmux@example.invalid";
 	const context = {
