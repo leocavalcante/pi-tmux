@@ -2186,6 +2186,63 @@ test("screens bearer values with whitespace-obfuscated labels without blocking p
 	expect(hasSensitiveOutput(prose)).toBe(false);
 });
 
+test("screens Token authorization credentials across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const values = [
+		{ label: "Authorization: Token ", token: "A1b2".repeat(6) },
+		{ label: "Proxy-Authorization: Token ", token: "C3d4".repeat(6) },
+	];
+
+	for (const { label, token } of values) {
+		const obfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+		for (const candidate of [token, obfuscated]) {
+			const value = `${label}${candidate}`;
+			expect(hasSensitiveNamingContext(value)).toBe(true);
+			expect(hasSensitiveOutput(value)).toBe(true);
+
+			const tokenStart = prefixLength - 8;
+			const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+			const prompt = `${prefix}${label}${candidate} ${"y".repeat(1_200)}`;
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+
+			const promptLength = MAX_PROMPT_LENGTH + 300;
+			const suffixStart = promptLength - Math.floor(retainedLength / 2);
+			const suffixTokenStart = suffixStart - 8;
+			const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+			const suffixPrompt = `${suffixPrefix}${label}${candidate} ${"y".repeat(
+				promptLength - suffixPrefix.length - label.length - candidate.length - 1,
+			)}`;
+			const suffixContext = buildNamingRequestContext([], suffixPrompt);
+			expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+			expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const historyContent = `${"x".repeat(990 - label.length - 1)} ${label}${token} y`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const context = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	for (const nearMiss of [
+		`Authorization: Token ${"A".repeat(19)}`,
+		`Authorization: Token authentication is supported`,
+		`Authorization: Tokenish ${"A".repeat(24)}`,
+		`prefixAuthorization: Token ${"A".repeat(24)}`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens short labeled passwords and passphrases across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
