@@ -296,6 +296,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])SK[a-f0-9]{32}(?![A-Za-z0-9_-])/i,
 	/nvapi-[A-Za-z0-9_-]{32,}/,
 	/r8_[A-Za-z0-9]{37}(?![A-Za-z0-9_])/, // Replicate tokens are exactly 40 characters.
+	// Pinecone API keys use `pcsk_`, a 5–6 character key ID, and a 63-character secret.
+	/(?<![A-Za-z0-9_-])pcsk_[A-Za-z0-9]{5,6}_[A-Za-z0-9]{63}(?![A-Za-z0-9_-])/,
 	// Cerebras keys have exactly 48 URL-safe characters; boundaries avoid `pcsk_` collisions.
 	/(?<![A-Za-z0-9_-])csk[-_][A-Za-z0-9_-]{48}(?![A-Za-z0-9_-])/,
 	/gsk_[A-Za-z0-9]{20,}/,
