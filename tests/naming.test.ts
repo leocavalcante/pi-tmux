@@ -463,6 +463,47 @@ test("screens bearer credentials across retained-context truncation boundaries",
 	expect(proseContext.hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens email addresses across retained-context truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const address = "alice@example.test";
+	const prefixAddressStart = prefixLength - 6;
+	const prompt = `${"x".repeat(prefixAddressStart - 1)} ${address} ${"x".repeat(1_200)}`;
+	const prefixContext = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+
+	const obfuscatedAddress = address.replace("@", "@\u200b");
+	const obfuscatedPrompt = `${"x".repeat(prefixAddressStart - 1)} ${obfuscatedAddress} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const historyContent = `${"x".repeat(993)} ${address} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+	const summary = buildNamingRequestContext([
+		{ role: "compactionSummary", summary: historyContent },
+	] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixLength = Math.floor(retainedLength / 2);
+	const suffixStart = promptLength - suffixLength;
+	const suffixAddressStart = suffixStart - address.length + 6;
+	const suffixPrompt = `${"x".repeat(suffixAddressStart - 1)} ${address} ${"y".repeat(promptLength - suffixAddressStart - address.length - 1)}`;
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+	const omittedAddressPrompt = `${"x".repeat(prefixLength + 19)} ${address} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedAddressPrompt).hasSensitiveBoundary()).toBe(false);
+	const nearMiss = "alice@example.x";
+	const nearMissPrompt = `${"x".repeat(prefixAddressStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens GitHub tokens across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

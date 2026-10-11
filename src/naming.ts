@@ -401,6 +401,11 @@ const CREDENTIAL_LIKE_PATTERNS = [
 // Require the beginning of a local-part run; without this, long non-email text
 // makes the unbounded local-part repetition retry from every character.
 const EMAIL_ADDRESS_PATTERN = /(?<![A-Z0-9._%+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+const EMAIL_ADDRESS_BOUNDARY_PATTERN = makeBoundaryPattern(
+	EMAIL_ADDRESS_PATTERN,
+	EMAIL_ADDRESS_PATTERN.source,
+	`(${EMAIL_ADDRESS_PATTERN.source})`,
+);
 // Compacted scans require a left boundary so unrelated title words do not combine into tokens.
 const SEPARATOR_TOLERANT_PATTERNS = [
 	...CREDENTIAL_LIKE_PATTERNS,
@@ -658,6 +663,7 @@ type NamingContextBoundary = {
 // Capture group 1 must contain only the credential value, not its contextual label.
 const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
+	EMAIL_ADDRESS_BOUNDARY_PATTERN,
 	BEARER_TOKEN_BOUNDARY_PATTERN,
 	GITHUB_TOKEN_BOUNDARY_PATTERN,
 	VERCEL_API_TOKEN_BOUNDARY_PATTERN,
