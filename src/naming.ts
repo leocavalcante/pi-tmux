@@ -231,6 +231,9 @@ function interleaveBoundaryFormattingControls(value: string): string {
 	return value.split("").join(String.raw`[\p{Cc}\p{Cf}]*`);
 }
 
+// Base64 payload separators tolerate invisible controls but not line breaks or other whitespace.
+const BASE64_FORMAT_CONTROL_SEPARATOR = String.raw`(?:(?!\p{White_Space})[\p{Cc}\p{Cf}])*`;
+
 // Keep fixed encoded signatures escaped in source while deriving a control-tolerant matcher.
 function makeHexEscapedLiteralBoundaryPattern(pattern: RegExp): RegExp {
 	const literal = pattern.source.replace(/\\x([0-9a-f]{2})/gi, (_escape, hex: string) =>
@@ -251,12 +254,31 @@ function makeBoundaryPattern(pattern: RegExp, token: string, boundaryToken: stri
 
 const NPM_AUTH_BOUNDARY_PATTERN = new RegExp(
 	String.raw`(?<![A-Za-z0-9_-])${interleaveBoundaryFormattingControls("_auth")}\s*["']?\s*[:=]\s*["']?`
-		+ String.raw`([A-Za-z0-9+/](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+/]){3,}[\p{Cc}\p{Cf}]*(?:=(?:[\p{Cc}\p{Cf}]*=)?)?)(?![A-Za-z0-9+/=])`,
+		+ String.raw`([A-Za-z0-9+/](?:${BASE64_FORMAT_CONTROL_SEPARATOR}[A-Za-z0-9+/]){3,}${BASE64_FORMAT_CONTROL_SEPARATOR}(?:=(?:${BASE64_FORMAT_CONTROL_SEPARATOR}=)?)?)(?![A-Za-z0-9+/=])`,
+	"iu",
+);
+const NPM_PASSWORD_BOUNDARY_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])${interleaveBoundaryFormattingControls("_password")}\s*["']?\s*[:=]\s*["']?`
+		+ String.raw`([A-Za-z0-9+/](?:${BASE64_FORMAT_CONTROL_SEPARATOR}[A-Za-z0-9+/]){1,}${BASE64_FORMAT_CONTROL_SEPARATOR}(?:=(?:${BASE64_FORMAT_CONTROL_SEPARATOR}=)?)?)(?![A-Za-z0-9+/=])`,
+	"iu",
+);
+const BASIC_AUTHORIZATION_BOUNDARY_LABEL = String.raw`(?:${interleaveBoundaryFormattingControls("proxy")}[\p{Cc}\p{Cf}]*[-_\s]?[\p{Cc}\p{Cf}]*${interleaveBoundaryFormattingControls("authorization")}|${interleaveBoundaryFormattingControls("authorization")})`;
+const BASIC_AUTHORIZATION_BOUNDARY_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])${BASIC_AUTHORIZATION_BOUNDARY_LABEL}\s*["']?\s*[:=]\s*["']?`
+		+ String.raw`${interleaveBoundaryFormattingControls("basic")}\s+([A-Za-z0-9+/](?:${BASE64_FORMAT_CONTROL_SEPARATOR}[A-Za-z0-9+/]){3,}${BASE64_FORMAT_CONTROL_SEPARATOR}(?:=(?:${BASE64_FORMAT_CONTROL_SEPARATOR}=)?)?)(?![A-Za-z0-9+/=])`,
+	"iu",
+);
+// Do not treat an unrelated YAML scalar continuation as part of a Basic credential.
+const BASIC_AUTHORIZATION_BLOCK_BOUNDARY_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])${BASIC_AUTHORIZATION_BOUNDARY_LABEL}["']?[ \t]*:[ \t]*${YAML_BLOCK_SCALAR_PROPERTIES}[|>]`
+		+ String.raw`(?:[1-9][+-]?|[+-][1-9]?)?[ \t]*(?:#[^\r\n]*)?\r?\n`
+		+ String.raw`[ \t]+${interleaveBoundaryFormattingControls("basic")}[\p{Cc}\p{Cf}\t ]*(?:\r?\n[ \t]+|[\p{Cc}\p{Cf}\t ]+)`
+		+ String.raw`([A-Za-z0-9+/](?:${BASE64_FORMAT_CONTROL_SEPARATOR}[A-Za-z0-9+/]){3,}${BASE64_FORMAT_CONTROL_SEPARATOR}(?:=(?:${BASE64_FORMAT_CONTROL_SEPARATOR}=)?)?)(?![A-Za-z0-9+/=])[ \t]*(?=\r?\n(?!(?:[ \t]*\r?\n)*[ \t]+\S)|$)`,
 	"iu",
 );
 const DOCKER_AUTH_BOUNDARY_PATTERN = new RegExp(
 	String.raw`(?<![A-Za-z0-9_-])${interleaveBoundaryFormattingControls("auth")}\s*["']?\s*[:=]\s*["']?`
-		+ String.raw`([A-Za-z0-9+/](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+/]){3,}[\p{Cc}\p{Cf}]*(?:=(?:[\p{Cc}\p{Cf}]*=)?)?)(?![A-Za-z0-9+/=])`,
+		+ String.raw`([A-Za-z0-9+/](?:${BASE64_FORMAT_CONTROL_SEPARATOR}[A-Za-z0-9+/]){3,}${BASE64_FORMAT_CONTROL_SEPARATOR}(?:=(?:${BASE64_FORMAT_CONTROL_SEPARATOR}=)?)?)(?![A-Za-z0-9+/=])`,
 	"iu",
 );
 
@@ -1349,6 +1371,9 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	AWS_ADDITIONAL_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 	AWS_BEARER_TOKEN_BOUNDARY_PATTERN,
 	NPM_AUTH_BOUNDARY_PATTERN,
+	NPM_PASSWORD_BOUNDARY_PATTERN,
+	BASIC_AUTHORIZATION_BOUNDARY_PATTERN,
+	BASIC_AUTHORIZATION_BLOCK_BOUNDARY_PATTERN,
 	DOCKER_AUTH_BOUNDARY_PATTERN,
 	AWS_BEDROCK_API_KEY_BOUNDARY_PATTERN,
 	GOOGLE_API_KEY_BOUNDARY_PATTERN,
@@ -1397,6 +1422,9 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 	.filter((pattern) => pattern !== LABELED_CREDENTIAL_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PASSWORD_BOUNDARY_PATTERN
 		&& pattern !== NPM_AUTH_BOUNDARY_PATTERN
+		&& pattern !== NPM_PASSWORD_BOUNDARY_PATTERN
+		&& pattern !== BASIC_AUTHORIZATION_BOUNDARY_PATTERN
+		&& pattern !== BASIC_AUTHORIZATION_BLOCK_BOUNDARY_PATTERN
 		&& pattern !== DOCKER_AUTH_BOUNDARY_PATTERN
 		&& pattern !== US_SSN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
@@ -1448,8 +1476,16 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 				if (!overlapsRetainedContext(tokenStart, tokenEnd)) continue;
 				if (sourcePattern === LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 					&& !isLuhnValidPaymentCardNumber(match[1]!)) continue;
-				if ((sourcePattern === NPM_AUTH_BOUNDARY_PATTERN || sourcePattern === DOCKER_AUTH_BOUNDARY_PATTERN)
-					&& !isBase64UserPasswordPair(match[1]!.replace(/[\p{Cc}\p{Cf}]/gu, ""))) continue;
+				const encoded = match[1]!.replace(/[\p{Cc}\p{Cf}]/gu, "");
+				if ((sourcePattern === NPM_AUTH_BOUNDARY_PATTERN
+					|| sourcePattern === BASIC_AUTHORIZATION_BOUNDARY_PATTERN
+					|| sourcePattern === BASIC_AUTHORIZATION_BLOCK_BOUNDARY_PATTERN
+					|| sourcePattern === DOCKER_AUTH_BOUNDARY_PATTERN)
+					&& !isBase64UserPasswordPair(encoded)) continue;
+				if (sourcePattern === NPM_PASSWORD_BOUNDARY_PATTERN) {
+					const password = decodeNpmPassword(encoded);
+					if (password === undefined || PASSWORD_PLACEHOLDER_PATTERN.test(password)) continue;
+				}
 				return true;
 			}
 		}
