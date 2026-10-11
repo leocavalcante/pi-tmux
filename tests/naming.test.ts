@@ -78,11 +78,16 @@ test("screens synthetic Stripe webhook signing secrets without flagging short or
 
 test("screens synthetic Slack webhook URLs without flagging similar links", () => {
 	const token = "A1b2".repeat(10) + "A1b";
+	const legacySecret = "C3d4".repeat(6);
+	const legacyUrl = `https://hooks.slack.com/services/T00000000/B11111111/${legacySecret}`;
 	const urls = [
 		`https://hooks.slack.com/services/${token}`,
 		`hooks.slack.com/workflows/${token}`,
 		`http://hooks.slack.com/triggers/${token}`,
 		`https://hooks.slack.com/services/${token.slice(0, 21)}\u200b${token.slice(21)}`,
+		legacyUrl,
+		legacyUrl.replace("hooks.slack.com", "hooks.slack.\u200bcom"),
+		legacyUrl.replace(legacySecret, `${legacySecret.slice(0, 12)}\u200b${legacySecret.slice(12)}`),
 	];
 
 	for (const url of urls) {
@@ -94,6 +99,12 @@ test("screens synthetic Slack webhook URLs without flagging similar links", () =
 		`https://hooks.slack.com/services/${"A1b2".repeat(10) + "A1"}`,
 		`https://hooks.slack.com/services/${token}${"A".repeat(14)}`,
 		`https://hooks.slack.com.evil.test/services/${token}`,
+		legacyUrl.replace("T00000000", "T0000000"),
+		legacyUrl.replace("B11111111", "B1111111"),
+		legacyUrl.replace(legacySecret, legacySecret.slice(1)),
+		legacyUrl.replace(legacySecret, `${legacySecret}A`),
+		legacyUrl.replace("/services/", "/service/"),
+		legacyUrl.replace("hooks.slack.com", "hooks.slack.com.evil.test"),
 		`https://hooks.slack.com/api/${token}`,
 		"Slack webhook configuration",
 	]) {
