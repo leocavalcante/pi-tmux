@@ -308,6 +308,13 @@ const NPM_ACCESS_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"npm_[A-Za-z0-9]{20,}",
 	String.raw`(n[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*m[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){19,})`,
 );
+// Hugging Face tokens use `hf_` followed by at least 20 alphanumeric characters.
+const HUGGING_FACE_TOKEN_PATTERN = /hf_[A-Za-z0-9]{20,}/;
+const HUGGING_FACE_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	HUGGING_FACE_TOKEN_PATTERN,
+	"hf_[A-Za-z0-9]{20,}",
+	String.raw`(h[\p{Cc}\p{Cf}]*f[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){19,})`,
+);
 const GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN = /glpat-[A-Za-z0-9_-]{20,}/;
 const GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN,
@@ -454,7 +461,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:xox[baprcds]|xapp)-[A-Za-z0-9-]{10,}/,
 	NPM_ACCESS_TOKEN_PATTERN,
 	GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN,
-	/hf_[A-Za-z0-9]{20,}/,
+	HUGGING_FACE_TOKEN_PATTERN,
 	/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/,
 	/-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/,
 ];
@@ -748,6 +755,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	GOOGLE_OAUTH_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	NPM_ACCESS_TOKEN_BOUNDARY_PATTERN,
+	HUGGING_FACE_TOKEN_BOUNDARY_PATTERN,
 ];
 
 function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {
