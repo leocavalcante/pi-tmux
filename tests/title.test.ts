@@ -1645,6 +1645,65 @@ test("boundary scans preserve minimum lengths for other supported token formats"
 	}
 });
 
+test("Azure SAS signatures crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixLength = Math.floor(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - suffixLength;
+	const signature = `${"A1b2".repeat(10)}A1b=`;
+	const urls = [
+		`https://storage.example.test/blob?sv=2023-11-03&sp=r&sig=${signature}&se=2030-01-01`,
+		`https://storage.example.test/blob?sig=${signature}&sv=2023-11-03&sp=r`,
+	];
+	const makePrompt = (url: string, signatureStart: number) => {
+		const urlSignatureStart = url.indexOf(`sig=${signature}`) + "sig=".length;
+		const prefixSize = signatureStart - urlSignatureStart;
+		const prompt = `${"x".repeat(prefixSize)}${url}${"y".repeat(promptLength - prefixSize - url.length)}`;
+		expect(prompt.length).toBe(promptLength);
+		return prompt;
+	};
+	const prompts = urls.flatMap((url) => [
+		makePrompt(url, prefixLength - 10),
+		makePrompt(url, suffixStart - 10),
+	]);
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const prompt of prompts) {
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(signature);
+	}
+});
+
+test("Azure SAS boundary scans preserve short-signature and invalid-version near-misses", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const signature = "A".repeat(19);
+	const nearMisses = [
+		`https://storage.example.test/blob?sv=2023-11-03&sig=${signature}&sp=r`,
+		`https://storage.example.test/blob?sig=${signature}&sv=2023-11-03&sp=r`,
+		`https://storage.example.test/blob?sv=not-a-date&sig=${"A".repeat(43)}&sp=r`,
+		`https://storage.example.test/blob?sig=${"A".repeat(43)}&sv=not-a-date&sp=r`,
+	];
+
+	for (const url of nearMisses) {
+		const urlSignatureStart = url.indexOf("sig=") + "sig=".length;
+		const prefixSize = prefixLength - 10 - urlSignatureStart;
+		const prompt = `${"x".repeat(prefixSize)}${url}${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("AI provider and model API tokens crossing prompt truncation skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
