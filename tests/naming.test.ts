@@ -33,6 +33,34 @@ test("screens synthetic 1Password service-account tokens without mistaking near-
 	}
 });
 
+test("screens Azure AD client-secret formats without flagging near-misses", () => {
+	const body = `${"Aa0_-.".repeat(5)}C3`;
+	const secrets = [`AbC7Q~${body}`, `AbC7Q~${body.slice(0, 31)}`, `AbC7Q~${body}${"x".repeat(2)}`];
+	const obfuscatedSecrets = [
+		secrets[0]!.replace("Q~", "Q\u200b~"),
+		secrets[0]!.replace("AbC7", "Ab\u200bC7"),
+		secrets[0]!.replace(body.slice(0, 16), `${body.slice(0, 16)}\u200b`),
+	];
+
+	for (const value of [...secrets, ...obfuscatedSecrets]) {
+		expect(hasSensitiveNamingContext(`Review Azure AD application access ${value}`)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`AbC7Q~${body.slice(0, 30)}`,
+		`AbC7Q~${body}${"x".repeat(3)}`,
+		`AbC7R~${body}`,
+		secrets[0]!.replace("Aa", "A!"),
+		`prefix${secrets[0]}`,
+		`${secrets[0]}suffix`,
+		"Azure AD application registration setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens synthetic Tailscale key strings in context and output", () => {
 	const keys = [
 		`tskey-${"A1b2".repeat(4)}`,
