@@ -637,6 +637,52 @@ const JWT_LIKE_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}`,
 	String.raw`(e[\p{Cc}\p{Cf}]*y[\p{Cc}\p{Cf}]*J[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){7,}[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){7,}[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){7,})`,
 );
+// Keep provider-token boundary checks paired with the full-context formats;
+// counts and lookarounds must stay aligned between the two scans.
+const NVIDIA_API_TOKEN_PATTERN = /nvapi-[A-Za-z0-9_-]{32,}/i;
+const NVIDIA_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	NVIDIA_API_TOKEN_PATTERN,
+	String.raw`nvapi-[A-Za-z0-9_-]{32,}`,
+	String.raw`(n[\p{Cc}\p{Cf}]*v[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){31,})`,
+);
+const CEREBRAS_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])csk[-_][A-Za-z0-9_-]{48}(?![A-Za-z0-9_-])/i;
+const CEREBRAS_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	CEREBRAS_API_TOKEN_PATTERN,
+	String.raw`csk[-_][A-Za-z0-9_-]{48}`,
+	String.raw`(c[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*k[\p{Cc}\p{Cf}]*[-_][\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){47})`,
+);
+const GROQ_API_TOKEN_PATTERN = /gsk_[A-Za-z0-9]{20,}/i;
+const GROQ_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GROQ_API_TOKEN_PATTERN,
+	String.raw`gsk_[A-Za-z0-9]{20,}`,
+	String.raw`(g[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*k[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){19,})`,
+);
+const XAI_API_TOKEN_PATTERN = /xai-[A-Za-z0-9_-]{16,}/i;
+const XAI_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	XAI_API_TOKEN_PATTERN,
+	String.raw`xai-[A-Za-z0-9_-]{16,}`,
+	String.raw`(x[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){15,})`,
+);
+const PERPLEXITY_API_TOKEN_PATTERN = /pplx-[A-Za-z0-9]{48}/i;
+const PERPLEXITY_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	PERPLEXITY_API_TOKEN_PATTERN,
+	String.raw`pplx-[A-Za-z0-9]{48}`,
+	String.raw`(p[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*x[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){47})`,
+);
+const OPENAI_COMPATIBLE_API_TOKEN_PATTERN = /(?:(?<!c)sk|rk)-(?:proj-|ant-|svcacct-|or-v1-)[A-Za-z0-9_-]{16,}/i;
+const OPENAI_COMPATIBLE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	OPENAI_COMPATIBLE_API_TOKEN_PATTERN,
+	String.raw`(?:(?<!c)sk|rk)-(?:proj-|ant-|svcacct-|or-v1-)[A-Za-z0-9_-]{16,}`,
+	String.raw`((?:(?<!c)s[\p{Cc}\p{Cf}]*k|r[\p{Cc}\p{Cf}]*k)[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*(?:p[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*j|a[\p{Cc}\p{Cf}]*n[\p{Cc}\p{Cf}]*t|s[\p{Cc}\p{Cf}]*v[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*t|o[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*v[\p{Cc}\p{Cf}]*1)[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){15,})`,
+);
+const STRIPE_API_TOKEN_PATTERN = /(?:sk|rk)_(?:live|test|prod)_[A-Za-z0-9]{16,}/i;
+// The boundary lookarounds prevent Pinecone's `pcsk_test...` form from being
+// mistaken for a Stripe key merely because it contains an `sk_test_` substring.
+const STRIPE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	STRIPE_API_TOKEN_PATTERN,
+	String.raw`(?:sk|rk)_(?:live|test|prod)_[A-Za-z0-9]{16,}`,
+	String.raw`(?<!c)((?:s[\p{Cc}\p{Cf}]*k|r[\p{Cc}\p{Cf}]*k)[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*(?:l[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*v[\p{Cc}\p{Cf}]*e|t[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*t|p[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*d)[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){15,})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -727,14 +773,14 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])xkeysib-[a-f0-9]{64}-[a-z0-9]{16}(?![A-Za-z0-9_-])/i,
 	// Twilio API keys use `SK` followed by exactly 32 hexadecimal characters.
 	/(?<![A-Za-z0-9_])SK[a-f0-9]{32}(?![A-Za-z0-9_-])/i,
-	/nvapi-[A-Za-z0-9_-]{32,}/,
+	NVIDIA_API_TOKEN_PATTERN,
 	REPLICATE_API_TOKEN_PATTERN,
 	PINECONE_API_KEY_PATTERN,
 	// Cerebras keys have exactly 48 URL-safe characters; boundaries avoid `pcsk_` collisions.
-	/(?<![A-Za-z0-9_-])csk[-_][A-Za-z0-9_-]{48}(?![A-Za-z0-9_-])/,
-	/gsk_[A-Za-z0-9]{20,}/,
-	/xai-[A-Za-z0-9_-]{16,}/,
-	/pplx-[A-Za-z0-9]{48}/,
+	CEREBRAS_API_TOKEN_PATTERN,
+	GROQ_API_TOKEN_PATTERN,
+	XAI_API_TOKEN_PATTERN,
+	PERPLEXITY_API_TOKEN_PATTERN,
 	AWS_ACCESS_KEY_ID_PATTERN,
 	// Additional AWS access-key ID prefixes use a 16-character base32-like suffix.
 	/(?<![A-Za-z0-9_])(?:A3T[A-Z0-9]|ABIA|ACCA)[A-Z2-7]{16}(?![A-Za-z0-9_])/,
@@ -749,10 +795,10 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	// Google OAuth access tokens commonly use `ya29.` followed by a long URL-safe value.
 	GOOGLE_OAUTH_ACCESS_TOKEN_PATTERN,
 	// `csk-` is Cerebras; do not mistake its `sk-` suffix for an OpenAI key.
-	/(?:(?<!c)sk|rk)-(?:proj-|ant-|svcacct-|or-v1-)[A-Za-z0-9_-]{16,}/i,
+	OPENAI_COMPATIBLE_API_TOKEN_PATTERN,
 	/(?:(?<!c)sk|rk)-[A-Za-z0-9]{16,}(?:[-_][A-Za-z0-9_-]+)*/i,
 	// Stripe API secret keys use sk_/rk_ with live, test, or prod mode and a long alphanumeric body.
-	/(?:sk|rk)_(?:live|test|prod)_[A-Za-z0-9]{16,}/i,
+	STRIPE_API_TOKEN_PATTERN,
 	NPM_ACCESS_TOKEN_PATTERN,
 	GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN,
 	HUGGING_FACE_TOKEN_PATTERN,
@@ -1122,6 +1168,13 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	SLACK_API_TOKEN_BOUNDARY_PATTERN,
 	PRIVATE_KEY_HEADER_BOUNDARY_PATTERN,
 	JWT_LIKE_TOKEN_BOUNDARY_PATTERN,
+	NVIDIA_API_TOKEN_BOUNDARY_PATTERN,
+	CEREBRAS_API_TOKEN_BOUNDARY_PATTERN,
+	GROQ_API_TOKEN_BOUNDARY_PATTERN,
+	XAI_API_TOKEN_BOUNDARY_PATTERN,
+	PERPLEXITY_API_TOKEN_BOUNDARY_PATTERN,
+	OPENAI_COMPATIBLE_API_TOKEN_BOUNDARY_PATTERN,
+	STRIPE_API_TOKEN_BOUNDARY_PATTERN,
 ];
 
 // Also recognize up to two control/whitespace separators between characters in

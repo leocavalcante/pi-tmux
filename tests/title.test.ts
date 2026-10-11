@@ -1592,6 +1592,42 @@ test("fixed-format tokens crossing prompt truncation skip model lookup", async (
 	}
 });
 
+test("AI provider and model API tokens crossing prompt truncation skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const tokens = [
+		`nvapi-${"A".repeat(40)}`,
+		`csk_${"B".repeat(48)}`,
+		`gsk_${"c".repeat(24)}`,
+		`xai-${"d".repeat(20)}`,
+		`pplx-${"e".repeat(48)}`,
+		`sk-proj-${"f".repeat(32)}`,
+		`sk-ant-${"g".repeat(32)}`,
+		`sk-svcacct-${"h".repeat(32)}`,
+		`sk-or-v1-${"i".repeat(32)}`,
+		`sk_live_${"j".repeat(24)}`,
+		`rk_test_${"K".repeat(24)}`,
+		`nva\u200bpi-${"L".repeat(40)}`,
+	];
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const token of tokens) {
+		const tokenStart = prefixLength - 10;
+		const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_200)}`;
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+});
+
 test("webhook and Discord auth credentials crossing prompt truncation skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
