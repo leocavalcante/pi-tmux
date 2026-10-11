@@ -1086,6 +1086,17 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review payment integration ${legacySquareAccessToken}`, legacySquareAccessToken);
 	const genericAccessKeyAssignment = `access_key=${"M3n4".repeat(6)}`;
 	await suppressed(fixture(), `Review cloud configuration ${genericAccessKeyAssignment}`, genericAccessKeyAssignment);
+
+	const neonMarker = "[... middle of prompt omitted ...]";
+	const neonRetainedLength = MAX_PROMPT_LENGTH - neonMarker.length - 2;
+	const neonPrefixLength = Math.ceil(neonRetainedLength / 2);
+	const whitespaceObfuscatedNeonKey = `neon_api_key_${"N".repeat(16)} ${"N".repeat(16)}`;
+	const neonTokenStart = neonPrefixLength - 34;
+	const neonPrefix = `${"x".repeat(neonTokenStart - 1)} `;
+	const neonPrompt = `${neonPrefix}${whitespaceObfuscatedNeonKey} ${"y".repeat(
+		3_000 - neonPrefix.length - whitespaceObfuscatedNeonKey.length - 1,
+	)}`;
+	await suppressed(fixture(), neonPrompt, whitespaceObfuscatedNeonKey);
 	const obfuscatedAccessKeyAssignment = genericAccessKeyAssignment.replace("access_key", "access_\u200bkey");
 	await suppressed(fixture(), `Review cloud configuration ${obfuscatedAccessKeyAssignment}`, obfuscatedAccessKeyAssignment);
 	const azureAdClientSecret = `AbC7Q~${"Aa0_-.".repeat(5)}C3`;

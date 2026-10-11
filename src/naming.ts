@@ -1309,6 +1309,7 @@ export function parseNamingModel(value?: string): NamingModel | null {
 }
 
 const WHITESPACE = /[\s\p{White_Space}]/u;
+const OBFUSCATION_SEPARATOR_PATTERN = /[\s\p{Cc}\p{Cf}]/u;
 
 type NamingContextBoundary = {
 	left: string;
@@ -1455,6 +1456,11 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		);
 		return source === pattern.source ? [] : [new RegExp(source, pattern.flags)];
 	});
+const WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS = WHITESPACE_TOLERANT_BOUNDARY_PATTERNS
+	// Cross truncation only when the candidate enforces a token-ending boundary;
+	// broad formats can otherwise absorb adjacent prose after a short near-miss.
+	.filter((pattern) => /\(\?![^()]*\)$/u.test(pattern.source))
+	.map((pattern) => new RegExp(pattern.source, `${pattern.flags}dg`));
 const WHITESPACE_TOLERANT_LABELED_PASSWORD_PATTERN = new RegExp(
 	LABELED_PASSWORD_BOUNDARY_PATTERN.source.replaceAll(
 		String.raw`[\p{Cc}\p{Cf}]*`, String.raw`[\p{Cc}\p{Cf}\s]{0,2}`,
@@ -1486,6 +1492,11 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 		const npmPasswordPlaceholderStarts = npmPasswordPlaceholderValueStarts(joined);
 		const overlapsRetainedContext = (tokenStart: number, tokenEnd: number) =>
 			retainedSide === "left" ? tokenStart < boundary : tokenEnd > boundary;
+		const hasSeparatorInRetainedContext = (tokenStart: number, tokenEnd: number) => {
+			const start = retainedSide === "left" ? tokenStart : Math.max(tokenStart, boundary);
+			const end = retainedSide === "left" ? Math.min(tokenEnd, boundary) : tokenEnd;
+			return OBFUSCATION_SEPARATOR_PATTERN.test(joined.slice(start, end));
+		};
 		for (const { sourcePattern, pattern } of SENSITIVE_BOUNDARY_SCAN_PATTERNS) {
 			for (const match of joined.matchAll(pattern)) {
 				if (sourcePattern === LABELED_PASSWORD_BOUNDARY_PATTERN
@@ -1505,6 +1516,13 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					if (password === undefined || PASSWORD_PLACEHOLDER_PATTERN.test(password)) continue;
 				}
 				return true;
+			}
+		}
+		for (const pattern of WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS) {
+			for (const match of joined.matchAll(pattern)) {
+				const tokenRange = match.indices![1];
+				if (tokenRange && overlapsRetainedContext(tokenRange[0], tokenRange[1])
+					&& hasSeparatorInRetainedContext(tokenRange[0], tokenRange[1])) return true;
 			}
 		}
 		for (const { pattern, captureIndex } of LABELED_PASSWORD_PHRASE_BOUNDARY_SCAN_PATTERNS) {

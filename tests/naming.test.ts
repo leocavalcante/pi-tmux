@@ -971,6 +971,36 @@ test("screens generic sk/rk API keys across prompt truncation boundaries", () =>
 	}
 });
 
+test("screens whitespace-obfuscated fixed-format credentials across truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const whitespaceObfuscatedToken = `neon_api_key_${"N".repeat(16)} ${"N".repeat(16)}`;
+	const promptWithTokenAt = (candidate: string, tokenStart: number) => {
+		const prefix = `${"x".repeat(tokenStart - 1)} `;
+		return `${prefix}${candidate} ${"y".repeat(promptLength - prefix.length - candidate.length - 1)}`;
+	};
+
+	expect(hasSensitiveNamingContext(whitespaceObfuscatedToken)).toBe(true);
+	for (const tokenStart of [prefixLength - 34, suffixStart - 5]) {
+		const context = buildNamingRequestContext([], promptWithTokenAt(whitespaceObfuscatedToken, tokenStart));
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+	}
+
+	const historyContent = `${"x".repeat(968)} ${whitespaceObfuscatedToken} y`;
+	for (const context of [
+		buildNamingRequestContext([{ role: "user", content: historyContent }] as any),
+		buildNamingRequestContext([{ role: "compactionSummary", summary: historyContent }] as any),
+	]) {
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+	}
+
+});
+
 test("generic sk/rk matching does not compact task-based prose into API keys", () => {
 	for (const prompt of [
 		"task-based development",
