@@ -127,6 +127,14 @@ test("local verify script runs the same validation gates as CI", () => {
 	].join(" && "));
 });
 
+test("the package test command runs native Node subprocess coverage", () => {
+	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
+		scripts?: Record<string, string>;
+	};
+	expect(manifest.scripts?.test).toBe("bun test tests/ && npm run test:node");
+	expect(manifest.scripts?.["test:node"]).toBe("node --test tests/tmux-node.mjs");
+});
+
 test("@types/node stays pinned to 22.20.5 in the manifest and lockfile", () => {
 	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
 		devDependencies?: Record<string, string>;

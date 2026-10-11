@@ -17,7 +17,8 @@
   "scripts": {
     "check": "tsc -p tsconfig.json",
     "check:tests": "tsc -p tsconfig.test.json",
-    "test": "bun test tests/",
+    "test": "bun test tests/ && npm run test:node",
+    "test:node": "node --test tests/tmux-node.mjs",
     "verify": "npm run check && npm run check:tests && npm audit --audit-level=high && npm test && npm pack --dry-run --ignore-scripts"
   },
   "devDependencies": {
