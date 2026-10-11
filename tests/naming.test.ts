@@ -409,6 +409,39 @@ test("screens Tavily API keys across retained-context boundaries without flaggin
 	}
 });
 
+test("screens Jina AI API keys across retained-context boundaries without flagging near-misses", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const body = "a1B2c3D4e5F6".repeat(5);
+	const tokens = [`jina_${body}`, `JINA_${body}`];
+
+	for (const token of tokens) {
+		const obfuscated = `${token.slice(0, 2)}\u200b${token.slice(2)}`;
+		for (const candidate of [token, obfuscated]) {
+			expect(hasSensitiveNamingContext(candidate)).toBe(true);
+			expect(hasSensitiveOutput(candidate)).toBe(true);
+			const tokenStart = prefixLength - 10;
+			const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const nearMisses = [
+		`jina_${body.slice(1)}`,
+		`jina_${body}a`,
+		`jina_${`${body.slice(0, 30)}!${body.slice(31)}`}`,
+		`x${tokens[0]}`,
+		`${tokens[0]}_suffix`,
+	];
+	for (const nearMiss of nearMisses) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens synthetic 1Password service-account tokens without mistaking near-misses", () => {
 	const body = "Aa0+/".repeat(50);
 	const token = `ops_eyJ${body}`;

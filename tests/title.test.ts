@@ -2015,6 +2015,7 @@ test("AI provider and model API tokens crossing prompt truncation skip model loo
 		`tvly-${"q".repeat(32)}`,
 		`tvly-dev-${"r".repeat(32)}`,
 		`tvly-prod-${"s".repeat(32)}`,
+		`jina_${"T".repeat(60)}`,
 		`nva\u200bpi-${"L".repeat(40)}`,
 	];
 	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
