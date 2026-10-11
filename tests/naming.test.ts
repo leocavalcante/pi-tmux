@@ -457,6 +457,55 @@ test("screens age secret identities across retained-context truncation boundarie
 	expect(buildNamingRequestContext([], nearMiss).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens Slack API tokens across retained-context truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const token = `xoxb-${"A1b2".repeat(8)}`;
+	const appToken = `xapp-${"C3d4".repeat(8)}`;
+	expect(hasSensitiveNamingContext(token)).toBe(true);
+	expect(hasSensitiveOutput(token)).toBe(true);
+	expect(hasSensitiveNamingContext(appToken)).toBe(true);
+
+	const prompt = `${"x".repeat(prefixLength - 8)}${token} ${"x".repeat(1_200)}`;
+	const context = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(true);
+
+	const obfuscatedToken = token.replace("xoxb", "xox\u200bb");
+	const obfuscatedPrompt = `${"x".repeat(prefixLength - 8)}${obfuscatedToken} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+	const controlObfuscatedToken = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
+	const controlObfuscatedPrompt = `${"x".repeat(prefixLength - 8)}${controlObfuscatedToken} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], controlObfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixLength = Math.floor(retainedLength / 2);
+	const suffixStart = promptLength - suffixLength;
+	const suffixTokenStart = suffixStart - 8;
+	const suffixPrompt = `${"x".repeat(suffixTokenStart)}${token}${"y".repeat(promptLength - suffixTokenStart - token.length)}`;
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+	const historyContent = `${"x".repeat(992)}${token} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+	const summaryContent = `${"x".repeat(992)}${appToken} y`;
+	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+
+	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${token} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+	const shortToken = `xoxb-${"A".repeat(9)}`;
+	const nearMiss = `${"x".repeat(prefixLength - 8)}${shortToken} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], nearMiss).hasSensitiveBoundary()).toBe(false);
+	const wrongPrefix = `${"x".repeat(prefixLength - 8)}xozb-${"A".repeat(24)} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], wrongPrefix).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens private-key headers across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

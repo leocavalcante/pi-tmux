@@ -245,6 +245,13 @@ const TAILSCALE_KEY_PATTERN =
 const SQUARE_ACCESS_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])(?:EAAA|sq0atp-)[A-Za-z0-9_-]{22,60}(?![A-Za-z0-9_-])/i;
 // Stripe webhook signing secrets use a distinctive prefix and long URL-safe value.
 const STRIPE_WEBHOOK_SECRET_PATTERN = /(?<![A-Za-z0-9_-])whsec_[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-])/i;
+// Slack API tokens use distinctive xox*/xapp prefixes and a long opaque body.
+const SLACK_API_TOKEN_PATTERN = /(?:xox[baprcds]|xapp)-[A-Za-z0-9-]{10,}/;
+const SLACK_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	SLACK_API_TOKEN_PATTERN,
+	"(?:xox[baprcds]|xapp)-[A-Za-z0-9-]{10,}",
+	String.raw`((?:x[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*x[\p{Cc}\p{Cf}]*[baprcds]|x[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*p)-[\p{Cc}\p{Cf}]*[A-Za-z0-9-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9-]){9,})`,
+);
 // Slack webhook URLs carry a long token in one path segment; keep legacy multi-segment
 // incoming webhooks in the separately validated pattern below.
 const SLACK_WEBHOOK_URL_PATTERN =
@@ -364,6 +371,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	TAILSCALE_KEY_PATTERN,
 	SQUARE_ACCESS_TOKEN_PATTERN,
 	STRIPE_WEBHOOK_SECRET_PATTERN,
+	SLACK_API_TOKEN_PATTERN,
 	SLACK_WEBHOOK_URL_PATTERN,
 	SLACK_LEGACY_WEBHOOK_URL_PATTERN,
 	DISCORD_WEBHOOK_URL_PATTERN,
@@ -466,7 +474,6 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:(?<!c)sk|rk)-[A-Za-z0-9]{16,}(?:[-_][A-Za-z0-9_-]+)*/i,
 	// Stripe API secret keys use sk_/rk_ with live, test, or prod mode and a long alphanumeric body.
 	/(?:sk|rk)_(?:live|test|prod)_[A-Za-z0-9]{16,}/i,
-	/(?:xox[baprcds]|xapp)-[A-Za-z0-9-]{10,}/,
 	NPM_ACCESS_TOKEN_PATTERN,
 	GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN,
 	HUGGING_FACE_TOKEN_PATTERN,
@@ -765,6 +772,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	NPM_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	HUGGING_FACE_TOKEN_BOUNDARY_PATTERN,
 	AGE_SECRET_KEY_BOUNDARY_PATTERN,
+	SLACK_API_TOKEN_BOUNDARY_PATTERN,
 	PRIVATE_KEY_HEADER_BOUNDARY_PATTERN,
 ];
 

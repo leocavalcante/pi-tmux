@@ -1564,6 +1564,25 @@ test("a boundary-detected credential bypasses unchanged-context deduplication", 
 	expect(f.warnings.join(" ")).not.toContain(token);
 });
 
+test("a Slack API token crossing prompt truncation is not sent to the naming model", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const token = `xoxb-${"A1b2".repeat(8)}`;
+	const prompt = `${"x".repeat(prefixLength - 8)}${token} ${"x".repeat(1_200)}`;
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	const f = fixture();
+	const find = spyOn(f.ctx.modelRegistry, "find");
+
+	f.input(prompt);
+	await settle();
+	expect(find).not.toHaveBeenCalled();
+	expect(f.requests).toHaveLength(0);
+	expect(f.state.title).toBe("existing task");
+	expect(f.warnings).toEqual([warning]);
+	expect(f.warnings.join(" ")).not.toContain(token);
+});
+
 test("a private-key header crossing prompt truncation is not sent to the naming model", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
