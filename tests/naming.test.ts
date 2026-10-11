@@ -215,6 +215,35 @@ test("screens synthetic Microsoft Teams incoming webhook URLs without flagging s
 	}
 });
 
+test("screens synthetic EasyPost API keys without flagging near-misses", () => {
+	const keys = [
+		`EZAK${"A1b2".repeat(13)}A1`,
+		`EZTK${"C3d4".repeat(13)}C3`,
+		`eztk${"E5f6".repeat(13)}E5`,
+	];
+	const obfuscatedKeys = [
+		keys[0]!.replace("EZAK", "EZ\u200bAK"),
+		keys[1]!.replace("C3d4".repeat(3), `C3d4\u200b${"C3d4".repeat(2)}`),
+	];
+
+	for (const key of [...keys, ...obfuscatedKeys, `${keys[0]}-production`]) {
+		expect(hasSensitiveNamingContext(`rotate EasyPost API key ${key}`)).toBe(true);
+		expect(hasSensitiveOutput(key)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`EZAK${"A1b2".repeat(13)}A`,
+		`EZTK${"C3d4".repeat(13)}C3A`,
+		`prefixEZAK${"A1b2".repeat(13)}A1`,
+		`EZAK${"A1b2".repeat(13)}A1suffix`,
+		`EZXX${"A1b2".repeat(13)}A1`,
+		"EasyPost API key setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("requestNamingTitle screens sensitive context before model-registry access", async () => {
 	const contextTexts = [
 		"task: pi-tmux@example.invalid",
