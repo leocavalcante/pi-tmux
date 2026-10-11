@@ -750,6 +750,13 @@ const STRIPE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`(?:sk|rk)_(?:live|test|prod)_[A-Za-z0-9]{16,}`,
 	String.raw`(?<!c)((?:s[\p{Cc}\p{Cf}]*k|r[\p{Cc}\p{Cf}]*k)[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*(?:l[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*v[\p{Cc}\p{Cf}]*e|t[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*t|p[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*d)[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){15,})`,
 );
+// Terraform Cloud tokens have a 14-character prefix, `.atlasv1.`, and a 60–70-character body.
+const TERRAFORM_CLOUD_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])[A-Za-z0-9]{14}\.atlasv1\.[A-Za-z0-9_=-]{60,70}(?![A-Za-z0-9_=-])/i;
+const TERRAFORM_CLOUD_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	TERRAFORM_CLOUD_API_TOKEN_PATTERN,
+	String.raw`[A-Za-z0-9]{14}\.atlasv1\.[A-Za-z0-9_=-]{60,70}`,
+	String.raw`([A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){13}[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*v[\p{Cc}\p{Cf}]*1[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_=-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_=-]){59,69})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -796,9 +803,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed
 	// by a 16-hex or `local` segment.
 	/(?<![A-Za-z0-9_])sgp_(?:[a-f0-9]{40}|(?:[a-f0-9]{16}|local)_[a-f0-9]{40})(?![A-Za-z0-9_-])/i,
-	// Terraform Cloud tokens combine a 14-character segment and `.atlasv1.`
-	// with a 60–70-character token body.
-	/(?<![A-Za-z0-9_])[A-Za-z0-9]{14}\.atlasv1\.[A-Za-z0-9_=-]{60,70}(?![A-Za-z0-9_=-])/,
+	TERRAFORM_CLOUD_API_TOKEN_PATTERN,
 	SHOPIFY_APP_TOKEN_PATTERN,
 	SHIPPO_API_TOKEN_PATTERN,
 	// PlanetScale API and OAuth tokens use 32–64 URL-safe characters after fixed prefixes.
@@ -1248,6 +1253,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	PERPLEXITY_API_TOKEN_BOUNDARY_PATTERN,
 	OPENAI_COMPATIBLE_API_TOKEN_BOUNDARY_PATTERN,
 	STRIPE_API_TOKEN_BOUNDARY_PATTERN,
+	TERRAFORM_CLOUD_API_TOKEN_BOUNDARY_PATTERN,
 ];
 const SENSITIVE_BOUNDARY_SCAN_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS.map((sourcePattern) => ({
 	sourcePattern,

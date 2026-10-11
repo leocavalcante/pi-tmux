@@ -1609,6 +1609,61 @@ test("repeated prompt-boundary scans reuse regexes without retaining match state
 	expect(context.hasSensitiveBoundary()).toBe(true);
 });
 
+test("Terraform Cloud API tokens crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+	const promptLength = 3_000;
+	const tokens = [
+		`${"T".repeat(14)}.atlasv1.${"a".repeat(60)}`,
+		`${"Q".repeat(14)}.ATLASV1.${"B".repeat(67)}_-=`,
+		`${"R".repeat(14)}.atla\u200bsv1.${"c".repeat(60)}`,
+	];
+	const makePrompt = (token: string, tokenStart: number) => {
+		const prefix = `${"x".repeat(tokenStart - 1)} `;
+		const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+		expect(prompt).toHaveLength(promptLength);
+		return prompt;
+	};
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const token of tokens) {
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const f = fixture();
+			const find = spyOn(f.ctx.modelRegistry, "find");
+
+			f.input(makePrompt(token, tokenStart));
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(f.requests).toHaveLength(0);
+			expect(f.state.title).toBe("existing task");
+			expect(f.warnings).toEqual([warning]);
+			expect(f.warnings.join(" ")).not.toContain(token);
+		}
+	}
+});
+
+test("Terraform Cloud boundary checks preserve token-length and version requirements", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+	const nearMisses = [
+		`${"T".repeat(14)}.atlasv1.${"a".repeat(59)}`,
+		`${"T".repeat(14)}.atlasv1.${"a".repeat(71)}`,
+		`${"T".repeat(14)}.atlasv2.${"a".repeat(60)}`,
+	];
+
+	for (const token of nearMisses) {
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${token} ${"y".repeat(3_000 - prefix.length - token.length - 1)}`;
+			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("fixed-format tokens crossing prompt truncation skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
