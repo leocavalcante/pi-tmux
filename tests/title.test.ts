@@ -1393,6 +1393,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review npm config ${npmrcAuth}`, npmrcAuth);
 	const obfuscatedNpmrcAuth = npmrcAuth.replace("_auth", "_au\u200bth");
 	await suppressed(fixture(), `Review npm config ${obfuscatedNpmrcAuth}`, obfuscatedNpmrcAuth);
+	const authValueOffset = npmrcAuth.indexOf("=") + 1;
+	const authValueStart = prefixLength - 10;
+	const authPrefix = `${"x".repeat(authValueStart - authValueOffset - 1)} `;
+	const boundaryNpmrcAuth = `${authPrefix}${npmrcAuth} ${"y".repeat(3_000 - authPrefix.length - npmrcAuth.length - 1)}`;
+	await suppressed(fixture(), boundaryNpmrcAuth, npmrcAuth);
 	const npmrcPassword = npmrcPasswordSetting("pw1");
 	await suppressed(fixture(), `Review npm config ${npmrcPassword}`, npmrcPassword);
 	const obfuscatedNpmrcPassword = npmrcPassword.replace("_password", "_pass\u200bword");
