@@ -138,6 +138,14 @@ const STRIPE_WEBHOOK_SECRET_PATTERN = /(?<![A-Za-z0-9_-])whsec_[A-Za-z0-9_-]{24,
 // Slack webhook URLs carry a long token in one of the platform's webhook routes.
 const SLACK_WEBHOOK_URL_PATTERN =
 	/(?<![A-Za-z0-9.-])(?:https?:\/\/)?hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}(?![A-Za-z0-9+/=])/i;
+// Teams incoming webhook URLs embed multiple GUIDs and a long webhook token.
+const MICROSOFT_TEAMS_GUID_PATTERN = String.raw`[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}`;
+const MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9.-])https:\/\/[a-z0-9]+\.webhook\.office\.com\/webhookb2\/`
+		+ `${MICROSOFT_TEAMS_GUID_PATTERN}@${MICROSOFT_TEAMS_GUID_PATTERN}`
+		+ String.raw`\/IncomingWebhook\/[a-f0-9]{32}\/${MICROSOFT_TEAMS_GUID_PATTERN}(?![A-Za-z0-9_-])`,
+	"i",
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -158,6 +166,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	TAILSCALE_KEY_PATTERN,
 	STRIPE_WEBHOOK_SECRET_PATTERN,
 	SLACK_WEBHOOK_URL_PATTERN,
+	MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN,
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed
 	// by a 16-hex or `local` segment.

@@ -102,6 +102,34 @@ test("screens synthetic Slack webhook URLs without flagging similar links", () =
 	}
 });
 
+test("screens synthetic Microsoft Teams incoming webhook URLs without flagging similar links", () => {
+	const guid = "01234567-89ab-cdef-0123-456789abcdef";
+	const otherGuid = "fedcba98-7654-3210-fedc-ba9876543210";
+	const token = "a1b2c3d4".repeat(4);
+	const url = `https://tenant.webhook.office.com/webhookb2/${guid}@${otherGuid}/IncomingWebhook/${token}/${guid}`;
+	const obfuscatedUrls = [
+		url.replace("webhook.office.com", "webhook.office.\u200bcom"),
+		url.replace("IncomingWebhook", "Incoming\u200bWebhook"),
+	];
+
+	for (const value of [url, ...obfuscatedUrls]) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		url.replace("webhook.office.com", "webhook.office.com.evil.test"),
+		url.replace("webhookb2", "api"),
+		url.replace(token, `${token}a`),
+		url.replace("https://", "http://"),
+		`prefix${url}`,
+		"Microsoft Teams webhook setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("requestNamingTitle screens context before model-registry access", async () => {
 	const contextText = "task: pi-tmux@example.invalid";
 	const context = {
