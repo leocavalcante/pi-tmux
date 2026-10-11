@@ -270,6 +270,32 @@ test("screens synthetic Airtable personal access tokens without flagging near-mi
 	}
 });
 
+test("screens synthetic ClickHouse Cloud API keys without flagging near-misses", () => {
+	const key = `4b1d${"A1b2".repeat(9)}A1`;
+	const obfuscatedKeys = [
+		key.replace("4b1d", "4b\u200b1d"),
+		key.replace("A1b2".repeat(4), `A1b2\u200b${"A1b2".repeat(3)}`),
+	];
+
+	for (const value of [key, ...obfuscatedKeys, key.toUpperCase()]) {
+		expect(hasSensitiveNamingContext(`review ClickHouse access ${value}`)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`4b1d${"A1b2".repeat(9)}A`,
+		`4b1d${"A1b2".repeat(9)}A1B`,
+		`4b1c${"A1b2".repeat(9)}A1`,
+		key.replace("A1b2", "A1b!"),
+		`prefix${key}`,
+		`${key}suffix`,
+		"ClickHouse API key setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens additional AWS access-key ID prefixes without flagging near-misses", () => {
 	const keys = [
 		`A3TA${"B".repeat(16)}`,
