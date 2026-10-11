@@ -25,6 +25,8 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 				{ value: "set ", label: "set <name>", description: "Pin a manual title" },
 				{ value: "auto", label: "auto", description: "Resume automatic naming" },
 			].filter((item) => item.value.startsWith(token));
+			// Exact complete commands should submit on Enter, not re-accept themselves.
+			if (items.some((item) => item.value === token)) return null;
 			return items.length ? items : null;
 		},
 		handler: async (args, ctx) => {
