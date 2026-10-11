@@ -321,6 +321,8 @@ const GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"glpat-[A-Za-z0-9_-]{20,}",
 	String.raw`(g[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){19,})`,
 );
+const PRIVATE_KEY_HEADER_PATTERN = /-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/;
+const PRIVATE_KEY_HEADER_BOUNDARY_PATTERN = new RegExp(`(${PRIVATE_KEY_HEADER_PATTERN.source})`, "u");
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -463,7 +465,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN,
 	HUGGING_FACE_TOKEN_PATTERN,
 	/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/,
-	/-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/,
+	PRIVATE_KEY_HEADER_PATTERN,
 ];
 
 // Require the beginning of a local-part run; without this, long non-email text
@@ -756,6 +758,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	NPM_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	HUGGING_FACE_TOKEN_BOUNDARY_PATTERN,
+	PRIVATE_KEY_HEADER_BOUNDARY_PATTERN,
 ];
 
 function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {
