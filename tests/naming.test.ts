@@ -1309,7 +1309,7 @@ test("screens explicit credential assignments across retained-context truncation
 	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
-test("screens framework, WordPress, and cryptographic key assignments across both prompt truncation boundaries", () => {
+test("screens framework, WordPress, session/cookie, and cryptographic key assignments across both prompt truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
@@ -1318,6 +1318,8 @@ test("screens framework, WordPress, and cryptographic key assignments across bot
 		"APP_KEY", "AES_KEY", "AES_256_KEY", "AES-256-KEY",
 		"SECRET_KEY_BASE", "ENCRYPTION_KEY", "FERNET_KEY",
 		"HMAC_KEY", "SIGNING_KEY", "JWT_SIGNING_KEY", "TOKEN_SIGNING_KEY", "MASTER_KEY",
+		"SESSION_KEY", "SESSION-KEY", "SESSION KEY",
+		"COOKIE_KEY", "COOKIE-KEY",
 		"AUTH_KEY", "SECURE_AUTH_KEY", "LOGGED_IN_KEY", "NONCE_KEY",
 		"AUTH_SALT", "SECURE_AUTH_SALT", "LOGGED_IN_SALT", "NONCE_SALT",
 	]
@@ -1327,6 +1329,7 @@ test("screens framework, WordPress, and cryptographic key assignments across bot
 	assignments.push({ name: "HMAC_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
 	assignments.push({ name: "AES_256_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
 	assignments.push({ name: "JWT_SIGNING_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
+	assignments.push({ name: "COOKIE_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
 
 	for (const { name, valuePrefix, value } of assignments) {
 		const assignment = `${name}=${valuePrefix}${value}`;
@@ -1366,6 +1369,9 @@ test("screens framework, WordPress, and cryptographic key assignments across bot
 		"SIGNING_KEY=placeholder",
 		"JWT_SIGNING_KEY rollover in a synthetic project",
 		`TOKEN_SIGNING_KEY=${"S".repeat(19)}`,
+		"COOKIE_KEY=example",
+		"SESSION_KEY rotation for a synthetic project",
+		`SESSION_KEY=${"Q".repeat(19)}`,
 		`AES_256_KEY=${"A".repeat(19)}`,
 		`ENCRYPTION_KEY=${"A".repeat(19)}`,
 		`MASTER_KEY=${"B".repeat(19)}`,
