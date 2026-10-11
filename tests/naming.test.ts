@@ -67,6 +67,39 @@ test("screens Pinecone API keys without flagging near-misses", () => {
 	}
 });
 
+test("screens Railway UUID tokens only when Railway context is present", () => {
+	const token = ["a".repeat(8), "b".repeat(4), "c".repeat(4), "d".repeat(4), "e".repeat(12)].join("-");
+	const labeledValues = [
+		`Railway: ${token}`,
+		`Railway token: ${token}`,
+		`Railway API token: ${token}`,
+		`RAILWAY_TOKEN=${token}`,
+		`RAILWAY_API_TOKEN=${token}`,
+	];
+	const obfuscatedValues = [
+		labeledValues[0]!.replace("Railway", "Rail\u200bway"),
+		`Railway token: ${token.slice(0, 16)}\u200b${token.slice(16)}`,
+	];
+
+	for (const value of [...labeledValues, ...obfuscatedValues]) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		token,
+		`project id: ${token}`,
+		`Railway ${token}`,
+		`Railway: ${token.slice(1)}`,
+		`Railway: ${token.replace("a", "g")}`,
+		`Railway: ${token}x`,
+		"Railway deployment setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens Alibaba Cloud AccessKey IDs without flagging near-misses", () => {
 	const key = `LTAI${"A1b2".repeat(5)}`;
 	const obfuscatedKeys = [
