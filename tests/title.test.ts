@@ -1037,7 +1037,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Resend access ${resendApiKey}`, resendApiKey);
 	const tailscaleKey = `tskey-${"A1b2".repeat(4)}`;
 	await suppressed(fixture(), `Provision Tailscale auth ${tailscaleKey}`, tailscaleKey);
-	const obfuscatedTailscaleKey = `tskey-${"A1b2".repeat(2)}\u200b${"C3d4".repeat(2)}`;
+	const tailscaleAuthKey = `tskey-auth-k${"A1b2".repeat(4)}`;
+	await suppressed(fixture(), `Provision Tailscale auth ${tailscaleAuthKey}`, tailscaleAuthKey);
+	const tailscaleApiKey = `tskey-api-${"C3d4".repeat(4)}`;
+	await suppressed(fixture(), `Provision Tailscale API access ${tailscaleApiKey}`, tailscaleApiKey);
+	const obfuscatedTailscaleKey = `tskey-auth-${"A1b2".repeat(2)}\u200b${"C3d4".repeat(2)}`;
 	await suppressed(fixture(), `Provision Tailscale auth ${obfuscatedTailscaleKey}`, obfuscatedTailscaleKey);
 	const supabaseSecretKey = `sb_secret_${"S".repeat(32)}`;
 	await suppressed(fixture(), `Review the Supabase config ${supabaseSecretKey}`, supabaseSecretKey);
