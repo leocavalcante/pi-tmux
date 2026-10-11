@@ -135,7 +135,7 @@ test("screens Vercel tokens only when a Vercel label is present", () => {
 	}
 });
 
-test("screens Vercel and Cloudflare keys across retained-context truncation boundaries", () => {
+test("screens labeled API credentials across retained-context truncation boundaries", () => {
 	const token = "A1b2".repeat(6);
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
@@ -166,6 +166,39 @@ test("screens Vercel and Cloudflare keys across retained-context truncation boun
 	const globalPrompt = `${"x".repeat(prefixTokenStart - globalLabel.length)}${globalLabel}${cloudflareGlobalKey} ${"x".repeat(1_200)}`;
 	expect(buildNamingRequestContext([], globalPrompt).hasSensitiveBoundary()).toBe(true);
 
+	const datadogKey = "A1b2".repeat(10);
+	const datadogLabel = " Datadog: ";
+	const mailgunToken = `key-${"a1b2".repeat(8)}`;
+	const mailgunLabel = " Mailgun: ";
+	const railwayToken = "11111111-2222-4333-8444-555555555555";
+	const railwayLabel = " Railway: ";
+	const additionalLabeledCredentials = [
+		{ label: datadogLabel, token: datadogKey },
+		{ label: mailgunLabel, token: mailgunToken },
+		{ label: railwayLabel, token: railwayToken },
+	];
+	for (const { label, token: credential } of additionalLabeledCredentials) {
+		const prompt = `${"x".repeat(prefixTokenStart - label.length)}${label}${credential} ${"x".repeat(1_200)}`;
+		const context = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+		expect(context.text).toBe(buildNamingContext([], prompt));
+	}
+	const obfuscatedDatadogPrompt = `${"x".repeat(prefixTokenStart - datadogLabel.length)}${datadogLabel}${datadogKey.slice(0, 4)}\u200b${datadogKey.slice(4)} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedDatadogPrompt).hasSensitiveBoundary()).toBe(true);
+	const obfuscatedRailwayPrompt = `${"x".repeat(prefixTokenStart - railwayLabel.length)}${railwayLabel}${railwayToken.slice(0, 8)}\u0000${railwayToken.slice(8)} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedRailwayPrompt).hasSensitiveBoundary()).toBe(true);
+	for (const { label, token: invalidCredential } of [
+		{ label: datadogLabel, token: datadogKey.slice(1) },
+		{ label: datadogLabel, token: `${datadogKey}A` },
+		{ label: mailgunLabel, token: mailgunToken.slice(1) },
+		{ label: mailgunLabel, token: `${mailgunToken}A` },
+		{ label: railwayLabel, token: railwayToken.replace("-", "_") },
+	]) {
+		const prompt = `${"x".repeat(prefixTokenStart - label.length)}${label}${invalidCredential} ${"x".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+	}
+
 	const promptLength = MAX_PROMPT_LENGTH + 300;
 	const suffixStart = promptLength - suffixLength;
 	const suffixTokenStart = suffixStart - 10;
@@ -174,6 +207,10 @@ test("screens Vercel and Cloudflare keys across retained-context truncation boun
 	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
 	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 	expect(suffixContext.text).toBe(buildNamingContext([], suffixPrompt));
+	const railwaySuffixPrompt = `${"x".repeat(suffixTokenStart - railwayLabel.length)}${railwayLabel}${railwayToken} ${"y".repeat(promptLength - suffixTokenStart - railwayToken.length - 1)}`;
+	const railwaySuffixContext = buildNamingRequestContext([], railwaySuffixPrompt);
+	expect(hasSensitiveNamingContext(railwaySuffixContext.text)).toBe(false);
+	expect(railwaySuffixContext.hasSensitiveBoundary()).toBe(true);
 
 	const historyContent = `${"x".repeat(981)} Vercel: ${token} y`;
 	const historyContext = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
@@ -194,6 +231,16 @@ test("screens Vercel and Cloudflare keys across retained-context truncation boun
 	] as any);
 	expect(hasSensitiveNamingContext(cloudflareSummary.text)).toBe(false);
 	expect(cloudflareSummary.hasSensitiveBoundary()).toBe(true);
+	const datadogHistoryContent = `${"x".repeat(960)}${datadogLabel}${datadogKey} y`;
+	const datadogHistory = buildNamingRequestContext([{ role: "user", content: datadogHistoryContent }] as any);
+	expect(hasSensitiveNamingContext(datadogHistory.text)).toBe(false);
+	expect(datadogHistory.hasSensitiveBoundary()).toBe(true);
+	const mailgunSummaryContent = `${"x".repeat(960)}${mailgunLabel}${mailgunToken} y`;
+	const mailgunSummary = buildNamingRequestContext([
+		{ role: "compactionSummary", summary: mailgunSummaryContent },
+	] as any);
+	expect(hasSensitiveNamingContext(mailgunSummary.text)).toBe(false);
+	expect(mailgunSummary.hasSensitiveBoundary()).toBe(true);
 
 	const omittedPrompt = `${"x".repeat(prefixLength + 20)} Vercel: ${token} ${"y".repeat(3_000)}`;
 	const omittedContext = buildNamingRequestContext([], omittedPrompt);
@@ -201,6 +248,10 @@ test("screens Vercel and Cloudflare keys across retained-context truncation boun
 	expect(omittedContext.hasSensitiveBoundary()).toBe(false);
 	const omittedCloudflarePrompt = `${"x".repeat(prefixLength + 20)}${cloudflareLabel}${cloudflareApiKey} ${"y".repeat(3_000)}`;
 	expect(buildNamingRequestContext([], omittedCloudflarePrompt).hasSensitiveBoundary()).toBe(false);
+	for (const { label, token: credential } of additionalLabeledCredentials) {
+		const omittedCredentialPrompt = `${"x".repeat(prefixLength + 20)}${label}${credential} ${"y".repeat(3_000)}`;
+		expect(buildNamingRequestContext([], omittedCredentialPrompt).hasSensitiveBoundary()).toBe(false);
+	}
 	const omittedHistoryContent = `${"x".repeat(1_010)} Vercel: ${token} y`;
 	const omittedHistory = buildNamingRequestContext([{ role: "user", content: omittedHistoryContent }] as any);
 	expect(omittedHistory.hasSensitiveBoundary()).toBe(false);

@@ -133,34 +133,61 @@ const RUBYGEMS_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])rubygems_[a-f0-9]{48}(?![A-
 const HEROKU_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])HRKU-AA[A-Za-z0-9_-]{58}(?![A-Za-z0-9_-])/i;
 // EasyPost test and production API keys use `EZTK` or `EZAK` plus 54 alphanumeric characters.
 const EASYPOST_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])EZ(?:AK|TK)[A-Za-z0-9]{54}(?![A-Za-z0-9_])/i;
+
+function makeBoundaryPattern(pattern: RegExp, token: string, boundaryToken: string): RegExp {
+	const source = pattern.source.replace(token, boundaryToken);
+	if (source === pattern.source) throw new Error("Boundary token did not match its source pattern");
+	const flags = pattern.flags.includes("u") ? pattern.flags : `${pattern.flags}u`;
+	return new RegExp(source, flags);
+}
+
 // Cloudflare API keys have 40 URL-safe characters; global keys have 37 hex characters.
 // Require a nearby Cloudflare label to avoid flagging unrelated opaque values.
 const CLOUDFLARE_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?cloudflare[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}([a-z0-9_-]{40})(?![A-Za-z0-9_-])/i;
 const CLOUDFLARE_GLOBAL_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?cloudflare[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}([a-f0-9]{37})(?![A-Za-z0-9_-])/i;
 // Boundary variants keep exact token lengths while allowing embedded format controls.
-const CLOUDFLARE_API_KEY_BOUNDARY_PATTERN = new RegExp(
-	CLOUDFLARE_API_KEY_PATTERN.source.replace(
-		"([a-z0-9_-]{40})", String.raw`([a-z0-9_-](?:[\p{Cc}\p{Cf}]*[a-z0-9_-]){39})`,
-	), `${CLOUDFLARE_API_KEY_PATTERN.flags}u`,
+const CLOUDFLARE_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	CLOUDFLARE_API_KEY_PATTERN,
+	"([a-z0-9_-]{40})",
+	String.raw`([a-z0-9_-](?:[\p{Cc}\p{Cf}]*[a-z0-9_-]){39})`,
 );
-const CLOUDFLARE_GLOBAL_API_KEY_BOUNDARY_PATTERN = new RegExp(
-	CLOUDFLARE_GLOBAL_API_KEY_PATTERN.source.replace(
-		"([a-f0-9]{37})", String.raw`([a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){36})`,
-	), `${CLOUDFLARE_GLOBAL_API_KEY_PATTERN.flags}u`,
+const CLOUDFLARE_GLOBAL_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	CLOUDFLARE_GLOBAL_API_KEY_PATTERN,
+	"([a-f0-9]{37})",
+	String.raw`([a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){36})`,
 );
 // Datadog API keys are 40 alphanumeric characters; require a nearby Datadog label.
-const DATADOG_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?datadog[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[A-Za-z0-9]{40}(?![A-Za-z0-9_-])/i;
+const DATADOG_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?datadog[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}([A-Za-z0-9]{40})(?![A-Za-z0-9_-])/i;
+const DATADOG_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DATADOG_API_KEY_PATTERN,
+	"([A-Za-z0-9]{40})",
+	String.raw`([A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){39})`,
+);
 // Mailgun private API tokens use `key-` plus 32 hex characters and a Mailgun label.
-const MAILGUN_PRIVATE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?mailgun[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}key-[a-f0-9]{32}(?![A-Za-z0-9_-])/i;
+const MAILGUN_PRIVATE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?mailgun[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}(key-[a-f0-9]{32})(?![A-Za-z0-9_-])/i;
+const MAILGUN_PRIVATE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	MAILGUN_PRIVATE_API_TOKEN_PATTERN,
+	"(key-[a-f0-9]{32})",
+	String.raw`(k[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*y[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){31})`,
+);
 // Vercel tokens use exactly 24 alphanumeric characters; require a nearby Vercel label.
 const VERCEL_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?vercel[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}([A-Za-z0-9]{24})(?![A-Za-z0-9_-])/i;
-const VERCEL_API_TOKEN_BOUNDARY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?vercel[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}([A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){23})(?![A-Za-z0-9_-])/iu;
+const VERCEL_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	VERCEL_API_TOKEN_PATTERN,
+	"([A-Za-z0-9]{24})",
+	String.raw`([A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){23})`,
+);
 // Railway tokens are UUID-shaped; require a nearby Railway label and delimiter.
 const RAILWAY_API_TOKEN_PATTERN = new RegExp(
 	String.raw`(?<![A-Za-z0-9_-])[\w.-]{0,50}?railway[ \t\w.-]{0,20}`
 		+ String.raw`[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[\x60'"\s=]{0,5}`
-		+ String.raw`[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}(?![A-Za-z0-9_-])`,
+		+ String.raw`([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})(?![A-Za-z0-9_-])`,
 	"i",
+);
+const RAILWAY_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	RAILWAY_API_TOKEN_PATTERN,
+	"([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})",
+	String.raw`([a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){7}[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*(?:[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){3}[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*){3}[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){11})`,
 );
 // Artifactory tokens have distinctive fixed prefixes and exact body lengths.
 const ARTIFACTORY_API_KEY_PATTERN = /(?<![A-Za-z0-9_])AKCp[A-Za-z0-9]{69}(?![A-Za-z0-9_])/;
@@ -615,6 +642,9 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	VERCEL_API_TOKEN_BOUNDARY_PATTERN,
 	CLOUDFLARE_API_KEY_BOUNDARY_PATTERN,
 	CLOUDFLARE_GLOBAL_API_KEY_BOUNDARY_PATTERN,
+	DATADOG_API_KEY_BOUNDARY_PATTERN,
+	MAILGUN_PRIVATE_API_TOKEN_BOUNDARY_PATTERN,
+	RAILWAY_API_TOKEN_BOUNDARY_PATTERN,
 ];
 
 function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {

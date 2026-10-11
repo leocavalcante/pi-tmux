@@ -1099,6 +1099,15 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the config Datadog: ${datadogApiKey}`, datadogApiKey);
 	const mailgunPrivateApiToken = `key-${"a1b2".repeat(8)}`;
 	await suppressed(fixture(), `Review Mailgun API access: ${mailgunPrivateApiToken}`, mailgunPrivateApiToken);
+	const railwayBoundaryToken = ["a".repeat(8), "b".repeat(4), "c".repeat(4), "d".repeat(4), "e".repeat(12)].join("-");
+	for (const [label, credential] of [
+		[" Datadog: ", datadogApiKey],
+		[" Mailgun: ", mailgunPrivateApiToken],
+		[" Railway: ", railwayBoundaryToken],
+	] as const) {
+		const truncatedPrompt = `${"x".repeat(tokenStart - label.length)}${label}${credential} ${"x".repeat(1_200)}`;
+		await suppressed(fixture(), truncatedPrompt, credential);
+	}
 	const artifactoryApiKey = `AKCp${"A1b2".repeat(17)}A`;
 	const artifactoryReferenceToken = `cmVmd${"C1d2".repeat(14)}AbC`;
 	await suppressed(fixture(), `Review the artifact repository ${artifactoryApiKey}`, artifactoryApiKey);
