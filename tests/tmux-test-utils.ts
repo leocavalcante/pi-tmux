@@ -1,4 +1,6 @@
-import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync, copyFileSync, existsSync, linkSync, mkdtempSync, readFileSync, rmSync, writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 
@@ -17,8 +19,18 @@ export async function withFakeTmux(
 	const originalNodeOptions = process.env.NODE_OPTIONS;
 	let completed = false;
 	try {
-		copyFileSync(nodeExecutable, executable);
-		if (process.platform !== "win32") chmodSync(executable, 0o755);
+		if (process.platform === "win32") {
+			// Avoid copying a large Node binary into the temp directory before each cold launch.
+			// Hard links are unavailable across volumes or on some filesystems, so retain a fallback.
+			try {
+				linkSync(nodeExecutable, executable);
+			} catch {
+				copyFileSync(nodeExecutable, executable);
+			}
+		} else {
+			copyFileSync(nodeExecutable, executable);
+			chmodSync(executable, 0o755);
+		}
 		writeFileSync(loader, [
 			`if (require("node:path").basename(process.execPath).toLowerCase() === ${JSON.stringify(process.platform === "win32" ? "tmux.exe" : "tmux")}) {`,
 			"process.argv.splice(1);",
