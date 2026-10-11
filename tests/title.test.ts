@@ -1636,6 +1636,37 @@ test("Azure and cloud access credentials crossing prompt truncation skip model l
 	}
 });
 
+test("Airtable and ClickHouse keys crossing prompt truncation skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const tokens = [
+		`pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`,
+		`4b1d${"A1b2".repeat(9)}A1`,
+	];
+	const values = tokens.flatMap((token, index) => [
+		token,
+		index === 0 ? token.replace("pat", "p\u200bat") : token.replace("4b1d", "4b\u200b1d"),
+		`${token.slice(0, 10)}\u0000${token.slice(10)}`,
+	]);
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const value of values) {
+		const tokenStart = prefixLength - Math.floor(value.length / 2);
+		const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(value);
+	}
+});
+
 test("a Slack API token crossing prompt truncation is not sent to the naming model", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
