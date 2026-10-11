@@ -575,6 +575,62 @@ const SENTRY_USER_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"sntryu_[a-f0-9]{64}",
 	String.raw`(s[\p{Cc}\p{Cf}]*n[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*y[\p{Cc}\p{Cf}]*u[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){63})`,
 );
+// Atlassian API tokens use `ATATT3` followed by 186 URL-safe characters.
+const ATLASSIAN_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])ATATT3[A-Za-z0-9_=-]{186}(?![A-Za-z0-9_=-])/i;
+const ATLASSIAN_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	ATLASSIAN_API_TOKEN_PATTERN,
+	"ATATT3[A-Za-z0-9_=-]{186}",
+	String.raw`(A[\p{Cc}\p{Cf}]*T[\p{Cc}\p{Cf}]*A[\p{Cc}\p{Cf}]*T[\p{Cc}\p{Cf}]*T[\p{Cc}\p{Cf}]*3[\p{Cc}\p{Cf}]*[A-Za-z0-9_=-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_=-]){185})`,
+);
+// Shopify app tokens have four fixed prefixes and a 32-character hexadecimal body.
+const SHOPIFY_APP_TOKEN_PATTERN = /(?<![A-Za-z0-9_])shp(?:at|ca|pa|ss)_[a-f0-9]{32}(?![A-Za-z0-9_-])/i;
+const SHOPIFY_APP_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	SHOPIFY_APP_TOKEN_PATTERN,
+	"shp(?:at|ca|pa|ss)_[a-f0-9]{32}",
+	String.raw`(s[\p{Cc}\p{Cf}]*h[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*(?:a[\p{Cc}\p{Cf}]*t|c[\p{Cc}\p{Cf}]*a|p[\p{Cc}\p{Cf}]*a|s[\p{Cc}\p{Cf}]*s)[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Fa-f0-9](?:[\p{Cc}\p{Cf}]*[A-Fa-f0-9]){31})`,
+);
+// Shippo API tokens use a live/test prefix and a 40-character hexadecimal body.
+const SHIPPO_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])shippo_(?:live|test)_[a-f0-9]{40}(?![A-Za-z0-9_-])/i;
+const SHIPPO_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	SHIPPO_API_TOKEN_PATTERN,
+	"shippo_(?:live|test)_[a-f0-9]{40}",
+	String.raw`(s[\p{Cc}\p{Cf}]*h[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*(?:l[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*v[\p{Cc}\p{Cf}]*e|t[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*t)[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Fa-f0-9](?:[\p{Cc}\p{Cf}]*[A-Fa-f0-9]){39})`,
+);
+// Postman API tokens use two fixed-length hexadecimal segments after `PMAK-`.
+const POSTMAN_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])PMAK-[a-f0-9]{24}-[a-f0-9]{34}(?![A-Za-z0-9_-])/i;
+const POSTMAN_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	POSTMAN_API_TOKEN_PATTERN,
+	"PMAK-[a-f0-9]{24}-[a-f0-9]{34}",
+	String.raw`(P[\p{Cc}\p{Cf}]*M[\p{Cc}\p{Cf}]*A[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Fa-f0-9](?:[\p{Cc}\p{Cf}]*[A-Fa-f0-9]){23}[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Fa-f0-9](?:[\p{Cc}\p{Cf}]*[A-Fa-f0-9]){33})`,
+);
+// Pulumi API tokens use `pul-` followed by exactly 40 hexadecimal characters.
+const PULUMI_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])pul-[a-f0-9]{40}(?![A-Za-z0-9_-])/i;
+const PULUMI_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	PULUMI_API_TOKEN_PATTERN,
+	"pul-[a-f0-9]{40}",
+	String.raw`(p[\p{Cc}\p{Cf}]*u[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Fa-f0-9](?:[\p{Cc}\p{Cf}]*[A-Fa-f0-9]){39})`,
+);
+// DigitalOcean access, personal, and refresh tokens share `_v1_` and 64 lowercase hex characters.
+const DIGITALOCEAN_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])do[opr]_v1_[a-f0-9]{64}(?![A-Za-z0-9_-])/;
+const DIGITALOCEAN_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DIGITALOCEAN_API_TOKEN_PATTERN,
+	"do[opr]_v1_[a-f0-9]{64}",
+	String.raw`(d[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*[opr][\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*v[\p{Cc}\p{Cf}]*1[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){63})`,
+);
+// Prefect API tokens use `pnu_` followed by exactly 36 alphanumeric characters.
+const PREFECT_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])pnu_[A-Za-z0-9]{36}(?![A-Za-z0-9_-])/i;
+const PREFECT_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	PREFECT_API_TOKEN_PATTERN,
+	"pnu_[A-Za-z0-9]{36}",
+	String.raw`(p[\p{Cc}\p{Cf}]*n[\p{Cc}\p{Cf}]*u[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){35})`,
+);
+// Octopus Deploy API keys use `API-` followed by 26 uppercase alphanumeric characters.
+const OCTOPUS_API_KEY_PATTERN = /(?<![A-Za-z0-9_])API-[A-Z0-9]{26}(?![A-Za-z0-9_-])/;
+const OCTOPUS_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	OCTOPUS_API_KEY_PATTERN,
+	"API-[A-Z0-9]{26}",
+	String.raw`(A[\p{Cc}\p{Cf}]*P[\p{Cc}\p{Cf}]*I[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Z0-9](?:[\p{Cc}\p{Cf}]*[A-Z0-9]){25})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -624,26 +680,18 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	// Terraform Cloud tokens combine a 14-character segment and `.atlasv1.`
 	// with a 60–70-character token body.
 	/(?<![A-Za-z0-9_])[A-Za-z0-9]{14}\.atlasv1\.[A-Za-z0-9_=-]{60,70}(?![A-Za-z0-9_=-])/,
-	// Shopify app tokens use four fixed prefixes and a 32-character hex body.
-	/(?<![A-Za-z0-9_])shp(?:at|ca|pa|ss)_[a-f0-9]{32}(?![A-Za-z0-9_-])/i,
-	// Shippo API tokens use a live/test prefix and a 40-character hex body.
-	/(?<![A-Za-z0-9_])shippo_(?:live|test)_[a-f0-9]{40}(?![A-Za-z0-9_-])/i,
+	SHOPIFY_APP_TOKEN_PATTERN,
+	SHIPPO_API_TOKEN_PATTERN,
 	// PlanetScale API and OAuth tokens use 32–64 URL-safe characters after fixed prefixes.
 	/(?<![A-Za-z0-9_])pscale_(?:tkn|oauth)_[A-Za-z0-9_.=-]{32,64}(?![A-Za-z0-9_.=-])/,
-	// Postman API tokens use two fixed-length hexadecimal segments after `PMAK-`.
-	/(?<![A-Za-z0-9_])PMAK-[a-f0-9]{24}-[a-f0-9]{34}(?![A-Za-z0-9_-])/i,
-	// Prefect API tokens use `pnu_` followed by exactly 36 alphanumeric characters.
-	/(?<![A-Za-z0-9_])pnu_[A-Za-z0-9]{36}(?![A-Za-z0-9_-])/i,
-	// Octopus Deploy API keys use `API-` followed by 26 uppercase alphanumeric characters.
-	/(?<![A-Za-z0-9_])API-[A-Z0-9]{26}(?![A-Za-z0-9_-])/,
-	// Pulumi API tokens use `pul-` followed by exactly 40 hexadecimal characters.
-	/(?<![A-Za-z0-9_])pul-[a-f0-9]{40}(?![A-Za-z0-9_-])/i,
+	POSTMAN_API_TOKEN_PATTERN,
+	PREFECT_API_TOKEN_PATTERN,
+	OCTOPUS_API_KEY_PATTERN,
+	PULUMI_API_TOKEN_PATTERN,
 	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,
 	// Databricks tokens are `dapi` plus 32 hex characters, optionally suffixed by one digit.
 	/(?<![A-Za-z0-9_])dapi[a-f0-9]{32}(?:-\d)?(?![A-Za-z0-9_-])/,
-	// DigitalOcean access, personal, and refresh tokens share `_v1_` followed by
-	// 64 hexadecimal characters.
-	/(?<![A-Za-z0-9_])do[opr]_v1_[a-f0-9]{64}(?![A-Za-z0-9_-])/,
+	DIGITALOCEAN_API_TOKEN_PATTERN,
 	// Cloudflare Origin CA keys have 24 and 146 hexadecimal characters around a hyphen.
 	/(?<![A-Za-z0-9_])v1\.0-[a-f0-9]{24}-[a-f0-9]{146}(?![A-Za-z0-9_-])/i,
 	// 1Password Secret Keys have an `A3-` prefix and fixed-length grouped characters.
@@ -651,8 +699,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	ONE_PASSWORD_SERVICE_ACCOUNT_TOKEN_PATTERN,
 	// Age identities use `AGE-SECRET-KEY-1` followed by 58 Bech32 characters.
 	AGE_SECRET_KEY_PATTERN,
-	// Atlassian API tokens use `ATATT3` followed by 186 URL-safe characters.
-	/(?<![A-Za-z0-9_])ATATT3[A-Za-z0-9_=-]{186}(?![A-Za-z0-9_=-])/i,
+	ATLASSIAN_API_TOKEN_PATTERN,
 	// Adobe OAuth client secrets use `p8e-` followed by 32 alphanumeric characters.
 	/(?<![A-Za-z0-9_])p8e-[a-z0-9]{32}(?![A-Za-z0-9_-])/i,
 	GRAFANA_API_KEY_PATTERN,
@@ -1022,6 +1069,14 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	VAULT_TOKEN_BOUNDARY_PATTERN,
 	NOTION_TOKEN_BOUNDARY_PATTERN,
 	SUPABASE_SECRET_API_KEY_BOUNDARY_PATTERN,
+	ATLASSIAN_API_TOKEN_BOUNDARY_PATTERN,
+	SHOPIFY_APP_TOKEN_BOUNDARY_PATTERN,
+	SHIPPO_API_TOKEN_BOUNDARY_PATTERN,
+	POSTMAN_API_TOKEN_BOUNDARY_PATTERN,
+	PULUMI_API_TOKEN_BOUNDARY_PATTERN,
+	DIGITALOCEAN_API_TOKEN_BOUNDARY_PATTERN,
+	PREFECT_API_TOKEN_BOUNDARY_PATTERN,
+	OCTOPUS_API_KEY_BOUNDARY_PATTERN,
 	GRAFANA_API_KEY_BOUNDARY_PATTERN,
 	GRAFANA_CLOUD_TOKEN_BOUNDARY_PATTERN,
 	GRAFANA_SERVICE_ACCOUNT_TOKEN_BOUNDARY_PATTERN,
