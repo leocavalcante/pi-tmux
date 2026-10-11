@@ -1731,6 +1731,77 @@ test("fixed-format token boundary checks preserve Sourcegraph, PlanetScale, and 
 	}
 });
 
+test("1Password, Cloudflare, Adobe, SendGrid, Brevo, and Twilio credentials cross retained prompt boundaries safely", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+	const promptLength = 3_000;
+	const five = "C".repeat(5);
+	const onePasswordKeys = [
+		["A3", "A".repeat(6), "B".repeat(11), five, five, five].join("-"),
+		["A3", "A".repeat(6), "D".repeat(6), "E".repeat(5), five, five, five].join("-"),
+	];
+	const cloudflareOriginKey = `v1.0-${"a".repeat(24)}-${"b".repeat(146)}`;
+	const adobeSecret = `p8e-${"A1b2".repeat(8)}`;
+	const sendGridKey = `SG.${"a".repeat(66)}`;
+	const brevoKey = `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}`;
+	const twilioKey = `SK${"a1".repeat(16)}`;
+	const tokens = [
+		...onePasswordKeys, cloudflareOriginKey, adobeSecret, sendGridKey, brevoKey, twilioKey,
+	];
+	const candidates = tokens.flatMap((token) => [
+		token,
+		`${token.slice(0, 10)}\u0000${token.slice(10)}`,
+	]);
+
+	for (const token of candidates) {
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(true);
+		}
+	}
+});
+
+test("boundary screening preserves exact fixed-credential formats and near-misses", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+	const five = "C".repeat(5);
+	const onePasswordSix = "A".repeat(6);
+	const onePasswordEleven = "B".repeat(11);
+	const cloudflareFirst = "a".repeat(24);
+	const cloudflareSecond = "b".repeat(146);
+	const adobeBody = "A1b2".repeat(8);
+	const nearMisses = [
+		`v1.0-${"a".repeat(23)}-${cloudflareSecond}`,
+		`v1.0-${cloudflareFirst}-${"b".repeat(145)}`,
+		`v1.1-${cloudflareFirst}-${cloudflareSecond}`,
+		["A3", "A".repeat(5), onePasswordEleven, five, five, five].join("-"),
+		["A3", onePasswordSix, "B".repeat(10), five, five, five].join("-"),
+		["A3", onePasswordSix, onePasswordEleven, five, five].join("-"),
+		`p8e-${adobeBody.slice(0, 31)}`,
+		`p8f-${adobeBody}`,
+		`SG.${"a".repeat(65)}`,
+		`SX.${"a".repeat(66)}`,
+		`xkeysib-${"a".repeat(63)}-${"B".repeat(16)}`,
+		`xkeysib-${"a".repeat(64)}-${"B".repeat(17)}`,
+		`SK${"a".repeat(31)}`,
+		`SK${"g".repeat(32)}`,
+	];
+
+	for (const token of nearMisses) {
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${token} ${"y".repeat(3_000 - prefix.length - token.length - 1)}`;
+			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("fixed-format tokens crossing prompt truncation skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
