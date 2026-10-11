@@ -58,9 +58,9 @@ const BEARER_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"([A-Za-z0-9._~+/=-](?:\\s*[A-Za-z0-9._~+/=-]){15,})",
 	String.raw`([A-Za-z0-9._~+/=-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9._~+/=-]){15,})`,
 );
-const US_SSN_PATTERN = /(?<![A-Za-z0-9])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?\d{3}[-\s]?\d{2}[-\s]?\d{4}(?![A-Za-z0-9_])/i;
+const US_SSN_PATTERN = /(?<![A-Za-z0-9])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?(\d{3}[-\s]?\d{2}[-\s]?\d{4})(?![A-Za-z0-9_])/i;
 // Require a phone-related label and a phone-number-shaped value of 7–15 digits.
-const LABELED_PHONE_PATTERN = /(?<![A-Za-z0-9])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?number)?\s*["']?\s*[:=]\s*["']?[\s(]*\+?\d(?:[ .()-]?\d){6,14}(?![A-Za-z0-9_])/i;
+const LABELED_PHONE_PATTERN = /(?<![A-Za-z0-9])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?number)?\s*["']?\s*[:=]\s*["']?[\s(]*(\+?\d(?:[ .()-]?\d){6,14})(?![A-Za-z0-9_])/i;
 const LABELED_PAYMENT_CARD_PATTERN = /(?<![A-Za-z0-9])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no))?|card(?:[-_\s]?(?:number|no))?|cc[-_\s]?(?:number|no)|ccn)\s*["']?\s*[:=]\s*["']?(\d(?:[ .()-]?\d){12,18})(?![A-Za-z0-9_])/i;
 // Require an explicit assignment and a long token-like value; don't compact ordinary spaces.
 const LABELED_CREDENTIAL_LABEL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?key(?:[-_\s]?id)?|access[-_\s]?token|aws[-_\s]?secret[-_\s]?access[-_\s]?key|client[-_\s]?key[-_\s]?data|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key)?|passphrase|password|credential|token|azure[-_\s]?devops(?:[-_\s]ext)?[-_\s]?pat)/i;
@@ -147,6 +147,16 @@ function makeBoundaryPattern(pattern: RegExp, token: string, boundaryToken: stri
 	return new RegExp(source, flags);
 }
 
+const US_SSN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	US_SSN_PATTERN,
+	"(\\d{3}[-\\s]?\\d{2}[-\\s]?\\d{4})",
+	String.raw`(\d(?:[\p{Cc}\p{Cf}]*\d){2}[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\d(?:[\p{Cc}\p{Cf}]*\d)[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\d(?:[\p{Cc}\p{Cf}]*\d){3})`,
+);
+const LABELED_PHONE_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_PHONE_PATTERN,
+	"(\\+?\\d(?:[ .()-]?\\d){6,14})",
+	String.raw`(\+?\d(?:[\p{Cc}\p{Cf}\s]*[ .()-]?[\p{Cc}\p{Cf}\s]*\d){6,14})`,
+);
 const LABELED_CREDENTIAL_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_CREDENTIAL_PATTERN,
 	"([A-Za-z0-9._~+/=-]{20,})",
@@ -660,9 +670,11 @@ type NamingContextBoundary = {
 	retainedSide: "left" | "right";
 };
 
-// Capture group 1 must contain only the credential value, not its contextual label.
+// Capture group 1 must contain only the sensitive value, not its contextual label.
 const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
+	US_SSN_BOUNDARY_PATTERN,
+	LABELED_PHONE_BOUNDARY_PATTERN,
 	EMAIL_ADDRESS_BOUNDARY_PATTERN,
 	BEARER_TOKEN_BOUNDARY_PATTERN,
 	GITHUB_TOKEN_BOUNDARY_PATTERN,

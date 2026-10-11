@@ -1104,6 +1104,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const emailStart = prefixLength - 6;
 	const truncatedEmailPrompt = `${"x".repeat(emailStart - 1)} ${boundaryEmailAddress} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedEmailPrompt, boundaryEmailAddress);
+	for (const [label, value] of [[" SSN: ", "000-00-0000"], [" Phone: ", "000-000-0000"]] as const) {
+		const valueStart = prefixLength - 6;
+		const truncatedPrompt = `${"x".repeat(valueStart - label.length)}${label}${value} ${"x".repeat(1_200)}`;
+		await suppressed(fixture(), truncatedPrompt, value);
+	}
 	const cloudflareApiKey = "a1b2".repeat(10);
 	const truncatedCloudflarePrompt = `${"x".repeat(tokenStart - 13)} Cloudflare: ${cloudflareApiKey} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedCloudflarePrompt, cloudflareApiKey);
