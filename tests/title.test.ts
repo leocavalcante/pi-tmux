@@ -1086,6 +1086,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review payment integration ${legacySquareAccessToken}`, legacySquareAccessToken);
 	const genericAccessKeyAssignment = `access_key=${"M3n4".repeat(6)}`;
 	await suppressed(fixture(), `Review cloud configuration ${genericAccessKeyAssignment}`, genericAccessKeyAssignment);
+	for (const label of ["APP_KEY", "SECRET_KEY_BASE", "ENCRYPTION_KEY", "MASTER_KEY"]) {
+		const assignment = `${label}=${"K3y4".repeat(8)}`;
+		await suppressed(fixture(), `Review deployment settings ${assignment}`, assignment);
+	}
 
 	const neonMarker = "[... middle of prompt omitted ...]";
 	const neonRetainedLength = MAX_PROMPT_LENGTH - neonMarker.length - 2;
