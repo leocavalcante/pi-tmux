@@ -895,6 +895,20 @@ test("screens Neon API keys without flagging near-misses", () => {
 	}
 });
 
+test("strips non-whitespace controls from credentials without joining surrounding prose", () => {
+	const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
+	const values = [
+		`${token.slice(0, 20)}\u0000${token.slice(20)}`,
+		`${token.slice(0, 20)}\u0080${token.slice(20)}`,
+	];
+
+	for (const value of values) {
+		const text = `Review Neon access ${value}`;
+		expect(hasSensitiveNamingContext(text)).toBe(true);
+		expect(hasSensitiveOutput(text)).toBe(true);
+	}
+});
+
 test("screens Neon API keys across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

@@ -730,6 +730,11 @@ function distinctTextVariants(...values: string[]): string[] {
 	return [...new Set(values)];
 }
 
+function stripNonWhitespaceControls(value: string): string {
+	return value.replace(/[\p{Cc}\p{Cf}]/gu, (character) =>
+		/\p{White_Space}/u.test(character) ? character : "");
+}
+
 // Check credentials and high-confidence personal-data formats before transmission.
 // These PII patterns require conventional email syntax or explicit labels; avoid
 // broad checks for names and other personal data that suppress ordinary titles.
@@ -738,9 +743,9 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| hasBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
 		|| US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
-		// Removing format characters alone preserves prose boundaries around a token.
-		// The fully compacted view below can otherwise join a preceding word to it.
-		const withoutFormatCharacters = value.replace(/\p{Cf}/gu, "");
+		// Strip invisible non-whitespace controls without joining a preceding word to the token.
+		// The fully compacted view below remains useful for credentials split by whitespace.
+		const withoutFormatCharacters = stripNonWhitespaceControls(value);
 		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
 		return hasSensitiveValue(withoutFormatCharacters)
 			|| CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
@@ -763,8 +768,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasBearerToken(value) || US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value)
 			|| hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
-		// Keep ordinary whitespace as a boundary while stripping invisible formatting.
-		const withoutFormatCharacters = value.replace(/\p{Cf}/gu, "");
+		// Keep ordinary whitespace as a boundary while stripping invisible controls.
+		const withoutFormatCharacters = stripNonWhitespaceControls(value);
 		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
 		return hasPattern(withoutFormatCharacters)
 			|| SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
