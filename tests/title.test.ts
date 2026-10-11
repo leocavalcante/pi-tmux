@@ -1021,6 +1021,12 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Tencent Cloud access ${tencentCloudSecretId}`, tencentCloudSecretId);
 	const obfuscatedTencentCloudSecretId = tencentCloudSecretId.replace("AKID", "A\u200bKID");
 	await suppressed(fixture(), `Review Tencent Cloud access ${obfuscatedTencentCloudSecretId}`, obfuscatedTencentCloudSecretId);
+	const squareAccessToken = `sq0atp-${"A1_-".repeat(6)}`;
+	const obfuscatedSquareAccessToken = squareAccessToken.replace("sq0atp-", "sq0\u200batp-");
+	const legacySquareAccessToken = `EAAA${"B2_c".repeat(6)}`;
+	await suppressed(fixture(), `Review payment integration ${squareAccessToken}`, squareAccessToken);
+	await suppressed(fixture(), `Review payment integration ${obfuscatedSquareAccessToken}`, obfuscatedSquareAccessToken);
+	await suppressed(fixture(), `Review payment integration ${legacySquareAccessToken}`, legacySquareAccessToken);
 	const genericAccessKeyAssignment = `access_key=${"M3n4".repeat(6)}`;
 	await suppressed(fixture(), `Review cloud configuration ${genericAccessKeyAssignment}`, genericAccessKeyAssignment);
 	const obfuscatedAccessKeyAssignment = genericAccessKeyAssignment.replace("access_key", "access_\u200bkey");
@@ -1497,6 +1503,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const discordWebhookUrl = `https://discord.com/api/webhooks/${discordWebhookId}/${discordWebhookToken}`;
 	const teamsWebhookGuid = "01234567-89ab-cdef-0123-456789abcdef";
 	const teamsWebhookUrl = `https://tenant.webhook.office.com/webhookb2/${teamsWebhookGuid}@fedcba98-7654-3210-fedc-ba9876543210/IncomingWebhook/${"a1b2c3d4".repeat(4)}/${teamsWebhookGuid}`;
+	const squareAccessToken = `sq0atp-${"A1_-".repeat(6)}`;
+	const obfuscatedSquareAccessToken = squareAccessToken.replace("sq0atp-", "sq0\u200batp-");
 	const outputs = [
 		`https://hooks.slack.com/services/${"A1b2".repeat(10)}A1b`,
 		`https://hooks.slack.com/workflows/${"A1b2".repeat(5)}\u200b${"C3d4".repeat(5)}C3d`,
@@ -1506,6 +1514,9 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		teamsWebhookUrl.replace("IncomingWebhook", "Incoming\u200bWebhook"),
 		`whsec_${"A1b2".repeat(8)}`,
 		`whsec_${"A1b2".repeat(4)}\u200b${"C3d4".repeat(4)}`,
+		squareAccessToken,
+		obfuscatedSquareAccessToken,
+		`EAAA${"B2_c".repeat(6)}`,
 		`password=${"S".repeat(12)}`,
 		`password=secret phrase`,
 		`password: "secret phrase"`,
