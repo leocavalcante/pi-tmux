@@ -1801,6 +1801,27 @@ test("a long 1Password token crossing prompt truncation skips model lookup", asy
 	expect(f.warnings.join(" ")).not.toContain(token);
 });
 
+test("a short labeled password crossing prompt truncation skips model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const label = " password: ";
+	const value = "R4nd0mxZ";
+	const valueStart = prefixLength - 3;
+	const prompt = `${"x".repeat(valueStart - label.length)}${label}${value}; ${"y".repeat(1_200)}`;
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	const f = fixture();
+	const find = spyOn(f.ctx.modelRegistry, "find");
+
+	f.input(prompt);
+	await settle();
+	expect(find).not.toHaveBeenCalled();
+	expect(f.requests).toHaveLength(0);
+	expect(f.state.title).toBe("existing task");
+	expect(f.warnings).toEqual([warning]);
+	expect(f.warnings.join(" ")).not.toContain(value);
+});
+
 test("a Replicate API token crossing prompt truncation skips model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
