@@ -1667,6 +1667,33 @@ test("Airtable and ClickHouse keys crossing prompt truncation skip model lookup"
 	}
 });
 
+test("a Pinecone API key crossing prompt truncation skips model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const token = `pcsk_test1_${"A".repeat(63)}`;
+	const values = [
+		token,
+		token.replace("pcsk_", "pc\u200bsk_"),
+		`${token.slice(0, 20)}\u0000${token.slice(20)}`,
+	];
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const value of values) {
+		const tokenStart = prefixLength - Math.floor(value.length / 2);
+		const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(value);
+	}
+});
+
 test("a Replicate API token crossing prompt truncation skips model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
