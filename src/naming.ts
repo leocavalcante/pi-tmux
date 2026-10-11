@@ -142,9 +142,10 @@ const SLACK_WEBHOOK_URL_PATTERN =
 // Classic incoming webhooks use workspace/channel IDs and a 24-character secret.
 const SLACK_LEGACY_WEBHOOK_URL_PATTERN =
 	/(?<![A-Za-z0-9.-])(?:https?:\/\/)?hooks\.slack\.com\/services\/T[A-Z0-9]{8}\/B[A-Z0-9]{8}\/[A-Za-z0-9]{24}(?![A-Za-z0-9_-])/i;
-// Discord webhook URLs embed an 18–19 digit ID and a fixed-length token.
+// Discord webhook URLs embed an 18–19 digit ID and fixed-length token.
+// Accept both current and legacy API hostnames.
 const DISCORD_WEBHOOK_URL_PATTERN =
-	/(?<![A-Za-z0-9.-])https:\/\/discord\.com\/api\/webhooks\/[0-9]{18,19}\/[A-Za-z0-9-]{68}(?![A-Za-z0-9_-])/i;
+	/(?<![A-Za-z0-9.-])https:\/\/(?:discord\.com|discordapp\.com)\/api\/webhooks\/[0-9]{18,19}\/[A-Za-z0-9-]{68}(?![A-Za-z0-9_-])/i;
 // Teams incoming webhook URLs embed multiple GUIDs and a long webhook token.
 const MICROSOFT_TEAMS_GUID_PATTERN = String.raw`[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}`;
 const MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN = new RegExp(
