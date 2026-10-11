@@ -778,6 +778,42 @@ const TERRAFORM_CLOUD_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`[A-Za-z0-9]{14}\.atlasv1\.[A-Za-z0-9_=-]{60,70}`,
 	String.raw`([A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){13}[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*v[\p{Cc}\p{Cf}]*1[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_=-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_=-]){59,69})`,
 );
+const ONE_PASSWORD_SECRET_KEY_PATTERN = /(?<![A-Za-z0-9_])A3-[A-Z0-9]{6}-(?:[A-Z0-9]{11}|[A-Z0-9]{6}-[A-Z0-9]{5})-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}(?![A-Za-z0-9_-])/i;
+const ONE_PASSWORD_SECRET_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	ONE_PASSWORD_SECRET_KEY_PATTERN,
+	String.raw`A3-[A-Z0-9]{6}-(?:[A-Z0-9]{11}|[A-Z0-9]{6}-[A-Z0-9]{5})-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}`,
+	String.raw`(A[\p{Cc}\p{Cf}]*3[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Z0-9](?:[\p{Cc}\p{Cf}]*[A-Z0-9]){5}[\p{Cc}\p{Cf}]*-(?:[\p{Cc}\p{Cf}]*[A-Z0-9](?:[\p{Cc}\p{Cf}]*[A-Z0-9]){10}|[\p{Cc}\p{Cf}]*[A-Z0-9](?:[\p{Cc}\p{Cf}]*[A-Z0-9]){5}[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Z0-9](?:[\p{Cc}\p{Cf}]*[A-Z0-9]){4})[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Z0-9](?:[\p{Cc}\p{Cf}]*[A-Z0-9]){4}[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Z0-9](?:[\p{Cc}\p{Cf}]*[A-Z0-9]){4}[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Z0-9](?:[\p{Cc}\p{Cf}]*[A-Z0-9]){4})`,
+);
+const CLOUDFLARE_ORIGIN_CA_KEY_PATTERN = /(?<![A-Za-z0-9_])v1\.0-[a-f0-9]{24}-[a-f0-9]{146}(?![A-Za-z0-9_-])/i;
+const CLOUDFLARE_ORIGIN_CA_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	CLOUDFLARE_ORIGIN_CA_KEY_PATTERN,
+	String.raw`v1\.0-[a-f0-9]{24}-[a-f0-9]{146}`,
+	String.raw`(v[\p{Cc}\p{Cf}]*1[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*0[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){23}[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){145})`,
+);
+const ADOBE_CLIENT_SECRET_PATTERN = /(?<![A-Za-z0-9_])p8e-[a-z0-9]{32}(?![A-Za-z0-9_-])/i;
+const ADOBE_CLIENT_SECRET_BOUNDARY_PATTERN = makeBoundaryPattern(
+	ADOBE_CLIENT_SECRET_PATTERN,
+	String.raw`p8e-[a-z0-9]{32}`,
+	String.raw`(p[\p{Cc}\p{Cf}]*8[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[a-z0-9](?:[\p{Cc}\p{Cf}]*[a-z0-9]){31})`,
+);
+const SENDGRID_API_KEY_PATTERN = /(?<![A-Za-z0-9_])SG\.[A-Za-z0-9=_.-]{66}(?![A-Za-z0-9=_.-])/i;
+const SENDGRID_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	SENDGRID_API_KEY_PATTERN,
+	String.raw`SG\.[A-Za-z0-9=_.-]{66}`,
+	String.raw`(S[\p{Cc}\p{Cf}]*G[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9=_.-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9=_.-]){65})`,
+);
+const BREVO_API_KEY_PATTERN = /(?<![A-Za-z0-9_])xkeysib-[a-f0-9]{64}-[a-z0-9]{16}(?![A-Za-z0-9_-])/i;
+const BREVO_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	BREVO_API_KEY_PATTERN,
+	String.raw`xkeysib-[a-f0-9]{64}-[a-z0-9]{16}`,
+	String.raw`(x[\p{Cc}\p{Cf}]*k[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*y[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*b[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){63}[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[a-z0-9](?:[\p{Cc}\p{Cf}]*[a-z0-9]){15})`,
+);
+const TWILIO_API_KEY_PATTERN = /(?<![A-Za-z0-9_])SK[a-f0-9]{32}(?![A-Za-z0-9_-])/i;
+const TWILIO_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	TWILIO_API_KEY_PATTERN,
+	String.raw`SK[a-f0-9]{32}`,
+	String.raw`(S[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){31})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -833,16 +869,13 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,
 	DATABRICKS_API_TOKEN_PATTERN,
 	DIGITALOCEAN_API_TOKEN_PATTERN,
-	// Cloudflare Origin CA keys have 24 and 146 hexadecimal characters around a hyphen.
-	/(?<![A-Za-z0-9_])v1\.0-[a-f0-9]{24}-[a-f0-9]{146}(?![A-Za-z0-9_-])/i,
-	// 1Password Secret Keys have an `A3-` prefix and fixed-length grouped characters.
-	/(?<![A-Za-z0-9_])A3-[A-Z0-9]{6}-(?:[A-Z0-9]{11}|[A-Z0-9]{6}-[A-Z0-9]{5})-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}(?![A-Za-z0-9_-])/i,
+	CLOUDFLARE_ORIGIN_CA_KEY_PATTERN,
+	ONE_PASSWORD_SECRET_KEY_PATTERN,
 	ONE_PASSWORD_SERVICE_ACCOUNT_TOKEN_PATTERN,
 	// Age identities use `AGE-SECRET-KEY-1` followed by 58 Bech32 characters.
 	AGE_SECRET_KEY_PATTERN,
 	ATLASSIAN_API_TOKEN_PATTERN,
-	// Adobe OAuth client secrets use `p8e-` followed by 32 alphanumeric characters.
-	/(?<![A-Za-z0-9_])p8e-[a-z0-9]{32}(?![A-Za-z0-9_-])/i,
+	ADOBE_CLIENT_SECRET_PATTERN,
 	GRAFANA_API_KEY_PATTERN,
 	GRAFANA_CLOUD_TOKEN_PATTERN,
 	GRAFANA_SERVICE_ACCOUNT_TOKEN_PATTERN,
@@ -856,12 +889,9 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	SUPABASE_SECRET_API_KEY_PATTERN,
 	NEON_API_KEY_PATTERN,
 	LINEAR_API_TOKEN_PATTERN,
-	// SendGrid API keys have the `SG.` prefix and exactly 66 URL-safe characters.
-	/(?<![A-Za-z0-9_])SG\.[A-Za-z0-9=_.-]{66}(?![A-Za-z0-9=_.-])/i,
-	// Brevo (formerly Sendinblue) API keys use a 64-hex body and a 16-character suffix.
-	/(?<![A-Za-z0-9_])xkeysib-[a-f0-9]{64}-[a-z0-9]{16}(?![A-Za-z0-9_-])/i,
-	// Twilio API keys use `SK` followed by exactly 32 hexadecimal characters.
-	/(?<![A-Za-z0-9_])SK[a-f0-9]{32}(?![A-Za-z0-9_-])/i,
+	SENDGRID_API_KEY_PATTERN,
+	BREVO_API_KEY_PATTERN,
+	TWILIO_API_KEY_PATTERN,
 	NVIDIA_API_TOKEN_PATTERN,
 	REPLICATE_API_TOKEN_PATTERN,
 	PINECONE_API_KEY_PATTERN,
@@ -1274,6 +1304,12 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	PLANETSCALE_API_TOKEN_BOUNDARY_PATTERN,
 	DATABRICKS_API_TOKEN_BOUNDARY_PATTERN,
 	TERRAFORM_CLOUD_API_TOKEN_BOUNDARY_PATTERN,
+	ONE_PASSWORD_SECRET_KEY_BOUNDARY_PATTERN,
+	CLOUDFLARE_ORIGIN_CA_KEY_BOUNDARY_PATTERN,
+	ADOBE_CLIENT_SECRET_BOUNDARY_PATTERN,
+	SENDGRID_API_KEY_BOUNDARY_PATTERN,
+	BREVO_API_KEY_BOUNDARY_PATTERN,
+	TWILIO_API_KEY_BOUNDARY_PATTERN,
 ];
 const SENSITIVE_BOUNDARY_SCAN_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS.map((sourcePattern) => ({
 	sourcePattern,
