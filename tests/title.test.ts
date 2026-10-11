@@ -1572,6 +1572,7 @@ test("fixed-format tokens crossing prompt truncation skip model lookup", async (
 		`rubygems_${"a".repeat(48)}`,
 		`CLOJARS_${"A".repeat(60)}`,
 		`tfp_${"A".repeat(59)}`,
+		`eyJ${"a".repeat(12)}.${"b".repeat(12)}.${"c".repeat(12)}`,
 	];
 	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
