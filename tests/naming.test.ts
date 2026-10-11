@@ -244,6 +244,32 @@ test("screens synthetic EasyPost API keys without flagging near-misses", () => {
 	}
 });
 
+test("screens synthetic Airtable personal access tokens without flagging near-misses", () => {
+	const token = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
+	const obfuscatedTokens = [
+		token.replace("pat", "p\u200bat"),
+		token.replace(".", "\u200b."),
+		token.replace("a1b2".repeat(4), `a1b2\u200b${"a1b2".repeat(3)}`),
+	];
+
+	for (const value of [token, ...obfuscatedTokens]) {
+		expect(hasSensitiveNamingContext(`review Airtable access ${value}`)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`pat${"A1b2".repeat(3)}A.${"a1b2".repeat(16)}`,
+		`pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(15)}a1b`,
+		`pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(15)}a1bg`,
+		`prefix${token}`,
+		`${token}suffix`,
+		"Airtable personal access token setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens additional AWS access-key ID prefixes without flagging near-misses", () => {
 	const keys = [
 		`A3TA${"B".repeat(16)}`,
