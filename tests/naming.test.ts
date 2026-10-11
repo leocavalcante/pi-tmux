@@ -10,7 +10,7 @@ import {
 	UnsafeNamingContextError,
 } from "../src/naming.ts";
 
-test("screens webhook credentials across retained-context boundaries", () => {
+test("screens webhook and Discord auth credentials across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
@@ -19,6 +19,8 @@ test("screens webhook credentials across retained-context boundaries", () => {
 	const slackToken = `${"A1b2".repeat(10)}A1b`;
 	const legacySlackToken = "C3d4".repeat(6);
 	const discordToken = "D5e6".repeat(17);
+	const discordAuthToken = `${"A1b_".repeat(6)}.cD9_-Z.${"QwErTy9_-".repeat(3)}`;
+	const discordMfaToken = `mfa.${"a1B_".repeat(21)}`;
 	const teamsToken = "a1b2c3d4".repeat(4);
 	const values = [
 		{ value: `whsec_${"F7g8".repeat(6)}`, secret: `whsec_${"F7g8".repeat(6)}` },
@@ -31,6 +33,8 @@ test("screens webhook credentials across retained-context boundaries", () => {
 			value: `https://discord.com/api/webhooks/123456789012345678/${discordToken}`,
 			secret: discordToken,
 		},
+		{ value: discordAuthToken, secret: discordAuthToken },
+		{ value: discordMfaToken, secret: discordMfaToken },
 		{
 			value: `https://tenant.webhook.office.com/webhookb2/${teamsGuid}@${teamsOtherGuid}/IncomingWebhook/${teamsToken}/${teamsGuid}`,
 			secret: teamsToken,
@@ -51,14 +55,14 @@ test("screens webhook credentials across retained-context boundaries", () => {
 		}
 	}
 
-	const summaryContent = `${"x".repeat(989)} ${values[0]!.value} y`;
+	const summaryContent = `${"x".repeat(989)} ${values[5]!.value} y`;
 	const summary = buildNamingRequestContext([
 		{ role: "compactionSummary", summary: summaryContent },
 	] as any);
 	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
 	expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const historyValue = values[3]!;
+	const historyValue = values[4]!;
 	const historyValueStart = 990 - historyValue.value.indexOf(historyValue.secret);
 	const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue.value} y`;
 	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
@@ -67,11 +71,17 @@ test("screens webhook credentials across retained-context boundaries", () => {
 
 	// A Teams URL can straddle the omitted region while its 32-character secret
 	// remains wholly omitted; the structural URL alone must not trigger a block.
-	const teamsValue = values[4]!.value;
+	const teamsValue = values[6]!.value;
 	const teamsSecretOffset = teamsValue.indexOf(teamsToken);
 	const omittedSecretPromptStart = prefixLength + 5 - teamsSecretOffset;
 	const omittedSecretPrompt = `${"x".repeat(omittedSecretPromptStart - 1)} ${teamsValue} ${"y".repeat(1_200)}`;
 	expect(buildNamingRequestContext([], omittedSecretPrompt).hasSensitiveBoundary()).toBe(false);
+
+	for (const nearMiss of [discordAuthToken.slice(0, -1), discordMfaToken.slice(0, -1)]) {
+		const tokenStart = prefixLength - 10;
+		const nearMissPrompt = `${"x".repeat(tokenStart - 1)} ${nearMiss} ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
+	}
 });
 
 test("screens additional supported fixed-format tokens across retained-context boundaries", () => {

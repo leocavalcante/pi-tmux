@@ -399,7 +399,17 @@ const DISCORD_WEBHOOK_URL_BOUNDARY_PATTERN = makeBoundaryPattern(
 // Discord authentication tokens use three fixed-length URL-safe segments; MFA
 // tokens use a distinct prefix and an 84-character URL-safe body.
 const DISCORD_AUTH_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{24}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27}(?![A-Za-z0-9_-])/;
+const DISCORD_AUTH_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DISCORD_AUTH_TOKEN_PATTERN,
+	String.raw`[A-Za-z0-9_-]{24}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27}`,
+	String.raw`([A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){23}[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){5}[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){26})`,
+);
 const DISCORD_MFA_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])mfa\.[A-Za-z0-9_-]{84}(?![A-Za-z0-9_-])/i;
+const DISCORD_MFA_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DISCORD_MFA_TOKEN_PATTERN,
+	String.raw`mfa\.[A-Za-z0-9_-]{84}`,
+	String.raw`(m[\p{Cc}\p{Cf}]*f[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){83})`,
+);
 // Teams incoming webhook URLs embed multiple GUIDs and a long webhook token.
 const MICROSOFT_TEAMS_GUID_PATTERN = String.raw`[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}`;
 const MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN = new RegExp(
@@ -958,6 +968,8 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	SLACK_WEBHOOK_URL_BOUNDARY_PATTERN,
 	SLACK_LEGACY_WEBHOOK_URL_BOUNDARY_PATTERN,
 	DISCORD_WEBHOOK_URL_BOUNDARY_PATTERN,
+	DISCORD_AUTH_TOKEN_BOUNDARY_PATTERN,
+	DISCORD_MFA_TOKEN_BOUNDARY_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_BOUNDARY_PATTERN,
 	US_SSN_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,

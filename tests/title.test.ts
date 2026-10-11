@@ -1591,7 +1591,7 @@ test("fixed-format tokens crossing prompt truncation skip model lookup", async (
 	}
 });
 
-test("webhook credentials crossing prompt truncation skip model lookup", async () => {
+test("webhook and Discord auth credentials crossing prompt truncation skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
@@ -1600,6 +1600,8 @@ test("webhook credentials crossing prompt truncation skip model lookup", async (
 	const slackToken = `${"A1b2".repeat(10)}A1b`;
 	const legacySlackToken = "C3d4".repeat(6);
 	const discordToken = "D5e6".repeat(17);
+	const discordAuthToken = `${"A1b_".repeat(6)}.cD9_-Z.${"QwErTy9_-".repeat(3)}`;
+	const discordMfaToken = `mfa.${"a1B_".repeat(21)}`;
 	const teamsToken = "a1b2c3d4".repeat(4);
 	const values = [
 		{ value: `whsec_${"F7g8".repeat(6)}`, secret: `whsec_${"F7g8".repeat(6)}` },
@@ -1612,6 +1614,8 @@ test("webhook credentials crossing prompt truncation skip model lookup", async (
 			value: `https://discord.com/api/webhooks/123456789012345678/${discordToken}`,
 			secret: discordToken,
 		},
+		{ value: discordAuthToken, secret: discordAuthToken },
+		{ value: discordMfaToken, secret: discordMfaToken },
 		{
 			value: `https://tenant.webhook.office.com/webhookb2/${teamsGuid}@${teamsOtherGuid}/IncomingWebhook/${teamsToken}/${teamsGuid}`,
 			secret: teamsToken,
