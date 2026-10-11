@@ -142,8 +142,18 @@ const TENCENT_CLOUD_SECRET_ID_BOUNDARY_PATTERN = makeBoundaryPattern(
 );
 // Airtable personal access tokens use `pat`, 14 alphanumeric characters, then 64 lowercase hex characters.
 const AIRTABLE_PERSONAL_ACCESS_TOKEN_PATTERN = /(?<![A-Za-z0-9_])pat[A-Za-z0-9]{14}\.[a-f0-9]{64}(?![A-Za-z0-9_])/;
+const AIRTABLE_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	AIRTABLE_PERSONAL_ACCESS_TOKEN_PATTERN,
+	String.raw`pat[A-Za-z0-9]{14}\.[a-f0-9]{64}`,
+	String.raw`(p[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){13}[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){63})`,
+);
 // ClickHouse Cloud API keys use `4b1d` followed by exactly 38 alphanumeric characters.
 const CLICKHOUSE_CLOUD_API_KEY_PATTERN = /(?<![A-Za-z0-9_])4b1d[A-Za-z0-9]{38}(?![A-Za-z0-9_])/;
+const CLICKHOUSE_CLOUD_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	CLICKHOUSE_CLOUD_API_KEY_PATTERN,
+	"4b1d[A-Za-z0-9]{38}",
+	String.raw`(4[\p{Cc}\p{Cf}]*b[\p{Cc}\p{Cf}]*1[\p{Cc}\p{Cf}]*d[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){37})`,
+);
 // GitLab Runner authentication tokens use `glrt-` followed by 20 URL-safe characters.
 const GITLAB_RUNNER_AUTH_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])glrt-[A-Za-z0-9_-]{20}(?![A-Za-z0-9_-])/;
 const GITLAB_RUNNER_AUTH_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -786,6 +796,8 @@ type NamingContextBoundary = {
 // Capture group 1 must contain only the sensitive value, not its contextual label.
 const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
+	AIRTABLE_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
+	CLICKHOUSE_CLOUD_API_KEY_BOUNDARY_PATTERN,
 	AZURE_DEVOPS_PAT_BOUNDARY_PATTERN,
 	AZURE_AD_CLIENT_SECRET_BOUNDARY_PATTERN,
 	ALIBABA_ACCESS_KEY_ID_BOUNDARY_PATTERN,

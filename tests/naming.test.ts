@@ -658,6 +658,75 @@ test("screens Azure AD, Alibaba, and Tencent credentials across retained-context
 	}
 });
 
+test("screens Airtable and ClickHouse keys across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
+	const clickhouseKey = `4b1d${"A1b2".repeat(9)}A1`;
+	const cases = [
+		{
+			token: airtableToken,
+			obfuscated: airtableToken.replace("pat", "p\u200bat"),
+			controlObfuscated: `${airtableToken.slice(0, 30)}\u0000${airtableToken.slice(30)}`,
+			nearMisses: [
+				airtableToken.slice(0, -1), `${airtableToken}A`, airtableToken.replace("pat", "pbt"), airtableToken.replace(".", "_"),
+			],
+		},
+		{
+			token: clickhouseKey,
+			obfuscated: clickhouseKey.replace("4b1d", "4b\u200b1d"),
+			controlObfuscated: `${clickhouseKey.slice(0, 20)}\u0000${clickhouseKey.slice(20)}`,
+			nearMisses: [
+				clickhouseKey.slice(0, -1), `${clickhouseKey}A`, clickhouseKey.replace("4b1d", "4b1e"), `_${clickhouseKey}`,
+			],
+		},
+	];
+
+	for (const { token, obfuscated, controlObfuscated, nearMisses } of cases) {
+		expect(hasSensitiveNamingContext(token)).toBe(true);
+		expect(hasSensitiveOutput(token)).toBe(true);
+
+		const promptAtPrefixBoundary = (value: string) => {
+			const tokenStart = prefixLength - Math.floor(value.length / 2);
+			return `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+		};
+		const prefixPrompt = promptAtPrefixBoundary(token);
+		const prefixContext = buildNamingRequestContext([], prefixPrompt);
+		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+		expect(buildNamingRequestContext([], promptAtPrefixBoundary(obfuscated)).hasSensitiveBoundary()).toBe(true);
+		expect(buildNamingRequestContext([], promptAtPrefixBoundary(controlObfuscated)).hasSensitiveBoundary()).toBe(true);
+
+		const promptLength = MAX_PROMPT_LENGTH + 300;
+		const suffixStart = promptLength - Math.floor(retainedLength / 2);
+		const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
+		const leading = `${"x".repeat(suffixTokenStart - 1)} `;
+		const tokenAndSpace = `${token} `;
+		const suffixPrompt = leading + tokenAndSpace
+			+ "y".repeat(promptLength - leading.length - tokenAndSpace.length);
+		const suffixContext = buildNamingRequestContext([], suffixPrompt);
+		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+		const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
+		const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+		expect(hasSensitiveNamingContext(history.text)).toBe(false);
+		expect(history.hasSensitiveBoundary()).toBe(true);
+		const summary = buildNamingRequestContext([
+			{ role: "compactionSummary", summary: historyContent },
+		] as any);
+		expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+		expect(summary.hasSensitiveBoundary()).toBe(true);
+
+		const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
+		expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+		for (const nearMiss of nearMisses) {
+			expect(buildNamingRequestContext([], promptAtPrefixBoundary(nearMiss)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Slack API tokens across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
