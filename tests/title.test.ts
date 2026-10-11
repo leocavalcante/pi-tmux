@@ -5986,3 +5986,54 @@ test("disposed UI notifications do not reject successful title commands", async 
 	await expect(f.refresh("unknown command")).resolves.toBeUndefined();
 	await expect(f.refresh("auto")).resolves.toBeUndefined();
 });
+
+test("rejects labeled Cloudflare API keys without mistaking near-misses for keys", async () => {
+	const apiKey = "A1b2".repeat(10);
+	const globalApiKey = "a1b2".repeat(9) + "c";
+	const sensitiveOutputs = [
+		`Cloudflare: ${apiKey}`,
+		`Cloudflare: ${apiKey.slice(0, 20)}\u200b${apiKey.slice(20)}`,
+		`Cloudflare global: ${globalApiKey}`,
+		`Cloudflare global: ${globalApiKey.slice(0, 18)}\u200b${globalApiKey.slice(18)}`,
+	];
+	for (const output of sensitiveOutputs) {
+		expect(hasSensitiveNamingContext(output)).toBe(true);
+		expect(hasSensitiveOutput(output)).toBe(true);
+		const f = fixture([Promise.resolve(response(output))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(1);
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(apiKey);
+		expect(f.warnings.join(" ")).not.toContain(globalApiKey);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("cloudflare api tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.requests).toHaveLength(1);
+	expect(ordinaryTitle.state.title).toBe("cloudflare api tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	const nearMisses = [
+		`Cloudflare: ${apiKey.slice(1)}`,
+		`Cloudflare: ${apiKey}A`,
+		`Cloudflare ${apiKey}`,
+		apiKey,
+		`Cloudflare global: ${globalApiKey.slice(1)}`,
+		`Cloudflare global: ${globalApiKey}a`,
+		`Cloudflare global: ${"g".repeat(37)}`,
+	];
+	for (const output of nearMisses) {
+		expect(hasSensitiveNamingContext(output)).toBe(false);
+		expect(hasSensitiveOutput(output)).toBe(false);
+		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("cloudflare api tests"))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(2);
+		expect(f.state.title).toBe("cloudflare api tests");
+		expect(f.warnings).toEqual([]);
+	}
+});
