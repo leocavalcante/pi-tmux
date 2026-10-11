@@ -1096,6 +1096,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const githubTokenStart = prefixLength - 8;
 	const truncatedGithubPrompt = `${"x".repeat(githubTokenStart)}${githubToken} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedGithubPrompt, githubToken);
+	const bearerToken = "A1b2".repeat(8);
+	const bearerTokenStart = prefixLength - 8;
+	const truncatedBearerPrompt = `${"x".repeat(bearerTokenStart - 7)}Bearer ${bearerToken} ${"x".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedBearerPrompt, bearerToken);
 	const cloudflareApiKey = "a1b2".repeat(10);
 	const truncatedCloudflarePrompt = `${"x".repeat(tokenStart - 13)} Cloudflare: ${cloudflareApiKey} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedCloudflarePrompt, cloudflareApiKey);

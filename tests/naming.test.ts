@@ -415,6 +415,54 @@ test("screens explicit credential assignments across retained-context truncation
 	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens bearer credentials across retained-context truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const label = "Bearer ";
+	const token = "A1b2".repeat(8);
+	const tokenStart = prefixLength - 8;
+	const prompt = `${"x".repeat(tokenStart - label.length)}${label}${token} ${"x".repeat(1_200)}`;
+	const prefixContext = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+
+	const controlObfuscatedToken = `${token.slice(0, 18)}\u0000${token.slice(18)}`;
+	const obfuscatedPrompt = `${"x".repeat(tokenStart - label.length)}${label}${controlObfuscatedToken} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const historyContent = `${"x".repeat(1_000 - label.length - 8)}${label}${token} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+	const summary = buildNamingRequestContext([
+		{ role: "compactionSummary", summary: historyContent },
+	] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixLength = Math.floor(retainedLength / 2);
+	const suffixStart = promptLength - suffixLength;
+	const suffixTokenStart = suffixStart - token.length + 8;
+	const suffixPrompt = `${"x".repeat(suffixTokenStart - label.length)}${label}${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${token} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+	const shortPrompt = `${"x".repeat(tokenStart - label.length)}${label}${"A".repeat(15)} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], shortPrompt).hasSensitiveBoundary()).toBe(false);
+
+	const prose = "Bearer authentication v2";
+	const proseStart = prefixLength - 10;
+	const prosePrompt = `${"x".repeat(proseStart)}${prose} ${"x".repeat(1_200)}`;
+	const proseContext = buildNamingRequestContext([], prosePrompt);
+	expect(hasSensitiveNamingContext(proseContext.text)).toBe(false);
+	expect(proseContext.hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens GitHub tokens across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
