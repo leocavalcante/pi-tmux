@@ -146,6 +146,57 @@ test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", (
 	}
 });
 
+test("screens Grafana, Doppler, and Sentry tokens across truncation", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const grafanaApiKey = `eyJrIjoi${"A".repeat(70)}`;
+	const grafanaCloudToken = `glc_${"A".repeat(400)}`;
+	const serviceBody = "aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x".repeat(2).slice(0, 32);
+	const grafanaServiceToken = `glsa_${serviceBody}_A1B2C3D4`;
+	const dopplerToken = `dp.pt.${"A".repeat(43)}`;
+	const sentryUserToken = `sntryu_${"a".repeat(64)}`;
+	const values = [grafanaApiKey, grafanaCloudToken, grafanaServiceToken, dopplerToken, sentryUserToken];
+
+	for (const value of values) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+		const obfuscated = value.slice(0, 10) + "\u200b" + value.slice(10);
+		for (const candidate of [value, obfuscated]) {
+			const valueStart = prefixLength - 10;
+			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const historyValue = sentryUserToken;
+	const historyValueStart = 990;
+	const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+
+	const summaryContent = `${"x".repeat(989)} ${dopplerToken} y`;
+	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+
+	const nearMisses = [
+		`eyJrIjoi${"A".repeat(69)}`,
+		`glc_${"A".repeat(31)}`,
+		`glsa_${serviceBody.slice(0, 31)}_A1B2C3D4`,
+		`dp.pt.${"A".repeat(42)}`,
+		`sntryu_${"a".repeat(63)}`,
+	];
+	for (const nearMiss of nearMisses) {
+		const tokenStart = prefixLength - 10;
+		const prompt = `${"x".repeat(tokenStart - 1)} ${nearMiss} ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens additional supported fixed-format tokens across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
