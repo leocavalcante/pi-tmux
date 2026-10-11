@@ -241,6 +241,8 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])v1\.0-[a-f0-9]{24}-[a-f0-9]{146}(?![A-Za-z0-9_-])/i,
 	// 1Password Secret Keys have an `A3-` prefix and fixed-length grouped characters.
 	/(?<![A-Za-z0-9_])A3-[A-Z0-9]{6}-(?:[A-Z0-9]{11}|[A-Z0-9]{6}-[A-Z0-9]{5})-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}(?![A-Za-z0-9_-])/i,
+	// 1Password service account tokens use `ops_eyJ` and a long Base64-form body.
+	/(?<![A-Za-z0-9_])ops_eyJ[A-Za-z0-9+/]{250,}={0,3}(?![A-Za-z0-9+/=])/,
 	// Age identities use `AGE-SECRET-KEY-1` followed by 58 Bech32 characters.
 	/(?<![A-Za-z0-9_])AGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L]{58}(?![A-Za-z0-9_-])/i,
 	// Atlassian API tokens use `ATATT3` followed by 186 URL-safe characters.

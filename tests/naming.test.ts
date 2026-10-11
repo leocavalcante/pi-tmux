@@ -7,6 +7,32 @@ import {
 	UnsafeNamingContextError,
 } from "../src/naming.ts";
 
+test("screens synthetic 1Password service-account tokens without mistaking near-misses", () => {
+	const body = "Aa0+/".repeat(50);
+	const token = `ops_eyJ${body}`;
+	const obfuscatedTokens = [
+		token.replace("ops_", "op\u200bs_"),
+		token.replace("eyJ", "ey\u200bJ"),
+		token.replace(body.slice(0, 100), `${body.slice(0, 100)}\u200b`),
+	];
+
+	for (const value of [token, `${token}==`, ...obfuscatedTokens]) {
+		expect(hasSensitiveNamingContext(`configure the vault integration ${value}`)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`ops_eyJ${body.slice(0, 249)}`,
+		`ops_eyJ${body.replace("A", "!")}`,
+		`ops_eyK${body}`,
+		`prefix${token}`,
+		"1Password service account setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens synthetic Tailscale key strings in context and output", () => {
 	const keys = [
 		`tskey-${"A1b2".repeat(4)}`,
