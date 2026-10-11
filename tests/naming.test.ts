@@ -36,6 +36,25 @@ test("screens synthetic 1Password service-account tokens without mistaking near-
 	}
 });
 
+test("screens long 1Password tokens across prompt truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const token = `ops_eyJ${"Aa0+/".repeat(50)}`;
+	const makePrompt = (value: string) => {
+		const tokenStart = prefixLength - 20;
+		return `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_300)}`;
+	};
+	const context = buildNamingRequestContext([], makePrompt(token));
+
+	expect(context.text).not.toContain(token);
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(true);
+
+	const nearMiss = `ops_eyJ${"Aa0+/".repeat(49)}Aa0+`;
+	expect(buildNamingRequestContext([], makePrompt(nearMiss)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Pinecone API keys without flagging near-misses", () => {
 	const secret = "A".repeat(63);
 	const keyFor = (keyId = "id123", value = secret) => `pcsk_${keyId}_${value}`;
