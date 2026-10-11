@@ -649,11 +649,14 @@ function assembleNamingContext(
 	const history: string[] = [];
 	let summary = knownSummary ?? "";
 	let foundSummary = !searchMessagesForSummary;
-	// Canonical projections carry the compaction summary separately. Bound the
-	// extra walk through their flat message arrays so long tool runs cannot make
-	// every naming refresh scan an unbounded amount of history. The compatibility
-	// messages-only helper still searches the full list for its summary.
-	const scanLimit = searchMessagesForSummary ? messages.length : MAX_HISTORY_MESSAGES_SCANNED;
+	// Messages-only compatibility inputs lack projection provenance, so a
+	// compaction summary may need to be found in the flat array. Preserve the
+	// common first-entry summary, then bound the backward search for recent text
+	// and any newer summary instead of scanning arbitrarily long tool histories.
+	if (searchMessagesForSummary && messages[0]?.role === "compactionSummary") {
+		summary = boundedSummary(messages[0].summary);
+	}
+	const scanLimit = MAX_HISTORY_MESSAGES_SCANNED;
 	for (let i = messages.length - 1, scanned = 0; i >= 0 && scanned < scanLimit; i--, scanned++) {
 		const message = messages[i];
 		if (message.role === "compactionSummary") {
