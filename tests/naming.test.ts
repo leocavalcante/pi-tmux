@@ -10,6 +10,70 @@ import {
 	UnsafeNamingContextError,
 } from "../src/naming.ts";
 
+test("screens webhook credentials across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const teamsGuid = "01234567-89ab-cdef-0123-456789abcdef";
+	const teamsOtherGuid = "fedcba98-7654-3210-fedc-ba9876543210";
+	const slackToken = `${"A1b2".repeat(10)}A1b`;
+	const legacySlackToken = "C3d4".repeat(6);
+	const discordToken = "D5e6".repeat(17);
+	const teamsToken = "a1b2c3d4".repeat(4);
+	const values = [
+		{ value: `whsec_${"F7g8".repeat(6)}`, secret: `whsec_${"F7g8".repeat(6)}` },
+		{ value: `https://hooks.slack.com/services/${slackToken}`, secret: slackToken },
+		{
+			value: `https://hooks.slack.com/services/T00000000/B11111111/${legacySlackToken}`,
+			secret: legacySlackToken,
+		},
+		{
+			value: `https://discord.com/api/webhooks/123456789012345678/${discordToken}`,
+			secret: discordToken,
+		},
+		{
+			value: `https://tenant.webhook.office.com/webhookb2/${teamsGuid}@${teamsOtherGuid}/IncomingWebhook/${teamsToken}/${teamsGuid}`,
+			secret: teamsToken,
+		},
+	];
+
+	for (const { value, secret } of values) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+		const obfuscated = value.replace(secret, `${secret.slice(0, 10)}\u0000${secret.slice(10)}`);
+		for (const candidate of [value, obfuscated]) {
+			const secretPrefix = secret.slice(0, 10);
+			const valueStart = prefixLength - 10 - candidate.indexOf(secretPrefix);
+			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const summaryContent = `${"x".repeat(989)} ${values[0]!.value} y`;
+	const summary = buildNamingRequestContext([
+		{ role: "compactionSummary", summary: summaryContent },
+	] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+
+	const historyValue = values[3]!;
+	const historyValueStart = 990 - historyValue.value.indexOf(historyValue.secret);
+	const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue.value} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+
+	// A Teams URL can straddle the omitted region while its 32-character secret
+	// remains wholly omitted; the structural URL alone must not trigger a block.
+	const teamsValue = values[4]!.value;
+	const teamsSecretOffset = teamsValue.indexOf(teamsToken);
+	const omittedSecretPromptStart = prefixLength + 5 - teamsSecretOffset;
+	const omittedSecretPrompt = `${"x".repeat(omittedSecretPromptStart - 1)} ${teamsValue} ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], omittedSecretPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens additional supported fixed-format tokens across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

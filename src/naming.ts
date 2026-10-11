@@ -358,6 +358,11 @@ const TAILSCALE_KEY_PATTERN =
 const SQUARE_ACCESS_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])(?:EAAA|sq0atp-)[A-Za-z0-9_-]{22,60}(?![A-Za-z0-9_-])/i;
 // Stripe webhook signing secrets use a distinctive prefix and long URL-safe value.
 const STRIPE_WEBHOOK_SECRET_PATTERN = /(?<![A-Za-z0-9_-])whsec_[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-])/i;
+const STRIPE_WEBHOOK_SECRET_BOUNDARY_PATTERN = makeBoundaryPattern(
+	STRIPE_WEBHOOK_SECRET_PATTERN,
+	"whsec_[A-Za-z0-9_-]{24,}",
+	String.raw`(w[\p{Cc}\p{Cf}]*h[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){23,})`,
+);
 // Slack API tokens use distinctive xox*/xapp prefixes and a long opaque body.
 const SLACK_API_TOKEN_PATTERN = /(?:xox[baprcds]|xapp)-[A-Za-z0-9-]{10,}/;
 const SLACK_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -369,13 +374,28 @@ const SLACK_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 // incoming webhooks in the separately validated pattern below.
 const SLACK_WEBHOOK_URL_PATTERN =
 	/(?<![A-Za-z0-9.-])(?:https?:\/\/)?hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+]{43,56}(?![A-Za-z0-9+/=])/i;
+const SLACK_WEBHOOK_URL_BOUNDARY_PATTERN = makeBoundaryPattern(
+	SLACK_WEBHOOK_URL_PATTERN,
+	"[A-Za-z0-9+]{43,56}",
+	String.raw`([A-Za-z0-9+](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+]){42,55})`,
+);
 // Classic incoming webhooks use workspace/channel IDs and a 24-character secret.
 const SLACK_LEGACY_WEBHOOK_URL_PATTERN =
 	/(?<![A-Za-z0-9.-])(?:https?:\/\/)?hooks\.slack\.com\/services\/T[A-Z0-9]{8}\/B[A-Z0-9]{8}\/[A-Za-z0-9]{24}(?![A-Za-z0-9_-])/i;
+const SLACK_LEGACY_WEBHOOK_URL_BOUNDARY_PATTERN = makeBoundaryPattern(
+	SLACK_LEGACY_WEBHOOK_URL_PATTERN,
+	"[A-Za-z0-9]{24}",
+	String.raw`([A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){23})`,
+);
 // Discord webhook URLs embed an 18–19 digit ID and fixed-length token.
 // Accept both current and legacy API hostnames.
 const DISCORD_WEBHOOK_URL_PATTERN =
 	/(?<![A-Za-z0-9.-])https:\/\/(?:discord\.com|discordapp\.com)\/api\/webhooks\/[0-9]{18,19}\/[A-Za-z0-9_-]{68}(?![A-Za-z0-9_-])/i;
+const DISCORD_WEBHOOK_URL_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DISCORD_WEBHOOK_URL_PATTERN,
+	"[A-Za-z0-9_-]{68}",
+	String.raw`([A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){67})`,
+);
 // Discord authentication tokens use three fixed-length URL-safe segments; MFA
 // tokens use a distinct prefix and an 84-character URL-safe body.
 const DISCORD_AUTH_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{24}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27}(?![A-Za-z0-9_-])/;
@@ -387,6 +407,11 @@ const MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN = new RegExp(
 		+ `${MICROSOFT_TEAMS_GUID_PATTERN}@${MICROSOFT_TEAMS_GUID_PATTERN}`
 		+ String.raw`\/IncomingWebhook\/[a-f0-9]{32}\/${MICROSOFT_TEAMS_GUID_PATTERN}(?![A-Za-z0-9_-])`,
 	"i",
+);
+const MICROSOFT_TEAMS_WEBHOOK_URL_BOUNDARY_PATTERN = makeBoundaryPattern(
+	MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN,
+	"[a-f0-9]{32}",
+	String.raw`([a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){31})`,
 );
 // Classic AWS access-key IDs use `AKIA` or `ASIA` plus exactly 16 uppercase letters/digits.
 const AWS_ACCESS_KEY_ID_PATTERN = /(?:AKIA|ASIA)[0-9A-Z]{16}/;
@@ -929,6 +954,11 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	CLOJARS_API_TOKEN_BOUNDARY_PATTERN,
 	RUBYGEMS_API_TOKEN_BOUNDARY_PATTERN,
 	TYPEFORM_API_TOKEN_BOUNDARY_PATTERN,
+	STRIPE_WEBHOOK_SECRET_BOUNDARY_PATTERN,
+	SLACK_WEBHOOK_URL_BOUNDARY_PATTERN,
+	SLACK_LEGACY_WEBHOOK_URL_BOUNDARY_PATTERN,
+	DISCORD_WEBHOOK_URL_BOUNDARY_PATTERN,
+	MICROSOFT_TEAMS_WEBHOOK_URL_BOUNDARY_PATTERN,
 	US_SSN_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
@@ -1006,13 +1036,11 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 		const overlapsRetainedContext = (tokenStart: number, tokenEnd: number) =>
 			retainedSide === "left" ? tokenStart < boundary : tokenEnd > boundary;
 		for (const sourcePattern of SENSITIVE_BOUNDARY_PATTERNS) {
-			const pattern = new RegExp(sourcePattern.source, `${sourcePattern.flags}g`);
+			const pattern = new RegExp(sourcePattern.source, `${sourcePattern.flags}dg`);
 			for (const match of joined.matchAll(pattern)) {
 				if (sourcePattern === LABELED_PASSWORD_BOUNDARY_PATTERN
 					&& npmPasswordPlaceholderStarts.has(match.index!)) continue;
-				const tokenLength = match[1]!.length;
-				const tokenStart = match.index! + match[0].length - tokenLength;
-				const tokenEnd = tokenStart + tokenLength;
+				const [tokenStart, tokenEnd] = match.indices![1]!;
 				if (!overlapsRetainedContext(tokenStart, tokenEnd)) continue;
 				if (sourcePattern === LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 					&& !isLuhnValidPaymentCardNumber(match[1]!)) continue;
