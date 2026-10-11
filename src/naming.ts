@@ -647,6 +647,18 @@ const DOPPLER_PERSONAL_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`dp\.pt\.[a-z0-9]{43}`,
 	String.raw`(d[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){42})`,
 );
+// Sentry organization tokens encode a region claim and end in a 43-character suffix.
+const SENTRY_ORG_TOKEN_PATTERN = /(?<![A-Za-z0-9_])sntrys_eyJpYXQiO[A-Za-z0-9+/]{10,200}(?:LCJyZWdpb25fdXJs|InJlZ2lvbl91cmwi|cmVnaW9uX3VybCI6)[A-Za-z0-9+/]{10,200}={0,2}_[A-Za-z0-9+/]{43}(?![A-Za-z0-9_+/=-])/;
+const SENTRY_ORG_TOKEN_BOUNDARY_REGION_CLAIM = `(?:${[
+	"LCJyZWdpb25fdXJs",
+	"InJlZ2lvbl91cmwi",
+	"cmVnaW9uX3VybCI6",
+].map(interleaveBoundaryFormattingControls).join("|")})`;
+const SENTRY_ORG_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	SENTRY_ORG_TOKEN_PATTERN,
+	String.raw`sntrys_eyJpYXQiO[A-Za-z0-9+/]{10,200}(?:LCJyZWdpb25fdXJs|InJlZ2lvbl91cmwi|cmVnaW9uX3VybCI6)[A-Za-z0-9+/]{10,200}={0,2}_[A-Za-z0-9+/]{43}`,
+	String.raw`(${interleaveBoundaryFormattingControls("sntrys_eyJpYXQiO")}[\p{Cc}\p{Cf}]*[A-Za-z0-9+/](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+/]){9,199}[\p{Cc}\p{Cf}]*${SENTRY_ORG_TOKEN_BOUNDARY_REGION_CLAIM}[\p{Cc}\p{Cf}]*[A-Za-z0-9+/](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+/]){9,199}(?:[\p{Cc}\p{Cf}]*=){0,2}[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9+/](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+/]){42})`,
+);
 // Sentry user access tokens use `sntryu_` followed by 64 lowercase hex characters.
 const SENTRY_USER_TOKEN_PATTERN = /(?<![A-Za-z0-9_])sntryu_[a-f0-9]{64}(?![A-Za-z0-9_-])/;
 const SENTRY_USER_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -902,8 +914,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	GRAFANA_CLOUD_TOKEN_PATTERN,
 	GRAFANA_SERVICE_ACCOUNT_TOKEN_PATTERN,
 	DOPPLER_PERSONAL_TOKEN_PATTERN,
-	// Sentry organization tokens contain an encoded region claim and a 43-character suffix.
-	/(?<![A-Za-z0-9_])sntrys_eyJpYXQiO[A-Za-z0-9+/]{10,200}(?:LCJyZWdpb25fdXJs|InJlZ2lvbl91cmwi|cmVnaW9uX3VybCI6)[A-Za-z0-9+/]{10,200}={0,2}_[A-Za-z0-9+/]{43}(?![A-Za-z0-9_+/=-])/,
+	SENTRY_ORG_TOKEN_PATTERN,
 	SENTRY_USER_TOKEN_PATTERN,
 	TELEGRAM_BOT_TOKEN_PATTERN,
 	VAULT_TOKEN_PATTERN,
@@ -1279,6 +1290,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	GRAFANA_CLOUD_TOKEN_BOUNDARY_PATTERN,
 	GRAFANA_SERVICE_ACCOUNT_TOKEN_BOUNDARY_PATTERN,
 	DOPPLER_PERSONAL_TOKEN_BOUNDARY_PATTERN,
+	SENTRY_ORG_TOKEN_BOUNDARY_PATTERN,
 	SENTRY_USER_TOKEN_BOUNDARY_PATTERN,
 	STRIPE_WEBHOOK_SECRET_BOUNDARY_PATTERN,
 	SLACK_WEBHOOK_URL_BOUNDARY_PATTERN,

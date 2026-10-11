@@ -2492,6 +2492,75 @@ test("screens alternate AWS access IDs and ABSK bearer tokens across retained bo
 	}
 });
 
+test("screens Sentry organization tokens across both retained prompt boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const firstClaim = "eyJpYXQiO";
+	const regionClaims = ["LCJyZWdpb25fdXJs", "InJlZ2lvbl91cmwi", "cmVnaW9uX3VybCI6"];
+	const tokenFor = (
+		first: string,
+		region: string,
+		second: string,
+		suffix = "C".repeat(43),
+		padding = "",
+	) => `sntrys_${firstClaim}${first}${region}${second}${padding}_${suffix}`;
+	const tokens = regionClaims.map((region) => ({
+		region,
+		token: tokenFor("a".repeat(20), region, "b".repeat(20)),
+	}));
+	// Exercise the longest accepted format, which must still fit the boundary scan window.
+	tokens.push({
+		region: regionClaims[0]!,
+		token: tokenFor("a".repeat(200), regionClaims[0]!, "b".repeat(200)),
+	});
+	tokens.push({
+		region: regionClaims[1]!,
+		token: tokenFor("a".repeat(20), regionClaims[1]!, "b".repeat(20), "C".repeat(43), "=="),
+	});
+	const candidates = tokens.flatMap(({ region, token }) => [
+		token,
+		token.replace("sntrys_", "sntry\u200bs_"),
+		token.replace(region, `${region.slice(0, 8)}\u0000${region.slice(8)}`),
+	]);
+	const tokenStarts = [prefixLength - 10, suffixStart - 10];
+
+	for (const token of candidates) {
+		expect(hasSensitiveNamingContext(token)).toBe(true);
+		expect(hasSensitiveOutput(token)).toBe(true);
+		for (const tokenStart of tokenStarts) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const nearMisses = [
+		tokenFor("a".repeat(9), regionClaims[0]!, "b".repeat(20)),
+		tokenFor("a".repeat(20), regionClaims[0]!, "b".repeat(9)),
+		tokenFor("a".repeat(20), "LCJyZWdpb25fdXls", "b".repeat(20)),
+		tokenFor("a".repeat(20), regionClaims[0]!, "b".repeat(20), "C".repeat(42)),
+	];
+	for (const nearMiss of nearMisses) {
+		for (const tokenStart of tokenStarts) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${nearMiss} ${"y".repeat(promptLength - prefix.length - nearMiss.length - 1)}`;
+			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+
+	const omittedToken = tokens[0]!.token;
+	const omittedTokenStart = prefixLength + 20;
+	const omittedPrefix = `${"x".repeat(omittedTokenStart - 1)} `;
+	const omittedPrompt = `${omittedPrefix}${omittedToken} ${"y".repeat(promptLength - omittedPrefix.length - omittedToken.length - 1)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Fireworks AI tokens across both retained prompt boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
