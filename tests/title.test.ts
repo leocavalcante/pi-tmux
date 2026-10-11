@@ -1021,6 +1021,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Tencent Cloud access ${tencentCloudSecretId}`, tencentCloudSecretId);
 	const obfuscatedTencentCloudSecretId = tencentCloudSecretId.replace("AKID", "A\u200bKID");
 	await suppressed(fixture(), `Review Tencent Cloud access ${obfuscatedTencentCloudSecretId}`, obfuscatedTencentCloudSecretId);
+	const typeformToken = `tfp_${"A1._-=".repeat(9)}A1._-`;
+	await suppressed(fixture(), `Review survey integration ${typeformToken}`, typeformToken);
+	const obfuscatedTypeformToken = typeformToken.replace("tfp_", "tf\u200bp_");
+	await suppressed(fixture(), `Review survey integration ${obfuscatedTypeformToken}`, obfuscatedTypeformToken);
 	const stripeProductionKeys = [
 		`sk_prod_${"A1b2".repeat(6)}`,
 		`rk_prod_${"C3d4".repeat(6)}`,
@@ -1644,6 +1648,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`sk_prod_${"A1b2".repeat(6)}`,
 		`sk_pr\u200bod_${"A1b2".repeat(6)}`,
 		`rk_prod_${"C3d4".repeat(6)}`,
+		`tfp_${"A1._-=".repeat(9)}A1._-`,
+		`tf\u200bp_${"A1._-=".repeat(9)}A1._-`,
 		`fixsk-${"a".repeat(16)}`,
 		`fixrk-${"a".repeat(16)}`,
 		["xoxb-", "a".repeat(24)].join(""),
