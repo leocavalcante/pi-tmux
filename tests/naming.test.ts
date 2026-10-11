@@ -1309,6 +1309,52 @@ test("screens explicit credential assignments across retained-context truncation
 	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens common framework key assignments across both prompt truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const credential = "K3y4".repeat(8);
+	const assignments = ["APP_KEY", "SECRET_KEY_BASE", "ENCRYPTION_KEY", "MASTER_KEY"]
+		.map((name) => ({ name, valuePrefix: "", value: credential }));
+	assignments.push({ name: "APP_KEY", valuePrefix: "base64:", value: Buffer.from(credential).toString("base64") });
+
+	for (const { name, valuePrefix, value } of assignments) {
+		const assignment = `${name}=${valuePrefix}${value}`;
+		expect(hasSensitiveNamingContext(assignment)).toBe(true);
+		expect(hasSensitiveOutput(assignment)).toBe(true);
+
+		const label = ` ${name}=`;
+		const prefixTokenStart = prefixLength - 10;
+		const prefixValueStart = prefixTokenStart - valuePrefix.length;
+		const prefixPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${valuePrefix}${value} ${"y".repeat(1_200)}`;
+		const prefixContext = buildNamingRequestContext([], prefixPrompt);
+		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+
+		const promptLength = MAX_PROMPT_LENGTH + 300;
+		const suffixStart = promptLength - Math.floor(retainedLength / 2);
+		const suffixTokenStart = suffixStart - 10;
+		const suffixValueStart = suffixTokenStart - valuePrefix.length;
+		const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${valuePrefix}${value} ${"y".repeat(promptLength - suffixValueStart - valuePrefix.length - value.length - 1)}`;
+		const suffixContext = buildNamingRequestContext([], suffixPrompt);
+		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"APP_KEY=placeholder",
+		"APP_KEY=base64:placeholder",
+		"SECRET_KEY_BASE=redacted",
+		`ENCRYPTION_KEY=${"A".repeat(19)}`,
+		`MASTER_KEY=${"B".repeat(19)}`,
+		"APP_KEY rotation in a synthetic project",
+		"rotate the secret key base after deployment",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens age secret identities across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
