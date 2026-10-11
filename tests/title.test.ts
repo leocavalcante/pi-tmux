@@ -4953,6 +4953,8 @@ test("parses naming models and rejects malformed configuration", () => {
 	const longestSetting = `${"p".repeat(254)}/m`;
 	expect(longestSetting).toHaveLength(256);
 	expect(parseNamingModel(longestSetting)).toEqual({ provider: "p".repeat(254), id: "m" });
+	expect(parseNamingModel(`${" ".repeat(1_000)}${longestSetting}${" ".repeat(1_000)}`))
+		.toEqual({ provider: "p".repeat(254), id: "m" });
 	const oversizedSetting = `${"p".repeat(255)}/m`;
 	expect(oversizedSetting).toHaveLength(257);
 	for (const value of ["model", "/model", "provider/", "bad provider/model", "provider/a\nb", oversizedSetting]) {
