@@ -1318,8 +1318,8 @@ test("screens framework, WordPress, session/cookie, and cryptographic key assign
 		"APP_KEY", "AES_KEY", "AES_256_KEY", "AES-256-KEY",
 		"SECRET_KEY_BASE", "ENCRYPTION_KEY", "FERNET_KEY",
 		"HMAC_KEY", "SIGNING_KEY", "JWT_SIGNING_KEY", "TOKEN_SIGNING_KEY", "MASTER_KEY",
-		"SESSION_KEY", "SESSION-KEY", "SESSION KEY",
-		"COOKIE_KEY", "COOKIE-KEY",
+		"SESSION_KEY", "SESSION-KEY", "SESSION KEY", "SESSION",
+		"COOKIE_KEY", "COOKIE-KEY", "COOKIE",
 		"AUTH_KEY", "SECURE_AUTH_KEY", "LOGGED_IN_KEY", "NONCE_KEY",
 		"AUTH_SALT", "SECURE_AUTH_SALT", "LOGGED_IN_SALT", "NONCE_SALT",
 	]
@@ -1354,6 +1354,18 @@ test("screens framework, WordPress, session/cookie, and cryptographic key assign
 		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 	}
 
+	for (const [role, label] of [
+		["user", "SESSION"],
+		["compactionSummary", "COOKIE"],
+	] as const) {
+		const content = `${"x".repeat(982)} ${label}=${credential} y`;
+		const boundaryContext = role === "user"
+			? buildNamingRequestContext([{ role, content }] as any)
+			: buildNamingRequestContext([{ role, summary: content }] as any);
+		expect(hasSensitiveNamingContext(boundaryContext.text)).toBe(false);
+		expect(boundaryContext.hasSensitiveBoundary()).toBe(true);
+	}
+
 	for (const nearMiss of [
 		"APP_KEY=placeholder",
 		"APP_KEY=base64:placeholder",
@@ -1370,6 +1382,11 @@ test("screens framework, WordPress, session/cookie, and cryptographic key assign
 		"JWT_SIGNING_KEY rollover in a synthetic project",
 		`TOKEN_SIGNING_KEY=${"S".repeat(19)}`,
 		"COOKIE_KEY=example",
+		"SESSION=placeholder",
+		"COOKIE=example",
+		"SESSION cookie setup for a synthetic project",
+		`SESSION=${"Q".repeat(19)}`,
+		`COOKIE=${"Q".repeat(19)}`,
 		"SESSION_KEY rotation for a synthetic project",
 		`SESSION_KEY=${"Q".repeat(19)}`,
 		`AES_256_KEY=${"A".repeat(19)}`,
