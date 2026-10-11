@@ -1114,6 +1114,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const gitlabTokenStart = prefixLength - 8;
 	const truncatedGitlabTokenPrompt = `${"x".repeat(gitlabTokenStart - 1)} ${gitlabPersonalAccessToken} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedGitlabTokenPrompt, gitlabPersonalAccessToken);
+	const npmAccessToken = `npm_${"A1b2C".repeat(5)}`;
+	const npmTokenStart = prefixLength - 8;
+	const truncatedNpmTokenPrompt = `${"x".repeat(npmTokenStart - 1)} ${npmAccessToken} ${"x".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedNpmTokenPrompt, npmAccessToken);
 	const githubToken = `ghp_${"A".repeat(36)}`;
 	const githubTokenStart = prefixLength - 8;
 	const truncatedGithubPrompt = `${"x".repeat(githubTokenStart)}${githubToken} ${"x".repeat(1_200)}`;
