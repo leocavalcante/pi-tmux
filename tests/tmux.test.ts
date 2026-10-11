@@ -12,7 +12,7 @@ async function withFakeTmux(
 	await withFakeTmuxFixture(nodeExecutable, script, action);
 }
 
-test("runTmux does not spawn a child for a pre-aborted signal", async () => {
+test.serial("runTmux does not spawn a child for a pre-aborted signal", async () => {
 	await withFakeTmux(() => [], async ({ pid }) => {
 		const controller = new AbortController();
 		const reason = new Error("cancelled");
@@ -26,13 +26,13 @@ test("runTmux does not spawn a child for a pre-aborted signal", async () => {
 	});
 });
 
-test("runTmux removes only the final LF and preserves trailing carriage returns", async () => {
+test.serial("runTmux removes only the final LF and preserves trailing carriage returns", async () => {
 	await withFakeTmux(() => ["process.stdout.write('custom name\\r\\n', () => process.exit(0));"], async () => {
 		expect(await runTmux([], new AbortController().signal)).toBe("custom name\r");
 	});
 });
 
-test("runTmux rejects and reaps a child that exceeds its output bound", async () => {
+test.serial("runTmux rejects and reaps a child that exceeds its output bound", async () => {
 	await withFakeTmux(() => [
 		"process.stdout.write('x'.repeat(70 * 1024));",
 		"setInterval(() => {}, 1000);",
@@ -48,7 +48,7 @@ test("runTmux rejects and reaps a child that exceeds its output bound", async ()
 	});
 });
 
-test.skipIf(process.platform === "win32")(
+test.serial.skipIf(process.platform === "win32")(
 	"runTmux rejects a timed-out child that exits cleanly after SIGTERM",
 	async () => {
 		await withFakeTmux(({ cleanExit }) => [
@@ -68,7 +68,7 @@ test.skipIf(process.platform === "win32")(
 	},
 );
 
-test("runTmux reaps a child on cancellation", async () => {
+test.serial("runTmux reaps a child on cancellation", async () => {
 	await withFakeTmux(() => [
 		"process.on('SIGTERM', () => {});",
 		"setInterval(() => {}, 1000);",
