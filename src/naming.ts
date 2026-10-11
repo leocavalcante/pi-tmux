@@ -512,6 +512,34 @@ const NEON_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"neon_api_key_[A-Za-z0-9_-]{32}",
 	String.raw`(n[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*n[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*k[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*y[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){31})`,
 );
+// Telegram bot tokens contain a numeric bot ID and a separate secret that starts with `A`.
+const TELEGRAM_BOT_TOKEN_PATTERN = /(?<![A-Za-z0-9_])[0-9]{5,16}:A[A-Za-z0-9_-]{34}(?![A-Za-z0-9_-])/;
+const TELEGRAM_BOT_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	TELEGRAM_BOT_TOKEN_PATTERN,
+	"[0-9]{5,16}:A[A-Za-z0-9_-]{34}",
+	String.raw`[0-9](?:[\p{Cc}\p{Cf}]*[0-9]){4,15}[\p{Cc}\p{Cf}]*:[\p{Cc}\p{Cf}]*(A[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){33})`,
+);
+// Vault service and batch tokens use `hvs.` or `hvb.` followed by 24 URL-safe characters.
+const VAULT_TOKEN_PATTERN = /(?<![A-Za-z0-9_])hv[bs]\.[A-Za-z0-9_-]{24}(?![A-Za-z0-9_-])/;
+const VAULT_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	VAULT_TOKEN_PATTERN,
+	"hv[bs]\\.[A-Za-z0-9_-]{24}",
+	String.raw`(h[\p{Cc}\p{Cf}]*v[\p{Cc}\p{Cf}]*[bs][\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){23})`,
+);
+// Notion tokens use `ntn_`, 11 digits, then 35 alphanumeric characters.
+const NOTION_TOKEN_PATTERN = /(?<![A-Za-z0-9_])ntn_[0-9]{11}[A-Za-z0-9]{35}(?![A-Za-z0-9_-])/;
+const NOTION_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	NOTION_TOKEN_PATTERN,
+	"ntn_[0-9]{11}[A-Za-z0-9]{35}",
+	String.raw`(n[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*n[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[0-9](?:[\p{Cc}\p{Cf}]*[0-9]){10}[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){34})`,
+);
+// Supabase secret API keys use a fixed prefix and 32 URL-safe characters.
+const SUPABASE_SECRET_API_KEY_PATTERN = /(?<![A-Za-z0-9_])sb_secret_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/;
+const SUPABASE_SECRET_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	SUPABASE_SECRET_API_KEY_PATTERN,
+	"sb_secret_[A-Za-z0-9_-]{32}",
+	String.raw`(s[\p{Cc}\p{Cf}]*b[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){31})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -604,14 +632,10 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])sntrys_eyJpYXQiO[A-Za-z0-9+/]{10,200}(?:LCJyZWdpb25fdXJs|InJlZ2lvbl91cmwi|cmVnaW9uX3VybCI6)[A-Za-z0-9+/]{10,200}={0,2}_[A-Za-z0-9+/]{43}(?![A-Za-z0-9_+/=-])/,
 	// Sentry user access tokens use `sntryu_` followed by 64 lowercase hex characters.
 	/(?<![A-Za-z0-9_])sntryu_[a-f0-9]{64}(?![A-Za-z0-9_-])/,
-	// Telegram bot tokens contain a 5–16 digit ID and a fixed-length secret starting with `A`.
-	/(?<![A-Za-z0-9_])[0-9]{5,16}:A[A-Za-z0-9_-]{34}(?![A-Za-z0-9_-])/,
-	// Vault service and batch tokens use `hvs.` or `hvb.` followed by 24 URL-safe characters.
-	/(?<![A-Za-z0-9_])hv[bs]\.[A-Za-z0-9_-]{24}(?![A-Za-z0-9_-])/,
-	// Notion tokens use `ntn_`, 11 digits, then 35 alphanumeric characters.
-	/(?<![A-Za-z0-9_])ntn_[0-9]{11}[A-Za-z0-9]{35}(?![A-Za-z0-9_-])/,
-	// Supabase secret API keys use a fixed prefix and 32 URL-safe characters.
-	/(?<![A-Za-z0-9_])sb_secret_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/,
+	TELEGRAM_BOT_TOKEN_PATTERN,
+	VAULT_TOKEN_PATTERN,
+	NOTION_TOKEN_PATTERN,
+	SUPABASE_SECRET_API_KEY_PATTERN,
 	NEON_API_KEY_PATTERN,
 	LINEAR_API_TOKEN_PATTERN,
 	// SendGrid API keys have the `SG.` prefix and exactly 66 URL-safe characters.
@@ -964,6 +988,10 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	CLOJARS_API_TOKEN_BOUNDARY_PATTERN,
 	RUBYGEMS_API_TOKEN_BOUNDARY_PATTERN,
 	TYPEFORM_API_TOKEN_BOUNDARY_PATTERN,
+	TELEGRAM_BOT_TOKEN_BOUNDARY_PATTERN,
+	VAULT_TOKEN_BOUNDARY_PATTERN,
+	NOTION_TOKEN_BOUNDARY_PATTERN,
+	SUPABASE_SECRET_API_KEY_BOUNDARY_PATTERN,
 	STRIPE_WEBHOOK_SECRET_BOUNDARY_PATTERN,
 	SLACK_WEBHOOK_URL_BOUNDARY_PATTERN,
 	SLACK_LEGACY_WEBHOOK_URL_BOUNDARY_PATTERN,
