@@ -4669,6 +4669,38 @@ test("messages-only naming context still finds compaction summaries in long hist
 	expect(buildNamingContext(messages as any)).toBe("summary: preserved summary\n\nuser: recent task");
 });
 
+test("messages-only scans prefer a recent compaction summary over the initial fallback", () => {
+	const messages = [
+		{ role: "compactionSummary", summary: "older summary" },
+		...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })),
+		{ role: "compactionSummary", summary: "recent summary" },
+		{ role: "user", content: "recent task" },
+	];
+
+	expect(buildNamingContext(messages as any)).toBe("summary: recent summary\n\nuser: recent task");
+});
+
+test("messages-only and legacy projection scans stop at the history budget", () => {
+	let readOldRole = false;
+	const oldMessage = {} as any;
+	Object.defineProperty(oldMessage, "role", {
+		get() {
+			readOldRole = true;
+			throw new Error("Fallback history scans should stop at their budget");
+		},
+	});
+	const messages = [
+		{ role: "toolResult" },
+		oldMessage,
+		...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })),
+		{ role: "user", content: "recent task" },
+	];
+
+	expect(buildNamingContext(messages as any)).toBe("user: recent task");
+	expect(buildNamingContext({ messages } as any)).toBe("user: recent task");
+	expect(readOldRole).toBe(false);
+});
+
 test("naming context does not read text from history older than its retained window", () => {
 	let readDiscardedContent = false;
 	const discarded = { role: "user" } as any;
