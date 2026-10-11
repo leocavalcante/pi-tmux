@@ -76,6 +76,32 @@ test("screens synthetic Stripe webhook signing secrets without flagging short or
 	}
 });
 
+test("screens synthetic Slack webhook URLs without flagging similar links", () => {
+	const token = "A1b2".repeat(10) + "A1b";
+	const urls = [
+		`https://hooks.slack.com/services/${token}`,
+		`hooks.slack.com/workflows/${token}`,
+		`http://hooks.slack.com/triggers/${token}`,
+		`https://hooks.slack.com/services/${token.slice(0, 21)}\u200b${token.slice(21)}`,
+	];
+
+	for (const url of urls) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`https://hooks.slack.com/services/${"A1b2".repeat(10) + "A1"}`,
+		`https://hooks.slack.com/services/${token}${"A".repeat(14)}`,
+		`https://hooks.slack.com.evil.test/services/${token}`,
+		`https://hooks.slack.com/api/${token}`,
+		"Slack webhook configuration",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("requestNamingTitle screens context before model-registry access", async () => {
 	const contextText = "task: pi-tmux@example.invalid";
 	const context = {
