@@ -915,22 +915,26 @@ test("superseding input cancels an overlong-title retry without applying its sta
 	expect(f.warnings).toEqual([]);
 });
 
-test.each([
-	["line feed", "\n"],
-	["carriage return", "\r"],
-	["vertical tab", "\v"],
-	["form feed", "\f"],
-	["next line", "\u0085"],
-	["line separator", "\u2028"],
-	["paragraph separator", "\u2029"],
-])("rejects %s in naming output as a line break", async (_name, separator) => {
-	const f = fixture([Promise.resolve(response(`fix auth${separator}tests`))]);
-	f.input("Name a task");
+test("superseding input cancels a multiline-title correction retry", async () => {
+	const retry = deferred();
+	const f = fixture([
+		Promise.resolve(response("fix ssh\nhelpers")),
+		retry.promise,
+		Promise.resolve(response("new task")),
+	]);
+	f.input("Old task");
 	await settle();
-	expect(f.requests).toHaveLength(1);
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model returned multiple lines; the current title was kept. Retry with /tmux-title or set it with /tmux-title set <name>."]);
+	expect(f.requests).toHaveLength(2);
+	expect(f.requests[1].context.systemPrompt).toContain("previous response was not a single-line title");
+	const retrySignal = f.requests[1].options.signal as AbortSignal;
+	f.input("New task");
+	await settle();
+	expect(retrySignal.aborted).toBe(true);
+	retry.resolve(response("stale title"));
+	await settle();
+	expect(f.requests).toHaveLength(3);
+	expect(f.state.title).toBe("new task");
+	expect(f.warnings).toEqual([]);
 });
 
 test.each([
@@ -941,15 +945,44 @@ test.each([
 	["next line", "\u0085"],
 	["line separator", "\u2028"],
 	["paragraph separator", "\u2029"],
-])("rejects %s at either edge of naming output", async (_name, separator) => {
+])("retries %s in naming output with a single-line correction", async (_name, separator) => {
+	const rejectedOutput = `fix auth${separator}tests`;
+	const f = fixture([
+		Promise.resolve(response(rejectedOutput)),
+		Promise.resolve(response("fix auth tests")),
+	]);
+	f.input("Name a task");
+	await settle();
+	expect(f.requests).toHaveLength(2);
+	expect(f.requests[1].context.systemPrompt).toContain("previous response was not a single-line title");
+	expect(f.requests[1].context.systemPrompt).toContain("without line breaks");
+	expect(f.requests[1].context.systemPrompt).not.toContain(rejectedOutput);
+	expect(f.requests[1].context.messages[0].content).toBe(f.requests[0].context.messages[0].content);
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.warnings).toEqual([]);
+});
+
+test.each([
+	["line feed", "\n"],
+	["carriage return", "\r"],
+	["vertical tab", "\v"],
+	["form feed", "\f"],
+	["next line", "\u0085"],
+	["line separator", "\u2028"],
+	["paragraph separator", "\u2029"],
+])("retries %s at either edge instead of trimming it into a title", async (_name, separator) => {
 	for (const output of [`${separator}fix auth tests`, `fix auth tests${separator}`]) {
-		const f = fixture([Promise.resolve(response(output))]);
+		const f = fixture([
+			Promise.resolve(response(output)),
+			Promise.resolve(response("fix auth tests")),
+		]);
 		f.input("Name a task");
 		await settle();
-		expect(f.requests).toHaveLength(1);
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["The naming model returned multiple lines; the current title was kept. Retry with /tmux-title or set it with /tmux-title set <name>."]);
+		expect(f.requests).toHaveLength(2);
+		expect(f.requests[1].context.systemPrompt).toContain("previous response was not a single-line title");
+		expect(f.requests[1].context.systemPrompt).not.toContain(output);
+		expect(f.state.title).toBe("fix auth tests");
+		expect(f.warnings).toEqual([]);
 	}
 });
 
@@ -964,7 +997,7 @@ test("accepts ordinary surrounding spaces in naming output", async () => {
 test.each([
 	["I'll inspect the conversation and choose a title.", "The naming model title exceeded the 24-character limit; the current title was kept.", true],
 	["one two three four five", "The naming model title exceeded the 4-word limit; the current title was kept.", true],
-	["fix ssh\nhelpers", "The naming model returned multiple lines; the current title was kept. Retry with /tmux-title or set it with /tmux-title set <name>.", false],
+	["fix ssh\nhelpers", "The naming model returned multiple lines; the current title was kept. Retry with /tmux-title or set it with /tmux-title set <name>.", true],
 	["investigate authentication failures", "The naming model title exceeded the 24-character limit; the current title was kept.", true],
 	["---", "The naming model returned no usable title; the current title was kept.", false],
 ])("rejects output that remains invalid after at most one retry: %s", async (output, warning, retry) => {
@@ -2468,6 +2501,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`${dynatraceApiToken.slice(0, 20)}\u200b${dynatraceApiToken.slice(20)}`,
 		resendApiKey,
 		`${resendApiKey.slice(0, 12)}\u200b${resendApiKey.slice(12)}`,
+		`${githubToken}\nfix auth tests`,
 		["sk", "-proj-", "a".repeat(32)].join(""),
 		["sk", "-ant-", "a".repeat(32)].join(""),
 		["sk", "-svcacct-", "a".repeat(32)].join(""),

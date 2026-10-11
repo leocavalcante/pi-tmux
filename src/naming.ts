@@ -1674,13 +1674,19 @@ export async function requestNamingTitle(
 		return await requestTitle(systemPrompt);
 	} catch (error) {
 		if (!(error instanceof InvalidNamingTitleError)
-			|| (error.reason !== "too-long" && error.reason !== "too-many-words")) throw error;
+			|| (error.reason !== "too-long"
+				&& error.reason !== "too-many-words"
+				&& error.reason !== "multiple-lines")) throw error;
 		if (signal.aborted || !isCurrent()) return;
-		// Retry once for a concise title; only clip the retry when it remains a
-		// 2–4-word label, never long-form prose.
+		// Retry once for a concise, single-line title; only clip the retry when it
+		// remains a 2–4-word label, never long-form prose. Do not echo the rejected output.
+		const correction = error.reason === "multiple-lines"
+			? "The previous response was not a single-line title. Return one line only, without line breaks."
+			: "The previous candidate exceeded a title limit.";
 		return requestTitle([
 			systemPrompt,
-			`The previous candidate exceeded a title limit. Do not restate the full request or include its answer-format constraints, such as sentence counts; label only the central task or topic. Use 2 or 3 short words, aim for 20 characters or fewer, and never exceed ${MAX_TITLE_LENGTH} ASCII characters.`,
+			correction,
+			`Do not restate the full request or include its answer-format constraints, such as sentence counts; label only the central task or topic. Use 2 or 3 short words, aim for 20 characters or fewer, and never exceed ${MAX_TITLE_LENGTH} ASCII characters.`,
 			"Return only the revised title.",
 		].join(" "), true);
 	}

@@ -209,10 +209,10 @@ Repeat the command to retry them.
   blocks are rejected; signatures over 4 Ki UTF-16 code units are treated as
   unrecognized metadata. If a provider ignores the requested
   96-token cap and selected output exceeds 64 Ki UTF-16 code units, it gets one
-  correction attempt and is not applied as-is. Other overlong or over-worded
-  first candidates also get one correction request. A still-overlong candidate
-  is clipped at a word boundary only when it remains a 2–4-word title; multiline,
-  over-word, and otherwise unusable output is rejected.
+  correction attempt and is not applied as-is. Other overlong, over-worded, or
+  multiline first candidates also get one correction request. A still-overlong
+  candidate is clipped at a word boundary only when it remains a 2–4-word title;
+  multiline, over-worded, and otherwise unusable retry output is rejected.
 - `* ` marks a fully settled run, after tool work, retries, and queued
   continuations are finished. It does not mean the task succeeded.
 - The 24-character limit includes the marker. Waiting titles reserve two
