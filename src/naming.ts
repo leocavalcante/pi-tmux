@@ -116,6 +116,8 @@ const DOCKER_HUB_OAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_oat_[A-Za-z0-9_-]{32}(?![
 const PYPI_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])pypi-(?:AgEIcHlwaS5vcmc|AgENdGVzdC5weXBpLm9yZw)[A-Za-z0-9_-]{50,1000}(?![A-Za-z0-9_-])/;
 // Clojars API tokens use the `CLOJARS_` prefix and an exact 60-character body.
 const CLOJARS_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])CLOJARS_[A-Za-z0-9]{60}(?![A-Za-z0-9_])/i;
+// RubyGems API tokens use `rubygems_` followed by exactly 48 hexadecimal characters.
+const RUBYGEMS_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])rubygems_[a-f0-9]{48}(?![A-Za-z0-9_-])/i;
 // Heroku API tokens use `HRKU-AA` followed by exactly 58 URL-safe characters.
 const HEROKU_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])HRKU-AA[A-Za-z0-9_-]{58}(?![A-Za-z0-9_-])/i;
 // Cloudflare API keys have 40 URL-safe characters; global keys have 37 hex characters.
@@ -176,6 +178,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	DOCKER_HUB_OAT_PATTERN,
 	PYPI_API_TOKEN_PATTERN,
 	CLOJARS_API_TOKEN_PATTERN,
+	RUBYGEMS_API_TOKEN_PATTERN,
 	HEROKU_API_TOKEN_PATTERN,
 	CLOUDFLARE_API_KEY_PATTERN,
 	CLOUDFLARE_GLOBAL_API_KEY_PATTERN,

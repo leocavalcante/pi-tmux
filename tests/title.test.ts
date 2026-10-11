@@ -1823,6 +1823,55 @@ test("rejects PyPI API tokens without mistaking near-misses for tokens", async (
 	}
 });
 
+test("screens RubyGems API tokens in naming context and model output without mistaking near-misses", async () => {
+	const token = `rubygems_${"a1b2".repeat(12)}`;
+	const obfuscatedTokens = [
+		token.replace("rubygems_", "rubygems\u200b_"),
+		`${token.slice(0, 30)}\u200b${token.slice(30)}`,
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const value of [token, ...obfuscatedTokens]) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review Ruby package publishing ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.state.title).toBe("existing task");
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(token);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(token);
+	}
+
+	const ordinaryTitle = fixture([Promise.resolve(response("rubygems build tests"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("rubygems build tests");
+	expect(ordinaryTitle.warnings).toEqual([]);
+
+	for (const nearMiss of [
+		`rubygems_${"a1b2".repeat(11)}a1b`,
+		`${token}f`,
+		`x${token}`,
+		`_${token}`,
+		`rubygems_${"g".repeat(48)}`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens Heroku API tokens in naming context and model output without mistaking near-misses", async () => {
 	const token = `HRKU-AA${"A1_b".repeat(14)}AB`;
 	const obfuscatedTokens = [
