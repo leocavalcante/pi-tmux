@@ -26,6 +26,12 @@ test("runTmux does not spawn a child for a pre-aborted signal", async () => {
 	});
 });
 
+test("runTmux removes only the final LF and preserves trailing carriage returns", async () => {
+	await withFakeTmux(() => ["process.stdout.write('custom name\\r\\n', () => process.exit(0));"], async () => {
+		expect(await runTmux([], new AbortController().signal)).toBe("custom name\r");
+	});
+});
+
 test("runTmux rejects and reaps a child that exceeds its output bound", async () => {
 	await withFakeTmux(() => [
 		"process.stdout.write('x'.repeat(70 * 1024));",

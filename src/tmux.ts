@@ -178,9 +178,10 @@ export const runTmux: RunTmux = async (args, signal) => {
 			// An already-aborted signal does not dispatch to newly added listeners.
 			if (commandSignal.aborted) escalateTermination();
 		});
-		// Remove the command's line terminator, not tabs or spaces in window names.
-		// In particular, a trailing tab is the empty title field in WINDOW_INFO_FORMAT.
-		return stdout.replace(/\r?\n$/, "");
+		// tmux terminates output with LF. Remove only that byte: a preceding CR
+		// may belong to a user-owned name and must remain visible to safety checks.
+		// Preserve tabs too; a trailing tab is the empty title field in WINDOW_INFO_FORMAT.
+		return stdout.replace(/\n$/, "");
 	} finally {
 		clearTimeout(timeout);
 		commandSignal.removeEventListener("abort", escalateTermination);

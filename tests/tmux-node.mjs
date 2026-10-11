@@ -25,6 +25,14 @@ test("Node-native tmux subprocess behavior", async (suite) => {
 		});
 	});
 
+	await suite.test("preserves trailing carriage returns while removing the output line feed", async () => {
+		await withNativeFakeTmux(() => [
+			"process.stdout.write('custom name\\r\\n', () => process.exit(0));",
+		], async () => {
+			assert.equal(await runTmux([], new AbortController().signal), "custom name\r");
+		});
+	});
+
 	await suite.test("rejects and reaps a child that exceeds its output bound", async () => {
 		await withNativeFakeTmux(() => [
 			"process.stdout.write('x'.repeat(70 * 1024));",
