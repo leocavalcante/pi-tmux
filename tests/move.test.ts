@@ -284,6 +284,30 @@ test.skipIf(!hasTmux).each(movingCases)("moving a waiting pane preserves escaped
 	});
 });
 
+test.skipIf(!hasTmux)("a failed moved-title update retries on a later status refresh", async () => {
+	await withServer(async (f) => {
+		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Source", "/bin/sleep 60");
+		const destination = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Destination", "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		await f.pin("move retry");
+		await f.emit("agent_settled");
+		f.tmux("join-pane", "-d", "-s", pane, "-t", destination);
+		let failed = false;
+		f.beforeCommand = async (args) => {
+			if (!failed && args[0] === "rename-window" && args[2] === pane) {
+				failed = true;
+				throw new Error("Synthetic transient title update failure");
+			}
+		};
+
+		await f.emit("agent_settled");
+		expect(failed).toBe(true);
+		expect(f.tmux("display-message", "-p", "-t", pane, "#{window_name}")).not.toBe("* move retry");
+		await f.emit("agent_settled");
+		expect(f.tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("* move retry");
+	});
+});
+
 test.skipIf(!hasTmux).each([false, true])("former-window repair preserves late literal titles and server-side status, initially waiting=%j", async (initialWaiting) => {
 	await withServer(async (f) => {
 		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Source", "/bin/sleep 60");

@@ -279,12 +279,14 @@ Repeat the command to retry them.
 ### Shared panes and cleanup
 
 Multiple interactive Pi panes in one tmux window share its task title. The
-most recent task-title update wins, including manual pins. Quitting one Pi
-keeps the current shared task title while another Pi remains in that window,
-whether it is busy or waiting. Cleanup chooses ownership and reads the latest
-shared title on the tmux server, so a peer that starts or renames after lookup
-is protected too. A peer in a different window does not prevent idle-title
-cleanup.
+most recent task-title update wins, including manual pins. Waiting-marker
+updates alone preserve the current shared title instead of replaying a stale
+per-pane title; a new AI result, manual pin, or explicit `/tmux-title sync` can
+replace it. Quitting one Pi keeps the current shared task title while another
+Pi remains in that window, whether it is busy or waiting. Cleanup chooses
+ownership and reads the latest shared title on the tmux server, protecting
+peers that start or rename after lookup. A peer in a different window does not
+prevent idle-title cleanup.
 The waiting marker aggregates all Pi panes in its window independently of
 which pane last named it. A waiting pane in a different window marks the
 session but not this window.

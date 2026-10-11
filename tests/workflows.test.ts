@@ -57,6 +57,12 @@ test("README documents the bounded manual and idle-title input limit", () => {
 	expect(readme).toContain("Inputs longer than 64 Ki UTF-16 code units are rejected before screening");
 });
 
+test("README distinguishes shared title updates from status-only markers", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
+	expect(readme).toContain("Waiting-marker updates alone preserve the current shared title instead of replaying a stale per-pane title");
+	expect(readme).toContain("a new AI result, manual pin, or explicit `/tmux-title sync` can replace it");
+});
+
 test("README specifies UTF-16 code-unit limits for naming context sent to the model", () => {
 	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
 	expect(readme).toContain("up to 6,000 UTF-16 code units of task context");

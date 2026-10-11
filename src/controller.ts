@@ -81,6 +81,11 @@ export function createController(tmux: RunTmux) {
 	let titleQueue: Promise<void> = Promise.resolve();
 	// Retain locations across lifecycle resets so interrupted move repairs can finish.
 	let lastLocation: { session: string; window: string; server?: string } | undefined;
+	// Track where this controller last successfully applied its stored title. A move
+	// must retry that title after transient failures, but a shared-window title from
+	// another Pi pane must not be replayed by an ordinary status refresh.
+	let lastTitleLocation: { session: string; window: string } | undefined;
+	let pinnedTitleNeedsApply = false;
 	let serverIdentityChanged = false;
 	const formerWindows = new Set<string>();
 	const formerSessions = new Set<string>();
@@ -101,6 +106,8 @@ export function createController(tmux: RunTmux) {
 		unsafeSessions.clear();
 		sessionNameSafetyAvailable.clear();
 		lastLocation = undefined;
+		lastTitleLocation = undefined;
+		pinnedTitleNeedsApply = false;
 		baseTitle = undefined;
 		manualTitle = false;
 		lastNamingContext = undefined;
@@ -257,7 +264,12 @@ export function createController(tmux: RunTmux) {
 		}
 	};
 
-	const refreshTitle = (ctx: ExtensionContext, pane: string, requestGeneration?: number) => {
+	const refreshTitle = (
+		ctx: ExtensionContext,
+		pane: string,
+		requestGeneration?: number,
+		applyStoredTitle = false,
+	) => {
 		const revision = ++titleRevision;
 		const signal = titleLifetime.signal;
 		let updated = false;
@@ -331,8 +343,23 @@ export function createController(tmux: RunTmux) {
 			// Keep model output provisional until its tmux update succeeds. A failed
 			// or superseded write must not affect later status-only title decisions.
 			const candidate = candidateTitle;
-			const hasTaskTitle = candidate !== undefined || baseTitle !== undefined;
-			const taskTitle = candidate ?? baseTitle ?? currentTitle.replace(/^\* /, "");
+			// A status-only refresh must not replay this controller's cached title:
+			// another Pi pane may have written a newer title to the shared window.
+			// Explicit sync/pin and quit cleanup are allowed to use the stored title.
+			const currentWindowHasStoredTitle = baseTitle !== undefined
+				&& (currentTitle === formatTitle(baseTitle, windowWaiting)
+					|| currentTitle === formatTitle(baseTitle, !windowWaiting));
+			const titleNeedsRestoringAtLocation = lastTitleLocation !== undefined
+				&& (lastTitleLocation.window !== current.window || lastTitleLocation.session !== current.session);
+			const storedTitle = applyStoredTitle || !active || pinnedTitleNeedsApply
+				|| titleNeedsRestoringAtLocation || currentWindowHasStoredTitle ? baseTitle : undefined;
+			const hasTaskTitle = candidate !== undefined || storedTitle !== undefined;
+			const taskTitle = candidate ?? storedTitle ?? currentTitle.replace(/^\* /, "");
+			const recordAppliedTitleLocation = () => {
+				if (!active || !stable || !hasTaskTitle || baseTitle === undefined) return;
+				lastTitleLocation = { session: current.session, window: current.window };
+				pinnedTitleNeedsApply = false;
+			};
 			let windowTitleMark: string | undefined;
 			if (currentTitle.startsWith(READY_PREFIX) || windowWaiting) {
 				windowTitleMark = await readWindowTitleMark(tmux, pane, signal);
@@ -382,6 +409,7 @@ export function createController(tmux: RunTmux) {
 					baseTitle = candidate;
 					candidateTitle = undefined;
 				}
+				recordAppliedTitleLocation();
 				updated = stable;
 				return;
 			}
@@ -424,6 +452,7 @@ export function createController(tmux: RunTmux) {
 				baseTitle = candidate;
 				candidateTitle = undefined;
 			}
+			recordAppliedTitleLocation();
 			updated = stable;
 		}).catch(() => {
 			if (isCurrent()) {
@@ -448,6 +477,7 @@ export function createController(tmux: RunTmux) {
 		baseTitle = title ?? (!alive ? idleTitle : undefined);
 		active = alive;
 		manualTitle = false;
+		pinnedTitleNeedsApply = false;
 		lastNamingContext = undefined;
 		return setWaiting(ctx, false);
 	};
@@ -576,7 +606,7 @@ export function createController(tmux: RunTmux) {
 		if (warnIfServerChanged(ctx)) return;
 		const signal = titleLifetime.signal;
 		warned = false;
-		const update = refreshTitle(ctx, pane);
+		const update = refreshTitle(ctx, pane, undefined, true);
 		const revision = titleRevision;
 		if (await update && !signal.aborted && revision === titleRevision) {
 			notifySafely(ctx, formerWindows.size || formerSessions.size
@@ -591,10 +621,11 @@ export function createController(tmux: RunTmux) {
 		cancel();
 		manualTitle = true;
 		baseTitle = title;
+		pinnedTitleNeedsApply = true;
 		lastNamingContext = undefined;
 		const signal = titleLifetime.signal;
 		const commandGeneration = generation;
-		const update = refreshTitle(ctx, pane);
+		const update = refreshTitle(ctx, pane, undefined, true);
 		const revision = titleRevision;
 		if (await update && !signal.aborted && revision === titleRevision && manualTitle
 			&& baseTitle === title && generation === commandGeneration) {
