@@ -1609,6 +1609,33 @@ test("Azure DevOps PATs and GitLab Runner tokens crossing prompt truncation skip
 	}
 });
 
+test("Azure and cloud access credentials crossing prompt truncation skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const tokens = [
+		`AbC7Q~${"Aa0_-.".repeat(6).slice(0, 32)}`,
+		`LTAI${"A1b2".repeat(5)}`,
+		`AKID${"C3d4".repeat(8)}`,
+	];
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const token of tokens) {
+		const tokenStart = prefixLength - Math.floor(token.length / 2);
+		const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(token);
+	}
+});
+
 test("a Slack API token crossing prompt truncation is not sent to the naming model", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
