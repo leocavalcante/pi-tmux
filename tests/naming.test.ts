@@ -746,7 +746,8 @@ test("screens Docker registry auth fields only when they encode user/password pa
 	const tokenStarts = [prefixLength - 10, suffixStart - 10];
 	const promptWithCredentialAt = (candidate: typeof candidates[number], tokenStart: number) => {
 		const prefix = `${"x".repeat(tokenStart - candidate.tokenOffset - 1)} `;
-		const prompt = `${prefix}${candidate.value} ${"y".repeat(promptLength - prefix.length - candidate.value.length - 1)}`;
+		const separator = "\n";
+		const prompt = `${prefix}${candidate.value}${separator}${"y".repeat(promptLength - prefix.length - candidate.value.length - separator.length)}`;
 		expect(prompt).toHaveLength(promptLength);
 		return prompt;
 	};
@@ -809,7 +810,8 @@ test("screens npm .npmrc _auth values across retained-context truncation boundar
 	const tokenStarts = [prefixLength - 10, suffixStart - 10];
 	const promptWithCredentialAt = (candidate: typeof candidates[number], tokenStart: number) => {
 		const prefix = `${"x".repeat(tokenStart - candidate.tokenOffset - 1)} `;
-		const prompt = `${prefix}${candidate.value} ${"y".repeat(promptLength - prefix.length - candidate.value.length - 1)}`;
+		const separator = "\n";
+		const prompt = `${prefix}${candidate.value}${separator}${"y".repeat(promptLength - prefix.length - candidate.value.length - separator.length)}`;
 		expect(prompt).toHaveLength(promptLength);
 		return prompt;
 	};
@@ -830,6 +832,108 @@ test("screens npm .npmrc _auth values across retained-context truncation boundar
 		const context = buildNamingRequestContext(input);
 		expect(hasSensitiveNamingContext(context.text)).toBe(false);
 		expect(context.hasSensitiveBoundary()).toBe(true);
+	}
+});
+
+test("screens short Basic Authorization and npm password values across truncation", () => {
+	const npmPassword = `//registry.npmjs.org/:_password=${Buffer.from("pw1").toString("base64")}`;
+	const basic = `Authorization: Basic ${Buffer.from("u:p").toString("base64")}`;
+	const obfuscatedNpmPassword = npmPassword.replace("_password", "_pass\u200bword").replace("cHcx", "cH\u0000cx");
+	const candidates = [
+		{ value: npmPassword, tokenOffset: npmPassword.indexOf("=") + 1 },
+		{ value: obfuscatedNpmPassword, tokenOffset: obfuscatedNpmPassword.indexOf("=") + 1 },
+		{ value: basic, tokenOffset: "Authorization: Basic ".length },
+		{
+			value: `Proxy-Authorization: Basic ${Buffer.from("u:p").toString("base64")}`,
+			tokenOffset: "Proxy-Authorization: Basic ".length,
+		},
+		{
+			value: `Autho\u200brization: Ba\u200bsic dT\u0000pw`,
+			tokenOffset: `Autho\u200brization: Ba\u200bsic `.length,
+		},
+		{
+			value: `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
+			tokenOffset: `Authorization: |-\n  Basic `.length,
+		},
+		{
+			value: `Proxy-Authorization: >-\n  Basic\n  ${Buffer.from("p:w").toString("base64")}`,
+			tokenOffset: `Proxy-Authorization: >-\n  Basic\n  `.length,
+		},
+	];
+	for (const { value } of candidates) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	const nearMisses = [
+		`//registry.npmjs.org/:_password=${Buffer.from("example").toString("base64")}`,
+		"//registry.npmjs.org/:_password=a!",
+		`Authorization: Basic ${Buffer.from("no-pair").toString("base64")}`,
+		`Authorization: |-\n  Basic ${Buffer.from("no-pair").toString("base64")}`,
+		`Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}\n\n  x`,
+	];
+	for (const value of nearMisses) {
+		expect(hasSensitiveNamingContext(value)).toBe(false);
+		expect(hasSensitiveOutput(value)).toBe(false);
+	}
+
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const promptWithCredentialAt = (candidate: typeof candidates[number], tokenStart: number) => {
+		const prefix = `${"x".repeat(tokenStart - candidate.tokenOffset - 1)} `;
+		const separator = candidate.value.includes("\n") ? "\n" : " ";
+		const prompt = `${prefix}${candidate.value}${separator}${"y".repeat(promptLength - prefix.length - candidate.value.length - separator.length)}`;
+		expect(prompt).toHaveLength(promptLength);
+		return prompt;
+	};
+
+	for (const candidate of candidates) {
+		for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
+			const context = buildNamingRequestContext([], promptWithCredentialAt(candidate, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+		const separator = candidate.value.includes("\n") ? "\n" : " ";
+		const historyContent = `${"x".repeat(997 - candidate.tokenOffset)} ${candidate.value}${separator}trailing text`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const context = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const placeholder = `//registry.npmjs.org/:_password=${Buffer.from("example").toString("base64")}`;
+	for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
+		const context = buildNamingRequestContext([], promptWithCredentialAt({
+			value: placeholder, tokenOffset: placeholder.indexOf("=") + 1,
+		}, tokenStart));
+		expect(context.hasSensitiveBoundary()).toBe(false);
+	}
+	const basicNearMisses = [
+		{
+			value: `Authorization: Basic ${Buffer.from("no-pair").toString("base64")}`,
+			tokenOffset: "Authorization: Basic ".length,
+		},
+		{
+			value: `Authorization: |-\n  Basic ${Buffer.from("no-pair").toString("base64")}`,
+			tokenOffset: `Authorization: |-\n  Basic `.length,
+		},
+		{
+			value: `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}\n\n  x`,
+			tokenOffset: `Authorization: |-\n  Basic `.length,
+		},
+	];
+	for (const candidate of basicNearMisses) {
+		for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
+			const context = buildNamingRequestContext([], promptWithCredentialAt(candidate, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
 	}
 });
 

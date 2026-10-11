@@ -1402,6 +1402,20 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review npm config ${npmrcPassword}`, npmrcPassword);
 	const obfuscatedNpmrcPassword = npmrcPassword.replace("_password", "_pass\u200bword");
 	await suppressed(fixture(), `Review npm config ${obfuscatedNpmrcPassword}`, obfuscatedNpmrcPassword);
+	for (const { value, tokenOffset } of [
+		{ value: npmrcPassword, tokenOffset: npmrcPassword.indexOf("=") + 1 },
+		{ value: obfuscatedNpmrcPassword, tokenOffset: obfuscatedNpmrcPassword.indexOf("=") + 1 },
+		{ value: shortBasicAuthorization, tokenOffset: "Authorization: Basic ".length },
+		{ value: shortProxyAuthorization, tokenOffset: "Proxy-Authorization: Basic ".length },
+		{ value: basicAuthorizationBlock, tokenOffset: basicAuthorizationBlock.indexOf("Basic ") + "Basic ".length },
+		{ value: proxyBasicAuthorizationBlock, tokenOffset: proxyBasicAuthorizationBlock.indexOf(Buffer.from("p:w").toString("base64")) },
+	]) {
+		const tokenStart = prefixLength - 2;
+		const prefix = `${"x".repeat(tokenStart - tokenOffset - 1)} `;
+		const separator = "\n";
+		const prompt = `${prefix}${value}${separator}${"y".repeat(3_000 - prefix.length - value.length - separator.length)}`;
+		await suppressed(fixture(), prompt, value);
+	}
 
 	const databaseUrl = "postgres://test-user:example-only-password@db.example.test/app";
 	await suppressed(fixture(), `Review the database connection ${databaseUrl}`, databaseUrl);
