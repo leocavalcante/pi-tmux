@@ -1823,6 +1823,50 @@ test("rejects PyPI API tokens without mistaking near-misses for tokens", async (
 	}
 });
 
+test("screens Heroku API tokens in naming context and model output without mistaking near-misses", async () => {
+	const token = `HRKU-AA${"A1_b".repeat(14)}AB`;
+	const obfuscatedTokens = [
+		token.replace("HRKU-AA", "HRKU\u200b-AA"),
+		`${token.slice(0, 38)}\u200b${token.slice(38)}`,
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const value of [token, token.toLowerCase(), ...obfuscatedTokens]) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review Heroku deployment ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.state.title).toBe("existing task");
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(token);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(token);
+	}
+
+	for (const nearMiss of [
+		`HRKU-AA${"A1_b".repeat(14)}`,
+		token.slice(0, -1),
+		`${token}Z`,
+		`x${token}`,
+		`_${token}`,
+		`HRKU-AB${"A1_b".repeat(14)}AB`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens Clojars tokens in naming context and model output without mistaking near-misses", async () => {
 	const token = `CLOJARS_${"A1b2".repeat(15)}`;
 	const obfuscatedTokens = [
