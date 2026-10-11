@@ -301,6 +301,12 @@ const GOOGLE_OAUTH_ACCESS_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`ya29\.[A-Za-z0-9_-]{20,}`,
 	String.raw`(y[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*2[\p{Cc}\p{Cf}]*9[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){19,})`,
 );
+const GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN = /glpat-[A-Za-z0-9_-]{20,}/;
+const GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN,
+	"glpat-[A-Za-z0-9_-]{20,}",
+	String.raw`(g[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){19,})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -440,7 +446,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?:sk|rk)_(?:live|test|prod)_[A-Za-z0-9]{16,}/i,
 	/(?:xox[baprcds]|xapp)-[A-Za-z0-9-]{10,}/,
 	/npm_[A-Za-z0-9]{20,}/,
-	/glpat-[A-Za-z0-9_-]{20,}/,
+	GITLAB_PERSONAL_ACCESS_TOKEN_PATTERN,
 	/hf_[A-Za-z0-9]{20,}/,
 	/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/,
 	/-----BEGIN (?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/,
@@ -733,6 +739,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	GOOGLE_OAUTH_CLIENT_SECRET_BOUNDARY_PATTERN,
 	GOOGLE_OAUTH_REFRESH_TOKEN_BOUNDARY_PATTERN,
 	GOOGLE_OAUTH_ACCESS_TOKEN_BOUNDARY_PATTERN,
+	GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
 ];
 
 function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {
