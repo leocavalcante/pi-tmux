@@ -942,6 +942,38 @@ test("screens short Basic Authorization and npm password values across truncatio
 	}
 });
 
+test("screens whitespace-obfuscated Authorization field names with valid Basic pairs", () => {
+	const encoded = Buffer.from("synthetic-user:synthetic-password").toString("base64");
+	for (const value of [
+		`Author ization: Basic ${encoded}`,
+		`Proxy-Author ization: Basic ${encoded}`,
+	]) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const promptAtBoundary = (value: string, headerStartOffset: number) => {
+		const headerStart = suffixStart - headerStartOffset;
+		const prefix = `${"x".repeat(headerStart - 1)} `;
+		const padding = ` ${"x".repeat(promptLength - prefix.length - value.length - 1)}`;
+		return `${prefix}${value}${padding}`;
+	};
+
+	const credential = `Proxy-Author ization: Basic ${encoded}`;
+	const context = buildNamingRequestContext([], promptAtBoundary(credential, "Proxy-Author ".length));
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(true);
+
+	const nearMiss = "Proxy-Author ization: Basic ordinary auth prose";
+	expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+	expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	expect(buildNamingRequestContext([], promptAtBoundary(nearMiss, "Proxy-Author ".length)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens whitespace-split Basic authorization labels across suffix truncation", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

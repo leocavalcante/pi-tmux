@@ -105,6 +105,17 @@ const OBFUSCATED_BASIC_AUTHORIZATION_PATTERN = new RegExp(
 const OBFUSCATED_BASIC_AUTHORIZATION_SCAN_PATTERN = new RegExp(
 	OBFUSCATED_BASIC_AUTHORIZATION_PATTERN.source, `${OBFUSCATED_BASIC_AUTHORIZATION_PATTERN.flags}g`,
 );
+const OBFUSCATED_AUTHORIZATION_HEADER_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?`
+		+ `(${interleaveWhitespaceAndFormattingControls("authorization")})`
+		+ String.raw`\s*["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{4,}={0,2})`
+		+ String.raw`(?![A-Za-z0-9+/=])`,
+	"iu",
+);
+const OBFUSCATED_AUTHORIZATION_HEADER_SCAN_PATTERN = new RegExp(
+	OBFUSCATED_AUTHORIZATION_HEADER_PATTERN.source,
+	`${OBFUSCATED_AUTHORIZATION_HEADER_PATTERN.flags}g`,
+);
 // npm .npmrc `_auth` and Docker config `auth` settings contain Base64 user:password pairs.
 const NPM_AUTH_PATTERN = /(?<![A-Za-z0-9_-])_auth\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
 const DOCKER_AUTH_PATTERN = /(?<![A-Za-z0-9_-])auth\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
@@ -252,6 +263,10 @@ function interleaveBoundaryFormattingControls(value: string): string {
 	return value.split("").join(String.raw`[\p{Cc}\p{Cf}]*`);
 }
 
+function interleaveWhitespaceAndFormattingControls(value: string): string {
+	return value.split("").join(String.raw`[\p{Cc}\p{Cf}\s]*`);
+}
+
 // Base64 payload separators tolerate invisible controls but not line breaks or other whitespace.
 const BASE64_FORMAT_CONTROL_SEPARATOR = String.raw`(?:(?!\p{White_Space})[\p{Cc}\p{Cf}])*`;
 
@@ -292,6 +307,10 @@ const BASIC_AUTHORIZATION_BOUNDARY_PATTERN = new RegExp(
 const OBFUSCATED_BASIC_AUTHORIZATION_BOUNDARY_SCAN_PATTERN = new RegExp(
 	OBFUSCATED_BASIC_AUTHORIZATION_PATTERN.source,
 	`${OBFUSCATED_BASIC_AUTHORIZATION_PATTERN.flags}dg`,
+);
+const OBFUSCATED_AUTHORIZATION_HEADER_BOUNDARY_SCAN_PATTERN = new RegExp(
+	OBFUSCATED_AUTHORIZATION_HEADER_PATTERN.source,
+	`${OBFUSCATED_AUTHORIZATION_HEADER_PATTERN.flags}dg`,
 );
 // Do not treat an unrelated YAML scalar continuation as part of a Basic credential.
 const BASIC_AUTHORIZATION_BLOCK_BOUNDARY_PATTERN = new RegExp(
@@ -1119,6 +1138,9 @@ function hasBasicAuthorizationCredential(value: string): boolean {
 	for (const match of value.matchAll(OBFUSCATED_BASIC_AUTHORIZATION_SCAN_PATTERN)) {
 		if (isBase64UserPasswordPair(match[2]!)) return true;
 	}
+	for (const match of value.matchAll(OBFUSCATED_AUTHORIZATION_HEADER_SCAN_PATTERN)) {
+		if (OBFUSCATION_SEPARATOR_PATTERN.test(match[1]!) && isBase64UserPasswordPair(match[2]!)) return true;
+	}
 	return false;
 }
 
@@ -1572,6 +1594,13 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 			const encodedRange = match.indices![2]!;
 			if (!overlapsRetainedContext(encodedRange[0], encodedRange[1])
 				|| !OBFUSCATION_SEPARATOR_PATTERN.test(joined.slice(schemeRange[0], schemeRange[1]))) continue;
+			if (isBase64UserPasswordPair(match[2]!)) return true;
+		}
+		for (const match of joined.matchAll(OBFUSCATED_AUTHORIZATION_HEADER_BOUNDARY_SCAN_PATTERN)) {
+			const headerRange = match.indices![1]!;
+			const encodedRange = match.indices![2]!;
+			if (!overlapsRetainedContext(encodedRange[0], encodedRange[1])
+				|| !OBFUSCATION_SEPARATOR_PATTERN.test(joined.slice(headerRange[0], headerRange[1]))) continue;
 			if (isBase64UserPasswordPair(match[2]!)) return true;
 		}
 		for (const pattern of WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS) {
