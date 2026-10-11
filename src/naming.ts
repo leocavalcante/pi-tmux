@@ -111,6 +111,8 @@ const AZURE_DEVOPS_PAT_PATTERN = /(?<![A-Za-z0-9_])[A-Za-z0-9]{75}AZDO[A-Za-z0-9
 const AZURE_AD_CLIENT_SECRET_PATTERN = /(?<![A-Za-z0-9_~.])[A-Za-z0-9_~.]{3}\dQ~[A-Za-z0-9_~.-]{31,34}(?![A-Za-z0-9_~.-])/;
 // Alibaba Cloud AccessKey IDs use the `LTAI` prefix and exactly 20 alphanumeric characters.
 const ALIBABA_ACCESS_KEY_ID_PATTERN = /(?<![A-Za-z0-9_])LTAI[A-Za-z0-9]{20}(?![A-Za-z0-9_])/;
+// Tencent Cloud SecretIds use the `AKID` prefix and exactly 32 alphanumeric characters.
+const TENCENT_CLOUD_SECRET_ID_PATTERN = /(?<![A-Za-z0-9_])AKID[A-Za-z0-9]{32}(?![A-Za-z0-9_])/;
 // Airtable personal access tokens use `pat`, 14 alphanumeric characters, then 64 lowercase hex characters.
 const AIRTABLE_PERSONAL_ACCESS_TOKEN_PATTERN = /(?<![A-Za-z0-9_])pat[A-Za-z0-9]{14}\.[a-f0-9]{64}(?![A-Za-z0-9_])/;
 // ClickHouse Cloud API keys use `4b1d` followed by exactly 38 alphanumeric characters.
@@ -187,6 +189,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	AZURE_DEVOPS_PAT_PATTERN,
 	AZURE_AD_CLIENT_SECRET_PATTERN,
 	ALIBABA_ACCESS_KEY_ID_PATTERN,
+	TENCENT_CLOUD_SECRET_ID_PATTERN,
 	AIRTABLE_PERSONAL_ACCESS_TOKEN_PATTERN,
 	CLICKHOUSE_CLOUD_API_KEY_PATTERN,
 	GITLAB_RUNNER_AUTH_TOKEN_PATTERN,

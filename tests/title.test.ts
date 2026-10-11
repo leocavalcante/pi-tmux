@@ -1017,6 +1017,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Alibaba Cloud access ${alibabaAccessKeyId}`, alibabaAccessKeyId);
 	const obfuscatedAlibabaAccessKeyId = alibabaAccessKeyId.replace("LTAI", "LT\u200bAI");
 	await suppressed(fixture(), `Review Alibaba Cloud access ${obfuscatedAlibabaAccessKeyId}`, obfuscatedAlibabaAccessKeyId);
+	const tencentCloudSecretId = `AKID${"A1b2".repeat(8)}`;
+	await suppressed(fixture(), `Review Tencent Cloud access ${tencentCloudSecretId}`, tencentCloudSecretId);
+	const obfuscatedTencentCloudSecretId = tencentCloudSecretId.replace("AKID", "A\u200bKID");
+	await suppressed(fixture(), `Review Tencent Cloud access ${obfuscatedTencentCloudSecretId}`, obfuscatedTencentCloudSecretId);
 	const azureAdClientSecret = `AbC7Q~${"Aa0_-.".repeat(5)}C3`;
 	await suppressed(fixture(), `Review Azure AD app registration ${azureAdClientSecret}`, azureAdClientSecret);
 	const obfuscatedAzureAdClientSecret = azureAdClientSecret.replace("Q~", "Q\u200b~");
@@ -1586,6 +1590,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		obfuscatedClickhouseKey,
 		`LTAI${"A1b2".repeat(5)}`,
 		`LT\u200bAI${"A1b2".repeat(5)}`,
+		`AKID${"A1b2".repeat(8)}`,
+		`A\u200bKID${"A1b2".repeat(8)}`,
 		`A3TA${"B".repeat(16)}`,
 		`ABIA${"C".repeat(16)}`,
 		`ACCA${"D".repeat(16)}`,
