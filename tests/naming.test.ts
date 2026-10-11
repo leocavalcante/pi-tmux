@@ -415,6 +415,54 @@ test("screens explicit credential assignments across retained-context truncation
 	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens private-key headers across retained-context truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const headers = [
+		["-----BEGIN ", "PRIVATE KEY-----"].join(""),
+		["-----BEGIN RSA ", "PRIVATE KEY-----"].join(""),
+		["-----BEGIN DSA ", "PRIVATE KEY-----"].join(""),
+		["-----BEGIN EC ", "PRIVATE KEY-----"].join(""),
+		["-----BEGIN OPENSSH ", "PRIVATE KEY-----"].join(""),
+		["-----BEGIN ENCRYPTED ", "PRIVATE KEY-----"].join(""),
+		["-----BEGIN PGP ", "PRIVATE KEY BLOCK-----"].join(""),
+	];
+
+	for (const header of headers) {
+		const prompt = `${"x".repeat(prefixLength - 8)}${header} ${"x".repeat(1_200)}`;
+		const context = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+	}
+
+	const header = ["-----BEGIN OPENSSH ", "PRIVATE KEY-----"].join("");
+	const controlObfuscatedHeader = header.replace("OPENSSH", "OPE\u200bNSSH");
+	const obfuscatedPrompt = `${"x".repeat(prefixLength - 8)}${controlObfuscatedHeader} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixLength = Math.floor(retainedLength / 2);
+	const suffixStart = promptLength - suffixLength;
+	const suffixPrompt = `${"x".repeat(suffixStart - 8)}${header}${"y".repeat(promptLength - suffixStart - header.length + 8)}`;
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+	const historyContent = `${"x".repeat(992)}${header} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: historyContent }] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+
+	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${header} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+	const nearMiss = `${"x".repeat(prefixLength - 8)}${["-----BEGIN ", "PUBLIC KEY-----"].join("")} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], nearMiss).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens bearer credentials across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
