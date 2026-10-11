@@ -1108,6 +1108,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		const truncatedPrompt = `${"x".repeat(tokenStart - label.length)}${label}${credential} ${"x".repeat(1_200)}`;
 		await suppressed(fixture(), truncatedPrompt, credential);
 	}
+	const genericAssignedKey = "M3n4".repeat(8);
+	const genericLabel = " access_key: ";
+	const genericBoundaryPrompt = `${"x".repeat(tokenStart - genericLabel.length)}${genericLabel}${genericAssignedKey} ${"x".repeat(1_200)}`;
+	await suppressed(fixture(), genericBoundaryPrompt, genericAssignedKey);
 	const artifactoryApiKey = `AKCp${"A1b2".repeat(17)}A`;
 	const artifactoryReferenceToken = `cmVmd${"C1d2".repeat(14)}AbC`;
 	await suppressed(fixture(), `Review the artifact repository ${artifactoryApiKey}`, artifactoryApiKey);

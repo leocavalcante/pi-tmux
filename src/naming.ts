@@ -59,7 +59,7 @@ const LABELED_PAYMENT_CARD_PATTERN = /(?<![A-Za-z0-9])(?:(?:credit|debit|payment
 // Require an explicit assignment and a long token-like value; don't compact ordinary spaces.
 const LABELED_CREDENTIAL_LABEL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?key(?:[-_\s]?id)?|access[-_\s]?token|aws[-_\s]?secret[-_\s]?access[-_\s]?key|client[-_\s]?key[-_\s]?data|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key)?|passphrase|password|credential|token|azure[-_\s]?devops(?:[-_\s]ext)?[-_\s]?pat)/i;
 const LABELED_CREDENTIAL_PATTERN = new RegExp(
-	`${LABELED_CREDENTIAL_LABEL_PATTERN.source}\\s*["']?\\s*[:=]\\s*["']?[A-Za-z0-9._~+/=-]{20,}`, "i",
+	`${LABELED_CREDENTIAL_LABEL_PATTERN.source}\\s*["']?\\s*[:=]\\s*["']?([A-Za-z0-9._~+/=-]{20,})`, "i",
 );
 // YAML allows tags and anchors between a key and its block scalar indicator.
 const YAML_BLOCK_SCALAR_PROPERTIES = String.raw`(?:(?:![^\s#]+|&[^\s#]+)[ \t]+)*`;
@@ -140,6 +140,12 @@ function makeBoundaryPattern(pattern: RegExp, token: string, boundaryToken: stri
 	const flags = pattern.flags.includes("u") ? pattern.flags : `${pattern.flags}u`;
 	return new RegExp(source, flags);
 }
+
+const LABELED_CREDENTIAL_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_CREDENTIAL_PATTERN,
+	"([A-Za-z0-9._~+/=-]{20,})",
+	String.raw`([A-Za-z0-9._~+/=-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9._~+/=-]){19,})`,
+);
 
 // Cloudflare API keys have 40 URL-safe characters; global keys have 37 hex characters.
 // Require a nearby Cloudflare label to avoid flagging unrelated opaque values.
@@ -639,6 +645,7 @@ type NamingContextBoundary = {
 
 // Capture group 1 must contain only the credential value, not its contextual label.
 const SENSITIVE_BOUNDARY_PATTERNS = [
+	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
 	VERCEL_API_TOKEN_BOUNDARY_PATTERN,
 	CLOUDFLARE_API_KEY_BOUNDARY_PATTERN,
 	CLOUDFLARE_GLOBAL_API_KEY_BOUNDARY_PATTERN,
