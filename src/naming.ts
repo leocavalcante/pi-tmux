@@ -214,6 +214,45 @@ const GITLAB_RUNNER_AUTH_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"glrt-[A-Za-z0-9_-]{20}",
 	String.raw`(g[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){19})`,
 );
+// GitLab documents several other credential prefixes. Keep their token bodies
+// narrow so ordinary GitLab setup prose does not trip the best-effort scanner.
+const GITLAB_FIXED_TOKEN_FORMATS = [
+	{ prefix: "gldt-", characters: "[A-Za-z0-9_-]", minLength: 20, maxLength: 20 }, // deploy token
+	{ prefix: "glffct-", characters: "[A-Za-z0-9_-]", minLength: 20, maxLength: 20 }, // feature-flag client token
+	{ prefix: "glft-", characters: "[A-Za-z0-9_-]", minLength: 20, maxLength: 20 }, // feed token
+	{ prefix: "glimt-", characters: "[A-Za-z0-9_-]", minLength: 25, maxLength: 25 }, // incoming-mail token
+	{ prefix: "glagent-", characters: "[A-Za-z0-9_-]", minLength: 50, maxLength: 50 }, // Kubernetes agent token
+	{ prefix: "gloas-", characters: "[A-Za-z0-9_-]", minLength: 64, maxLength: 64 }, // OAuth application secret
+	{ prefix: "glptt-", characters: "[a-f0-9]", minLength: 40, maxLength: 40 }, // pipeline trigger token
+	{ prefix: "GR1348941", characters: "[A-Za-z0-9_-]", minLength: 20, maxLength: 20 }, // legacy runner registration token
+	{ prefix: "glsoat-", characters: "[A-Za-z0-9_-]", minLength: 20, maxLength: 20 }, // SCIM token
+	{ prefix: "glrtr-", characters: "[A-Za-z0-9_-]", minLength: 20, maxLength: 300 }, // routable runner token
+] as const;
+const GITLAB_FIXED_TOKEN_PATTERNS = GITLAB_FIXED_TOKEN_FORMATS.map(({ prefix, characters, minLength, maxLength }) => {
+	const tokenLength = minLength === maxLength ? `{${minLength}}` : `{${minLength},${maxLength}}`;
+	return new RegExp(`(?<![A-Za-z0-9_-])(${prefix}${characters}${tokenLength})(?![A-Za-z0-9_-])`, "u");
+});
+const boundaryTokenCharacters = (characters: string, minLength: number, maxLength = minLength) => {
+	const repeats = minLength === maxLength ? `{${minLength - 1}}` : `{${minLength - 1},${maxLength - 1}}`;
+	return String.raw`[\p{Cc}\p{Cf}]*${characters}(?:[\p{Cc}\p{Cf}]*${characters})${repeats}`;
+};
+const GITLAB_FIXED_TOKEN_BOUNDARY_PATTERNS = GITLAB_FIXED_TOKEN_FORMATS.map(({ prefix, characters, minLength, maxLength }) =>
+	new RegExp(
+		`(?<![A-Za-z0-9_-])(${interleaveBoundaryFormattingControls(prefix)}`
+			+ `${boundaryTokenCharacters(characters, minLength, maxLength)})(?![A-Za-z0-9_-])`, "u",
+	),
+);
+const GITLAB_CICD_JOB_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])(glcbt-[A-Za-z0-9]{1,5}_[A-Za-z0-9_-]{20})(?![A-Za-z0-9_-])/;
+const GITLAB_CICD_JOB_TOKEN_BOUNDARY_PATTERN = new RegExp(
+	`(?<![A-Za-z0-9_-])(${interleaveBoundaryFormattingControls("glcbt-")}`
+		+ `${boundaryTokenCharacters("[A-Za-z0-9]", 1, 5)}[\\p{Cc}\\p{Cf}]*_[\\p{Cc}\\p{Cf}]*`
+		+ `${boundaryTokenCharacters("[A-Za-z0-9_-]", 20)})(?![A-Za-z0-9_-])`, "u",
+);
+const GITLAB_SESSION_COOKIE_PATTERN = /(?<![A-Za-z0-9_-])_gitlab_session=([a-z0-9]{32})(?![A-Za-z0-9_-])/;
+const GITLAB_SESSION_COOKIE_BOUNDARY_PATTERN = new RegExp(
+	`(?<![A-Za-z0-9_-])${interleaveBoundaryFormattingControls("_gitlab_session")}`
+		+ String.raw`[\p{Cc}\p{Cf}]*=[\p{Cc}\p{Cf}]*([a-z0-9](?:[\p{Cc}\p{Cf}]*[a-z0-9]){31})(?![A-Za-z0-9_-])`, "u",
+);
 // Docker Hub personal and organization access tokens have fixed-length bodies.
 const DOCKER_HUB_PAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_pat_[A-Za-z0-9_-]{27}(?![A-Za-z0-9_-])/;
 const DOCKER_HUB_OAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_oat_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/;
@@ -1005,6 +1044,9 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	AIRTABLE_PERSONAL_ACCESS_TOKEN_PATTERN,
 	CLICKHOUSE_CLOUD_API_KEY_PATTERN,
 	GITLAB_RUNNER_AUTH_TOKEN_PATTERN,
+	...GITLAB_FIXED_TOKEN_PATTERNS,
+	GITLAB_CICD_JOB_TOKEN_PATTERN,
+	GITLAB_SESSION_COOKIE_PATTERN,
 	DOCKER_HUB_PAT_PATTERN,
 	DOCKER_HUB_OAT_PATTERN,
 	PYPI_API_TOKEN_PATTERN,
@@ -1441,6 +1483,9 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	ALIBABA_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 	TENCENT_CLOUD_SECRET_ID_BOUNDARY_PATTERN,
 	GITLAB_RUNNER_AUTH_TOKEN_BOUNDARY_PATTERN,
+	...GITLAB_FIXED_TOKEN_BOUNDARY_PATTERNS,
+	GITLAB_CICD_JOB_TOKEN_BOUNDARY_PATTERN,
+	GITLAB_SESSION_COOKIE_BOUNDARY_PATTERN,
 	HEROKU_API_TOKEN_BOUNDARY_PATTERN,
 	ARTIFACTORY_API_KEY_BOUNDARY_PATTERN,
 	ARTIFACTORY_REFERENCE_TOKEN_BOUNDARY_PATTERN,

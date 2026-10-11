@@ -1480,12 +1480,35 @@ test("screens Docker Hub tokens across retained-context truncation boundaries", 
 	}
 });
 
-test("screens Azure DevOps and GitLab Runner tokens across retained-context truncation boundaries", () => {
+test("screens Azure DevOps and GitLab tokens across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
 	const azureToken = `${"a".repeat(75)}AZDO${"B".repeat(5)}`;
 	const runnerToken = `glrt-${"A1b2_-".repeat(3)}Z9`;
+	const token = (prefix: string, body: string) => `${prefix}${body}`;
+	const repeated = (characters: string, length: number) => characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
+	const gitlabTokens = [
+		{ token: token("glcbt-abcde_", "A1b2_-".repeat(3) + "Z9"), prefix: "glcbt" },
+		{ token: token("gldt-", "A1b2_-".repeat(3) + "Z9"), prefix: "gldt-" },
+		{ token: token("glffct-", "A1b2_-".repeat(3) + "Z9"), prefix: "glffct-" },
+		{ token: token("glft-", "A1b2_-".repeat(3) + "Z9"), prefix: "glft-" },
+		{ token: token("glimt-", repeated("A1b2_-", 25)), prefix: "glimt-" },
+		{ token: token("glagent-", repeated("A1b2_-", 50)), prefix: "glagent-" },
+		{ token: token("gloas-", repeated("A1b2_-", 64)), prefix: "gloas-" },
+		{ token: token("glptt-", "a1b2".repeat(10)), prefix: "glptt-" },
+		{ token: token("GR1348941", "A1b2_".repeat(4)), prefix: "GR1348941" },
+		{ token: token("glsoat-", "A1b2_-".repeat(3) + "Z9"), prefix: "glsoat-" },
+		{ token: token("glrtr-", "A1b2_-".repeat(3) + "Z9"), prefix: "glrtr-" },
+		{ token: `_gitlab_session=${"a1b2".repeat(8)}`, prefix: "_gitlab_session" },
+	].map(({ token: value, prefix }) => ({
+		token: value,
+		obfuscated: value.replace(prefix, `${prefix.slice(0, Math.floor(prefix.length / 2))}\u200b${prefix.slice(Math.floor(prefix.length / 2))}`),
+		controlObfuscated: `${value.slice(0, Math.floor(value.length / 2))}\u0000${value.slice(Math.floor(value.length / 2))}`,
+		nearMisses: prefix === "glrtr-"
+			? [value.slice(0, -1), value.replace(prefix, `${prefix.slice(0, -1)}x`), `x${value}`, `_${value}`, `${prefix}${"a".repeat(301)}`]
+			: [value.slice(0, -1), `${value}x`, value.replace(prefix, `${prefix.slice(0, -1)}x`), `x${value}`, `_${value}`],
+	}));
 	const cases = [
 		{
 			token: azureToken,
@@ -1503,6 +1526,7 @@ test("screens Azure DevOps and GitLab Runner tokens across retained-context trun
 				runnerToken.slice(0, -1), `${runnerToken}Z`, runnerToken.replace("glrt", "glrx"), `x${runnerToken}`, `_${runnerToken}`,
 			],
 		},
+		...gitlabTokens,
 	];
 
 	for (const { token, obfuscated, controlObfuscated, nearMisses } of cases) {

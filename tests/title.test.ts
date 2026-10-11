@@ -2999,6 +2999,64 @@ test("rejects GitLab Runner authentication tokens without mistaking near-misses 
 	}
 });
 
+test("rejects additional GitLab credentials and session cookies without flagging near-misses", async () => {
+	const repeated = (characters: string, length: number) => characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
+	const cases = [
+		{ token: `glcbt-abcde_${repeated("A1b2_-", 20)}`, prefix: "glcbt" },
+		{ token: `gldt-${repeated("A1b2_-", 20)}`, prefix: "gldt-" },
+		{ token: `glffct-${repeated("A1b2_-", 20)}`, prefix: "glffct-" },
+		{ token: `glft-${repeated("A1b2_-", 20)}`, prefix: "glft-" },
+		{ token: `glimt-${repeated("A1b2_-", 25)}`, prefix: "glimt-" },
+		{ token: `glagent-${repeated("A1b2_-", 50)}`, prefix: "glagent-" },
+		{ token: `gloas-${repeated("A1b2_-", 64)}`, prefix: "gloas-" },
+		{ token: `glptt-${"a1b2".repeat(10)}`, prefix: "glptt-" },
+		{ token: `GR1348941${repeated("A1b2_", 20)}`, prefix: "GR1348941" },
+		{ token: `glsoat-${repeated("A1b2_-", 20)}`, prefix: "glsoat-" },
+		{ token: `glrtr-${repeated("A1b2_-", 20)}`, prefix: "glrtr-" },
+		{ token: `_gitlab_session=${"a1b2".repeat(8)}`, prefix: "_gitlab_session" },
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const { token, prefix } of cases) {
+		const obfuscated = token.replace(prefix, `${prefix.slice(0, Math.floor(prefix.length / 2))}\u200b${prefix.slice(Math.floor(prefix.length / 2))}`);
+		for (const sensitiveToken of [token, obfuscated]) {
+			expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
+			expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
+
+			const input = fixture();
+			const find = spyOn(input.ctx.modelRegistry, "find");
+			input.input(`Review GitLab credentials ${sensitiveToken}`);
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(input.requests).toHaveLength(0);
+			expect(input.warnings).toEqual([contextWarning]);
+			expect(input.warnings.join(" ")).not.toContain(token);
+
+			const output = fixture([Promise.resolve(response(sensitiveToken))]);
+			output.input("Name a task");
+			await settle();
+			expect(output.state.title).toBe("existing task");
+			expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+			expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+			expect(output.warnings.join(" ")).not.toContain(token);
+		}
+
+		const nearMisses = prefix === "glrtr-"
+			? [token.slice(0, -1), token.replace(prefix, `${prefix.slice(0, -1)}x`), `x${token}`, `_${token}`, `${prefix}${"a".repeat(301)}`]
+			: [token.slice(0, -1), `${token}x`, token.replace(prefix, `${prefix.slice(0, -1)}x`), `x${token}`, `_${token}`];
+		for (const nearMiss of nearMisses) {
+			expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+			expect(hasSensitiveOutput(nearMiss)).toBe(false);
+		}
+	}
+
+	const safeTitle = fixture([Promise.resolve(response("gitlab ci setup"))]);
+	safeTitle.input("Review GitLab CI job token configuration");
+	await settle();
+	expect(safeTitle.state.title).toBe("gitlab ci setup");
+	expect(safeTitle.warnings).toEqual([]);
+});
+
 test("rejects Docker Hub personal and organization tokens without mistaking near-misses for tokens", async () => {
 	const patBody = "A1b2_-".repeat(5).slice(0, 27);
 	const oatBody = "Q7w8_-".repeat(6).slice(0, 32);
