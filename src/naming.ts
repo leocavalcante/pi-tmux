@@ -968,6 +968,13 @@ const TAVILY_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`tvly-(?:dev-|prod-)?[A-Za-z0-9]{16,}`,
 	`(${TAVILY_API_TOKEN_BOUNDARY_PREFIX}[\\p{Cc}\\p{Cf}]*[A-Za-z0-9](?:[\\p{Cc}\\p{Cf}]*[A-Za-z0-9]){15,})`,
 );
+// Jina AI API keys use `jina_` followed by exactly 60 alphanumeric characters.
+const JINA_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])jina_[A-Za-z0-9]{60}(?![A-Za-z0-9_])/i;
+const JINA_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	JINA_API_TOKEN_PATTERN,
+	String.raw`jina_[A-Za-z0-9]{60}`,
+	String.raw`(j[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*n[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){59})`,
+);
 // Capture URI user-info separately so boundary checks can ensure credential text overlaps retained context.
 const URI_USER_INFO_CREDENTIAL_PATTERN = /[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/((?:[^\s/:@]+)?:[^\s/@]+)@/i;
 const URI_USER_INFO_CREDENTIAL_BOUNDARY_PATTERN = /[A-Za-z](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+.-]){0,31}[\p{Cc}\p{Cf}]*:[\p{Cc}\p{Cf}]*\/[\p{Cc}\p{Cf}]*\/[\p{Cc}\p{Cf}]*((?:[^\s/:@]+)?:[^\s/@]+)@/iu;
@@ -1025,6 +1032,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	PULUMI_API_TOKEN_PATTERN,
 	FIREWORKS_API_TOKEN_PATTERN,
 	TAVILY_API_TOKEN_PATTERN,
+	JINA_API_TOKEN_PATTERN,
 	DATABRICKS_API_TOKEN_PATTERN,
 	DIGITALOCEAN_API_TOKEN_PATTERN,
 	CLOUDFLARE_ORIGIN_CA_KEY_PATTERN,
@@ -1507,6 +1515,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	ADOBE_CLIENT_SECRET_BOUNDARY_PATTERN,
 	FIREWORKS_API_TOKEN_BOUNDARY_PATTERN,
 	TAVILY_API_TOKEN_BOUNDARY_PATTERN,
+	JINA_API_TOKEN_BOUNDARY_PATTERN,
 	SENDGRID_API_KEY_BOUNDARY_PATTERN,
 	BREVO_API_KEY_BOUNDARY_PATTERN,
 	TWILIO_API_KEY_BOUNDARY_PATTERN,
