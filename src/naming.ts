@@ -540,6 +540,41 @@ const SUPABASE_SECRET_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"sb_secret_[A-Za-z0-9_-]{32}",
 	String.raw`(s[\p{Cc}\p{Cf}]*b[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){31})`,
 );
+// Grafana API keys use `eyJrIjoi` followed by 70–400 alphanumeric characters.
+const GRAFANA_API_KEY_PATTERN = /(?<![A-Za-z0-9_])eyJrIjoi[a-z0-9]{70,400}={0,3}(?![A-Za-z0-9_=-])/i;
+const GRAFANA_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GRAFANA_API_KEY_PATTERN,
+	"eyJrIjoi[a-z0-9]{70,400}={0,3}",
+	String.raw`(e[\p{Cc}\p{Cf}]*y[\p{Cc}\p{Cf}]*J[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*I[\p{Cc}\p{Cf}]*j[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){69,399}={0,3})`,
+);
+// Grafana Cloud tokens use `glc_` followed by 32–400 base64 characters.
+const GRAFANA_CLOUD_TOKEN_PATTERN = /(?<![A-Za-z0-9_])glc_[a-z0-9+/]{32,400}={0,3}(?![A-Za-z0-9_+/=-])/i;
+const GRAFANA_CLOUD_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GRAFANA_CLOUD_TOKEN_PATTERN,
+	"glc_[a-z0-9+/]{32,400}={0,3}",
+	String.raw`(g[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9+/](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+/]){31,399}={0,3})`,
+);
+// Grafana service-account tokens use 32 alphanumeric and 8 hexadecimal characters.
+const GRAFANA_SERVICE_ACCOUNT_TOKEN_PATTERN = /(?<![A-Za-z0-9_])glsa_[a-z0-9]{32}_[a-f0-9]{8}(?![A-Za-z0-9_-])/i;
+const GRAFANA_SERVICE_ACCOUNT_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GRAFANA_SERVICE_ACCOUNT_TOKEN_PATTERN,
+	"glsa_[a-z0-9]{32}_[a-f0-9]{8}",
+	String.raw`(g[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){31}[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Fa-f0-9](?:[\p{Cc}\p{Cf}]*[A-Fa-f0-9]){7})`,
+);
+// Doppler personal tokens use `dp.pt.` followed by 43 alphanumeric characters.
+const DOPPLER_PERSONAL_TOKEN_PATTERN = /(?<![A-Za-z0-9_])dp\.pt\.[a-z0-9]{43}(?![A-Za-z0-9_-])/i;
+const DOPPLER_PERSONAL_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DOPPLER_PERSONAL_TOKEN_PATTERN,
+	String.raw`dp\.pt\.[a-z0-9]{43}`,
+	String.raw`(d[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){42})`,
+);
+// Sentry user access tokens use `sntryu_` followed by 64 lowercase hex characters.
+const SENTRY_USER_TOKEN_PATTERN = /(?<![A-Za-z0-9_])sntryu_[a-f0-9]{64}(?![A-Za-z0-9_-])/;
+const SENTRY_USER_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	SENTRY_USER_TOKEN_PATTERN,
+	"sntryu_[a-f0-9]{64}",
+	String.raw`(s[\p{Cc}\p{Cf}]*n[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*y[\p{Cc}\p{Cf}]*u[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){63})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -620,18 +655,13 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])ATATT3[A-Za-z0-9_=-]{186}(?![A-Za-z0-9_=-])/i,
 	// Adobe OAuth client secrets use `p8e-` followed by 32 alphanumeric characters.
 	/(?<![A-Za-z0-9_])p8e-[a-z0-9]{32}(?![A-Za-z0-9_-])/i,
-	// Grafana API keys use `eyJrIjoi` followed by 70–400 alphanumeric characters.
-	/(?<![A-Za-z0-9_])eyJrIjoi[a-z0-9]{70,400}={0,3}(?![A-Za-z0-9_=-])/i,
-	// Grafana Cloud tokens use `glc_` followed by 32–400 base64 characters.
-	/(?<![A-Za-z0-9_])glc_[a-z0-9+/]{32,400}={0,3}(?![A-Za-z0-9_+/=-])/i,
-	// Grafana service-account tokens use 32 alphanumeric and 8 hexadecimal characters.
-	/(?<![A-Za-z0-9_])glsa_[a-z0-9]{32}_[a-f0-9]{8}(?![A-Za-z0-9_-])/i,
-	// Doppler personal tokens use `dp.pt.` followed by 43 alphanumeric characters.
-	/(?<![A-Za-z0-9_])dp\.pt\.[a-z0-9]{43}(?![A-Za-z0-9_-])/i,
+	GRAFANA_API_KEY_PATTERN,
+	GRAFANA_CLOUD_TOKEN_PATTERN,
+	GRAFANA_SERVICE_ACCOUNT_TOKEN_PATTERN,
+	DOPPLER_PERSONAL_TOKEN_PATTERN,
 	// Sentry organization tokens contain an encoded region claim and a 43-character suffix.
 	/(?<![A-Za-z0-9_])sntrys_eyJpYXQiO[A-Za-z0-9+/]{10,200}(?:LCJyZWdpb25fdXJs|InJlZ2lvbl91cmwi|cmVnaW9uX3VybCI6)[A-Za-z0-9+/]{10,200}={0,2}_[A-Za-z0-9+/]{43}(?![A-Za-z0-9_+/=-])/,
-	// Sentry user access tokens use `sntryu_` followed by 64 lowercase hex characters.
-	/(?<![A-Za-z0-9_])sntryu_[a-f0-9]{64}(?![A-Za-z0-9_-])/,
+	SENTRY_USER_TOKEN_PATTERN,
 	TELEGRAM_BOT_TOKEN_PATTERN,
 	VAULT_TOKEN_PATTERN,
 	NOTION_TOKEN_PATTERN,
@@ -992,6 +1022,11 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	VAULT_TOKEN_BOUNDARY_PATTERN,
 	NOTION_TOKEN_BOUNDARY_PATTERN,
 	SUPABASE_SECRET_API_KEY_BOUNDARY_PATTERN,
+	GRAFANA_API_KEY_BOUNDARY_PATTERN,
+	GRAFANA_CLOUD_TOKEN_BOUNDARY_PATTERN,
+	GRAFANA_SERVICE_ACCOUNT_TOKEN_BOUNDARY_PATTERN,
+	DOPPLER_PERSONAL_TOKEN_BOUNDARY_PATTERN,
+	SENTRY_USER_TOKEN_BOUNDARY_PATTERN,
 	STRIPE_WEBHOOK_SECRET_BOUNDARY_PATTERN,
 	SLACK_WEBHOOK_URL_BOUNDARY_PATTERN,
 	SLACK_LEGACY_WEBHOOK_URL_BOUNDARY_PATTERN,
