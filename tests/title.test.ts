@@ -1100,6 +1100,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const bearerTokenStart = prefixLength - 8;
 	const truncatedBearerPrompt = `${"x".repeat(bearerTokenStart - 7)}Bearer ${bearerToken} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedBearerPrompt, bearerToken);
+	const boundaryEmailAddress = "alice@example.test";
+	const emailStart = prefixLength - 6;
+	const truncatedEmailPrompt = `${"x".repeat(emailStart - 1)} ${boundaryEmailAddress} ${"x".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedEmailPrompt, boundaryEmailAddress);
 	const cloudflareApiKey = "a1b2".repeat(10);
 	const truncatedCloudflarePrompt = `${"x".repeat(tokenStart - 13)} Cloudflare: ${cloudflareApiKey} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedCloudflarePrompt, cloudflareApiKey);
