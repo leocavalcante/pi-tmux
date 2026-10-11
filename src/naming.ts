@@ -826,9 +826,11 @@ const TWILIO_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`SK[a-f0-9]{32}`,
 	String.raw`(S[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){31})`,
 );
+// Capture URI user-info separately so boundary checks can ensure credential text overlaps retained context.
+const URI_USER_INFO_CREDENTIAL_PATTERN = /[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/((?:[^\s/:@]+)?:[^\s/@]+)@/i;
+const URI_USER_INFO_CREDENTIAL_BOUNDARY_PATTERN = /[A-Za-z](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9+.-]){0,31}[\p{Cc}\p{Cf}]*:[\p{Cc}\p{Cf}]*\/[\p{Cc}\p{Cf}]*\/[\p{Cc}\p{Cf}]*((?:[^\s/:@]+)?:[^\s/@]+)@/iu;
 const CREDENTIAL_LIKE_PATTERNS = [
-	// URI user-info is a common place for database and service credentials.
-	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
+	URI_USER_INFO_CREDENTIAL_PATTERN,
 	AZURE_SAS_PATTERN,
 	AZURE_DEVOPS_PAT_PATTERN,
 	AZURE_AD_CLIENT_SECRET_PATTERN,
@@ -1224,6 +1226,7 @@ type NamingContextBoundary = {
 
 // Capture group 1 must contain only the sensitive value, not its contextual label.
 const SENSITIVE_BOUNDARY_PATTERNS = [
+	URI_USER_INFO_CREDENTIAL_BOUNDARY_PATTERN,
 	LABELED_CREDENTIAL_BOUNDARY_PATTERN,
 	LABELED_PASSWORD_BOUNDARY_PATTERN,
 	AZURE_SAS_BOUNDARY_PATTERN,

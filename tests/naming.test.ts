@@ -2408,6 +2408,45 @@ test("screens additional AWS access-key ID prefixes without flagging near-misses
 	}
 });
 
+test("screens credential-bearing URI user-info across retained boundaries without flagging no-password URLs", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const url = "postgres://test-user:!examplepassword!!!@db.example.test/app";
+	const variants = [
+		url,
+		`${url.slice(0, 4)}\u0000${url.slice(4)}`,
+		`${url.slice(0, 15)}\u200b${url.slice(15)}`,
+	];
+	const tokenStarts = [prefixLength - 20, suffixStart - 20];
+
+	for (const value of variants) {
+		for (const tokenStart of tokenStarts) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const noPasswordUrls = [
+		"postgres://test-user@localhost/app",
+		"redis://:@localhost:6379/0",
+		"postgres:/test-user:password@localhost/app",
+	];
+	for (const value of noPasswordUrls) {
+		for (const tokenStart of tokenStarts) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens alternate AWS access IDs and ABSK bearer tokens across retained boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
