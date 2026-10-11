@@ -1005,6 +1005,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the auth flow with ${token}`);
 	const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
 	await suppressed(fixture(), `Review Airtable data access ${airtableToken}`, airtableToken);
+	const clickhouseKey = `4b1d${"A1b2".repeat(9)}A1`;
+	await suppressed(fixture(), `Review ClickHouse access ${clickhouseKey}`, clickhouseKey);
+	const obfuscatedClickhouseKey = clickhouseKey.replace("4b1d", "4b\u200b1d");
+	await suppressed(fixture(), `Review ClickHouse access ${obfuscatedClickhouseKey}`, obfuscatedClickhouseKey);
 	const awsAlternateAccessKeys = [
 		`A3TA${"B".repeat(16)}`,
 		`ABIA${"C".repeat(16)}`,
@@ -1449,6 +1453,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const awsKey = ["AKIA", "A".repeat(16)].join("");
 	const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
 	const obfuscatedAirtableToken = airtableToken.replace(".", "\u200b.");
+	const clickhouseKey = `4b1d${"A1b2".repeat(9)}A1`;
+	const obfuscatedClickhouseKey = clickhouseKey.replace("4b1d", "4b\u200b1d");
 	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
 	const compatibilityGithubToken = [...githubToken]
 		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
@@ -1556,6 +1562,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["ASIA", "A".repeat(16)].join(""),
 		airtableToken,
 		obfuscatedAirtableToken,
+		clickhouseKey,
+		obfuscatedClickhouseKey,
 		`A3TA${"B".repeat(16)}`,
 		`ABIA${"C".repeat(16)}`,
 		`ACCA${"D".repeat(16)}`,
