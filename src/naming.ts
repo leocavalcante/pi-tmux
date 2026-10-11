@@ -208,6 +208,17 @@ const HEROKU_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 );
 // EasyPost test and production API keys use `EZTK` or `EZAK` plus 54 alphanumeric characters.
 const EASYPOST_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])EZ(?:AK|TK)[A-Za-z0-9]{54}(?![A-Za-z0-9_])/i;
+const EASYPOST_API_TOKEN_BOUNDARY_PREFIX = `(?:${["EZAK", "EZTK"]
+	.map(interleaveBoundaryFormattingControls).join("|")})`;
+const EASYPOST_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	EASYPOST_API_TOKEN_PATTERN,
+	"EZ(?:AK|TK)[A-Za-z0-9]{54}",
+	`(${EASYPOST_API_TOKEN_BOUNDARY_PREFIX}[\\p{Cc}\\p{Cf}]*[A-Za-z0-9](?:[\\p{Cc}\\p{Cf}]*[A-Za-z0-9]){53})`,
+);
+
+function interleaveBoundaryFormattingControls(value: string): string {
+	return value.split("").join(String.raw`[\p{Cc}\p{Cf}]*`);
+}
 
 function makeBoundaryPattern(pattern: RegExp, token: string, boundaryToken: string): RegExp {
 	const source = pattern.source.replace(token, boundaryToken);
@@ -347,6 +358,13 @@ const FLY_IO_ORG_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`(f[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*1[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){42})`,
 );
 const FLY_IO_MACHINE_TOKEN_PATTERN = /(?<![A-Za-z0-9_])(?:fm1[ar]|fm2)_[A-Za-z0-9+/]{100,}={0,3}(?![A-Za-z0-9_+/=-])/;
+const FLY_IO_MACHINE_TOKEN_BOUNDARY_PREFIX = `(?:${["fm1a_", "fm1r_", "fm2_"]
+	.map(interleaveBoundaryFormattingControls).join("|")})`;
+const FLY_IO_MACHINE_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	FLY_IO_MACHINE_TOKEN_PATTERN,
+	String.raw`(?:fm1[ar]|fm2)_[A-Za-z0-9+/]{100,}={0,3}`,
+	`(${FLY_IO_MACHINE_TOKEN_BOUNDARY_PREFIX}[\\p{Cc}\\p{Cf}]*[A-Za-z0-9+/](?:[\\p{Cc}\\p{Cf}]*[A-Za-z0-9+/]){99,}(?:[\\p{Cc}\\p{Cf}]*=){0,3}[\\p{Cc}\\p{Cf}]*)`,
+);
 // Dynatrace API tokens use `dt0c01.` and two fixed-length alphanumeric segments.
 const DYNATRACE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])dt0c01\.[A-Za-z0-9]{24}\.[A-Za-z0-9]{64}(?![A-Za-z0-9_])/;
 const DYNATRACE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -356,6 +374,11 @@ const DYNATRACE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 );
 // Resend API keys have the distinctive `re_` prefix and a long URL-safe body.
 const RESEND_API_KEY_PATTERN = /(?<![A-Za-z0-9_])re_[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-])/;
+const RESEND_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	RESEND_API_KEY_PATTERN,
+	"re_[A-Za-z0-9_-]{32,}",
+	`(${interleaveBoundaryFormattingControls("re_")}[\\p{Cc}\\p{Cf}]*[A-Za-z0-9_-](?:[\\p{Cc}\\p{Cf}]*[A-Za-z0-9_-]){31,})`,
+);
 // Typeform API tokens use `tfp_` followed by exactly 59 URL-safe characters.
 const TYPEFORM_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])tfp_[A-Za-z0-9_.=-]{59}(?![A-Za-z0-9_.=-])/i;
 const TYPEFORM_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -374,8 +397,22 @@ const NEW_RELIC_USER_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
 // The subtype separator must not prevent screening of the opaque key body.
 const TAILSCALE_KEY_PATTERN =
 	/(?<![A-Za-z0-9_-])tskey-(?:[A-Za-z0-9]{16,}|(?:auth|api|client)-[A-Za-z0-9][A-Za-z0-9_-]{15,})(?![A-Za-z0-9_-])/i;
+const TAILSCALE_KEY_BOUNDARY_SUBTYPES = `(?:${["auth", "api", "client"]
+	.map(interleaveBoundaryFormattingControls).join("|")})`;
+const TAILSCALE_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	TAILSCALE_KEY_PATTERN,
+	String.raw`tskey-(?:[A-Za-z0-9]{16,}|(?:auth|api|client)-[A-Za-z0-9][A-Za-z0-9_-]{15,})`,
+	`(${interleaveBoundaryFormattingControls("tskey-")}[\\p{Cc}\\p{Cf}]*(?:[A-Za-z0-9](?:[\\p{Cc}\\p{Cf}]*[A-Za-z0-9]){15,}|${TAILSCALE_KEY_BOUNDARY_SUBTYPES}[\\p{Cc}\\p{Cf}]*-[\\p{Cc}\\p{Cf}]*[A-Za-z0-9](?:[\\p{Cc}\\p{Cf}]*[A-Za-z0-9_-]){15,}))`,
+);
 // Square access tokens use `EAAA` or `sq0atp-` followed by 22–60 URL-safe characters.
 const SQUARE_ACCESS_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])(?:EAAA|sq0atp-)[A-Za-z0-9_-]{22,60}(?![A-Za-z0-9_-])/i;
+const SQUARE_ACCESS_TOKEN_BOUNDARY_PREFIX = `(?:${["EAAA", "sq0atp-"]
+	.map(interleaveBoundaryFormattingControls).join("|")})`;
+const SQUARE_ACCESS_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	SQUARE_ACCESS_TOKEN_PATTERN,
+	String.raw`(?:EAAA|sq0atp-)[A-Za-z0-9_-]{22,60}`,
+	`(${SQUARE_ACCESS_TOKEN_BOUNDARY_PREFIX}[\\p{Cc}\\p{Cf}]*[A-Za-z0-9_-](?:[\\p{Cc}\\p{Cf}]*[A-Za-z0-9_-]){21,59})`,
+);
 // Stripe webhook signing secrets use a distinctive prefix and long URL-safe value.
 const STRIPE_WEBHOOK_SECRET_PATTERN = /(?<![A-Za-z0-9_-])whsec_[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-])/i;
 const STRIPE_WEBHOOK_SECRET_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -1132,7 +1169,12 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	ARTIFACTORY_REFERENCE_TOKEN_BOUNDARY_PATTERN,
 	DYNATRACE_API_TOKEN_BOUNDARY_PATTERN,
 	FLY_IO_ORG_TOKEN_BOUNDARY_PATTERN,
+	FLY_IO_MACHINE_TOKEN_BOUNDARY_PATTERN,
 	NEW_RELIC_USER_API_KEY_BOUNDARY_PATTERN,
+	RESEND_API_KEY_BOUNDARY_PATTERN,
+	TAILSCALE_KEY_BOUNDARY_PATTERN,
+	SQUARE_ACCESS_TOKEN_BOUNDARY_PATTERN,
+	EASYPOST_API_TOKEN_BOUNDARY_PATTERN,
 	CLOJARS_API_TOKEN_BOUNDARY_PATTERN,
 	RUBYGEMS_API_TOKEN_BOUNDARY_PATTERN,
 	TYPEFORM_API_TOKEN_BOUNDARY_PATTERN,
