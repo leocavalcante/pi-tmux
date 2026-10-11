@@ -415,6 +415,48 @@ test("screens explicit credential assignments across retained-context truncation
 	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens age secret identities across retained-context truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const prefix = ["AGE", "SECRET", "KEY", "1"].join("-");
+	const identity = `${prefix}${"Q".repeat(58)}`;
+	expect(hasSensitiveNamingContext(identity)).toBe(true);
+	expect(hasSensitiveOutput(identity)).toBe(true);
+
+	const prompt = `${"x".repeat(prefixLength - 9)} ${identity} ${"x".repeat(1_200)}`;
+	const context = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(true);
+
+	const obfuscated = identity.replace("SECRET", "SEC\u200bRET");
+	const obfuscatedPrompt = `${"x".repeat(prefixLength - 9)} ${obfuscated} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixLength = Math.floor(retainedLength / 2);
+	const suffixStart = promptLength - suffixLength;
+	const suffixTokenStart = suffixStart - 8;
+	const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${identity} ${"y".repeat(promptLength - suffixTokenStart - identity.length - 1)}`;
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+	const historyContent = `${"x".repeat(991)} ${identity} y`;
+	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+	expect(hasSensitiveNamingContext(history.text)).toBe(false);
+	expect(history.hasSensitiveBoundary()).toBe(true);
+	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: historyContent }] as any);
+	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+	expect(summary.hasSensitiveBoundary()).toBe(true);
+
+	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${identity} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+	const shortIdentity = `${prefix}${"Q".repeat(57)}`;
+	const nearMiss = `${"x".repeat(prefixLength - 9)} ${shortIdentity} ${"x".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], nearMiss).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens private-key headers across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
