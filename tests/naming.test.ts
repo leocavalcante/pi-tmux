@@ -442,6 +442,38 @@ test("screens Jina AI API keys across retained-context boundaries without flaggi
 	}
 });
 
+test("screens Browserbase live/test API keys across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffix = "a1B2_c3D4-".repeat(3);
+	const tokens = ["bb_live_", "bb_test_", "BB_LIVE_"].map((prefix) => `${prefix}${suffix}`);
+
+	for (const token of tokens) {
+		const obfuscated = `${token.slice(0, 1)}\u200b${token.slice(1)}`;
+		for (const candidate of [token, obfuscated]) {
+			expect(hasSensitiveNamingContext(candidate)).toBe(true);
+			expect(hasSensitiveOutput(candidate)).toBe(true);
+			const tokenStart = prefixLength - 10;
+			const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const nearMisses = [
+		`bb_live_${"a".repeat(19)}`,
+		`bb_dev_${"a".repeat(24)}`,
+		`notbb_live_${"a".repeat(24)}`,
+		`bb_live_${"a".repeat(10)}.${"b".repeat(10)}`,
+	];
+	for (const nearMiss of nearMisses) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens Firecrawl API keys across retained-context boundaries without flagging near-misses", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

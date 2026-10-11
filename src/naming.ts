@@ -951,6 +951,15 @@ const TWILIO_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`SK[a-f0-9]{32}`,
 	String.raw`(S[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){31})`,
 );
+// Browserbase API keys use live/test prefixes and a long URL-safe suffix.
+const BROWSERBASE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])bb_(?:live|test)_[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/i;
+const BROWSERBASE_API_TOKEN_BOUNDARY_PREFIX = `(?:${["bb_live_", "bb_test_"]
+	.map(interleaveBoundaryFormattingControls).join("|")})`;
+const BROWSERBASE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	BROWSERBASE_API_TOKEN_PATTERN,
+	String.raw`bb_(?:live|test)_[A-Za-z0-9_-]{20,}`,
+	`(${BROWSERBASE_API_TOKEN_BOUNDARY_PREFIX}[\\p{Cc}\\p{Cf}]*[A-Za-z0-9_-](?:[\\p{Cc}\\p{Cf}]*[A-Za-z0-9_-]){19,})`,
+);
 // Firecrawl API keys use `fc-` followed by a long alphanumeric value. A 20-character minimum avoids matching UUID fragments.
 const FIRECRAWL_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])fc-[A-Za-z0-9]{20,}(?![A-Za-z0-9_-])/i;
 const FIRECRAWL_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -1037,6 +1046,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	PREFECT_API_TOKEN_PATTERN,
 	OCTOPUS_API_KEY_PATTERN,
 	PULUMI_API_TOKEN_PATTERN,
+	BROWSERBASE_API_TOKEN_PATTERN,
 	FIRECRAWL_API_TOKEN_PATTERN,
 	FIREWORKS_API_TOKEN_PATTERN,
 	TAVILY_API_TOKEN_PATTERN,
@@ -1521,6 +1531,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	ONE_PASSWORD_SECRET_KEY_BOUNDARY_PATTERN,
 	CLOUDFLARE_ORIGIN_CA_KEY_BOUNDARY_PATTERN,
 	ADOBE_CLIENT_SECRET_BOUNDARY_PATTERN,
+	BROWSERBASE_API_TOKEN_BOUNDARY_PATTERN,
 	FIRECRAWL_API_TOKEN_BOUNDARY_PATTERN,
 	FIREWORKS_API_TOKEN_BOUNDARY_PATTERN,
 	TAVILY_API_TOKEN_BOUNDARY_PATTERN,
