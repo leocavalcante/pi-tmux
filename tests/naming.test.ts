@@ -83,6 +83,33 @@ test("screens Tencent Cloud SecretIds without flagging near-misses", () => {
 	}
 });
 
+test("screens assigned access-key values without mistaking placeholders or short values for credentials", () => {
+	const credentialValues = [
+		`access_key=${"A1b2".repeat(6)}`,
+		`accessKeyId:${"C3d4".repeat(6)}`,
+		`AWS_ACCESS_KEY_ID=${"E5f6".repeat(5)}`,
+		`Access Key = ${"G7h8".repeat(6)}`,
+		`access_\u200bkey=${"J9k0".repeat(6)}`,
+	];
+
+	for (const value of credentialValues) {
+		expect(hasSensitiveNamingContext(`review cloud configuration ${value}`)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"access_key=placeholder",
+		"access_key=example",
+		`access_key=${"A".repeat(19)}`,
+		"access_key_id: redacted",
+		"access key configuration",
+		"review key access tests",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens Azure AD client-secret formats without flagging near-misses", () => {
 	const body = `${"Aa0_-.".repeat(5)}C3`;
 	const secrets = [`AbC7Q~${body}`, `AbC7Q~${body.slice(0, 31)}`, `AbC7Q~${body}${"x".repeat(2)}`];
