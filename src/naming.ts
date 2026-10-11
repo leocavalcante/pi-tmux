@@ -95,6 +95,16 @@ const LABELED_PASSWORD_BLOCK_PATTERN = new RegExp(
 );
 // Basic authorization values are base64 user-info, not provider-prefixed tokens.
 const BASIC_AUTHORIZATION_PATTERN = /(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?basic\s+([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
+const OBFUSCATED_BASIC_AUTHORIZATION_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?`
+		+ String.raw`(B[\p{Cc}\p{Cf}\s]*a[\p{Cc}\p{Cf}\s]*s[\p{Cc}\p{Cf}\s]*i[\p{Cc}\p{Cf}\s]*c)`
+		+ String.raw`[\p{Cc}\p{Cf}\s]+([A-Za-z0-9+/]{4,}={0,2})`
+		+ String.raw`(?![A-Za-z0-9+/=])`,
+	"iu",
+);
+const OBFUSCATED_BASIC_AUTHORIZATION_SCAN_PATTERN = new RegExp(
+	OBFUSCATED_BASIC_AUTHORIZATION_PATTERN.source, `${OBFUSCATED_BASIC_AUTHORIZATION_PATTERN.flags}g`,
+);
 // npm .npmrc `_auth` and Docker config `auth` settings contain Base64 user:password pairs.
 const NPM_AUTH_PATTERN = /(?<![A-Za-z0-9_-])_auth\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
 const DOCKER_AUTH_PATTERN = /(?<![A-Za-z0-9_-])auth\s*["']?\s*[:=]\s*["']?([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/i;
@@ -278,6 +288,10 @@ const BASIC_AUTHORIZATION_BOUNDARY_PATTERN = new RegExp(
 	String.raw`(?<![A-Za-z0-9_-])${BASIC_AUTHORIZATION_BOUNDARY_LABEL}\s*["']?\s*[:=]\s*["']?`
 		+ String.raw`${interleaveBoundaryFormattingControls("basic")}\s+([A-Za-z0-9+/](?:${BASE64_FORMAT_CONTROL_SEPARATOR}[A-Za-z0-9+/]){3,}${BASE64_FORMAT_CONTROL_SEPARATOR}(?:=(?:${BASE64_FORMAT_CONTROL_SEPARATOR}=)?)?)(?![A-Za-z0-9+/=])`,
 	"iu",
+);
+const OBFUSCATED_BASIC_AUTHORIZATION_BOUNDARY_SCAN_PATTERN = new RegExp(
+	OBFUSCATED_BASIC_AUTHORIZATION_PATTERN.source,
+	`${OBFUSCATED_BASIC_AUTHORIZATION_PATTERN.flags}dg`,
 );
 // Do not treat an unrelated YAML scalar continuation as part of a Basic credential.
 const BASIC_AUTHORIZATION_BLOCK_BOUNDARY_PATTERN = new RegExp(
@@ -1102,6 +1116,9 @@ function hasBasicAuthorizationCredential(value: string): boolean {
 	for (const match of value.matchAll(pattern)) {
 		if (isBase64UserPasswordPair(match[1])) return true;
 	}
+	for (const match of value.matchAll(OBFUSCATED_BASIC_AUTHORIZATION_SCAN_PATTERN)) {
+		if (isBase64UserPasswordPair(match[2]!)) return true;
+	}
 	return false;
 }
 
@@ -1549,6 +1566,13 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !hasSeparatorInRetainedContext(tokenRange[0], tokenRange[1]))) continue;
 			const bearerValue = stripNonWhitespaceControls(match[2]!);
 			if (hasBearerToken(`Bearer ${bearerValue}`)) return true;
+		}
+		for (const match of joined.matchAll(OBFUSCATED_BASIC_AUTHORIZATION_BOUNDARY_SCAN_PATTERN)) {
+			const schemeRange = match.indices![1]!;
+			const encodedRange = match.indices![2]!;
+			if (!overlapsRetainedContext(encodedRange[0], encodedRange[1])
+				|| !OBFUSCATION_SEPARATOR_PATTERN.test(joined.slice(schemeRange[0], schemeRange[1]))) continue;
+			if (isBase64UserPasswordPair(match[2]!)) return true;
 		}
 		for (const pattern of WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS) {
 			for (const match of joined.matchAll(pattern)) {
