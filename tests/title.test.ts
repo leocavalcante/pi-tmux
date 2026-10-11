@@ -1683,6 +1683,43 @@ test("platform tokens crossing prompt truncation skip model lookup", async () =>
 	}
 });
 
+test("deployment and commerce tokens crossing prompt truncation skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const atlassianToken = `ATATT3${"a".repeat(183)}_-=`;
+	const shopifyTokens = ["shpat_", "shpca_", "shppa_", "shpss_"].map((prefix) => `${prefix}${"a".repeat(32)}`);
+	const shippoTokens = ["live", "test"].map((mode) => `shippo_${mode}_${"a".repeat(40)}`);
+	const postmanToken = `PMAK-${"a".repeat(24)}-${"b".repeat(34)}`;
+	const pulumiToken = `pul-${"a".repeat(40)}`;
+	const digitalOceanTokens = ["doo", "dop", "dor"].map((prefix) => `${prefix}_v1_${"a".repeat(64)}`);
+	const prefectToken = `pnu_${"A1b2".repeat(9)}`;
+	const octopusApiKey = `API-${"A1B2".repeat(6)}A1`;
+	const values = [
+		atlassianToken, ...shopifyTokens, ...shippoTokens, postmanToken,
+		pulumiToken, ...digitalOceanTokens, prefectToken, octopusApiKey,
+	];
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const value of values) {
+		const obfuscated = value.slice(0, 10) + "\u200b" + value.slice(10);
+		for (const candidate of [value, obfuscated]) {
+			const valueStart = prefixLength - 10;
+			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+			const f = fixture();
+			const find = spyOn(f.ctx.modelRegistry, "find");
+
+			f.input(prompt);
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(f.requests).toHaveLength(0);
+			expect(f.state.title).toBe("existing task");
+			expect(f.warnings).toEqual([warning]);
+			expect(f.warnings.join(" ")).not.toContain(value);
+		}
+	}
+});
+
 test("observability tokens crossing prompt truncation skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
