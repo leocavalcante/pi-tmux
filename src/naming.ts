@@ -138,6 +138,9 @@ const STRIPE_WEBHOOK_SECRET_PATTERN = /(?<![A-Za-z0-9_-])whsec_[A-Za-z0-9_-]{24,
 // Slack webhook URLs carry a long token in one of the platform's webhook routes.
 const SLACK_WEBHOOK_URL_PATTERN =
 	/(?<![A-Za-z0-9.-])(?:https?:\/\/)?hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}(?![A-Za-z0-9+/=])/i;
+// Discord webhook URLs embed an 18–19 digit ID and a fixed-length token.
+const DISCORD_WEBHOOK_URL_PATTERN =
+	/(?<![A-Za-z0-9.-])https:\/\/discord\.com\/api\/webhooks\/[0-9]{18,19}\/[A-Za-z0-9-]{68}(?![A-Za-z0-9_-])/i;
 // Teams incoming webhook URLs embed multiple GUIDs and a long webhook token.
 const MICROSOFT_TEAMS_GUID_PATTERN = String.raw`[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}`;
 const MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN = new RegExp(
@@ -166,6 +169,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	TAILSCALE_KEY_PATTERN,
 	STRIPE_WEBHOOK_SECRET_PATTERN,
 	SLACK_WEBHOOK_URL_PATTERN,
+	DISCORD_WEBHOOK_URL_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN,
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
 	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed

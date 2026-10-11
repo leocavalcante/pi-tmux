@@ -1045,6 +1045,12 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the callback configuration ${stripeWebhookSecret}`, stripeWebhookSecret);
 	const slackWebhookUrl = `https://hooks.slack.com/services/${"A1b2".repeat(10)}A1b`;
 	await suppressed(fixture(), `Review callback delivery ${slackWebhookUrl}`, slackWebhookUrl);
+	const discordWebhookId = "123456789".repeat(2);
+	const discordWebhookToken = "A1b2".repeat(17);
+	const discordWebhookUrl = `https://discord.com/api/webhooks/${discordWebhookId}/${discordWebhookToken}`;
+	await suppressed(fixture(), `Review Discord delivery ${discordWebhookUrl}`, discordWebhookUrl);
+	const obfuscatedDiscordWebhookUrl = discordWebhookUrl.replace("discord.com", "dis\u200bcord.com");
+	await suppressed(fixture(), `Review Discord delivery ${obfuscatedDiscordWebhookUrl}`, obfuscatedDiscordWebhookUrl);
 	const teamsWebhookGuid = "01234567-89ab-cdef-0123-456789abcdef";
 	const teamsWebhookUrl = `https://tenant.webhook.office.com/webhookb2/${teamsWebhookGuid}@fedcba98-7654-3210-fedc-ba9876543210/IncomingWebhook/${"a1b2c3d4".repeat(4)}/${teamsWebhookGuid}`;
 	await suppressed(fixture(), `Review Teams delivery ${teamsWebhookUrl}`, teamsWebhookUrl);
@@ -1444,11 +1450,16 @@ test("credential-shaped model output is rejected without applying or disclosing 
 	const obfuscatedNpmrcAuth = npmrcAuth.replace("_auth", "_au\u200bth");
 	const npmrcPassword = npmrcPasswordSetting("pw1");
 	const obfuscatedNpmrcPassword = npmrcPassword.replace("_password", "_pass\u200bword");
+	const discordWebhookId = "123456789".repeat(2);
+	const discordWebhookToken = "A1b2".repeat(17);
+	const discordWebhookUrl = `https://discord.com/api/webhooks/${discordWebhookId}/${discordWebhookToken}`;
 	const teamsWebhookGuid = "01234567-89ab-cdef-0123-456789abcdef";
 	const teamsWebhookUrl = `https://tenant.webhook.office.com/webhookb2/${teamsWebhookGuid}@fedcba98-7654-3210-fedc-ba9876543210/IncomingWebhook/${"a1b2c3d4".repeat(4)}/${teamsWebhookGuid}`;
 	const outputs = [
 		`https://hooks.slack.com/services/${"A1b2".repeat(10)}A1b`,
 		`https://hooks.slack.com/workflows/${"A1b2".repeat(5)}\u200b${"C3d4".repeat(5)}C3d`,
+		discordWebhookUrl,
+		discordWebhookUrl.replace(discordWebhookToken, `${discordWebhookToken.slice(0, 34)}\u200b${discordWebhookToken.slice(34)}`),
 		teamsWebhookUrl,
 		teamsWebhookUrl.replace("IncomingWebhook", "Incoming\u200bWebhook"),
 		`whsec_${"A1b2".repeat(8)}`,
