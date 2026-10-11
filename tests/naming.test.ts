@@ -83,6 +83,37 @@ test("screens Tencent Cloud SecretIds without flagging near-misses", () => {
 	}
 });
 
+test("screens synthetic Square access tokens without flagging near-misses", () => {
+	const squareToken = `sq0atp-${"A1_-".repeat(6)}`;
+	const legacySquareToken = `EAAA${"B2_c".repeat(6)}`;
+	const obfuscatedTokens = [
+		squareToken.replace("sq0atp-", "sq0\u200batp-"),
+		`${squareToken.slice(0, 18)}\u200b${squareToken.slice(18)}`,
+		legacySquareToken.replace("EAAA", "EA\u200bAA"),
+	];
+
+	for (const value of [squareToken, legacySquareToken, `sq0atp-${"A".repeat(22)}`, `EAAA${"B".repeat(60)}`, ...obfuscatedTokens]) {
+		expect(hasSensitiveNamingContext(`review payment integration ${value}`)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`sq0atp-${"A".repeat(21)}`,
+		`sq0atp-${"A".repeat(61)}`,
+		`EAAA${"B".repeat(21)}`,
+		`EAAA${"B".repeat(61)}`,
+		`sq0atq-${"A".repeat(24)}`,
+		`sq0atp-${"A".repeat(10)}!${"A".repeat(14)}`,
+		`prefix${squareToken}`,
+		`sq0atp-${"A".repeat(60)}suffix`,
+		`EAAA${"B".repeat(60)}suffix`,
+		"Square access token integration",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens assigned access-key values without mistaking placeholders or short values for credentials", () => {
 	const credentialValues = [
 		`access_key=${"A1b2".repeat(6)}`,

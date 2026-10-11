@@ -157,6 +157,8 @@ const NEW_RELIC_USER_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])NRAK-[A-Za-z0-9]{27}(?
 // The subtype separator must not prevent screening of the opaque key body.
 const TAILSCALE_KEY_PATTERN =
 	/(?<![A-Za-z0-9_-])tskey-(?:[A-Za-z0-9]{16,}|(?:auth|api|client)-[A-Za-z0-9][A-Za-z0-9_-]{15,})(?![A-Za-z0-9_-])/i;
+// Square access tokens use `EAAA` or `sq0atp-` followed by 22–60 URL-safe characters.
+const SQUARE_ACCESS_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])(?:EAAA|sq0atp-)[A-Za-z0-9_-]{22,60}(?![A-Za-z0-9_-])/i;
 // Stripe webhook signing secrets use a distinctive prefix and long URL-safe value.
 const STRIPE_WEBHOOK_SECRET_PATTERN = /(?<![A-Za-z0-9_-])whsec_[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-])/i;
 // Slack webhook URLs carry a long token in one path segment; keep legacy multi-segment
@@ -212,6 +214,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	RESEND_API_KEY_PATTERN,
 	NEW_RELIC_USER_API_KEY_PATTERN,
 	TAILSCALE_KEY_PATTERN,
+	SQUARE_ACCESS_TOKEN_PATTERN,
 	STRIPE_WEBHOOK_SECRET_PATTERN,
 	SLACK_WEBHOOK_URL_PATTERN,
 	SLACK_LEGACY_WEBHOOK_URL_PATTERN,
