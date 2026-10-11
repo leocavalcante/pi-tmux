@@ -120,6 +120,8 @@ const CLOJARS_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])CLOJARS_[A-Za-z0-9]{60}(?![A
 const RUBYGEMS_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])rubygems_[a-f0-9]{48}(?![A-Za-z0-9_-])/i;
 // Heroku API tokens use `HRKU-AA` followed by exactly 58 URL-safe characters.
 const HEROKU_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])HRKU-AA[A-Za-z0-9_-]{58}(?![A-Za-z0-9_-])/i;
+// EasyPost test and production API keys use `EZTK` or `EZAK` plus 54 alphanumeric characters.
+const EASYPOST_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])EZ(?:AK|TK)[A-Za-z0-9]{54}(?![A-Za-z0-9_])/i;
 // Cloudflare API keys have 40 URL-safe characters; global keys have 37 hex characters.
 // Require a nearby Cloudflare label to avoid flagging unrelated opaque values.
 const CLOUDFLARE_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?cloudflare[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[a-z0-9_-]{40}(?![A-Za-z0-9_-])/i;
@@ -182,6 +184,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	CLOJARS_API_TOKEN_PATTERN,
 	RUBYGEMS_API_TOKEN_PATTERN,
 	HEROKU_API_TOKEN_PATTERN,
+	EASYPOST_API_TOKEN_PATTERN,
 	CLOUDFLARE_API_KEY_PATTERN,
 	CLOUDFLARE_GLOBAL_API_KEY_PATTERN,
 	DATADOG_API_KEY_PATTERN,
