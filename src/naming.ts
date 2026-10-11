@@ -275,6 +275,13 @@ const AWS_ACCESS_KEY_ID_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"(?:AKIA|ASIA)[0-9A-Z]{16}",
 	String.raw`((?:A[\p{Cc}\p{Cf}]*K[\p{Cc}\p{Cf}]*I[\p{Cc}\p{Cf}]*A|A[\p{Cc}\p{Cf}]*S[\p{Cc}\p{Cf}]*I[\p{Cc}\p{Cf}]*A)[\p{Cc}\p{Cf}]*[0-9A-Z](?:[\p{Cc}\p{Cf}]*[0-9A-Z]){15})`,
 );
+// Google Cloud API keys use `AIza` followed by exactly 35 URL-safe characters.
+const GOOGLE_API_KEY_PATTERN = /(?<![A-Za-z0-9_])AIza[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])/;
+const GOOGLE_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GOOGLE_API_KEY_PATTERN,
+	"AIza[A-Za-z0-9_-]{35}",
+	String.raw`(A[\p{Cc}\p{Cf}]*I[\p{Cc}\p{Cf}]*z[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){34})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -400,7 +407,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/ABSK[A-Za-z0-9+/]{109,269}={0,2}/,
 	/bedrock-api-key-\x59\x6d\x56\x6b\x63\x6d\x39\x6a\x61\x79\x35\x68\x62\x57\x46\x36\x62\x32\x35\x68\x64\x33\x4d\x75\x59\x32\x39\x74/,
 	// Google Cloud API keys use `AIza` followed by exactly 35 alphanumeric, underscore, or hyphen characters.
-	/(?<![A-Za-z0-9_])AIza[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])/,
+	GOOGLE_API_KEY_PATTERN,
 	// Google OAuth client secrets use a `GOCSPX-` prefix and a long URL-safe value.
 	/(?<![A-Za-z0-9_])GOCSPX-[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/i,
 	// Google OAuth refresh tokens use a `1//` prefix and a long URL-safe value.
@@ -703,6 +710,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	MAILGUN_PRIVATE_API_TOKEN_BOUNDARY_PATTERN,
 	RAILWAY_API_TOKEN_BOUNDARY_PATTERN,
 	AWS_ACCESS_KEY_ID_BOUNDARY_PATTERN,
+	GOOGLE_API_KEY_BOUNDARY_PATTERN,
 ];
 
 function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {

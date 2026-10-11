@@ -1096,6 +1096,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const awsAccessKeyStart = prefixLength - 8;
 	const truncatedAwsPrompt = `${"x".repeat(awsAccessKeyStart)}${awsAccessKeyId} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedAwsPrompt, awsAccessKeyId);
+	const truncatedGoogleApiKey = `AIza${"A".repeat(35)}`;
+	const googleApiKeyStart = prefixLength - 8;
+	const truncatedGoogleApiPrompt = `${"x".repeat(googleApiKeyStart - 1)} ${truncatedGoogleApiKey} ${"x".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedGoogleApiPrompt, truncatedGoogleApiKey);
 	const githubToken = `ghp_${"A".repeat(36)}`;
 	const githubTokenStart = prefixLength - 8;
 	const truncatedGithubPrompt = `${"x".repeat(githubTokenStart)}${githubToken} ${"x".repeat(1_200)}`;
