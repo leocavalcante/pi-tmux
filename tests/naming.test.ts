@@ -580,6 +580,84 @@ test("screens Azure DevOps and GitLab Runner tokens across retained-context trun
 	}
 });
 
+test("screens Azure AD, Alibaba, and Tencent credentials across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const azureSecret = (bodyLength: number) => `AbC7Q~${"Aa0_-.".repeat(6).slice(0, bodyLength)}`;
+	const alibabaKey = `LTAI${"A1b2".repeat(5)}`;
+	const tencentSecretId = `AKID${"C3d4".repeat(8)}`;
+	const cases = [
+		{
+			token: azureSecret(31),
+			obfuscated: azureSecret(31).replace("Q~", "Q\u200b~"),
+			controlObfuscated: `${azureSecret(31).slice(0, 18)}\u0000${azureSecret(31).slice(18)}`,
+			nearMisses: [azureSecret(30), azureSecret(35), azureSecret(31).replace("Q~", "R~"), `_${azureSecret(31)}`],
+		},
+		{
+			token: azureSecret(34),
+			obfuscated: azureSecret(34).replace("AbC7", "Ab\u200bC7"),
+			controlObfuscated: `${azureSecret(34).slice(0, 18)}\u0000${azureSecret(34).slice(18)}`,
+			nearMisses: [azureSecret(35), azureSecret(34).replace("Q~", "Q!"), `_${azureSecret(34)}`],
+		},
+		{
+			token: alibabaKey,
+			obfuscated: alibabaKey.replace("LTAI", "LT\u200bAI"),
+			controlObfuscated: `${alibabaKey.slice(0, 12)}\u0000${alibabaKey.slice(12)}`,
+			nearMisses: [alibabaKey.slice(0, -1), `${alibabaKey}A`, alibabaKey.replace("LTAI", "LTAJ"), `_${alibabaKey}`],
+		},
+		{
+			token: tencentSecretId,
+			obfuscated: tencentSecretId.replace("AKID", "A\u200bKID"),
+			controlObfuscated: `${tencentSecretId.slice(0, 18)}\u0000${tencentSecretId.slice(18)}`,
+			nearMisses: [tencentSecretId.slice(0, -1), `${tencentSecretId}A`, tencentSecretId.replace("AKID", "AKIE"), `_${tencentSecretId}`],
+		},
+	];
+
+	for (const { token, obfuscated, controlObfuscated, nearMisses } of cases) {
+		expect(hasSensitiveNamingContext(token)).toBe(true);
+		expect(hasSensitiveOutput(token)).toBe(true);
+
+		const promptAtPrefixBoundary = (value: string) => {
+			const tokenStart = prefixLength - Math.floor(value.length / 2);
+			return `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+		};
+		const prefixPrompt = promptAtPrefixBoundary(token);
+		const prefixContext = buildNamingRequestContext([], prefixPrompt);
+		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+		expect(buildNamingRequestContext([], promptAtPrefixBoundary(obfuscated)).hasSensitiveBoundary()).toBe(true);
+		expect(buildNamingRequestContext([], promptAtPrefixBoundary(controlObfuscated)).hasSensitiveBoundary()).toBe(true);
+
+		const promptLength = MAX_PROMPT_LENGTH + 300;
+		const suffixStart = promptLength - Math.floor(retainedLength / 2);
+		const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
+		const leading = `${"x".repeat(suffixTokenStart - 1)} `;
+		const tokenAndSpace = `${token} `;
+		const suffixPrompt = leading + tokenAndSpace
+			+ "y".repeat(promptLength - leading.length - tokenAndSpace.length);
+		const suffixContext = buildNamingRequestContext([], suffixPrompt);
+		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+		const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
+		const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
+		expect(hasSensitiveNamingContext(history.text)).toBe(false);
+		expect(history.hasSensitiveBoundary()).toBe(true);
+		const summary = buildNamingRequestContext([
+			{ role: "compactionSummary", summary: historyContent },
+		] as any);
+		expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+		expect(summary.hasSensitiveBoundary()).toBe(true);
+
+		const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
+		expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+		for (const nearMiss of nearMisses) {
+			expect(buildNamingRequestContext([], promptAtPrefixBoundary(nearMiss)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Slack API tokens across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
