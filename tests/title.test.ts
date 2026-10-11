@@ -1010,9 +1010,13 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const obfuscatedOnePasswordToken = onePasswordToken.replace("eyJ", "ey\u200bJ");
 	await suppressed(fixture(), `Review 1Password vault access ${obfuscatedOnePasswordToken}`, obfuscatedOnePasswordToken);
 	const clickhouseKey = `4b1d${"A1b2".repeat(9)}A1`;
+	const alibabaAccessKeyId = `LTAI${"A1b2".repeat(5)}`;
 	await suppressed(fixture(), `Review ClickHouse access ${clickhouseKey}`, clickhouseKey);
 	const obfuscatedClickhouseKey = clickhouseKey.replace("4b1d", "4b\u200b1d");
 	await suppressed(fixture(), `Review ClickHouse access ${obfuscatedClickhouseKey}`, obfuscatedClickhouseKey);
+	await suppressed(fixture(), `Review Alibaba Cloud access ${alibabaAccessKeyId}`, alibabaAccessKeyId);
+	const obfuscatedAlibabaAccessKeyId = alibabaAccessKeyId.replace("LTAI", "LT\u200bAI");
+	await suppressed(fixture(), `Review Alibaba Cloud access ${obfuscatedAlibabaAccessKeyId}`, obfuscatedAlibabaAccessKeyId);
 	const azureAdClientSecret = `AbC7Q~${"Aa0_-.".repeat(5)}C3`;
 	await suppressed(fixture(), `Review Azure AD app registration ${azureAdClientSecret}`, azureAdClientSecret);
 	const obfuscatedAzureAdClientSecret = azureAdClientSecret.replace("Q~", "Q\u200b~");
@@ -1580,6 +1584,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		obfuscatedOnePasswordToken,
 		clickhouseKey,
 		obfuscatedClickhouseKey,
+		`LTAI${"A1b2".repeat(5)}`,
+		`LT\u200bAI${"A1b2".repeat(5)}`,
 		`A3TA${"B".repeat(16)}`,
 		`ABIA${"C".repeat(16)}`,
 		`ACCA${"D".repeat(16)}`,
