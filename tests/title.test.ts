@@ -1183,6 +1183,15 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const bearerTokenStart = prefixLength - 8;
 	const truncatedBearerPrompt = `${"x".repeat(bearerTokenStart - 7)}Bearer ${bearerToken} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedBearerPrompt, bearerToken);
+	const longBearerToken = "A1b2".repeat(20);
+	const spacedBearerToken = `${longBearerToken.slice(0, 10)} ${longBearerToken.slice(10)}`;
+	const suffixLength = Math.floor(retainedPromptLength / 2);
+	const suffixPromptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixStart = suffixPromptLength - suffixLength;
+	const suffixBearerStart = suffixStart - 5;
+	const spacedBearerPrompt = `${"x".repeat(suffixBearerStart - 7)}Bearer ${spacedBearerToken}`
+		+ "y".repeat(suffixPromptLength - suffixBearerStart - spacedBearerToken.length);
+	await suppressed(fixture(), spacedBearerPrompt, spacedBearerToken);
 	const boundaryEmailAddress = "alice@example.test";
 	const emailStart = prefixLength - 6;
 	const truncatedEmailPrompt = `${"x".repeat(emailStart - 1)} ${boundaryEmailAddress} ${"x".repeat(1_200)}`;
