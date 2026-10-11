@@ -1021,6 +1021,17 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review Tencent Cloud access ${tencentCloudSecretId}`, tencentCloudSecretId);
 	const obfuscatedTencentCloudSecretId = tencentCloudSecretId.replace("AKID", "A\u200bKID");
 	await suppressed(fixture(), `Review Tencent Cloud access ${obfuscatedTencentCloudSecretId}`, obfuscatedTencentCloudSecretId);
+	const stripeProductionKeys = [
+		`sk_prod_${"A1b2".repeat(6)}`,
+		`rk_prod_${"C3d4".repeat(6)}`,
+	];
+	for (const key of stripeProductionKeys) {
+		await suppressed(fixture(), `Review payment processing ${key}`, key);
+	}
+	const obfuscatedStripeProductionKey = stripeProductionKeys[0]!.replace("prod", "pr\u200bod");
+	await suppressed(
+		fixture(), `Review payment processing ${obfuscatedStripeProductionKey}`, obfuscatedStripeProductionKey,
+	);
 	const squareAccessToken = `sq0atp-${"A1_-".repeat(6)}`;
 	const obfuscatedSquareAccessToken = squareAccessToken.replace("sq0atp-", "sq0\u200batp-");
 	const legacySquareAccessToken = `EAAA${"B2_c".repeat(6)}`;
@@ -1630,6 +1641,9 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`fixsk-or-v1-${"a".repeat(32)}`,
 		["sk-or", " ", "-v1-", "a".repeat(32)].join(""),
 		["sk", "_live_", "a".repeat(24)].join(""),
+		`sk_prod_${"A1b2".repeat(6)}`,
+		`sk_pr\u200bod_${"A1b2".repeat(6)}`,
+		`rk_prod_${"C3d4".repeat(6)}`,
 		`fixsk-${"a".repeat(16)}`,
 		`fixrk-${"a".repeat(16)}`,
 		["xoxb-", "a".repeat(24)].join(""),
