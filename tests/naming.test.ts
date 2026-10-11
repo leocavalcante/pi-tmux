@@ -33,6 +33,31 @@ test("screens synthetic 1Password service-account tokens without mistaking near-
 	}
 });
 
+test("screens Alibaba Cloud AccessKey IDs without flagging near-misses", () => {
+	const key = `LTAI${"A1b2".repeat(5)}`;
+	const obfuscatedKeys = [
+		key.replace("LTAI", "LT\u200bAI"),
+		`${key.slice(0, 12)}\u200b${key.slice(12)}`,
+	];
+
+	for (const value of [key, ...obfuscatedKeys]) {
+		expect(hasSensitiveNamingContext(`review Alibaba Cloud access ${value}`)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`LTAI${"A1b2".repeat(4)}A1b`,
+		`LTAI${"A1b2".repeat(5)}A`,
+		`LTAJ${"A1b2".repeat(5)}`,
+		`prefix${key}`,
+		`${key}suffix`,
+		"Alibaba Cloud AccessKey setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens Azure AD client-secret formats without flagging near-misses", () => {
 	const body = `${"Aa0_-.".repeat(5)}C3`;
 	const secrets = [`AbC7Q~${body}`, `AbC7Q~${body.slice(0, 31)}`, `AbC7Q~${body}${"x".repeat(2)}`];
