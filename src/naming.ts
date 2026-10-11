@@ -750,6 +750,27 @@ const STRIPE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`(?:sk|rk)_(?:live|test|prod)_[A-Za-z0-9]{16,}`,
 	String.raw`(?<!c)((?:s[\p{Cc}\p{Cf}]*k|r[\p{Cc}\p{Cf}]*k)[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*(?:l[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*v[\p{Cc}\p{Cf}]*e|t[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*t|p[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*d)[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){15,})`,
 );
+// Sourcegraph access tokens have one of three fixed layouts and 40 hex characters at the end.
+const SOURCEGRAPH_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])sgp_(?:[a-f0-9]{40}|(?:[a-f0-9]{16}|local)_[a-f0-9]{40})(?![A-Za-z0-9_-])/i;
+const SOURCEGRAPH_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	SOURCEGRAPH_API_TOKEN_PATTERN,
+	String.raw`sgp_(?:[a-f0-9]{40}|(?:[a-f0-9]{16}|local)_[a-f0-9]{40})`,
+	String.raw`(s[\p{Cc}\p{Cf}]*g[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*(?:[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){39}|(?:[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){15}|l[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*l)[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){39}))`,
+);
+// PlanetScale API and OAuth tokens use a fixed prefix and 32–64 URL-safe characters.
+const PLANETSCALE_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])pscale_(?:tkn|oauth)_[A-Za-z0-9_.=-]{32,64}(?![A-Za-z0-9_.=-])/i;
+const PLANETSCALE_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	PLANETSCALE_API_TOKEN_PATTERN,
+	String.raw`pscale_(?:tkn|oauth)_[A-Za-z0-9_.=-]{32,64}`,
+	String.raw`(p[\p{Cc}\p{Cf}]*s[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*l[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*(?:t[\p{Cc}\p{Cf}]*k[\p{Cc}\p{Cf}]*n|o[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*u[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*h)[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9_.=-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_.=-]){31,63})`,
+);
+// Databricks personal access tokens are 32 hex characters after `dapi`, optionally followed by `-` and a digit.
+const DATABRICKS_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])dapi[a-f0-9]{32}(?:-\d)?(?![A-Za-z0-9_-])/i;
+const DATABRICKS_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DATABRICKS_API_TOKEN_PATTERN,
+	String.raw`dapi[a-f0-9]{32}(?:-\d)?`,
+	String.raw`(d[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){31}(?:[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*\d)?)`,
+);
 // Terraform Cloud tokens have a 14-character prefix, `.atlasv1.`, and a 60–70-character body.
 const TERRAFORM_CLOUD_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])[A-Za-z0-9]{14}\.atlasv1\.[A-Za-z0-9_=-]{60,70}(?![A-Za-z0-9_=-])/i;
 const TERRAFORM_CLOUD_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -800,21 +821,17 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	DISCORD_MFA_TOKEN_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN,
 	GITHUB_TOKEN_PATTERN,
-	// Sourcegraph tokens use `sgp_` plus 40 hex characters, optionally prefixed
-	// by a 16-hex or `local` segment.
-	/(?<![A-Za-z0-9_])sgp_(?:[a-f0-9]{40}|(?:[a-f0-9]{16}|local)_[a-f0-9]{40})(?![A-Za-z0-9_-])/i,
+	SOURCEGRAPH_API_TOKEN_PATTERN,
 	TERRAFORM_CLOUD_API_TOKEN_PATTERN,
 	SHOPIFY_APP_TOKEN_PATTERN,
 	SHIPPO_API_TOKEN_PATTERN,
-	// PlanetScale API and OAuth tokens use 32–64 URL-safe characters after fixed prefixes.
-	/(?<![A-Za-z0-9_])pscale_(?:tkn|oauth)_[A-Za-z0-9_.=-]{32,64}(?![A-Za-z0-9_.=-])/,
+	PLANETSCALE_API_TOKEN_PATTERN,
 	POSTMAN_API_TOKEN_PATTERN,
 	PREFECT_API_TOKEN_PATTERN,
 	OCTOPUS_API_KEY_PATTERN,
 	PULUMI_API_TOKEN_PATTERN,
 	/(?:fw[-_]|fpk_)[A-Za-z0-9_-]{20,}/,
-	// Databricks tokens are `dapi` plus 32 hex characters, optionally suffixed by one digit.
-	/(?<![A-Za-z0-9_])dapi[a-f0-9]{32}(?:-\d)?(?![A-Za-z0-9_-])/,
+	DATABRICKS_API_TOKEN_PATTERN,
 	DIGITALOCEAN_API_TOKEN_PATTERN,
 	// Cloudflare Origin CA keys have 24 and 146 hexadecimal characters around a hyphen.
 	/(?<![A-Za-z0-9_])v1\.0-[a-f0-9]{24}-[a-f0-9]{146}(?![A-Za-z0-9_-])/i,
@@ -1253,6 +1270,9 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	PERPLEXITY_API_TOKEN_BOUNDARY_PATTERN,
 	OPENAI_COMPATIBLE_API_TOKEN_BOUNDARY_PATTERN,
 	STRIPE_API_TOKEN_BOUNDARY_PATTERN,
+	SOURCEGRAPH_API_TOKEN_BOUNDARY_PATTERN,
+	PLANETSCALE_API_TOKEN_BOUNDARY_PATTERN,
+	DATABRICKS_API_TOKEN_BOUNDARY_PATTERN,
 	TERRAFORM_CLOUD_API_TOKEN_BOUNDARY_PATTERN,
 ];
 const SENSITIVE_BOUNDARY_SCAN_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS.map((sourcePattern) => ({

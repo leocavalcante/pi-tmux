@@ -1664,6 +1664,73 @@ test("Terraform Cloud boundary checks preserve token-length and version requirem
 	}
 });
 
+test("Sourcegraph, PlanetScale, and Databricks tokens crossing either retained boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+	const promptLength = 3_000;
+	const tokens = [
+		`sgp_${"a".repeat(40)}`,
+		`sgp_${"b".repeat(16)}_${"c".repeat(40)}`,
+		`sgp_local_${"d".repeat(40)}`,
+		`pscale_tkn_${"A1_bc.-=".repeat(4)}`,
+		`pscale_oauth_${"B".repeat(64)}`,
+		`dapi${"e".repeat(32)}`,
+		`dapi${"f".repeat(32)}-2`,
+	];
+	const candidates = tokens.flatMap((token) => [
+		token,
+		`${token.slice(0, 10)}\u0000${token.slice(10)}`,
+	]);
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const token of candidates) {
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const f = fixture();
+			const find = spyOn(f.ctx.modelRegistry, "find");
+
+			f.input(prompt);
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(f.requests).toHaveLength(0);
+			expect(f.state.title).toBe("existing task");
+			expect(f.warnings).toEqual([warning]);
+			expect(f.warnings.join(" ")).not.toContain(token);
+		}
+	}
+});
+
+test("fixed-format token boundary checks preserve Sourcegraph, PlanetScale, and Databricks near-misses", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+	const nearMisses = [
+		`sgp_${"a".repeat(39)}`,
+		`sgp_${"a".repeat(41)}`,
+		`sgp_${"g".repeat(40)}`,
+		`pscale_tkn_${"A".repeat(31)}`,
+		`pscale_oauth_${"B".repeat(65)}`,
+		`pscale_bad_${"C".repeat(40)}`,
+		`dapi${"a".repeat(31)}`,
+		`dapi${"a".repeat(33)}`,
+		`dapi${"g".repeat(32)}`,
+		`dapi${"a".repeat(32)}-22`,
+	];
+
+	for (const token of nearMisses) {
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${token} ${"y".repeat(3_000 - prefix.length - token.length - 1)}`;
+			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("fixed-format tokens crossing prompt truncation skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
