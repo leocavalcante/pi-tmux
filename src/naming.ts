@@ -402,6 +402,13 @@ const LINEAR_API_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"lin_api_[A-Za-z0-9]{40}",
 	String.raw`(l[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*n[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){39})`,
 );
+// Neon API keys use `neon_api_key_` followed by exactly 32 URL-safe characters.
+const NEON_API_KEY_PATTERN = /(?<![A-Za-z0-9_])neon_api_key_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/;
+const NEON_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
+	NEON_API_KEY_PATTERN,
+	"neon_api_key_[A-Za-z0-9_-]{32}",
+	String.raw`(n[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*n[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*i[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*k[\p{Cc}\p{Cf}]*e[\p{Cc}\p{Cf}]*y[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){31})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -503,8 +510,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	/(?<![A-Za-z0-9_])ntn_[0-9]{11}[A-Za-z0-9]{35}(?![A-Za-z0-9_-])/,
 	// Supabase secret API keys use a fixed prefix and 32 URL-safe characters.
 	/(?<![A-Za-z0-9_])sb_secret_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/,
-	// Neon API keys use a fixed prefix and 32 URL-safe characters.
-	/(?<![A-Za-z0-9_])neon_api_key_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/,
+	NEON_API_KEY_PATTERN,
 	LINEAR_API_TOKEN_PATTERN,
 	// SendGrid API keys have the `SG.` prefix and exactly 66 URL-safe characters.
 	/(?<![A-Za-z0-9_])SG\.[A-Za-z0-9=_.-]{66}(?![A-Za-z0-9=_.-])/i,
@@ -818,6 +824,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	REPLICATE_API_TOKEN_BOUNDARY_PATTERN,
 	PINECONE_API_KEY_BOUNDARY_PATTERN,
 	LINEAR_API_TOKEN_BOUNDARY_PATTERN,
+	NEON_API_KEY_BOUNDARY_PATTERN,
 	AIRTABLE_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	CLICKHOUSE_CLOUD_API_KEY_BOUNDARY_PATTERN,
 	AZURE_DEVOPS_PAT_BOUNDARY_PATTERN,
