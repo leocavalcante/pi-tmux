@@ -135,9 +135,13 @@ const TAILSCALE_KEY_PATTERN =
 	/(?<![A-Za-z0-9_-])tskey-(?:[A-Za-z0-9]{16,}|(?:auth|api|client)-[A-Za-z0-9][A-Za-z0-9_-]{15,})(?![A-Za-z0-9_-])/i;
 // Stripe webhook signing secrets use a distinctive prefix and long URL-safe value.
 const STRIPE_WEBHOOK_SECRET_PATTERN = /(?<![A-Za-z0-9_-])whsec_[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-])/i;
-// Slack webhook URLs carry a long token in one of the platform's webhook routes.
+// Slack webhook URLs carry a long token in one path segment; keep legacy multi-segment
+// incoming webhooks in the separately validated pattern below.
 const SLACK_WEBHOOK_URL_PATTERN =
-	/(?<![A-Za-z0-9.-])(?:https?:\/\/)?hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}(?![A-Za-z0-9+/=])/i;
+	/(?<![A-Za-z0-9.-])(?:https?:\/\/)?hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+]{43,56}(?![A-Za-z0-9+/=])/i;
+// Classic incoming webhooks use workspace/channel IDs and a 24-character secret.
+const SLACK_LEGACY_WEBHOOK_URL_PATTERN =
+	/(?<![A-Za-z0-9.-])(?:https?:\/\/)?hooks\.slack\.com\/services\/T[A-Z0-9]{8}\/B[A-Z0-9]{8}\/[A-Za-z0-9]{24}(?![A-Za-z0-9_-])/i;
 // Discord webhook URLs embed an 18–19 digit ID and a fixed-length token.
 const DISCORD_WEBHOOK_URL_PATTERN =
 	/(?<![A-Za-z0-9.-])https:\/\/discord\.com\/api\/webhooks\/[0-9]{18,19}\/[A-Za-z0-9-]{68}(?![A-Za-z0-9_-])/i;
@@ -169,6 +173,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	TAILSCALE_KEY_PATTERN,
 	STRIPE_WEBHOOK_SECRET_PATTERN,
 	SLACK_WEBHOOK_URL_PATTERN,
+	SLACK_LEGACY_WEBHOOK_URL_PATTERN,
 	DISCORD_WEBHOOK_URL_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN,
 	/(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
