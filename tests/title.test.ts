@@ -1823,6 +1823,49 @@ test("rejects PyPI API tokens without mistaking near-misses for tokens", async (
 	}
 });
 
+test("screens Clojars tokens in naming context and model output without mistaking near-misses", async () => {
+	const token = `CLOJARS_${"A1b2".repeat(15)}`;
+	const obfuscatedTokens = [
+		token.replace("CLOJARS_", "CLOJARS\u200b_"),
+		`${token.slice(0, 38)}\u200b${token.slice(38)}`,
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const value of [token, ...obfuscatedTokens]) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review Clojars publishing ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.state.title).toBe("existing task");
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(token);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(token);
+	}
+
+	for (const nearMiss of [
+		`CLOJARS_${"A1b2".repeat(14)}A1b`,
+		`${token}Z`,
+		`x${token}`,
+		`_${token}`,
+		`CLOJARX_${"A1b2".repeat(15)}`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("rejects labeled Datadog API keys without mistaking near-misses for keys", async () => {
 	const keyValue = "A1b2".repeat(10);
 	const outputs = [

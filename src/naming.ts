@@ -114,6 +114,8 @@ const DOCKER_HUB_PAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_pat_[A-Za-z0-9_-]{27}(?![
 const DOCKER_HUB_OAT_PATTERN = /(?<![A-Za-z0-9_-])dckr_oat_[A-Za-z0-9_-]{32}(?![A-Za-z0-9_-])/;
 // PyPI and TestPyPI API tokens encode their registry in a distinctive prefix.
 const PYPI_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])pypi-(?:AgEIcHlwaS5vcmc|AgENdGVzdC5weXBpLm9yZw)[A-Za-z0-9_-]{50,1000}(?![A-Za-z0-9_-])/;
+// Clojars API tokens use the `CLOJARS_` prefix and an exact 60-character body.
+const CLOJARS_API_TOKEN_PATTERN = /(?<![A-Za-z0-9_])CLOJARS_[A-Za-z0-9]{60}(?![A-Za-z0-9_])/i;
 // Cloudflare API keys have 40 URL-safe characters; global keys have 37 hex characters.
 // Require a nearby Cloudflare label to avoid flagging unrelated opaque values.
 const CLOUDFLARE_API_KEY_PATTERN = /(?<![A-Za-z0-9_-])[\w.-]{0,50}?cloudflare[ \t\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[`'"\s=]{0,5}[a-z0-9_-]{40}(?![A-Za-z0-9_-])/i;
@@ -171,6 +173,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	DOCKER_HUB_PAT_PATTERN,
 	DOCKER_HUB_OAT_PATTERN,
 	PYPI_API_TOKEN_PATTERN,
+	CLOJARS_API_TOKEN_PATTERN,
 	CLOUDFLARE_API_KEY_PATTERN,
 	CLOUDFLARE_GLOBAL_API_KEY_PATTERN,
 	DATADOG_API_KEY_PATTERN,
