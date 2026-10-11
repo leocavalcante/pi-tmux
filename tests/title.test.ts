@@ -1110,6 +1110,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		const truncatedOAuthPrompt = `${"x".repeat(tokenStart - 1)} ${googleOAuthToken} ${"x".repeat(1_200)}`;
 		await suppressed(fixture(), truncatedOAuthPrompt, googleOAuthToken);
 	}
+	const gitlabPersonalAccessToken = `glpat-${"A1b_-".repeat(6)}`;
+	const gitlabTokenStart = prefixLength - 8;
+	const truncatedGitlabTokenPrompt = `${"x".repeat(gitlabTokenStart - 1)} ${gitlabPersonalAccessToken} ${"x".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedGitlabTokenPrompt, gitlabPersonalAccessToken);
 	const githubToken = `ghp_${"A".repeat(36)}`;
 	const githubTokenStart = prefixLength - 8;
 	const truncatedGithubPrompt = `${"x".repeat(githubTokenStart)}${githubToken} ${"x".repeat(1_200)}`;
