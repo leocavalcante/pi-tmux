@@ -5334,6 +5334,17 @@ test("oversized manual title input is rejected before screening or writes", asyn
 	expect(f.warnings.join(" ")).not.toContain(oversizedTitle);
 });
 
+test("very large title command arguments are rejected before parsing or writes", async () => {
+	const oversizedCommand = `set ${"x".repeat(MAX_TITLE_INPUT_LENGTH * 16)}`;
+	const f = fixture();
+	await f.refresh(oversizedCommand);
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls).toEqual([]);
+	expect(f.requests).toEqual([]);
+	expect(f.warnings).toEqual(["Title command input is too long to process safely; it was not applied."]);
+	expect(f.warnings.join(" ")).not.toContain(oversizedCommand);
+});
+
 test("manual titles reject sensitive text before normalization without disclosing it", async () => {
 	const token = ["ghp_", "A".repeat(20)].join("");
 	const sensitiveTitles = [

@@ -6,6 +6,8 @@ import { cleanTitle, MAX_TITLE_INPUT_LENGTH } from "./title.ts";
 import { runTmux, type RunTmux } from "./tmux.ts";
 
 const HAS_NON_WHITESPACE = /[^\s\p{White_Space}]/u;
+// Bound trimming and regex captures, leaving room for the command and whitespace.
+const MAX_TITLE_COMMAND_ARGUMENT_LENGTH = MAX_TITLE_INPUT_LENGTH * 2;
 
 export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	const controller = createController(tmux);
@@ -25,6 +27,10 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			return items.length ? items : null;
 		},
 		handler: async (args, ctx) => {
+			if (args.length > MAX_TITLE_COMMAND_ARGUMENT_LENGTH) {
+				notifySafely(ctx, "Title command input is too long to process safely; it was not applied.", "warning");
+				return;
+			}
 			const command = args.trim();
 			const set = /^set(?:\s+([\s\S]*))?$/.exec(command);
 			if (command && !["auto", "status", "sync"].includes(command) && !set) {
