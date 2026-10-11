@@ -6849,6 +6849,8 @@ test("manual titles work with AI disabled, and auto respects that setting", asyn
 	expect(f.state.title).toBe("x".repeat(24));
 	await f.emit("agent_settled");
 	expect(f.state.title).toBe("* " + "x".repeat(22));
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* " + "x".repeat(22));
 	await f.refresh("auto");
 	expect(f.state.title).toBe("* " + "x".repeat(22));
 	expect(f.requests).toHaveLength(0);

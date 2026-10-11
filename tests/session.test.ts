@@ -499,6 +499,55 @@ test.skipIf(!hasTmux)("the real tmux adapter handles long custom window names", 
 	}
 });
 
+test.skipIf(!hasTmux)("a status-only settlement preserves the peer's latest shared title until explicit sync", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const originalModel = process.env.PI_TMUX_MODEL;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "SharedStatus", "/bin/sleep", "60");
+		const sibling = tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", pane, "/bin/sleep", "60");
+		const warnings: string[] = [];
+		const ctx = { mode: "tui", ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } } } as unknown as ExtensionContext;
+		const peer = (target: string) => {
+			const handlers = new Map<string, Function>();
+			const commands = new Map<string, Function>();
+			piTmux(mockPi(handlers, commands), async (args) => tmux(...args));
+			return {
+				emit: async (event: string) => {
+					process.env.TMUX_PANE = target;
+					await handlers.get(event)!({ type: event }, ctx);
+				},
+				command: async (args: string) => {
+					process.env.TMUX_PANE = target;
+					await commands.get("tmux-title")!(args, ctx);
+				},
+			};
+		};
+		const first = peer(pane);
+		const second = peer(sibling);
+		await first.emit("session_start");
+		await second.emit("session_start");
+		await first.command("set first task");
+		await second.command("set peer task");
+		await first.emit("agent_settled");
+		expect(tmux("display-message", "-p", "-t", sibling, "#{window_name}")).toBe("* peer task");
+		await first.command("sync");
+		expect(tmux("display-message", "-p", "-t", sibling, "#{window_name}")).toBe("* first task");
+		expect(warnings).toEqual([]);
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+		else process.env.PI_TMUX_MODEL = originalModel;
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
+	}
+});
+
 test.skipIf(!hasTmux).each([false, true])("quitting one Pi preserves its peer's title and uses the configured idle title when last, peer waiting=%j", async (waiting) => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");
