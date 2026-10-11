@@ -173,6 +173,16 @@ const GITHUB_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"((?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}))",
 	String.raw`((?:gh[pousr]_[A-Za-z0-9](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9]){19,}|github_pat_[A-Za-z0-9_](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_]){19,}))`,
 );
+const DOCKER_HUB_PAT_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DOCKER_HUB_PAT_PATTERN,
+	"dckr_pat_[A-Za-z0-9_-]{27}",
+	String.raw`(d[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*k[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*p[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){26})`,
+);
+const DOCKER_HUB_OAT_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DOCKER_HUB_OAT_PATTERN,
+	"dckr_oat_[A-Za-z0-9_-]{32}",
+	String.raw`(d[\p{Cc}\p{Cf}]*c[\p{Cc}\p{Cf}]*k[\p{Cc}\p{Cf}]*r[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*o[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*t[\p{Cc}\p{Cf}]*_[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){31})`,
+);
 
 // Cloudflare API keys have 40 URL-safe characters; global keys have 37 hex characters.
 // Require a nearby Cloudflare label to avoid flagging unrelated opaque values.
@@ -772,6 +782,8 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	NPM_ACCESS_TOKEN_BOUNDARY_PATTERN,
 	HUGGING_FACE_TOKEN_BOUNDARY_PATTERN,
 	AGE_SECRET_KEY_BOUNDARY_PATTERN,
+	DOCKER_HUB_PAT_BOUNDARY_PATTERN,
+	DOCKER_HUB_OAT_BOUNDARY_PATTERN,
 	SLACK_API_TOKEN_BOUNDARY_PATTERN,
 	PRIVATE_KEY_HEADER_BOUNDARY_PATTERN,
 ];

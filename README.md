@@ -346,8 +346,8 @@ and custom extension messages are excluded. Summaries and ordinary dialogue
 can still mention details from tool output. Before model lookup or provider
 transport, the bounded context is checked locally with limited patterns for
 recognizable credentials. These include selected provider-specific formats
-(for example GitHub, GitLab, PyPI, and Tailscale keys, Stripe webhook signing
-secrets, Slack API tokens, Discord and Slack webhook URLs, Microsoft Teams webhook URLs,
+(for example GitHub, GitLab, Docker Hub, PyPI, and Tailscale tokens, Stripe webhook
+signing secrets, Slack API tokens, Discord and Slack webhook URLs, Microsoft Teams webhook URLs,
 Azure DevOps PATs, Google OAuth/API keys, and other service tokens), npm `.npmrc` `_auth`
 username/password pairs and legacy Base64 `_password` values, credential-bearing
 URLs, Bearer and Base64 Basic authorization values, and long values assigned to
