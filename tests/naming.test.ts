@@ -909,6 +909,24 @@ test("strips non-whitespace controls from credentials without joining surroundin
 	}
 });
 
+test("screens whitespace-obfuscated credentials embedded in ordinary prose", () => {
+	const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
+	const obfuscated = `${token.slice(0, 20)} ${token.slice(20)}`;
+	const text = `Review Neon access ${obfuscated} before deployment`;
+
+	expect(hasSensitiveNamingContext(text)).toBe(true);
+	expect(hasSensitiveOutput(text)).toBe(true);
+	for (const nearMiss of [
+		`Review Neon access ${obfuscated.slice(0, -1)} before deployment`,
+		`Review Neon access ${obfuscated.replace("neon_api_key_", "neon_api_keys_")} before deployment`,
+		`prefix${obfuscated}`,
+		`${obfuscated}suffix`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens Neon API keys across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
