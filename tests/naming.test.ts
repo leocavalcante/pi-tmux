@@ -2492,6 +2492,52 @@ test("screens alternate AWS access IDs and ABSK bearer tokens across retained bo
 	}
 });
 
+test("screens Fireworks AI tokens across both retained prompt boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const tokens = [
+		`fw-${"A".repeat(40)}`,
+		`fw_${"B".repeat(40)}`,
+		`fpk_${"C".repeat(40)}`,
+	];
+	const candidates = tokens.flatMap((token) => [
+		token,
+		token.replace(/^(?:fw[-_]|fpk_)/, (prefix) => `${prefix[0]}\u200b${prefix.slice(1)}`),
+		`${token.slice(0, 10)}\u0000${token.slice(10)}`,
+	]);
+	const tokenStarts = [prefixLength - 10, suffixStart - 10];
+
+	for (const token of candidates) {
+		expect(hasSensitiveNamingContext(token)).toBe(true);
+		expect(hasSensitiveOutput(token)).toBe(true);
+		for (const tokenStart of tokenStarts) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	for (const nearMiss of [`fw-${"A".repeat(19)}`, `fpk_${"B".repeat(19)}`]) {
+		for (const tokenStart of tokenStarts) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${nearMiss} ${"y".repeat(promptLength - prefix.length - nearMiss.length - 1)}`;
+			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+
+	const omittedTokenStart = prefixLength + 20;
+	const omittedToken = tokens[0]!;
+	const omittedPrefix = `${"x".repeat(omittedTokenStart - 1)} `;
+	const omittedPrompt = `${omittedPrefix}${omittedToken} ${"y".repeat(promptLength - omittedPrefix.length - omittedToken.length - 1)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("requestNamingTitle screens sensitive context before model-registry access", async () => {
 	const contextTexts = [
 		"task: pi-tmux@example.invalid",
