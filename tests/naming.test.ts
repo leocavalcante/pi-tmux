@@ -58,6 +58,31 @@ test("screens Alibaba Cloud AccessKey IDs without flagging near-misses", () => {
 	}
 });
 
+test("screens Tencent Cloud SecretIds without flagging near-misses", () => {
+	const secretId = `AKID${"A1b2".repeat(8)}`;
+	const obfuscatedSecretIds = [
+		secretId.replace("AKID", "A\u200bKID"),
+		`${secretId.slice(0, 20)}\u200b${secretId.slice(20)}`,
+	];
+
+	for (const value of [secretId, ...obfuscatedSecretIds]) {
+		expect(hasSensitiveNamingContext(`review Tencent Cloud access ${value}`)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`AKID${"A1b2".repeat(7)}A1b`,
+		`AKID${"A1b2".repeat(8)}A`,
+		`AKIE${"A1b2".repeat(8)}`,
+		`prefix${secretId}`,
+		`${secretId}suffix`,
+		"Tencent Cloud SecretId setup",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens Azure AD client-secret formats without flagging near-misses", () => {
 	const body = `${"Aa0_-.".repeat(5)}C3`;
 	const secrets = [`AbC7Q~${body}`, `AbC7Q~${body.slice(0, 31)}`, `AbC7Q~${body}${"x".repeat(2)}`];
