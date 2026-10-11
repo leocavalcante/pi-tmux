@@ -282,6 +282,25 @@ const GOOGLE_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"AIza[A-Za-z0-9_-]{35}",
 	String.raw`(A[\p{Cc}\p{Cf}]*I[\p{Cc}\p{Cf}]*z[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){34})`,
 );
+// Google OAuth credential formats have distinctive prefixes and long URL-safe bodies.
+const GOOGLE_OAUTH_CLIENT_SECRET_PATTERN = /(?<![A-Za-z0-9_])GOCSPX-[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/i;
+const GOOGLE_OAUTH_CLIENT_SECRET_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GOOGLE_OAUTH_CLIENT_SECRET_PATTERN,
+	"GOCSPX-[A-Za-z0-9_-]{20,}",
+	String.raw`(G[\p{Cc}\p{Cf}]*O[\p{Cc}\p{Cf}]*C[\p{Cc}\p{Cf}]*S[\p{Cc}\p{Cf}]*P[\p{Cc}\p{Cf}]*X[\p{Cc}\p{Cf}]*-[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){19,})`,
+);
+const GOOGLE_OAUTH_REFRESH_TOKEN_PATTERN = /(?<![A-Za-z0-9_])1\/\/[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/;
+const GOOGLE_OAUTH_REFRESH_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GOOGLE_OAUTH_REFRESH_TOKEN_PATTERN,
+	String.raw`1\/\/[A-Za-z0-9_-]{20,}`,
+	String.raw`(1[\p{Cc}\p{Cf}]*\/[\p{Cc}\p{Cf}]*\/[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){19,})`,
+);
+const GOOGLE_OAUTH_ACCESS_TOKEN_PATTERN = /(?<![A-Za-z0-9_])ya29\.[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/;
+const GOOGLE_OAUTH_ACCESS_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	GOOGLE_OAUTH_ACCESS_TOKEN_PATTERN,
+	String.raw`ya29\.[A-Za-z0-9_-]{20,}`,
+	String.raw`(y[\p{Cc}\p{Cf}]*a[\p{Cc}\p{Cf}]*2[\p{Cc}\p{Cf}]*9[\p{Cc}\p{Cf}]*\.[\p{Cc}\p{Cf}]*[A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){19,})`,
+);
 const CREDENTIAL_LIKE_PATTERNS = [
 	// URI user-info is a common place for database and service credentials.
 	/[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/(?:[^\s/:@]+)?:[^\s/@]+@/i,
@@ -409,11 +428,11 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	// Google Cloud API keys use `AIza` followed by exactly 35 alphanumeric, underscore, or hyphen characters.
 	GOOGLE_API_KEY_PATTERN,
 	// Google OAuth client secrets use a `GOCSPX-` prefix and a long URL-safe value.
-	/(?<![A-Za-z0-9_])GOCSPX-[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/i,
+	GOOGLE_OAUTH_CLIENT_SECRET_PATTERN,
 	// Google OAuth refresh tokens use a `1//` prefix and a long URL-safe value.
-	/(?<![A-Za-z0-9_])1\/\/[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/,
+	GOOGLE_OAUTH_REFRESH_TOKEN_PATTERN,
 	// Google OAuth access tokens commonly use `ya29.` followed by a long URL-safe value.
-	/(?<![A-Za-z0-9_])ya29\.[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/,
+	GOOGLE_OAUTH_ACCESS_TOKEN_PATTERN,
 	// `csk-` is Cerebras; do not mistake its `sk-` suffix for an OpenAI key.
 	/(?:(?<!c)sk|rk)-(?:proj-|ant-|svcacct-|or-v1-)[A-Za-z0-9_-]{16,}/i,
 	/(?:(?<!c)sk|rk)-[A-Za-z0-9]{16,}(?:[-_][A-Za-z0-9_-]+)*/i,
@@ -711,6 +730,9 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	RAILWAY_API_TOKEN_BOUNDARY_PATTERN,
 	AWS_ACCESS_KEY_ID_BOUNDARY_PATTERN,
 	GOOGLE_API_KEY_BOUNDARY_PATTERN,
+	GOOGLE_OAUTH_CLIENT_SECRET_BOUNDARY_PATTERN,
+	GOOGLE_OAUTH_REFRESH_TOKEN_BOUNDARY_PATTERN,
+	GOOGLE_OAUTH_ACCESS_TOKEN_BOUNDARY_PATTERN,
 ];
 
 function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {
