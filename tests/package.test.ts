@@ -153,6 +153,7 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 			"index.ts",
 			"src/title.ts",
 			"src/naming.ts",
+			"src/unicode-digits.ts",
 			"src/tmux.ts",
 			"src/controller.ts",
 			"src/extension.ts",
