@@ -1056,6 +1056,28 @@ test("a successful title clears the last rejection from status", async () => {
 	expect(f.notices.at(-1)).toContain("Last naming rejection: none");
 });
 
+test("sensitive model output updates the status category without disclosing the reply", async () => {
+	const syntheticToken = `ghp_${"a".repeat(20)}`;
+	const f = fixture([
+		Promise.resolve(response("one two three four five")),
+		Promise.resolve(response("one two three four five")),
+		Promise.resolve(response(syntheticToken)),
+	]);
+	f.input("First task");
+	await settle();
+	await f.refresh("status");
+	expect(f.notices.at(-1)).toContain("Last naming rejection: word count;");
+	f.input("Second task");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.warnings.at(-1)).toBe("Sensitive-looking naming output was not applied.");
+	expect(f.warnings.join(" ")).not.toContain(syntheticToken);
+	await f.refresh("status");
+	const status = f.notices.at(-1)!;
+	expect(status).toContain("Last naming rejection: sensitive-looking output;");
+	expect(status).not.toContain(syntheticToken);
+});
+
 test("does not apply a short-looking response truncated by the token limit", async () => {
 	const f = fixture([Promise.resolve(response("fix ssh", "length"))]);
 	f.input("Name a task");
