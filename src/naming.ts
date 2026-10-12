@@ -238,6 +238,12 @@ const LABELED_AUSTRALIAN_MEDICARE_NUMBER_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])medicare[-_\s]+(?:card[-_\s]+)?(?:number|no\.?|card)\s*#?\s*["']?\s*[:=]\s*["']?(${AUSTRALIAN_MEDICARE_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
 	"iu",
 );
+// Aadhaar numbers use 12 digits, begin with 2–9, and carry a Verhoeff check digit.
+const AADHAAR_NUMBER_VALUE_PATTERN = String.raw`\p{Nd}(?:[-\s]?\p{Nd}){11}`;
+const LABELED_AADHAAR_NUMBER_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])aadhaar(?:[-_\s]?(?:number|no\.?|id))?\s*#?\s*["']?\s*[:=]\s*["']?(${AADHAAR_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	"iu",
+);
 // New Zealand IRD numbers are eight or nine digits and use Inland Revenue's mod-11 check.
 const NEW_ZEALAND_IRD_NUMBER_VALUE_PATTERN = String.raw`\p{Nd}(?:[-\s]?\p{Nd}){7,8}`;
 const LABELED_NEW_ZEALAND_IRD_NUMBER_PATTERN = new RegExp(
@@ -1330,6 +1336,11 @@ const LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	`(${AUSTRALIAN_MEDICARE_NUMBER_VALUE_PATTERN})`,
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){9,10})`,
 );
+const LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_AADHAAR_NUMBER_PATTERN,
+	`(${AADHAAR_NUMBER_VALUE_PATTERN})`,
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){11})`,
+);
 const LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_NEW_ZEALAND_IRD_NUMBER_PATTERN,
 	`(${NEW_ZEALAND_IRD_NUMBER_VALUE_PATTERN})`,
@@ -2358,6 +2369,54 @@ function isValidNewZealandIrdNumber(value: string): boolean {
 	});
 }
 
+const VERHOEFF_MULTIPLICATION_TABLE = [
+	[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+	[1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+	[2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+	[3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+	[4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+	[5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+	[6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+	[7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+	[8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+	[9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+] as const;
+const VERHOEFF_PERMUTATION_TABLE = [
+	[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+	[1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+	[5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+	[8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+	[9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+	[4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+	[2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+	[7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+] as const;
+
+function hasVerhoeffCheckDigit(digits: string): boolean {
+	let checksum = 0;
+	for (let index = 0; index < digits.length; index++) {
+		const digit = digits.charCodeAt(digits.length - index - 1) - 48;
+		checksum = VERHOEFF_MULTIPLICATION_TABLE[checksum]![VERHOEFF_PERMUTATION_TABLE[index % 8]![digit]!]!;
+	}
+	return checksum === 0;
+}
+
+function isValidAadhaarNumber(value: string): boolean {
+	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) =>
+		digits.length === 12 && digits[0]! >= "2" && digits[0]! <= "9" && hasVerhoeffCheckDigit(digits));
+}
+
+function hasLabeledAadhaarNumber(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_AADHAAR_NUMBER_PATTERN.source,
+		`${LABELED_AADHAAR_NUMBER_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidAadhaarNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
 function hasLabeledNewZealandIrdNumber(value: string): boolean {
 	const pattern = new RegExp(
 		LABELED_NEW_ZEALAND_IRD_NUMBER_PATTERN.source,
@@ -2642,7 +2701,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 		|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
-		|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
+		|| hasLabeledAadhaarNumber(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2662,7 +2721,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
-			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
+			|| hasLabeledAadhaarNumber(compacted) || LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	const lowercased = compatibilityNormalized.toLowerCase();
@@ -2683,7 +2742,7 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 			|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
-			|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
+			|| hasLabeledAadhaarNumber(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2700,7 +2759,7 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
-			|| hasLabeledPaymentCard(compacted);
+			|| hasLabeledAadhaarNumber(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	return distinctTextVariants(text, compatibilityNormalized, compatibilityNormalized.toLowerCase()).some((value) =>
@@ -2878,6 +2937,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN,
 	LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN,
+	LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
 	EMAIL_ADDRESS_BOUNDARY_PATTERN,
@@ -2975,6 +3035,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN
+		&& pattern !== LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 		&& pattern !== EMAIL_ADDRESS_BOUNDARY_PATTERN
@@ -3057,6 +3118,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidAustralianMedicareNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN
 					&& !isValidNewZealandIrdNumber(match[1]!)) continue;
+				if (sourcePattern === LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN
+					&& !isValidAadhaarNumber(match[1]!)) continue;
 				if (sourcePattern === US_ITIN_BOUNDARY_PATTERN
 					&& !isValidUsItinNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN

@@ -5687,6 +5687,62 @@ test("screens valid New Zealand IRD numbers only with an explicit label", () => 
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens Verhoeff-valid Aadhaar numbers only with an explicit label", () => {
+	const identifiers = [
+		"Aadhaar: 234567890124",
+		"Aadhaar Number=2345 6789 0124",
+		"Aadhaar No.: 2345-6789-0124",
+		"Aadhaar ID: 234567890124",
+	];
+	for (const identifier of identifiers) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	const unicodeAadhaar = "234567890124".replace(/\d/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	for (const identifier of [`Aadhaar: ${unicodeAadhaar}`, "Aadhaar: 234567\u200b890124"]) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"234567890124",
+		"Aadhaar: 234567890125",
+		"Aadhaar: 123456789010",
+		"Aadhaar: 000000000000",
+		"Aadhaar: 23456789012",
+		"Aadhaar Number: 2345678901245",
+		"Aadhaar No. 234567890124",
+		"Aadhaar number validation in the task",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("Aadhaar values crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const label = " Aadhaar Number: ";
+	const value = "234567890124";
+
+	for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
+		const before = "x".repeat(valueStart - label.length);
+		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+		expect(prompt).toHaveLength(promptLength);
+		const context = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+	}
+
+	const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}234567890125 ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens check-digit-valid Brazilian CPF values only with an explicit label", () => {
 	const identifiers = [
 		"CPF: 529.982.247-25",

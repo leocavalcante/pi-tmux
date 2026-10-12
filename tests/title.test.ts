@@ -6245,6 +6245,83 @@ test("New Zealand IRD numbers crossing either retained prompt boundary skip mode
 	}
 });
 
+test("rejects explicitly labeled Verhoeff-valid Aadhaar numbers without exposing them", async () => {
+	const identifiers = [
+		"Aadhaar: 234567890124",
+		"Aadhaar Number=2345 6789 0124",
+		"Aadhaar No.: 2345-6789-0124",
+		"Aadhaar ID: 234567890124",
+		"Aadhaar: ٢٣٤٥٦٧٨٩٠١٢٤",
+		"Aadhaar: 234567\u200b890124",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the Indian identity record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"234567890124",
+		"Aadhaar: 234567890125",
+		"Aadhaar: 123456789010",
+		"Aadhaar: 000000000000",
+		"Aadhaar: 23456789012",
+		"Aadhaar Number 234567890124",
+		"Aadhaar number validation in the task",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("aadhaar parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("aadhaar parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("Aadhaar numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const label = " Aadhaar Number: ";
+	const value = "234567890124";
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
+		const before = "x".repeat(valueStart - label.length);
+		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+		expect(prompt).toHaveLength(promptLength);
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(value);
+	}
+});
+
 test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them", async () => {
 	const identifiers = [
 		"SIN: 712-345-677",
