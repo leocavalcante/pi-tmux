@@ -7889,3 +7889,35 @@ test("rejects labeled Cloudflare API keys without mistaking near-misses for keys
 		expect(f.warnings).toEqual([]);
 	}
 });
+
+test("coalesces superseded title refreshes during a burst of lifecycle updates", async () => {
+	process.env.PI_TMUX_MODEL = "off";
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => { release = resolve; });
+	let held = false;
+	const f = fixture([], async (args) => {
+		if (!held && args[0] === "display-message") { held = true; await gate; }
+	});
+	const initial = f.refresh("sync");
+	await settle();
+	expect(held).toBe(true);
+
+	let completed = 0;
+	const superseded = Array.from({ length: 64 }, () => f.emit("agent_settled") as Promise<void>);
+	for (const update of superseded) void update.then(() => { completed++; });
+	f.emit("agent_start");
+	let completedWhileBlocked = 0;
+	try {
+		await settle();
+		completedWhileBlocked = completed;
+	} finally {
+		release();
+	}
+
+	await Promise.all([initial, ...superseded]);
+	await settle();
+	expect(completedWhileBlocked).toBe(superseded.length);
+	expect(f.state.waitingPanes.get("%1")).toBe("0");
+	expect(f.state.activePanes.get("%1")).toBe("1");
+	expect(f.warnings).toEqual([]);
+});
