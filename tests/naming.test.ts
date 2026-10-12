@@ -2250,6 +2250,78 @@ test("screens Token and ApiKey authorization credentials across retained-context
 	}
 });
 
+test("screens Negotiate, NTLM, and Kerberos authorization tokens across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const headers = [
+		{
+			label: "Authorization: Negotiate ",
+			token: Buffer.from("A".repeat(32)).toString("base64"),
+		},
+		{
+			label: "Proxy-Authorization: NTLM ",
+			token: Buffer.from("B".repeat(64)).toString("base64"),
+		},
+		{
+			label: "Authorization: Kerberos ",
+			token: Buffer.from("C".repeat(32)).toString("base64"),
+		},
+	];
+
+	for (const { label, token } of headers) {
+		const value = `${label}${token}`;
+		const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}`;
+		for (const candidate of [value, obfuscated]) {
+			expect(hasSensitiveNamingContext(candidate)).toBe(true);
+			expect(hasSensitiveOutput(candidate)).toBe(true);
+		}
+
+		const tokenStart = prefixLength - 8;
+		const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+		const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
+		const context = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+
+		const promptLength = MAX_PROMPT_LENGTH + 300;
+		const suffixStart = promptLength - Math.floor(retainedLength / 2);
+		const suffixTokenStart = suffixStart - 8;
+		const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+		const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
+			promptLength - suffixPrefix.length - value.length - 1,
+		)}`;
+		const suffixContext = buildNamingRequestContext([], suffixPrompt);
+		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+		const historyContent = `${"x".repeat(990 - label.length - 1)} ${value} y`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const historyContext = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
+			expect(historyContext.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const token = Buffer.from("D".repeat(32)).toString("base64");
+	for (const nearMiss of [
+		`Authorization: Negotiate ${"A".repeat(19)}`,
+		"Authorization: Negotiate authentication is supported",
+		"Authorization: Negotiate this ordinary exchange is enabled",
+		`Authorization: Negotiateish ${token}`,
+		`Authorization: NTLMish ${token}`,
+		`Authorization: Kerberos ${"A".repeat(19)}`,
+		`Proxy-Authorization: SPNEGO ${token}`,
+		`prefixAuthorization: Negotiate ${token}`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens HTTP Signature Authorization proofs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
