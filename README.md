@@ -401,8 +401,9 @@ For supported credential labels, YAML block scalars with tags or anchors are als
 checked, as are shorter non-placeholder password/passphrase assignments and
 recognizable PEM, OpenSSH, PGP, SSH2, and PuTTY private-key file markers. The
 context scanner also checks recognizable ASCII and internationalized email
-addresses, explicitly labeled U.S. SSNs and ITINs in recognized IRS number
-ranges, calendar-valid numeric dates following explicit date-of-birth labels,
+addresses, explicitly labeled U.S. SSN-shaped values, ITINs in recognized IRS
+number ranges, and EINs in the conventional 2-7 digit format,
+calendar-valid numeric dates following explicit date-of-birth labels,
 UK National Insurance numbers, explicitly labeled Brazilian CPF values
 with valid check digits, and explicitly labeled Canadian SIN values with valid
 Luhn check digits. Explicitly labeled IBANs with supported country lengths and
@@ -427,9 +428,10 @@ compatibility-normalized output against the same limited set of selected
 provider-specific credential formats and private-key file markers,
 credential-bearing URLs, authorization
 values, and labeled credential patterns. It also checks recognizable ASCII
-and internationalized email addresses, explicitly labeled U.S. SSNs and ITINs
-in recognized IRS number ranges, calendar-valid numeric dates following explicit
-date-of-birth labels, UK National Insurance numbers, explicitly labeled Brazilian
+and internationalized email addresses, explicitly labeled U.S. SSN-shaped
+values, ITINs in recognized IRS number ranges, and EINs in the conventional 2-7
+digit format, calendar-valid numeric dates following explicit date-of-birth
+labels, UK National Insurance numbers, explicitly labeled Brazilian
 CPF values with valid check digits, and explicitly labeled Canadian SIN values
 with valid Luhn check digits. Explicitly labeled IBANs with supported country
 lengths and valid MOD 97 checksums are checked too. Phone numbers and Luhn-valid,
