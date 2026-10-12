@@ -5388,6 +5388,9 @@ test("screens explicitly labeled ABA routing numbers with accepted prefixes and 
 		"Routing number: 087294619",
 		"ABA routing number=126804371",
 		"Routing Transit Number: 329170640",
+		"Bank Routing Number: 329170640",
+		"Routing #: 329170640",
+		"RTN: 659173045",
 		"ABA RTN: 659173045",
 		"Routing Number: 800000006",
 		"Routing No.: 087-294-619",
@@ -5406,6 +5409,8 @@ test("screens explicitly labeled ABA routing numbers with accepted prefixes and 
 		"Routing number: 08729461",
 		"Routing number: 0872946190",
 		"Routing number 087294619",
+		"RTN 087294619",
+		"Routing # 087294619",
 		"Bank number: 087294619",
 		"Routing number validation",
 	]) {
@@ -5422,14 +5427,16 @@ test("ABA routing numbers crossing either retained prompt boundary are detected"
 	const suffixStart = promptLength - Math.floor(retainedLength / 2);
 	const label = " ABA routing number: ";
 
-	for (const value of ["087294619", "٠٨٧٢٩٤٦١٩"]) {
-		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-			const before = "x".repeat(valueStart - label.length);
-			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
+	for (const boundaryLabel of [label, " RTN: "]) {
+		for (const value of ["087294619", "٠٨٧٢٩٤٦١٩"]) {
+			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+				const before = "x".repeat(valueStart - boundaryLabel.length);
+				const prompt = `${before}${boundaryLabel}${value} ${"y".repeat(promptLength - before.length - boundaryLabel.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
 		}
 	}
 

@@ -177,8 +177,9 @@ const LABELED_IBAN_PATTERN = new RegExp(
 );
 // U.S. ABA routing numbers have nine digits, a routing-symbol prefix, and a checksum.
 const ABA_ROUTING_NUMBER_VALUE_PATTERN = String.raw`\p{Nd}(?:[-\s]?\p{Nd}){8}`;
+const ABA_ROUTING_NUMBER_LABEL_PATTERN = String.raw`(?:(?:aba[-_\s]+)?(?:bank[-_\s]+)?routing(?:[-_\s]+transit)?[-_\s]+(?:number|no\.?)|(?:aba[-_\s]+)?(?:bank[-_\s]+)?routing\s*#|(?:aba[-_\s]+)?rtn)`;
 const LABELED_ABA_ROUTING_NUMBER_PATTERN = new RegExp(
-	String.raw`(?<![\p{L}\p{N}])(?:(?:aba[-_\s]+)?routing(?:[-_\s]+transit)?[-_\s]+(?:number|no\.?)|aba[-_\s]+rtn)\s*#?\s*["']?\s*[:=]\s*["']?(${ABA_ROUTING_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	String.raw`(?<![\p{L}\p{N}])${ABA_ROUTING_NUMBER_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${ABA_ROUTING_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
 	"iu",
 );
 // Keep the accepted IBAN registry subset explicit to avoid shape-only matches.

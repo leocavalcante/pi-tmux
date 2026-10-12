@@ -6327,6 +6327,9 @@ test("rejects explicitly labeled checksum-valid ABA routing numbers without expo
 		"Routing number: 087294619",
 		"ABA routing number=126804371",
 		"Routing Transit Number: 329170640",
+		"Bank Routing Number: 329170640",
+		"Routing #: 329170640",
+		"RTN: 659173045",
 		"ABA RTN: 659173045",
 		"Routing Number: 800000006",
 		"Routing No.: 087-294-619",
@@ -6363,6 +6366,8 @@ test("rejects explicitly labeled checksum-valid ABA routing numbers without expo
 		"Routing number: 08729461",
 		"Routing number: 0872946190",
 		"Routing number 087294619",
+		"RTN 087294619",
+		"Routing # 087294619",
 		"Bank number: 087294619",
 		"Routing number validation",
 	]) {
