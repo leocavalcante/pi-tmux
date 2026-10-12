@@ -63,6 +63,12 @@ test("README cites J-LIS for the Japanese My Number checksum rule", () => {
 	expect(readme).toContain("https://www.j-lis.go.jp/data/open/cnt/3/1282/1/H2707_qa.pdf");
 });
 
+test("README cites INSEE for Corsican NIR check-key support", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
+	expect(readme).toContain("Corsican `2A`/`2B` department codes");
+	expect(readme).toContain("https://xml.insee.fr/schema/nir.html");
+});
+
 test("CONTRIBUTING documents current privacy screening test coverage", () => {
 	const contributorGuide = readFileSync(fileURLToPath(new URL("../CONTRIBUTING.md", import.meta.url)), "utf8")
 		.replace(/\s+/gu, " ");
