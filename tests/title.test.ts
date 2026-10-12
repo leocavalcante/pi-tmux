@@ -5992,6 +5992,52 @@ test("rejects Grafana tokens without mistaking near-miss strings for tokens", as
 	}
 });
 
+test("rejects explicitly labeled valid CPF values without exposing them", async () => {
+	const identifiers = [
+		"CPF: 529.982.247-25",
+		"CPF number=52998224725",
+		"Cadastro de Pessoas Físicas: 529 982 247 25",
+		"CPF: 529.98\u200b2.247-25",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"529.982.247-25",
+		"CPF: 529.982.247-24",
+		"CPF: 000.000.000-00",
+		"CPF parsing in a task",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("CPF parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("cpf parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
 test("rejects explicitly labeled UK National Insurance numbers without blocking near-misses", async () => {
 	const identifiers = [
 		"National Insurance number: AB 12 34 56 C",

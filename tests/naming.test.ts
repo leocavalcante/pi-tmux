@@ -5329,6 +5329,76 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 	}
 });
 
+test("screens check-digit-valid Brazilian CPF values only with an explicit label", () => {
+	const identifiers = [
+		"CPF: 529.982.247-25",
+		"CPF number=52998224725",
+		"Cadastro de Pessoas Físicas: 529 982 247 25",
+	];
+	for (const identifier of identifiers) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	const unicodeCpf = "529.982.247-25".replace(/\d/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	for (const identifier of [`CPF: ${unicodeCpf}`, `CPF: 529.98\u200b2.247-25`]) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"529.982.247-25",
+		"CPF: 529.982.247-24",
+		"CPF number: 1234567890",
+		"CPF: 000.000.000-00",
+		"CPF: 529.982.247-250",
+		"CPF parsing in the task",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const label = " CPF: ";
+	const value = "529.982.247-25";
+	const prefixValueStart = prefixLength - 7;
+	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
+	const prefixContext = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+
+	const obfuscatedValue = `${value.slice(0, 7)}\u200b${value.slice(7)}`;
+	const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const historyContent = `${"x".repeat(988 - label.length)}${label}${value} y`;
+	for (const messages of [
+		[{ role: "user", content: historyContent }],
+		[{ role: "compactionSummary", summary: historyContent }],
+	] as any[]) {
+		const context = buildNamingRequestContext(messages);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+	}
+
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const suffixValueStart = suffixStart - value.length + 7;
+	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} `
+		+ `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${value} ${"y".repeat(3_000)}`;
+	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+	const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}529.982.247-24 ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Luhn-valid labeled payment cards across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
