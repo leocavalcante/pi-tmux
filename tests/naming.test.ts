@@ -2420,6 +2420,63 @@ test("screens AWS and Google Cloud Storage V4 signed URLs across retained-contex
 	}
 });
 
+test("screens legacy Google Cloud Storage V2 signed URLs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const signature = "A".repeat(344);
+	const percentEncodedSignature = Buffer.from(Array.from({ length: 256 }, (_, index) => index))
+		.toString("base64").replaceAll("+", "%2B").replaceAll("/", "%2F").replaceAll("=", "%3D");
+	const accessId = "EXAMPLE_ACCESS_ID";
+	const values = [
+		{
+			url: `https://storage.googleapis.com/bucket/object?GoogleAccessId=${accessId}&Expires=1790000000&Signature=${signature}`,
+			signature,
+		},
+		{
+			url: `https://storage.googleapis.com/bucket/object?Signature=${percentEncodedSignature}&Expires=1790000000&GoogleAccessId=${accessId}`,
+			signature: percentEncodedSignature,
+		},
+	];
+	const promptAt = (url: string, token: string, start: number) => {
+		const urlStart = start - url.indexOf(token);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, signature: token } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, token, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const omittedSignature = buildNamingRequestContext([], promptAt(url, token, prefixLength + 5));
+		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+	}
+
+	const nearMisses = [
+		{ url: `Signature=${signature}`, signature },
+		{ url: `Signature=${signature}&GoogleAccessKey=${accessId}`, signature },
+		{ url: `GoogleAccessId=${accessId}&Signature=${"A".repeat(27)}`, signature: "A".repeat(27) },
+		{ url: `GoogleAccessId=${accessId}&Signature=${"A".repeat(901)}`, signature: "A".repeat(901) },
+		{ url: `GoogleAccessId=${accessId}&Expires=1790000000`, signature: accessId },
+		{ url: `GoogleAccessId=${accessId}&Sig=${signature}`, signature },
+	];
+	for (const { url, signature: token } of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, token, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens CloudFront signed URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

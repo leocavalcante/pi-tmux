@@ -357,7 +357,7 @@ Azure DevOps
 PATs, Google OAuth/API keys, and other service tokens), npm `.npmrc` `_auth`
 username/password pairs, Docker config `auth` values encoding username/password pairs,
 and legacy Base64 `_password` values, credential-bearing URLs, including
-CloudFront, AWS, and Google Cloud Storage V4 signed URLs,
+CloudFront, AWS V4, and legacy/V4 Google Cloud Storage signed URLs,
 Bearer, Token, and ApiKey authorization values,
 Negotiate/NTLM/Kerberos authentication tokens and challenges, legacy HTTP Signature
 proofs, RFC 9421 HTTP Message Signature proofs,
