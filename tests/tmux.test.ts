@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { runTmux } from "../src/tmux.ts";
+import { runTmux, targetDisappeared } from "../src/tmux.ts";
 import { childHasExited, observeRejection, waitForChild, withFakeTmux as withFakeTmuxFixture } from "./tmux-test-utils.ts";
 
 async function withFakeTmux(
@@ -11,6 +11,14 @@ async function withFakeTmux(
 	if (!nodeExecutable) throw new Error("Node.js is required for the fake tmux executable");
 	await withFakeTmuxFixture(nodeExecutable, script, action);
 }
+
+test("recognizes vanished tmux targets from adapter errors without misclassifying other failures", () => {
+	expect(targetDisappeared(new Error("can't find window: @12"), "@12")).toBe(true);
+	expect(targetDisappeared(new Error("can't find session: $3"), "$3")).toBe(true);
+	expect(targetDisappeared({ stderr: Buffer.from("can't find window: @12\n") }, "@12")).toBe(true);
+	expect(targetDisappeared(new Error("tmux server is unavailable"), "@12")).toBe(false);
+	expect(targetDisappeared(new Error("can't find session: $3"), "@12")).toBe(false);
+});
 
 test.serial("runTmux does not spawn a child for a pre-aborted signal", async () => {
 	await withFakeTmux(() => [], async ({ pid }) => {
