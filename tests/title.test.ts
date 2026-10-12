@@ -1393,6 +1393,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	for (const [label, value] of [
 		[" SSN: ", "000-00-0000"],
 		[" SSN: ", "٠٠٠-٠٠-٠٠٠٠"],
+		[" NI number: ", "AB 12 34 56 C"],
 		[" Card Number: ", "٠٠٠٠-٠٠٠٠-٠٠٠٠-٠٠٠٠"],
 		[" Phone: ", "000-000-0000"],
 	] as const) {
@@ -5932,6 +5933,74 @@ test("rejects Grafana tokens without mistaking near-miss strings for tokens", as
 		expect(f.state.title).toBe("grafana alerts");
 		expect(f.warnings).toEqual([]);
 	}
+});
+
+test("rejects explicitly labeled UK National Insurance numbers without blocking near-misses", async () => {
+	const identifiers = [
+		"National Insurance number: AB 12 34 56 C",
+		"National Insurance No=CE123456A",
+		"NI number: GW 12-34-56 D",
+		"NI: ST123456C",
+		"NINO: AB123456B",
+		"NI number: AB ١٢٣٤٥٦A",
+		"National Insurance number: ＡＢ １２ ３４ ５６ Ｃ",
+		"NI number:\u200b AB 12 34 56 C",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	const fragments = ["NI number: AB 12 34 ", "56 C"];
+	const splitResponse = {
+		...response(""),
+		content: fragments.map((text, index) => ({
+			type: "text",
+			text,
+			textSignature: JSON.stringify({ v: 1, id: `ni-${index}`, phase: "final_answer" }),
+		})),
+	};
+	const split = fixture([Promise.resolve(splitResponse)]);
+	split.input("Name a task");
+	await settle();
+	expect(split.state.title).toBe("existing task");
+	expect(split.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+
+	for (const nearMiss of [
+		"AB123456C",
+		"NI number: DD 12 34 56 C",
+		"NI number: AD 12 34 56 C",
+		"NI number: AB 12 34 56 E",
+		"NI number: AB 12 34 5 C",
+		"NI number: AB 12 34 567 C",
+		"National Insurance number parsing",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("NI parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("ni parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("rejects phone-shaped output only when a phone label is present", async () => {
