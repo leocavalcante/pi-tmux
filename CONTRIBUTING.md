@@ -49,7 +49,9 @@ npm test
 - `tests/package.test.ts` runs `npm pack` in a temporary directory, inspects the packed manifest and entrypoint, then imports the extracted file after Bun's TypeScript erasure and exercises status-only lifecycle behavior without a runtime SDK dependency. It requires `npm` and `tar` on `PATH`; on Windows the npm command shim is launched through the command shell.
 - `tests/tmux.test.ts` runs under Bun and uses a Node-based fake tmux executable to test `runTmux` output bounds, timeouts, cancellation, forced termination, and pre-aborted signals. The graceful-SIGTERM assertion skips on native Windows, where child termination semantics differ; no tmux server is required.
 - `tests/tmux-node.mjs` runs the focused `runTmux` subprocess cases under Node's native `node:child_process` implementation, covering pre-aborted signals, output-bound cleanup, cancellation, and graceful timeout exit. Run it alone with `npm run test:node`; it does not need a tmux server.
-- `tests/naming.test.ts` checks synthetic Tailscale key screening in naming context and output, including invisible-character variants and near-misses, and verifies context screening happens before model-registry access without echoing matches.
+- `tests/naming.test.ts` covers synthetic credential and explicitly labeled personal-data screening, including Unicode variants, near-misses, and retained-context-boundary cases; it verifies context is screened before model-registry access without echoing matches.
+- `tests/title.test.ts` checks that sensitive-looking context is not sent to the model and sensitive-looking output is neither applied nor disclosed; identifier examples are synthetic.
+- `tests/unicode-digits.test.ts` verifies runtime-supported decimal digit mappings and conservative handling of unmappable digits.
 - `tests/issue-templates.test.ts` parses the issue-form YAML, checks supported field structures and privacy reminders, and keeps blank issues enabled.
 - `tests/workflows.test.ts` keeps third-party GitHub Actions pinned to full commit SHAs with version comments, while allowing local reusable workflows.
 
