@@ -2315,6 +2315,78 @@ test("screens HTTP Signature Authorization proofs across retained-context bounda
 	}
 });
 
+test("screens HTTP Message Signature proofs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const headers = [
+		{
+			label: "Signature: sig1=:",
+			token: Buffer.from("A".repeat(32)).toString("base64"),
+		},
+		{
+			label: '"Signature": "sig2=:',
+			token: Buffer.from("B".repeat(64)).toString("base64"),
+		},
+	];
+
+	for (const { label, token } of headers) {
+		const value = `${label}${token}:`;
+		const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}:`;
+		for (const candidate of [value, obfuscated]) {
+			expect(hasSensitiveNamingContext(candidate)).toBe(true);
+			expect(hasSensitiveOutput(candidate)).toBe(true);
+		}
+
+		const tokenStart = prefixLength - 8;
+		const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+		const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
+		const context = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+
+		const promptLength = MAX_PROMPT_LENGTH + 300;
+		const suffixStart = promptLength - Math.floor(retainedLength / 2);
+		const suffixTokenStart = suffixStart - 8;
+		const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+		const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
+			promptLength - suffixPrefix.length - value.length - 1,
+		)}`;
+		const suffixContext = buildNamingRequestContext([], suffixPrompt);
+		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+		const historyContent = `${"x".repeat(990 - label.length - 1)} ${value}`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const historyContext = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
+			expect(historyContext.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const signature = Buffer.from("C".repeat(32)).toString("base64");
+	for (const nearMiss of [
+		`Signature: sig1=:${"A".repeat(19)}:`,
+		"Signature-Input: sig1=(\"@method\" \"date\");keyid=\"client-key\"",
+		`Signature-Input: sig1=:${signature}:`,
+		`Not-Signature: sig1=:${signature}:`,
+		"Signature: authentication is enabled",
+		`Signature: 1sig=:${signature}:`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+
+	const signatureInputLabel = "Signature-Input: sig1=:";
+	const boundaryTokenStart = prefixLength - 8;
+	const signatureInputPrefix = `${"x".repeat(boundaryTokenStart - signatureInputLabel.length - 1)} `;
+	const signatureInputPrompt = `${signatureInputPrefix}${signatureInputLabel}${signature}: ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], signatureInputPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Digest Authorization response hashes across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
