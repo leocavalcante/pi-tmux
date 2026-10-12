@@ -173,6 +173,21 @@ test("CI history secret scanning verifies its pinned binary and redacts findings
 	expect(execution).toBeGreaterThan(extraction);
 });
 
+test("manual npm bootstrap checks out clean origin/main before logging in", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
+	const commands = /Bootstrap version `0\.1\.0`[\s\S]*?```sh\n([\s\S]*?)\n```/u.exec(readme)?.[1];
+	if (!commands) throw new Error("README must document the one-time npm bootstrap commands");
+	const preflight = [
+		"git fetch origin",
+		'test "$(git branch --show-current)" = "main"',
+		'test -z "$(git status --porcelain)"',
+		'test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"',
+	].map((command) => commands.indexOf(command));
+	const login = commands.indexOf("npm login");
+	expect(preflight.every((position, index) => position >= 0 && position < login
+		&& (index === 0 || position > preflight[index - 1]!))).toBe(true);
+});
+
 test("npm publishing requires all release safety gates", () => {
 	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/publish.yml", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
 	const topLevelPermissions = /^permissions:\n((?:  [^\n]*\n)+)/m.exec(workflow)?.[1] ?? "";
