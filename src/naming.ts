@@ -162,6 +162,12 @@ const OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN = new RegExp(
 	OBFUSCATED_BEARER_TOKEN_PATTERN.source, `${OBFUSCATED_BEARER_TOKEN_PATTERN.flags}g`,
 );
 const US_SSN_PATTERN = /(?<![\p{L}\p{N}])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
+// UK NI prefixes exclude D/F/I/Q/U/V first, and D/F/I/O/Q/U/V second; suffixes are A–D.
+const UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN = String.raw`[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z][-\s]?\p{Nd}{2}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{2}[-\s]?[A-D]`;
+const UK_NATIONAL_INSURANCE_NUMBER_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])(?:national[-_\s]+insurance(?:[-_\s]+(?:number|no))?|ni(?:[-_\s]+(?:number|no))?|nino)\s*["']?\s*[:=]\s*["']?(${UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	"iu",
+);
 // Require a phone-related label and a phone-number-shaped value of 7–15 digits.
 const LABELED_PHONE_PATTERN = /(?<![\p{L}\p{N}])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?number)?\s*["']?\s*[:=]\s*["']?[\s(]*(\+?\p{Nd}(?:[ .()-]?\p{Nd}){6,14})(?![\p{L}\p{N}_])/iu;
 const LABELED_PAYMENT_CARD_PATTERN = /(?<![\p{L}\p{N}])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no))?|card(?:[-_\s]?(?:number|no))?|cc[-_\s]?(?:number|no)|ccn)\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){12,18})(?![\p{L}\p{N}_])/iu;
@@ -1203,6 +1209,11 @@ const US_SSN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"(\\p{Nd}{3}[-\\s]?\\p{Nd}{2}[-\\s]?\\p{Nd}{4})",
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){2}[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){3})`,
 );
+const UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
+	UK_NATIONAL_INSURANCE_NUMBER_PATTERN,
+	`(${UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN})`,
+	String.raw`([A-CEGHJ-PR-TW-Z](?:[\p{Cc}\p{Cf}]*[A-CEGHJ-NPR-TW-Z])(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd})){3}[\p{Cc}\p{Cf}\s-]*[A-D])`,
+);
 const LABELED_PHONE_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_PHONE_PATTERN,
 	"(\\+?\\p{Nd}(?:[ .()-]?\\p{Nd}){6,14})",
@@ -2072,6 +2083,7 @@ const SEPARATOR_TOLERANT_PATTERNS = [
 	...COMPACTED_CREDENTIAL_LIKE_PATTERNS,
 	BEARER_TOKEN_PATTERN,
 	US_SSN_PATTERN,
+	UK_NATIONAL_INSURANCE_NUMBER_PATTERN,
 	LABELED_PHONE_PATTERN,
 	EMAIL_ADDRESS_PATTERN,
 ].map((pattern) => new RegExp(`(?<![A-Za-z0-9])(?:${pattern.source})`, pattern.flags));
@@ -2329,7 +2341,8 @@ function hasObfuscatedBearerToken(value: string): boolean {
 export function hasSensitiveNamingContext(text: string): boolean {
 	const hasSensitiveValue = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 		|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
-		|| US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
+		|| US_SSN_PATTERN.test(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
+		|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2344,6 +2357,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| hasWhitespaceSeparatedCredential(value)
 			|| COMPACTED_CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
 			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_SSN_PATTERN.test(compacted)
+			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted)
 			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
@@ -2359,7 +2373,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 export function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
-			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value)
+			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_SSN_PATTERN.test(value)
+			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value)
 			|| hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
@@ -2541,6 +2556,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	DISCORD_MFA_TOKEN_BOUNDARY_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_BOUNDARY_PATTERN,
 	US_SSN_BOUNDARY_PATTERN,
+	UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
 	EMAIL_ADDRESS_BOUNDARY_PATTERN,
@@ -2629,6 +2645,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== BASIC_AUTHORIZATION_BLOCK_BOUNDARY_PATTERN
 		&& pattern !== DOCKER_AUTH_BOUNDARY_PATTERN
 		&& pattern !== US_SSN_BOUNDARY_PATTERN
+		&& pattern !== UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 		&& pattern !== EMAIL_ADDRESS_BOUNDARY_PATTERN
