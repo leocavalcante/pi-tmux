@@ -3021,6 +3021,33 @@ test("WeTransfer short links stay out of naming context and model output", async
 	}
 });
 
+test("GoFile shared links stay out of naming context and model output", async () => {
+	const links = [
+		{ url: "https://gofile.io/d/SXwLDt", id: "SXwLDt" },
+		{ url: "https://www.gofile.io/d/AbC123?lang=en", id: "AbC123" },
+	];
+	for (const { url, id } of links) {
+		const sensitiveContext = fixture();
+		sensitiveContext.input(`Review this GoFile link: ${url}`);
+		await settle();
+		expect(sensitiveContext.requests).toHaveLength(0);
+		expect(sensitiveContext.state.title).toBe("existing task");
+		expect(sensitiveContext.warnings).toEqual([
+			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+		]);
+		expect(sensitiveContext.warnings.join(" ")).not.toContain(id);
+
+		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+		sensitiveOutput.input("Name a task");
+		await settle();
+		expect(sensitiveOutput.requests).toHaveLength(1);
+		expect(sensitiveOutput.state.title).toBe("existing task");
+		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(sensitiveOutput.warnings.join(" ")).not.toContain(id);
+	}
+});
+
 test("Filemail transfer links stay out of naming context and model output", async () => {
 	const links = [
 		{ url: "https://www.filemail.com/d/ifyvssdfbjbnzni", id: "ifyvssdfbjbnzni" },
