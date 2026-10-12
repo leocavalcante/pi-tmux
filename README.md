@@ -402,7 +402,8 @@ checked, as are shorter non-placeholder password/passphrase assignments and
 recognizable PEM, OpenSSH, PGP, SSH2, and PuTTY private-key file markers. The
 context scanner also checks recognizable ASCII and internationalized email
 addresses, explicitly labeled U.S. SSNs and ITINs in recognized IRS number
-ranges, UK National Insurance numbers, explicitly labeled Brazilian CPF values
+ranges, calendar-valid numeric dates following explicit date-of-birth labels,
+UK National Insurance numbers, explicitly labeled Brazilian CPF values
 with valid check digits, and explicitly labeled Canadian SIN values with valid
 Luhn check digits. Phone numbers and Luhn-valid, explicitly labeled
 payment-card-shaped values are checked too,
@@ -426,10 +427,11 @@ provider-specific credential formats and private-key file markers,
 credential-bearing URLs, authorization
 values, and labeled credential patterns. It also checks recognizable ASCII
 and internationalized email addresses, explicitly labeled U.S. SSNs and ITINs
-in recognized IRS number ranges, UK National Insurance numbers, explicitly
-labeled Brazilian CPF values with valid check digits, and explicitly labeled
-Canadian SIN values with valid Luhn check digits. Phone numbers and Luhn-valid,
-explicitly labeled payment-card-shaped values are checked too, including values
+in recognized IRS number ranges, calendar-valid numeric dates following explicit
+date-of-birth labels, UK National Insurance numbers, explicitly labeled Brazilian
+CPF values with valid check digits, and explicitly labeled Canadian SIN values
+with valid Luhn check digits. Phone numbers and Luhn-valid, explicitly labeled
+payment-card-shaped values are checked too, including values
 written with Unicode decimal digits.
 Supported YAML block-scalar forms with tags or anchors, plus shorter
 non-placeholder password/passphrase assignments, are checked too. A view with whitespace, control, and format

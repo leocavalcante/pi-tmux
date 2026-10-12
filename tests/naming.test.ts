@@ -5264,7 +5264,7 @@ test("screens short labeled passwords and passphrases across retained-context tr
 	expect(buildNamingRequestContext([], npmPlaceholderPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
-test("screens labeled U.S. tax IDs and phone numbers across retained-context truncation boundaries", () => {
+test("screens labeled U.S. tax IDs, dates of birth, and phone numbers across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
@@ -5278,6 +5278,9 @@ test("screens labeled U.S. tax IDs and phone numbers across retained-context tru
 		{ label: " TIN: ", value: "000-00-0000", shortValue: "000-00-000" },
 		{ label: " Tax ID No.: ", value: "000000000", shortValue: "00000000" },
 		{ label: " Taxpayer Identification Number: ", value: "000-00-0000", shortValue: "000-00-000" },
+		{ label: " DOB: ", value: "2000-02-29", shortValue: "2001-02-29" },
+		{ label: " DOB: ", value: "٢٠٠٠-٠٢-٢٩", shortValue: "٢٠٠١-٠٢-٢٩" },
+		{ label: " Date of Birth: ", value: "31.12.1999", shortValue: "31.13.1999" },
 		{ label: " Phone: ", value: "000-000-0000", shortValue: "000-000" },
 		{ label: " Phone #: ", value: "000-000-0000", shortValue: "000-000" },
 		{ label: " Phone No.: ", value: "000-000-0000", shortValue: "000-000" },
@@ -5336,6 +5339,11 @@ test("screens labeled U.S. tax IDs and phone numbers across retained-context tru
 		"TIN No. 000-00-0000",
 		"Tax ID No. 000-00-0000",
 		"Taxpayer Identification Number: 000-00-000",
+		"2000-02-29",
+		"DOB 2000-02-29",
+		"DOB: 2001-02-29",
+		"DOB: 2020-02-30",
+		"Birth Date: 31.13.1999",
 		"Social Security #: 000-00-000",
 		"Phone # 000-000-0000",
 		"Ticket #: 000-000-0000",
