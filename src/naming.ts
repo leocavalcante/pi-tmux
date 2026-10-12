@@ -165,23 +165,23 @@ const OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN = new RegExp(
 const US_SSN_PATTERN = /(?<![\p{L}\p{N}])(?:ssn(?:[-_\s]?(?:number|no\.?))?|social[-_\s]+security(?:[-_\s]+(?:number|no\.?))?)\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
 const US_ITIN_VALUE_PATTERN = String.raw`\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4}`;
 const US_ITIN_PATTERN = new RegExp(
-	String.raw`(?<![\p{L}\p{N}])(?:itin(?:[-_\s]?(?:number|no))?|individual[-_\s]+taxpayer[-_\s]+identification(?:[-_\s]+(?:number|no))?)\s*["']?\s*[:=]\s*["']?(${US_ITIN_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	String.raw`(?<![\p{L}\p{N}])(?:itin(?:[-_\s]?(?:number|no\.?))?|individual[-_\s]+taxpayer[-_\s]+identification(?:[-_\s]+(?:number|no\.?))?)\s*#?\s*["']?\s*[:=]\s*["']?(${US_ITIN_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
 	"iu",
 );
 // UK NI prefixes exclude D/F/I/Q/U/V first, and D/F/I/O/Q/U/V second; suffixes are A–D.
 const UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN = String.raw`[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z][-\s]?\p{Nd}{2}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{2}[-\s]?[A-D]`;
 const UK_NATIONAL_INSURANCE_NUMBER_PATTERN = new RegExp(
-	String.raw`(?<![\p{L}\p{N}])(?:national[-_\s]+insurance(?:[-_\s]+(?:number|no))?|ni(?:[-_\s]+(?:number|no))?|nino)\s*["']?\s*[:=]\s*["']?(${UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	String.raw`(?<![\p{L}\p{N}])(?:national[-_\s]+insurance(?:[-_\s]+(?:number|no\.?))?|ni(?:[-_\s]+(?:number|no\.?))?|nino)\s*#?\s*["']?\s*[:=]\s*["']?(${UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
 	"iu",
 );
 // Require a phone-related label and a phone-number-shaped value of 7–15 digits.
-const LABELED_PHONE_PATTERN = /(?<![\p{L}\p{N}])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?number)?\s*["']?\s*[:=]\s*["']?[\s(]*(\+?\p{Nd}(?:[ .()-]?\p{Nd}){6,14})(?![\p{L}\p{N}_])/iu;
+const LABELED_PHONE_PATTERN = /(?<![\p{L}\p{N}])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?(?:number|no\.?))?\s*#?\s*["']?\s*[:=]\s*["']?[\s(]*(\+?\p{Nd}(?:[ .()-]?\p{Nd}){6,14})(?![\p{L}\p{N}_])/iu;
 const LABELED_PAYMENT_CARD_PATTERN = /(?<![\p{L}\p{N}])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no\.?))?|card(?:[-_\s]?(?:number|no\.?))?|cc[-_\s]?(?:number|no\.?|#)|ccn)\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){12,18})(?![\p{L}\p{N}_])/iu;
 // CPF is Brazil's 11-digit personal tax identifier. Require an explicit label
 // and validate both check digits to avoid flagging arbitrary digit strings as PII.
-const LABELED_CPF_PATTERN = /(?<![\p{L}\p{N}])(?:cpf(?:[-_\s]?(?:number|no))?|cadastro[-_\s]+de[-_\s]+pessoas[-_\s]+f[ií]sicas?)\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){10})(?![\p{L}\p{N}_])/iu;
+const LABELED_CPF_PATTERN = /(?<![\p{L}\p{N}])(?:cpf(?:[-_\s]?(?:number|no\.?))?|cadastro[-_\s]+de[-_\s]+pessoas[-_\s]+f[ií]sicas?)\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){10})(?![\p{L}\p{N}_])/iu;
 // Canadian SINs are nine digits; require an explicit label and a valid Luhn check digit.
-const LABELED_CANADIAN_SIN_PATTERN = /(?<![\p{L}\p{N}])(?:sin(?:[-_\s]?(?:number|no))?|social[-_\s]+insurance(?:[-_\s]+(?:number|no))?)\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){8})(?![\p{L}\p{N}_])/iu;
+const LABELED_CANADIAN_SIN_PATTERN = /(?<![\p{L}\p{N}])(?:sin(?:[-_\s]?(?:number|no\.?))?|social[-_\s]+insurance(?:[-_\s]+(?:number|no\.?))?)\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){8})(?![\p{L}\p{N}_])/iu;
 // Some framework, service, session, and cookie credentials lack provider prefixes.
 // Require explicit assignments and long values; do not compact ordinary spaces.
 const LABELED_CREDENTIAL_LABEL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?key(?:[-_\s]?id)?|aes(?:[-_\s]?(?:128|192|256))?[-_\s]?key|(?:app|cookie|encryption|fernet|hmac|master|session|signing)[-_\s]?key|(?<![A-Za-z0-9_-])(?:cookie|session)|(?:auth|logged[-_\s]?in|nonce)[-_\s]?(?:key|salt)|access[-_\s]?token|aws[-_\s]?secret[-_\s]?access[-_\s]?key|client[-_\s]?key[-_\s]?data|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key(?:[-_\s]?base)?)?|passphrase|password|credential|token|azure[-_\s]?devops(?:[-_\s]ext)?[-_\s]?pat)/i;

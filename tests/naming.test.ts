@@ -5276,6 +5276,8 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 		{ label: " Social Security No.: ", value: "000-00-0000", shortValue: "000-00-000" },
 		{ label: " Social Security #: ", value: "000-00-0000", shortValue: "000-00-000" },
 		{ label: " Phone: ", value: "000-000-0000", shortValue: "000-000" },
+		{ label: " Phone #: ", value: "000-000-0000", shortValue: "000-000" },
+		{ label: " Phone No.: ", value: "000-000-0000", shortValue: "000-000" },
 		{ label: " Phone: ", value: "٠٠٠-٠٠٠-٠٠٠٠", shortValue: "٠٠٠-٠٠" },
 	];
 
@@ -5329,6 +5331,8 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 		"SSN: ٠٠٠-٠٠-٠٠٠٠٠",
 		"SSN No. 000-00-0000",
 		"Social Security #: 000-00-000",
+		"Phone # 000-000-0000",
+		"Ticket #: 000-000-0000",
 	]) {
 		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
 		expect(hasSensitiveOutput(nearMiss)).toBe(false);
@@ -5368,7 +5372,7 @@ test("screens Luhn-valid Canadian SIN values only with an explicit label", () =>
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
-	const label = " SIN: ";
+	const label = " SIN No.: ";
 	const value = "712-345-677";
 	const prefixValueStart = prefixLength - 5;
 	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
@@ -5427,7 +5431,7 @@ test("screens check-digit-valid Brazilian CPF values only with an explicit label
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
-	const label = " CPF: ";
+	const label = " CPF No.: ";
 	const value = "529.982.247-25";
 	const prefixValueStart = prefixLength - 7;
 	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
