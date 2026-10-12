@@ -1,5 +1,6 @@
 import type { ExtensionContext, SessionProjection } from "@earendil-works/pi-coding-agent";
 import { cleanTitle, MAX_TITLE_LENGTH } from "./title.ts";
+import { asciiDecimalDigits, conservativelyValidateLabeledDigits } from "./unicode-digits.ts";
 
 export const MAX_PROMPT_LENGTH = 2_000;
 export const MAX_CONTEXT_LENGTH = 6_000;
@@ -2103,48 +2104,6 @@ const SEPARATOR_TOLERANT_PATTERNS = [
 	EMAIL_ADDRESS_PATTERN,
 ].map((pattern) => new RegExp(`(?<![A-Za-z0-9])(?:${pattern.source})`, pattern.flags));
 
-// Unicode 17 decimal-digit zero code points; digits 0–9 follow each zero.
-// Keep the table explicit because JavaScript has no decimal-digit value property.
-const UNICODE_DECIMAL_DIGIT_PATTERN = /\p{Nd}/u;
-const UNICODE_DECIMAL_DIGIT_ZEROES = [
-	0x0030, 0x0660, 0x06f0, 0x07c0, 0x0966, 0x09e6, 0x0a66, 0x0ae6,
-	0x0b66, 0x0be6, 0x0c66, 0x0ce6, 0x0d66, 0x0de6, 0x0e50, 0x0ed0,
-	0x0f20, 0x1040, 0x1090, 0x17e0, 0x1810, 0x1946, 0x19d0, 0x1a80,
-	0x1a90, 0x1b50, 0x1bb0, 0x1c40, 0x1c50, 0xa620, 0xa8d0, 0xa900,
-	0xa9d0, 0xa9f0, 0xaa50, 0xabf0, 0xff10, 0x104a0, 0x10d30, 0x10d40,
-	0x11066, 0x110f0, 0x11136, 0x111d0, 0x112f0, 0x11450, 0x114d0, 0x11650,
-	0x116c0, 0x116d0, 0x116da, 0x11730, 0x118e0, 0x11950, 0x11bf0, 0x11c50,
-	0x11d50, 0x11da0, 0x11de0, 0x11f50, 0x16130, 0x16a60, 0x16ac0, 0x16b50,
-	0x16d70, 0x1ccf0, 0x1d7ce, 0x1d7d8, 0x1d7e2, 0x1d7ec, 0x1d7f6, 0x1e140,
-	0x1e2f0, 0x1e4f0, 0x1e5f1, 0x1e950, 0x1fbf0,
-];
-
-function decimalDigitValue(character: string): number | undefined {
-	const codePoint = character.codePointAt(0)!;
-	let low = 0;
-	let high = UNICODE_DECIMAL_DIGIT_ZEROES.length - 1;
-	while (low <= high) {
-		const middle = Math.floor((low + high) / 2);
-		const zero = UNICODE_DECIMAL_DIGIT_ZEROES[middle]!;
-		if (codePoint < zero) high = middle - 1;
-		else if (codePoint >= zero + 10) low = middle + 1;
-		else return codePoint - zero;
-	}
-	return undefined;
-}
-
-function asciiDecimalDigits(value: string): string | undefined {
-	let digits = "";
-	for (const character of value) {
-		if (!UNICODE_DECIMAL_DIGIT_PATTERN.test(character)) continue;
-		const digit = decimalDigitValue(character);
-		// Fail closed for decimal digits added after the table's Unicode version.
-		if (digit === undefined) return undefined;
-		digits += digit;
-	}
-	return digits;
-}
-
 function hasLuhnCheckDigit(digits: string): boolean {
 	let sum = 0;
 	let doubleDigit = false;
@@ -2162,7 +2121,10 @@ function hasLuhnCheckDigit(digits: string): boolean {
 
 function isLuhnValidPaymentCardNumber(value: string): boolean {
 	const digits = asciiDecimalDigits(value);
-	return digits !== undefined && digits.length >= 13 && digits.length <= 19 && hasLuhnCheckDigit(digits);
+	return conservativelyValidateLabeledDigits(
+		digits,
+		(knownDigits) => knownDigits.length >= 13 && knownDigits.length <= 19 && hasLuhnCheckDigit(knownDigits),
+	);
 }
 
 function hasLabeledPaymentCard(value: string): boolean {
@@ -2175,16 +2137,18 @@ function hasLabeledPaymentCard(value: string): boolean {
 
 function isValidCpfNumber(value: string): boolean {
 	const digits = asciiDecimalDigits(value);
-	if (digits === undefined || digits.length !== 11 || /^(\d)\1{10}$/u.test(digits)) return false;
-	const digitAt = (index: number) => digits.charCodeAt(index) - 48;
-	let firstSum = 0;
-	for (let index = 0; index < 9; index++) firstSum += digitAt(index) * (10 - index);
-	const firstCheckDigit = firstSum % 11 < 2 ? 0 : 11 - (firstSum % 11);
-	if (digitAt(9) !== firstCheckDigit) return false;
-	let secondSum = 0;
-	for (let index = 0; index < 10; index++) secondSum += digitAt(index) * (11 - index);
-	const secondCheckDigit = secondSum % 11 < 2 ? 0 : 11 - (secondSum % 11);
-	return digitAt(10) === secondCheckDigit;
+	return conservativelyValidateLabeledDigits(digits, (knownDigits) => {
+		if (knownDigits.length !== 11 || /^(\d)\1{10}$/u.test(knownDigits)) return false;
+		const digitAt = (index: number) => knownDigits.charCodeAt(index) - 48;
+		let firstSum = 0;
+		for (let index = 0; index < 9; index++) firstSum += digitAt(index) * (10 - index);
+		const firstCheckDigit = firstSum % 11 < 2 ? 0 : 11 - (firstSum % 11);
+		if (digitAt(9) !== firstCheckDigit) return false;
+		let secondSum = 0;
+		for (let index = 0; index < 10; index++) secondSum += digitAt(index) * (11 - index);
+		const secondCheckDigit = secondSum % 11 < 2 ? 0 : 11 - (secondSum % 11);
+		return digitAt(10) === secondCheckDigit;
+	});
 }
 
 function hasLabeledCpf(value: string): boolean {
@@ -2197,8 +2161,11 @@ function hasLabeledCpf(value: string): boolean {
 
 function isValidCanadianSinNumber(value: string): boolean {
 	const digits = asciiDecimalDigits(value);
-	return digits !== undefined && digits.length === 9 && !/^(\d)\1{8}$/u.test(digits)
-		&& hasLuhnCheckDigit(digits);
+	return conservativelyValidateLabeledDigits(
+		digits,
+		(knownDigits) => knownDigits.length === 9 && !/^(\d)\1{8}$/u.test(knownDigits)
+			&& hasLuhnCheckDigit(knownDigits),
+	);
 }
 
 function hasLabeledCanadianSin(value: string): boolean {
