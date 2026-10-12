@@ -4285,6 +4285,77 @@ test("screens Zoom meeting passcodes in join URLs across retained-context bounda
 	expect(buildNamingRequestContext([], promptAt(values[0]!.url, passcode, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens Webex meeting passwords in join URLs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	// These deliberately synthetic hosts and passwords are not real invitations.
+	const values = [
+		{
+			url: "https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake&pwd=SYNTHETIC-ONLY-123&locale=en",
+			password: "SYNTHETIC-ONLY-123",
+		},
+		{
+			url: "https://meeting.invalid.webex.com/meet/synthetic-user?pwd=TEST+ONLY%2FKEY=",
+			password: "TEST+ONLY%2FKEY=",
+		},
+	];
+	const promptAt = (url: string, password: string, start: number) => {
+		const urlStart = start - url.indexOf(password);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, password } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscatedPassword = `${password.slice(0, 5)}\u200b${password.slice(5)}`;
+		const obfuscated = url.replace(password, obfuscatedPassword);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const candidate of [
+			{ text: url, value: password },
+			{ text: obfuscated, value: obfuscatedPassword },
+		]) {
+			for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
+				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.value, tokenStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const password = values[0]!.password;
+	const nearMisses = [
+		`https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake&xpwd=${password}`,
+		`https://synthetic.invalid.webex.com/meet/synthetic-user?pwd=abc`,
+		`https://synthetic.invalid.webex.com/meeting/synthetic-user?pwd=${password}`,
+		`https://synthetic.invalid.webex.com/meet?pwd=${password}`,
+		`https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake`,
+		`https://webex.com/synthetic/j.php?MTID=fake&pwd=${password}`,
+		`https://synthetic.invalid.webex.com.evil.test/synthetic/j.php?pwd=${password}`,
+		`https://synthetic.invalid.webex.com.example.test/meet/synthetic-user?pwd=${password}`,
+		`https://synthetic.invalid.webex.org/meet/synthetic-user?pwd=${password}`,
+		`https://example.test/meet/synthetic-user?pwd=${password}`,
+		`https://synthetic.invalid.webex.com/not-a-meeting?pwd=${password}`,
+		`discussion of a Webex meeting password pwd=${password}`,
+	];
+	for (const candidate of nearMisses) {
+		expect(hasSensitiveNamingContext(candidate)).toBe(false);
+		expect(hasSensitiveOutput(candidate)).toBe(false);
+		if (candidate.includes(password)) {
+			for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
+				expect(buildNamingRequestContext([], promptAt(candidate, password, tokenStart)).hasSensitiveBoundary()).toBe(false);
+			}
+		}
+	}
+
+	expect(buildNamingRequestContext([], promptAt(values[0]!.url, password, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Google Drive resource-key API headers across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
