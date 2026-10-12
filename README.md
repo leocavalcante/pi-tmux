@@ -380,6 +380,7 @@ Oracle Object Storage pre-authenticated request URLs,
 Proton Drive generated share-link passwords,
 pCloud public-link codes,
 WeTransfer short-link codes,
+SwissTransfer `/d/` and `/dl/` share-link UUIDs,
 Bearer, Token, and ApiKey authorization values,
 Negotiate/NTLM/Kerberos authentication tokens and challenges, legacy HTTP Signature
 proofs, RFC 9421 HTTP Message Signature proofs,

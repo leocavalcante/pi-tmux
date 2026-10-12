@@ -3552,6 +3552,85 @@ test("screens Proton Drive share-link passwords across retained-context boundari
 	}
 });
 
+test("screens SwissTransfer share-link UUIDs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const values = [
+		{
+			url: "https://www.swisstransfer.com/d/a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+			uuid: "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+		},
+		{
+			url: "https://swisstransfer.com/de/dl/018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b?lang=fr",
+			uuid: "018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b",
+		},
+		{
+			url: "https://swisstransfer.infomaniak.com/dl/7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70/",
+			uuid: "7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70",
+		},
+	];
+	const promptAt = (text: string, uuid: string, start: number) => {
+		const textStart = start - text.indexOf(uuid);
+		const prefix = `${"x".repeat(textStart - 1)} `;
+		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+	};
+
+	for (const { url, uuid } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscatedUuid = `${uuid.slice(0, 18)}\u200b${uuid.slice(18)}`;
+		const obfuscated = url.replace(uuid, obfuscatedUuid);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const candidate of [
+			{ text: url, uuid },
+			{ text: obfuscated, uuid: obfuscatedUuid },
+		]) {
+			for (const uuidStart of [prefixLength - 4, suffixStart - candidate.uuid.length + 4]) {
+				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.uuid, uuidStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+
+		const historyContent = `${"x".repeat(996 - url.indexOf(uuid))} ${url} trailing text`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const context = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const uuid = values[0]!.uuid;
+	const nearMisses = [
+		{ url: `https://www.swisstransfer.com/d/${uuid.replaceAll("-", "")}`, uuid: uuid.replaceAll("-", "") },
+		{ url: `https://www.swisstransfer.com/d/${uuid.slice(1)}`, uuid: uuid.slice(1) },
+		{ url: `https://www.swisstransfer.com/d/${uuid}a`, uuid: `${uuid}a` },
+		{ url: `https://www.swisstransfer.com.evil.test/d/${uuid}`, uuid },
+		{ url: `https://files.swisstransfer.com/d/${uuid}`, uuid },
+		{ url: `https://swisstransfer.com/d/${uuid}/extra`, uuid },
+		{ url: `https://swisstransfer.com/download/${uuid}`, uuid },
+		{ url: `https://example.test/d/${uuid}`, uuid },
+		{ url: `discussion of a SwissTransfer link ${uuid}`, uuid },
+	];
+	for (const { url, uuid: nearMissUuid } of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const uuidStart of [prefixLength - 4, suffixStart - nearMissUuid.length + 4]) {
+			expect(buildNamingRequestContext([], promptAt(url, nearMissUuid, uuidStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+
+	expect(buildNamingRequestContext([], promptAt(values[0]!.url, uuid, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Box shared-link IDs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

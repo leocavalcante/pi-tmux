@@ -3021,6 +3021,43 @@ test("WeTransfer short links stay out of naming context and model output", async
 	}
 });
 
+test("SwissTransfer share links stay out of naming context and model output", async () => {
+	const links = [
+		{
+			url: "https://www.swisstransfer.com/d/a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+			uuid: "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+		},
+		{
+			url: "https://swisstransfer.com/de/dl/018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b?lang=fr",
+			uuid: "018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b",
+		},
+		{
+			url: "https://swisstransfer.infomaniak.com/dl/7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70/",
+			uuid: "7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70",
+		},
+	];
+	for (const { url, uuid } of links) {
+		const sensitiveContext = fixture();
+		sensitiveContext.input(`Review this SwissTransfer link: ${url}`);
+		await settle();
+		expect(sensitiveContext.requests).toHaveLength(0);
+		expect(sensitiveContext.state.title).toBe("existing task");
+		expect(sensitiveContext.warnings).toEqual([
+			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+		]);
+		expect(sensitiveContext.warnings.join(" ")).not.toContain(uuid);
+
+		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+		sensitiveOutput.input("Name a task");
+		await settle();
+		expect(sensitiveOutput.requests).toHaveLength(1);
+		expect(sensitiveOutput.state.title).toBe("existing task");
+		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(sensitiveOutput.warnings.join(" ")).not.toContain(uuid);
+	}
+});
+
 test("Box shared-link URLs stay out of naming context and model output", async () => {
 	const sharedLinkId = "a".repeat(20);
 	const link = `https://app.box.com/s/${sharedLinkId}`;
