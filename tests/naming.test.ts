@@ -3090,6 +3090,65 @@ test("screens MEGA file and folder share-link keys across retained-context bound
 	}
 });
 
+test("screens Proton Drive share-link passwords across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const keys = [`${"A".repeat(5)}_-${"A".repeat(5)}`, "B".repeat(12)];
+	const values = [
+		{ url: `https://drive.proton.me/urls/sharetoken#${keys[0]}`, key: keys[0]! },
+		{ url: `https://drive.protonmail.com/urls/sharedlink#${keys[1]}`, key: keys[1]! },
+	];
+	const promptAt = (url: string, key: string, start: number) => {
+		const urlStart = start - url.indexOf(key);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, key } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscated = url.replace(key, `${key.slice(0, 6)}\u200b${key.slice(6)}`);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			const context = buildNamingRequestContext([], promptAt(url, key, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const obfuscatedKey = `${key.slice(0, 6)}\u200b${key.slice(6)}`;
+		const obfuscatedContext = buildNamingRequestContext(
+			[], promptAt(obfuscated, obfuscatedKey, prefixLength - 11),
+		);
+		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+		expect(buildNamingRequestContext([], promptAt(url, key, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+	}
+
+	const key = values[0]!.key;
+	const nearMisses = [
+		`https://drive.proton.me/urls/sharetoken#${key.slice(1)}`,
+		`https://drive.proton.me/urls/sharetoken#${key}X`,
+		`https://drive.proton.me/urls/short#${key}`,
+		`https://drive.proton.me.evil.test/urls/sharetoken#${key}`,
+		`https://mail.proton.me/urls/sharetoken#${key}`,
+		`https://drive.proton.me/file/sharetoken#${key}`,
+		`https://drive.proton.me/urls/sharetoken?key=${key}`,
+		`https://drive.proton.me/urls/sharetoken`,
+		`discussion of Proton Drive share links ${key}`,
+	];
+	for (const url of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			expect(buildNamingRequestContext([], promptAt(url, key, tokenStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Google Drive resource-key API headers across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
