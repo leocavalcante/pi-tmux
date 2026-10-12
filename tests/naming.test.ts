@@ -5500,6 +5500,60 @@ test("passport numbers crossing either retained prompt boundary are detected", (
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens numeric bank-account values only with an explicit bank account label", () => {
+	const identifiers = [
+		"Bank Account Number: 4829163705",
+		"bank account no.: 0375918642",
+		"Bank Acct #: 7305-1948-62",
+		"Bank Account=804193762510",
+		"Bank Account Number: ٨٢٠٥١٩٣٧",
+	];
+	for (const identifier of identifiers) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"4829163705",
+		"Account Number: 4829163705",
+		"Bank Account Number: 12345",
+		"Bank Account Number: 123456789012345678",
+		"Bank Account Number: 12--345678",
+		"Bank Account Number: 12A4567890",
+		"Bank Account Number format",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("bank-account numbers crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+
+	for (const label of [" Bank Account Number: ", " Bank Acct #: "]) {
+		for (const value of ["4829163705", "7305-1948-62"]) {
+			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const label = " Bank Account Number: ";
+	for (const invalidValue of ["12345", "12--345678"]) {
+		const invalidPrompt = `${"x".repeat(prefixLength - 3 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens labeled IBANs across retained-context boundaries and control obfuscation", () => {
 	const iban = "GB05 TEST 0000 0000 0000 00";
 	const label = " IBAN: ";
