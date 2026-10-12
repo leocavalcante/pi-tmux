@@ -2643,6 +2643,55 @@ test("screens CloudFront signed-cookie signatures across retained-context bounda
 	}
 });
 
+test("screens Google Cloud CDN signed URLs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const signature = `${"A1b_".repeat(6)}A1b=`;
+	const urlPrefix = "URLPrefix=aHR0cHM6Ly9tZWRpYS5leGFtcGxlLmNvbS92aWRlb3Mv";
+	const values = [
+		`https://media.example.com/videos/137138595?Expires=1790000000&KeyName=mySigningKey&Signature=${signature}`,
+		`https://media.example.com/videos/master.m3u8?userID=abc123&${urlPrefix}&Expires=1790000000&KeyName=mySigningKey&Signature=${signature}`,
+	];
+	const promptAt = (url: string, token: string, start: number) => {
+		const urlStart = start - url.indexOf(token);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const url of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const omittedSignature = buildNamingRequestContext([], promptAt(values[0]!, signature, prefixLength + 5));
+	expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+
+	const nearMisses = [
+		{ url: `https://media.example.com/file?Expires=1790000000&KeyName=mySigningKey&Signature=${"A".repeat(26)}=`, signature: `${"A".repeat(26)}=` },
+		{ url: `https://media.example.com/file?Expires=1790000000&KeyName=mySigningKey&Signature=${"A".repeat(28)}=`, signature: `${"A".repeat(28)}=` },
+		{ url: `https://media.example.com/file?Expires=1790000000&KeyId=mySigningKey&Signature=${signature}`, signature },
+		{ url: `https://media.example.com/file?Expires=1790000000&KeyName=${"A".repeat(64)}&Signature=${signature}`, signature },
+		{ url: `https://media.example.com/file?KeyName=mySigningKey&Expires=1790000000&Signature=${signature}`, signature },
+		{ url: `https://media.example.com/file?Expires=1790000000&KeyName=mySigningKey&NotSignature=${signature}`, signature },
+	];
+	for (const { url, signature: candidate } of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, candidate, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Tencent COS SHA-1 signed URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
