@@ -502,6 +502,39 @@ test.skipIf(!hasTmux)("destroyed former windows and sessions do not prevent dest
 	});
 });
 
+test.skipIf(!hasTmux)("message-only adapter errors clear vanished former-location repairs", async () => {
+	await withServer(async (f) => {
+		const pane = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Source", "/bin/sleep 60");
+		const source = f.tmux("display-message", "-p", "-t", pane, "#{session_id}");
+		const oldWindow = f.tmux("display-message", "-p", "-t", pane, "#{window_id}");
+		const destination = f.tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "Destination", "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		await f.pin("move task");
+		await f.emit("agent_settled");
+		f.tmux("join-pane", "-d", "-s", pane, "-t", destination);
+		let disappearedTargets = 0;
+		f.beforeCommand = async (args) => {
+			if (args.includes(oldWindow)) {
+				disappearedTargets++;
+				throw new Error(`can't find window: ${oldWindow}`);
+			}
+			if (args.includes(source)) {
+				disappearedTargets++;
+				throw new Error(`can't find session: ${source}`);
+			}
+		};
+
+		await f.emit("agent_settled");
+		expect(disappearedTargets).toBe(2);
+		expect(f.tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("* move task");
+		expect(await f.status()).toContain("Pending move repairs: windows 0, sessions 0");
+		const repairAttempts = disappearedTargets;
+		await f.emit("agent_settled");
+		expect(disappearedTargets).toBe(repairAttempts);
+		expect(f.warnings).toEqual([]);
+	});
+});
+
 test.skipIf(!hasTmux)("former-window repair preserves long custom names and waiting markers", async () => {
 	await withServer(async (f) => {
 		const customTitle = "Custom Deployment Window Name Exceeding the Task Title Limit";
