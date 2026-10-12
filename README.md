@@ -357,8 +357,9 @@ Azure DevOps
 PATs, Google OAuth/API keys, and other service tokens), npm `.npmrc` `_auth`
 username/password pairs, Docker config `auth` values encoding username/password pairs,
 and legacy Base64 `_password` values, credential-bearing URLs, Bearer, Token, and
-ApiKey authorization values, legacy HTTP Signature authorization proofs, Digest
-Authorization response hashes, and Authentication-Info rspauth hashes, selected
+ApiKey authorization values, legacy HTTP Signature authorization proofs, RFC 9421
+HTTP Message Signature proofs, Digest Authorization response hashes, and
+Authentication-Info rspauth hashes, selected
 session-cookie IDs in `Set-Cookie` headers, Base64 Basic authorization values, and
 long values assigned to common credential labels, including explicit `session` and
 `cookie` assignments.

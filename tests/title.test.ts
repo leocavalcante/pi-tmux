@@ -1203,6 +1203,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const httpSignature = Buffer.from("A".repeat(32)).toString("base64");
 	const httpSignatureAuthorization = `Authorization: Signature keyId="client-key",algorithm="hmac-sha256",headers="date",signature="${httpSignature}"`;
 	await suppressed(fixture(), httpSignatureAuthorization, httpSignatureAuthorization);
+	const httpMessageSignature = `Signature: sig1=:${httpSignature}:`;
+	await suppressed(fixture(), httpMessageSignature, httpMessageSignature);
 	const digestAuthorization = `Authorization: Digest username="alice", realm="example", nonce="n", uri="/private", response="${"A1b2".repeat(8)}"`;
 	await suppressed(fixture(), digestAuthorization, digestAuthorization);
 	const rspauthHeader = 'Authentication-Info: rspauth="';
@@ -2868,6 +2870,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["Proxy-Authorization: API-Key ", "G7h8".repeat(6)].join(""),
 		["Authorization: Signature keyId=client-key,signature=", Buffer.from("A".repeat(32)).toString("base64")].join(""),
 		["Proxy-Authorization: Signature keyId=client-key,signature=", Buffer.from("B".repeat(64)).toString("base64")].join(""),
+		`Signature: sig1=:${Buffer.from("C".repeat(32)).toString("base64")}:`,
 		["Proxy-Authorization: Digest username=alice, response=", "A1b2".repeat(8)].join(""),
 		["Authentication-Info: rspauth=", "C3d4".repeat(8)].join(""),
 		["Proxy-Authentication-Info: qop=auth, rspauth=", "E5f6".repeat(16)].join(""),
