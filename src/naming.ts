@@ -245,6 +245,13 @@ const UK_NATIONAL_INSURANCE_NUMBER_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])(?:national[-_\s]+insurance(?:[-_\s]+(?:number|no\.?))?|ni(?:[-_\s]+(?:number|no\.?))?|nino)\s*#?\s*["']?\s*[:=]\s*["']?(${UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
 	"iu",
 );
+// NHS numbers are 10 digits; require an NHS-specific label and validate the
+// mandatory Modulus 11 check digit to avoid matching arbitrary digit strings.
+const NHS_NUMBER_VALUE_PATTERN = String.raw`\p{Nd}(?:[-\s]?\p{Nd}){9}`;
+const LABELED_NHS_NUMBER_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])(?:nhs[-_\s]+(?:patient[-_\s]+)?(?:number|no\.?)|national[-_\s]+health[-_\s]+service[-_\s]+(?:patient[-_\s]+)?(?:number|no\.?))\s*#?\s*["']?\s*[:=]\s*["']?(${NHS_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	"iu",
+);
 // Require a phone-related label and a phone-number-shaped value of 7–15 digits.
 const LABELED_PHONE_PATTERN = /(?<![\p{L}\p{N}])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?(?:number|no\.?))?\s*#?\s*["']?\s*[:=]\s*["']?[\s(]*(\+?\p{Nd}(?:[ .()-]?\p{Nd}){6,14})(?![\p{L}\p{N}_])/iu;
 const LABELED_PAYMENT_CARD_PATTERN = /(?<![\p{L}\p{N}])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no\.?))?|card(?:[-_\s]?(?:number|no\.?))?|cc[-_\s]?(?:number|no\.?|#)|ccn)\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){12,18})(?![\p{L}\p{N}_])/iu;
@@ -1449,6 +1456,11 @@ const UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	`(${UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN})`,
 	String.raw`([A-CEGHJ-PR-TW-Z](?:[\p{Cc}\p{Cf}]*[A-CEGHJ-NPR-TW-Z])(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd})){3}[\p{Cc}\p{Cf}\s-]*[A-D])`,
 );
+const LABELED_NHS_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_NHS_NUMBER_PATTERN,
+	`(${NHS_NUMBER_VALUE_PATTERN})`,
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){9})`,
+);
 const LABELED_CPF_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_CPF_PATTERN,
 	String.raw`(\p{Nd}(?:[ .()-]?\p{Nd}){10})`,
@@ -2495,6 +2507,34 @@ function hasLabeledRecoveryCode(value: string): boolean {
 	return false;
 }
 
+// NHS Data Dictionary specifies weights 10–2 and the modulo-11 result rules.
+// https://www.datadictionary.nhs.uk/attributes/nhs_number.html
+const NHS_NUMBER_CHECK_WEIGHTS = [10, 9, 8, 7, 6, 5, 4, 3, 2] as const;
+function isValidNhsNumber(value: string): boolean {
+	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) => {
+		// Exclude repeated-digit placeholders even though they pass the check-digit equation.
+		if (digits.length !== 10 || /^(\d)\1{9}$/u.test(digits)) return false;
+		let weightedSum = 0;
+		for (let index = 0; index < NHS_NUMBER_CHECK_WEIGHTS.length; index++) {
+			weightedSum += (digits.charCodeAt(index) - 48) * NHS_NUMBER_CHECK_WEIGHTS[index]!;
+		}
+		const checkDigit = 11 - (weightedSum % 11);
+		if (checkDigit === 10) return false;
+		return Number(digits[9]) === (checkDigit === 11 ? 0 : checkDigit);
+	});
+}
+
+function hasLabeledNhsNumber(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_NHS_NUMBER_PATTERN.source,
+		`${LABELED_NHS_NUMBER_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidNhsNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
 function isValidCpfNumber(value: string): boolean {
 	const digits = asciiDecimalDigits(value);
 	return conservativelyValidateLabeledDigits(digits, (knownDigits) => {
@@ -3204,7 +3244,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| hasLabeledUsItin(value) || hasLabeledDateOfBirth(value) || hasLabeledIban(value)
 		|| hasLabeledAbaRoutingNumber(value) || hasLabeledPassportNumber(value)
 		|| hasLabeledDriverLicenseNumber(value) || hasLabeledBankAccountNumber(value)
-		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
+		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledNhsNumber(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 		|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
 		|| hasLabeledAadhaarNumber(value) || hasLabeledChineseResidentIdNumber(value)
@@ -3231,8 +3271,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted)
 			|| hasLabeledAbaRoutingNumber(compacted) || hasLabeledPassportNumber(compacted)
 			|| hasLabeledDriverLicenseNumber(compacted) || hasLabeledBankAccountNumber(compacted)
-			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
-			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
+			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledNhsNumber(compacted)
+			|| hasLabeledCpf(compacted) || hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledChineseResidentIdNumber(compacted)
 			|| hasLabeledJapaneseMyNumber(compacted) || hasLabeledSwedishPersonalId(compacted)
@@ -3259,7 +3299,7 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledDateOfBirth(value) || hasLabeledIban(value) || hasLabeledAbaRoutingNumber(value)
 			|| hasLabeledPassportNumber(value) || hasLabeledDriverLicenseNumber(value)
 			|| hasLabeledBankAccountNumber(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
-			|| hasLabeledCpf(value)
+			|| hasLabeledNhsNumber(value) || hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 			|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
 			|| hasLabeledAadhaarNumber(value) || hasLabeledChineseResidentIdNumber(value)
@@ -3284,8 +3324,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| US_EIN_PATTERN.test(compacted) || hasLabeledUsItin(compacted)
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledAbaRoutingNumber(compacted)
 			|| hasLabeledPassportNumber(compacted) || hasLabeledDriverLicenseNumber(compacted)
-			|| hasLabeledBankAccountNumber(compacted) || hasLabeledCpf(compacted)
-			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
+			|| hasLabeledBankAccountNumber(compacted) || hasLabeledNhsNumber(compacted)
+			|| hasLabeledCpf(compacted) || hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledChineseResidentIdNumber(compacted)
 			|| hasLabeledJapaneseMyNumber(compacted) || hasLabeledSwedishPersonalId(compacted)
@@ -3469,6 +3509,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_BANK_ACCOUNT_NUMBER_BOUNDARY_PATTERN,
 	US_ITIN_BOUNDARY_PATTERN,
 	UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN,
+	LABELED_NHS_NUMBER_BOUNDARY_PATTERN,
 	LABELED_CPF_BOUNDARY_PATTERN,
 	LABELED_CANADIAN_SIN_BOUNDARY_PATTERN,
 	LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN,
@@ -3581,6 +3622,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== LABELED_BANK_ACCOUNT_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== US_ITIN_BOUNDARY_PATTERN
 		&& pattern !== UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN
+		&& pattern !== LABELED_NHS_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CPF_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CANADIAN_SIN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN
@@ -3677,6 +3719,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidOneTimeAuthCode(match[1]!)) continue;
 				if (sourcePattern === LABELED_RECOVERY_CODE_BOUNDARY_PATTERN
 					&& !isValidRecoveryCode(match[1]!)) continue;
+				if (sourcePattern === LABELED_NHS_NUMBER_BOUNDARY_PATTERN
+					&& !isValidNhsNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_CPF_BOUNDARY_PATTERN
 					&& !isValidCpfNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_CANADIAN_SIN_BOUNDARY_PATTERN

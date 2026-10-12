@@ -404,9 +404,12 @@ context scanner also checks recognizable ASCII and internationalized email
 addresses, explicitly labeled U.S. SSN-shaped values, explicitly labeled
 ITINs in recognized IRS number ranges, and explicitly labeled EINs in the
 conventional 2-7 digit format, calendar-valid numeric dates following explicit
-date-of-birth labels, UK National Insurance numbers, explicitly labeled
-Brazilian CPF values with valid check digits, explicitly labeled Canadian SIN
-values with valid Luhn check digits, and explicitly labeled Aadhaar numbers
+date-of-birth labels, and UK National Insurance numbers. Explicitly labeled
+NHS numbers with 10 digits and a valid Modulus 11 check digit are also screened
+using the algorithm specified in the [NHS Data Dictionary][nhs-number-standard].
+Explicitly labeled Brazilian CPF values with valid check digits, explicitly
+labeled Canadian SIN values with valid Luhn check digits, and explicitly labeled
+Aadhaar numbers
 with 12 digits, a leading digit from 2–9, and valid Verhoeff check digits.
 Explicitly labeled Chinese/PRC national-ID and resident-identity-card values,
 including common Simplified Chinese labels such as `居民身份证号码` and
@@ -480,8 +483,11 @@ values, and labeled credential patterns. It also checks recognizable ASCII
 and internationalized email addresses, explicitly labeled U.S. SSN-shaped
 values, explicitly labeled ITINs in recognized IRS number ranges, and explicitly
 labeled EINs in the conventional 2-7 digit format, calendar-valid numeric dates
-following explicit date-of-birth labels, UK National Insurance numbers,
-explicitly labeled Brazilian CPF values with valid check digits, explicitly
+following explicit date-of-birth labels, and UK National Insurance numbers.
+Explicitly labeled NHS numbers with 10 digits and a valid Modulus 11 check digit
+are also screened using the algorithm specified in the
+[NHS Data Dictionary][nhs-number-standard]. Explicitly labeled Brazilian CPF
+values with valid check digits, explicitly
 labeled Canadian SIN values with valid Luhn check digits, and explicitly labeled
 Aadhaar numbers with 12 digits, a leading digit from 2–9, and valid Verhoeff
 check digits. Explicitly labeled Chinese/PRC national-ID and resident-identity-card
@@ -601,3 +607,4 @@ and the [package-existence prerequisite](https://docs.npmjs.com/cli/v11/commands
 [MIT](LICENSE).
 
 [spanish-nif-guide]: https://www.interior.gob.es/opencms/en/servicios-al-ciudadano/tramites-y-gestiones/dni/calculo-del-digito-de-control-del-nif-nie/
+[nhs-number-standard]: https://www.datadictionary.nhs.uk/attributes/nhs_number.html

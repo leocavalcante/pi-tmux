@@ -6367,6 +6367,67 @@ test("Indian PAN values crossing either retained prompt boundary are detected", 
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens Modulus-11-valid NHS numbers only with explicit NHS labels", () => {
+	const nhsNumber = "2468135792";
+	const zeroCheckDigitNhsNumber = "2718281820";
+	const arabicNhsNumber = nhsNumber.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	const fullwidthNhsNumber = zeroCheckDigitNhsNumber.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0xff10 + Number(digit)));
+	for (const identifier of [
+		`NHS Number: ${nhsNumber}`,
+		"NHS No.: 246-813-5792",
+		`National Health Service number=${zeroCheckDigitNhsNumber}`,
+		"NHS Patient Number: 271 828 1820",
+		`NHS Number: ${arabicNhsNumber}`,
+		`National Health Service Number: ${fullwidthNhsNumber}`,
+		`NHS Number: ${nhsNumber.slice(0, 5)}\u200b${nhsNumber.slice(5)}`,
+	]) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		nhsNumber,
+		"NHS Number: 2468135793",
+		"NHS Number: 1234567890",
+		"NHS Number: 0000000000",
+		"NHS Number: 1111111111",
+		"NHS: 2468135792",
+		"NHS Pension Number: 2468135792",
+		"NHS Number 2468135792",
+		"NHS Number: 24681357921",
+		"National Health Service number: validation",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("NHS numbers crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	for (const [label, value] of [
+		[" NHS Number: ", "2468135792"],
+		[" National Health Service number=", "2718281820"],
+	]) {
+		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+			const before = "x".repeat(valueStart - label.length);
+			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " NHS Number: ".length)} NHS Number: 2468135793 ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens check-digit-valid Brazilian CPF values only with an explicit label", () => {
 	const identifiers = [
 		"CPF: 529.982.247-25",
