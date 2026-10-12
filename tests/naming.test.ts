@@ -5329,6 +5329,65 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 	}
 });
 
+test("screens Luhn-valid Canadian SIN values only with an explicit label", () => {
+	const identifiers = [
+		"SIN: 712-345-677",
+		"SIN Number=712345677",
+		"Social Insurance Number: 712 345 677",
+	];
+	for (const identifier of identifiers) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	const unicodeSin = "712345677".replace(/\d/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	for (const identifier of [`SIN: ${unicodeSin}`, "SIN: 712.34\u200b5.677"]) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"712-345-677",
+		"SIN: 712-345-678",
+		"SIN: 000-000-000",
+		"SIN: 71234567",
+		"SIN: 7123456770",
+		"SIN validation in the task",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const label = " SIN: ";
+	const value = "712-345-677";
+	const prefixValueStart = prefixLength - 5;
+	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
+	const prefixContext = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+
+	const obfuscatedValue = `${value.slice(0, 5)}\u200b${value.slice(5)}`;
+	const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const historyContent = `${"x".repeat(995 - label.length)}${label}${value} y`;
+	for (const messages of [
+		[{ role: "user", content: historyContent }],
+		[{ role: "compactionSummary", summary: historyContent }],
+	] as any[]) {
+		const context = buildNamingRequestContext(messages);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+	}
+
+	const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}712-345-678 ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens check-digit-valid Brazilian CPF values only with an explicit label", () => {
 	const identifiers = [
 		"CPF: 529.982.247-25",

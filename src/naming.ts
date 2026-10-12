@@ -174,6 +174,8 @@ const LABELED_PAYMENT_CARD_PATTERN = /(?<![\p{L}\p{N}])(?:(?:credit|debit|paymen
 // CPF is Brazil's 11-digit personal tax identifier. Require an explicit label
 // and validate both check digits to avoid flagging arbitrary digit strings as PII.
 const LABELED_CPF_PATTERN = /(?<![\p{L}\p{N}])(?:cpf(?:[-_\s]?(?:number|no))?|cadastro[-_\s]+de[-_\s]+pessoas[-_\s]+f[ií]sicas?)\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){10})(?![\p{L}\p{N}_])/iu;
+// Canadian SINs are nine digits; require an explicit label and a valid Luhn check digit.
+const LABELED_CANADIAN_SIN_PATTERN = /(?<![\p{L}\p{N}])(?:sin(?:[-_\s]?(?:number|no))?|social[-_\s]+insurance(?:[-_\s]+(?:number|no))?)\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){8})(?![\p{L}\p{N}_])/iu;
 // Some framework, service, session, and cookie credentials lack provider prefixes.
 // Require explicit assignments and long values; do not compact ordinary spaces.
 const LABELED_CREDENTIAL_LABEL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?key(?:[-_\s]?id)?|aes(?:[-_\s]?(?:128|192|256))?[-_\s]?key|(?:app|cookie|encryption|fernet|hmac|master|session|signing)[-_\s]?key|(?<![A-Za-z0-9_-])(?:cookie|session)|(?:auth|logged[-_\s]?in|nonce)[-_\s]?(?:key|salt)|access[-_\s]?token|aws[-_\s]?secret[-_\s]?access[-_\s]?key|client[-_\s]?key[-_\s]?data|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key(?:[-_\s]?base)?)?|passphrase|password|credential|token|azure[-_\s]?devops(?:[-_\s]ext)?[-_\s]?pat)/i;
@@ -1222,6 +1224,11 @@ const LABELED_CPF_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`(\p{Nd}(?:[ .()-]?\p{Nd}){10})`,
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s]*[ .()-]?[\p{Cc}\p{Cf}\s]*\p{Nd}){10})`,
 );
+const LABELED_CANADIAN_SIN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_CANADIAN_SIN_PATTERN,
+	String.raw`(\p{Nd}(?:[ .()-]?\p{Nd}){8})`,
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s]*[ .()-]?[\p{Cc}\p{Cf}\s]*\p{Nd}){8})`,
+);
 const LABELED_PHONE_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_PHONE_PATTERN,
 	"(\\+?\\p{Nd}(?:[ .()-]?\\p{Nd}){6,14})",
@@ -2138,9 +2145,7 @@ function asciiDecimalDigits(value: string): string | undefined {
 	return digits;
 }
 
-function isLuhnValidPaymentCardNumber(value: string): boolean {
-	const digits = asciiDecimalDigits(value);
-	if (digits === undefined || digits.length < 13 || digits.length > 19) return false;
+function hasLuhnCheckDigit(digits: string): boolean {
 	let sum = 0;
 	let doubleDigit = false;
 	for (let index = digits.length - 1; index >= 0; index--) {
@@ -2153,6 +2158,11 @@ function isLuhnValidPaymentCardNumber(value: string): boolean {
 		doubleDigit = !doubleDigit;
 	}
 	return sum % 10 === 0;
+}
+
+function isLuhnValidPaymentCardNumber(value: string): boolean {
+	const digits = asciiDecimalDigits(value);
+	return digits !== undefined && digits.length >= 13 && digits.length <= 19 && hasLuhnCheckDigit(digits);
 }
 
 function hasLabeledPaymentCard(value: string): boolean {
@@ -2181,6 +2191,20 @@ function hasLabeledCpf(value: string): boolean {
 	const pattern = new RegExp(LABELED_CPF_PATTERN.source, `${LABELED_CPF_PATTERN.flags}g`);
 	for (const match of value.matchAll(pattern)) {
 		if (isValidCpfNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
+function isValidCanadianSinNumber(value: string): boolean {
+	const digits = asciiDecimalDigits(value);
+	return digits !== undefined && digits.length === 9 && !/^(\d)\1{8}$/u.test(digits)
+		&& hasLuhnCheckDigit(digits);
+}
+
+function hasLabeledCanadianSin(value: string): boolean {
+	const pattern = new RegExp(LABELED_CANADIAN_SIN_PATTERN.source, `${LABELED_CANADIAN_SIN_PATTERN.flags}g`);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidCanadianSinNumber(match[1]!)) return true;
 	}
 	return false;
 }
@@ -2372,7 +2396,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 	const hasSensitiveValue = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 		|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
 		|| US_SSN_PATTERN.test(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
-		|| hasLabeledCpf(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
+		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2388,7 +2412,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| COMPACTED_CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
 			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_SSN_PATTERN.test(compacted)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
-			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
+			|| hasLabeledCanadianSin(compacted) || LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	const lowercased = compatibilityNormalized.toLowerCase();
@@ -2405,7 +2429,7 @@ export function hasSensitiveOutput(text: string): boolean {
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_SSN_PATTERN.test(value)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
-			|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
+			|| hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2418,7 +2442,7 @@ export function hasSensitiveOutput(text: string): boolean {
 		return (withoutFormatCharacters !== value && hasPattern(withoutFormatCharacters))
 			|| hasWhitespaceSeparatedCredential(value)
 			|| SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
-			|| hasLabeledCpf(compacted) || hasLabeledPaymentCard(compacted);
+			|| hasLabeledCpf(compacted) || hasLabeledCanadianSin(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	return distinctTextVariants(text, compatibilityNormalized, compatibilityNormalized.toLowerCase()).some((value) =>
@@ -2588,6 +2612,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	US_SSN_BOUNDARY_PATTERN,
 	UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_CPF_BOUNDARY_PATTERN,
+	LABELED_CANADIAN_SIN_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
 	EMAIL_ADDRESS_BOUNDARY_PATTERN,
@@ -2678,6 +2703,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== US_SSN_BOUNDARY_PATTERN
 		&& pattern !== UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CPF_BOUNDARY_PATTERN
+		&& pattern !== LABELED_CANADIAN_SIN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 		&& pattern !== EMAIL_ADDRESS_BOUNDARY_PATTERN
@@ -2752,6 +2778,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isLuhnValidPaymentCardNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_CPF_BOUNDARY_PATTERN
 					&& !isValidCpfNumber(match[1]!)) continue;
+				if (sourcePattern === LABELED_CANADIAN_SIN_BOUNDARY_PATTERN
+					&& !isValidCanadianSinNumber(match[1]!)) continue;
 				const encoded = match[1]!.replace(/[\p{Cc}\p{Cf}]/gu, "");
 				if ((sourcePattern === NPM_AUTH_BOUNDARY_PATTERN
 					|| sourcePattern === BASIC_AUTHORIZATION_BOUNDARY_PATTERN
