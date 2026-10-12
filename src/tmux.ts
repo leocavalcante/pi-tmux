@@ -166,6 +166,7 @@ export const runTmux: RunTmux = async (args, signal) => {
 			child = execFile("tmux", args, {
 				encoding: "utf8",
 				signal: commandSignal,
+				windowsHide: true,
 				maxBuffer: MAX_TMUX_OUTPUT_BYTES,
 			}, (error, stdout) => {
 				if (error) {
