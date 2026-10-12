@@ -225,6 +225,12 @@ const LABELED_PAYMENT_CARD_PATTERN = /(?<![\p{L}\p{N}])(?:(?:credit|debit|paymen
 const LABELED_CPF_PATTERN = /(?<![\p{L}\p{N}])(?:cpf(?:[-_\s]?(?:number|no\.?))?|cadastro[-_\s]+de[-_\s]+pessoas[-_\s]+f[ií]sicas?)\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){10})(?![\p{L}\p{N}_])/iu;
 // Canadian SINs are nine digits; require an explicit label and a valid Luhn check digit.
 const LABELED_CANADIAN_SIN_PATTERN = /(?<![\p{L}\p{N}])(?:sin(?:[-_\s]?(?:number|no\.?))?|social[-_\s]+insurance(?:[-_\s]+(?:number|no\.?))?)\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){8})(?![\p{L}\p{N}_])/iu;
+// Australian TFNs are nine digits; require a TFN/tax-file label and a valid checksum.
+const AUSTRALIAN_TFN_VALUE_PATTERN = String.raw`\p{Nd}(?:[-\s]?\p{Nd}){8}`;
+const LABELED_AUSTRALIAN_TFN_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])(?:tfn(?:[-_\s]?(?:number|no\.?))?|(?:australian[-_\s]+)?tax[-_\s]+file[-_\s]+(?:number|no\.?))\s*#?\s*["']?\s*[:=]\s*["']?(${AUSTRALIAN_TFN_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	"iu",
+);
 // Some framework, service, session, and cookie credentials lack provider prefixes.
 // Require explicit assignments and long values; do not compact ordinary spaces.
 const LABELED_CREDENTIAL_LABEL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?key(?:[-_\s]?id)?|aes(?:[-_\s]?(?:128|192|256))?[-_\s]?key|(?:app|cookie|encryption|fernet|hmac|master|session|signing)[-_\s]?key|(?<![A-Za-z0-9_-])(?:cookie|session)|(?:auth|logged[-_\s]?in|nonce)[-_\s]?(?:key|salt)|access[-_\s]?token|aws[-_\s]?secret[-_\s]?access[-_\s]?key|client[-_\s]?key[-_\s]?data|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key(?:[-_\s]?base)?)?|passphrase|password|credential|token|azure[-_\s]?devops(?:[-_\s]ext)?[-_\s]?pat)/i;
@@ -1301,6 +1307,11 @@ const LABELED_CANADIAN_SIN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`(\p{Nd}(?:[ .()-]?\p{Nd}){8})`,
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s]*[ .()-]?[\p{Cc}\p{Cf}\s]*\p{Nd}){8})`,
 );
+const LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_AUSTRALIAN_TFN_PATTERN,
+	`(${AUSTRALIAN_TFN_VALUE_PATTERN})`,
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){8})`,
+);
 const LABELED_PHONE_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_PHONE_PATTERN,
 	"(\\+?\\p{Nd}(?:[ .()-]?\\p{Nd}){6,14})",
@@ -2247,6 +2258,30 @@ function hasLabeledCanadianSin(value: string): boolean {
 	return false;
 }
 
+// Official left-to-right TFN weights; a valid nine-digit TFN has a weighted sum divisible by 11.
+const AUSTRALIAN_TFN_WEIGHTS = [1, 4, 3, 7, 5, 8, 6, 9, 10] as const;
+function isValidAustralianTfnNumber(value: string): boolean {
+	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) => {
+		if (digits.length !== 9 || /^(\d)\1{8}$/u.test(digits)) return false;
+		let weightedSum = 0;
+		for (let index = 0; index < digits.length; index++) {
+			weightedSum += (digits.charCodeAt(index) - 48) * AUSTRALIAN_TFN_WEIGHTS[index]!;
+		}
+		return weightedSum % 11 === 0;
+	});
+}
+
+function hasLabeledAustralianTfn(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_AUSTRALIAN_TFN_PATTERN.source,
+		`${LABELED_AUSTRALIAN_TFN_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidAustralianTfnNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
 // ITINs start with 9; the fourth and fifth digits use the IRS-issued ranges.
 function isValidUsItinNumber(value: string): boolean {
 	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) => {
@@ -2518,7 +2553,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| US_TAX_ID_PATTERN.test(value) || US_EIN_PATTERN.test(value)
 		|| hasLabeledUsItin(value) || hasLabeledDateOfBirth(value) || hasLabeledIban(value)
 		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
-		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
+		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
+		|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2536,7 +2572,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| US_EIN_PATTERN.test(compacted) || hasLabeledUsItin(compacted)
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
-			|| hasLabeledCanadianSin(compacted) || LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
+			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
+			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	const lowercased = compatibilityNormalized.toLowerCase();
@@ -2555,7 +2592,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| US_EIN_PATTERN.test(value) || hasLabeledUsItin(value)
 			|| hasLabeledDateOfBirth(value) || hasLabeledIban(value)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
-			|| hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
+			|| hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
+			|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2570,7 +2608,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
 			|| US_EIN_PATTERN.test(compacted) || hasLabeledUsItin(compacted)
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledCpf(compacted)
-			|| hasLabeledCanadianSin(compacted) || hasLabeledPaymentCard(compacted);
+			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
+			|| hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	return distinctTextVariants(text, compatibilityNormalized, compatibilityNormalized.toLowerCase()).some((value) =>
@@ -2745,6 +2784,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_CPF_BOUNDARY_PATTERN,
 	LABELED_CANADIAN_SIN_BOUNDARY_PATTERN,
+	LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
 	EMAIL_ADDRESS_BOUNDARY_PATTERN,
@@ -2839,6 +2879,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CPF_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CANADIAN_SIN_BOUNDARY_PATTERN
+		&& pattern !== LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 		&& pattern !== EMAIL_ADDRESS_BOUNDARY_PATTERN
@@ -2915,6 +2956,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidCpfNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_CANADIAN_SIN_BOUNDARY_PATTERN
 					&& !isValidCanadianSinNumber(match[1]!)) continue;
+				if (sourcePattern === LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN
+					&& !isValidAustralianTfnNumber(match[1]!)) continue;
 				if (sourcePattern === US_ITIN_BOUNDARY_PATTERN
 					&& !isValidUsItinNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN
