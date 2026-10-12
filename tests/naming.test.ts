@@ -6051,6 +6051,67 @@ test("Chinese resident ID numbers crossing either retained prompt boundary are d
 	}
 });
 
+test("screens checksum-valid Japanese My Numbers only with explicit labels", () => {
+	const sample = "012345678903";
+	const arabicDigits = sample.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	const fullwidthDigits = sample.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0xff10 + Number(digit)));
+	for (const identifier of [
+		`Japanese My Number: ${sample}`,
+		"Japan individual number=314159265352",
+		"Japanese national ID number: 987654321093",
+		`個人番号：${sample}`,
+		"マイナンバー=314159265352",
+		"Japanese My Number: 0123-4567-8903",
+		`Japanese My Number: ${arabicDigits}`,
+		`個人番号：${fullwidthDigits}`,
+		`マイナンバー: ${sample.slice(0, 5)}\u200b${sample.slice(5)}`,
+	]) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		sample,
+		`ID Number: ${sample}`,
+		`My Number: ${sample}`,
+		"Japanese My Number: 012345678904",
+		"Japanese My Number: 01234567890",
+		"Japanese My Number 012345678903",
+		`個人番号 ${sample}`,
+		"個人番号 validation",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("Japanese My Numbers crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	for (const label of [" Japanese My Number: ", " 個人番号："]) {
+		for (const value of ["012345678903", "0123-4567-8903"]) {
+			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	for (const label of [" Japanese My Number: ", " 個人番号："]) {
+		const invalidPrompt = `${"x".repeat(prefixLength - 4 - label.length)}${label}012345678904 ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens conventionally formatted Indian PAN values only with an explicit label", () => {
 	const identifiers = [
 		"PAN: ZZZPZ9876Q",
