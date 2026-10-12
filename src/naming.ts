@@ -321,6 +321,15 @@ const LABELED_JAPANESE_MY_NUMBER_PATTERN = new RegExp(
 	String.raw`${JAPANESE_MY_NUMBER_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${JAPANESE_MY_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
 	"iu",
 );
+// Swedish personnummer and samordningsnummer use a birth date, birth number,
+// and Luhn control digit; allow both short/full years and official separators.
+const SWEDISH_PERSONAL_ID_VALUE_PATTERN = String.raw`(?:\p{Nd}{6}[-+]?\p{Nd}{4}|\p{Nd}{8}[-+]?\p{Nd}{4})`;
+const SWEDISH_PERSONAL_ID_EXACT_PATTERN = /^(?:\p{Nd}{10}|\p{Nd}{12})$/u;
+const SWEDISH_PERSONAL_ID_LABEL_PATTERN = String.raw`(?:(?<![\p{L}\p{N}])(?:swedish|sweden)[-_\s]+(?:(?:personal[-_\s]+)?(?:identity|identification|id)(?:[-_\s]+(?:number|no\.?))?|coordination[-_\s]+number)|(?<![\p{L}\p{N}])(?:personnummer|samordningsnummer))`;
+const LABELED_SWEDISH_PERSONAL_ID_PATTERN = new RegExp(
+	String.raw`${SWEDISH_PERSONAL_ID_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${SWEDISH_PERSONAL_ID_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
+	"iu",
+);
 // Indian PANs use a 10-character layout; the fourth letter is a holder-category code.
 const INDIAN_PAN_VALUE_PATTERN = String.raw`[A-Z]{3}[ABCFGHJLPT][A-Z]\p{Nd}{4}[A-Z]`;
 const INDIAN_PAN_EXACT_PATTERN = new RegExp(`^${INDIAN_PAN_VALUE_PATTERN}$`, "iu");
@@ -1454,6 +1463,11 @@ const LABELED_JAPANESE_MY_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_JAPANESE_MY_NUMBER_PATTERN,
 	`(${JAPANESE_MY_NUMBER_VALUE_PATTERN})`,
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){11})`,
+);
+const LABELED_SWEDISH_PERSONAL_ID_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_SWEDISH_PERSONAL_ID_PATTERN,
+	`(${SWEDISH_PERSONAL_ID_VALUE_PATTERN})`,
+	String.raw`((?:\p{Nd}(?:[\p{Cc}\p{Cf}\s]*\p{Nd}){5}[\p{Cc}\p{Cf}\s]*[-+]?\p{Nd}(?:[\p{Cc}\p{Cf}\s]*\p{Nd}){3}|\p{Nd}(?:[\p{Cc}\p{Cf}\s]*\p{Nd}){7}[\p{Cc}\p{Cf}\s]*[-+]?\p{Nd}(?:[\p{Cc}\p{Cf}\s]*\p{Nd}){3}))`,
 );
 const LABELED_INDIAN_PAN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_INDIAN_PAN_PATTERN,
@@ -2682,6 +2696,41 @@ function hasLabeledJapaneseMyNumber(value: string): boolean {
 	return false;
 }
 
+function isValidSwedishPersonalId(value: string): boolean {
+	const separator = value.includes("+") ? "+" : "-";
+	const normalized = value.replace(/[\p{Cc}\p{Cf}\s+-]+/gu, "");
+	if (!SWEDISH_PERSONAL_ID_EXACT_PATTERN.test(normalized)) return false;
+	return conservativelyValidateLabeledDigits(asciiDecimalDigits(normalized), (digits) => {
+		if ((digits.length !== 10 && digits.length !== 12) || !hasLuhnCheckDigit(digits)) return false;
+		const birthDate = digits.slice(0, -4);
+		let year: number;
+		if (birthDate.length === 8) {
+			year = Number(birthDate.slice(0, 4));
+		} else {
+			const currentYear = new Date().getUTCFullYear();
+			const baseYear = currentYear - (separator === "+" ? 100 : 0);
+			const twoDigitYear = Number(birthDate.slice(0, 2));
+			const yearsSinceBirthCentury = (baseYear - twoDigitYear) % 100;
+			year = baseYear - yearsSinceBirthCentury;
+		}
+		const month = birthDate.slice(-4, -2);
+		const encodedDay = Number(birthDate.slice(-2));
+		const day = encodedDay > 60 ? encodedDay - 60 : encodedDay;
+		return isValidDateOfBirth(`${year}-${month}-${String(day).padStart(2, "0")}`);
+	});
+}
+
+function hasLabeledSwedishPersonalId(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_SWEDISH_PERSONAL_ID_PATTERN.source,
+		`${LABELED_SWEDISH_PERSONAL_ID_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidSwedishPersonalId(match[1]!)) return true;
+	}
+	return false;
+}
+
 function isValidIndianPanNumber(value: string): boolean {
 	const normalized = value.replace(/[\p{Cc}\p{Cf}]/gu, "");
 	if (!INDIAN_PAN_EXACT_PATTERN.test(normalized)) return false;
@@ -3065,7 +3114,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 		|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
 		|| hasLabeledAadhaarNumber(value) || hasLabeledChineseResidentIdNumber(value)
-		|| hasLabeledJapaneseMyNumber(value) || hasLabeledIndianPanNumber(value)
+		|| hasLabeledJapaneseMyNumber(value) || hasLabeledSwedishPersonalId(value)
+		|| hasLabeledIndianPanNumber(value)
 		|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value)
 		|| hasLabeledCardSecurityCode(value) || hasLabeledPin(value)
 		|| hasLabeledOneTimeAuthCode(value) || hasLabeledRecoveryCode(value);
@@ -3091,7 +3141,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledChineseResidentIdNumber(compacted)
-			|| hasLabeledJapaneseMyNumber(compacted) || hasLabeledIndianPanNumber(compacted)
+			|| hasLabeledJapaneseMyNumber(compacted) || hasLabeledSwedishPersonalId(compacted)
+			|| hasLabeledIndianPanNumber(compacted)
 			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted)
 			|| hasLabeledCardSecurityCode(compacted) || hasLabeledPin(compacted)
 			|| hasLabeledOneTimeAuthCode(compacted) || hasLabeledRecoveryCode(compacted);
@@ -3118,7 +3169,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 			|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
 			|| hasLabeledAadhaarNumber(value) || hasLabeledChineseResidentIdNumber(value)
-			|| hasLabeledJapaneseMyNumber(value) || hasLabeledIndianPanNumber(value)
+			|| hasLabeledJapaneseMyNumber(value) || hasLabeledSwedishPersonalId(value)
+			|| hasLabeledIndianPanNumber(value)
 			|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value)
 			|| hasLabeledCardSecurityCode(value) || hasLabeledPin(value)
 			|| hasLabeledOneTimeAuthCode(value) || hasLabeledRecoveryCode(value)
@@ -3142,7 +3194,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledChineseResidentIdNumber(compacted)
-			|| hasLabeledJapaneseMyNumber(compacted) || hasLabeledIndianPanNumber(compacted)
+			|| hasLabeledJapaneseMyNumber(compacted) || hasLabeledSwedishPersonalId(compacted)
+			|| hasLabeledIndianPanNumber(compacted)
 			|| hasLabeledPaymentCard(compacted) || hasLabeledCardSecurityCode(compacted)
 			|| hasLabeledPin(compacted) || hasLabeledOneTimeAuthCode(compacted)
 			|| hasLabeledRecoveryCode(compacted);
@@ -3330,6 +3383,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN,
 	LABELED_CHINESE_RESIDENT_ID_NUMBER_BOUNDARY_PATTERN,
 	LABELED_JAPANESE_MY_NUMBER_BOUNDARY_PATTERN,
+	LABELED_SWEDISH_PERSONAL_ID_BOUNDARY_PATTERN,
 	LABELED_INDIAN_PAN_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
@@ -3439,6 +3493,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CHINESE_RESIDENT_ID_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_JAPANESE_MY_NUMBER_BOUNDARY_PATTERN
+		&& pattern !== LABELED_SWEDISH_PERSONAL_ID_BOUNDARY_PATTERN
 		&& pattern !== LABELED_INDIAN_PAN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
@@ -3540,6 +3595,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidChineseResidentIdNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_JAPANESE_MY_NUMBER_BOUNDARY_PATTERN
 					&& !isValidJapaneseMyNumber(match[1]!)) continue;
+				if (sourcePattern === LABELED_SWEDISH_PERSONAL_ID_BOUNDARY_PATTERN
+					&& !isValidSwedishPersonalId(match[1]!)) continue;
 				if (sourcePattern === LABELED_INDIAN_PAN_BOUNDARY_PATTERN
 					&& !isValidIndianPanNumber(match[1]!)) continue;
 				if (sourcePattern === US_ITIN_BOUNDARY_PATTERN
