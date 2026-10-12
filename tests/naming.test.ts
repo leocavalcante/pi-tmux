@@ -2420,6 +2420,61 @@ test("screens AWS and Google Cloud Storage V4 signed URLs across retained-contex
 	}
 });
 
+test("screens CloudFront signed URLs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const signature = "A1b_".repeat(24);
+	const values = [
+		{
+			url: `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${signature}&Key-Pair-Id=APKEXAMPLE`,
+		},
+		{
+			url: `https://d111111abcdef8.cloudfront.net/private?Key-Pair-Id=APKEXAMPLE&Signature=${signature}&Expires=1790000000`,
+		},
+		{
+			url: `https://cdn.example.test/private?Policy=eyJTdGF0ZW1lbnQiOiJleGFtcGxlIn0&Signature=${signature}&Key-Pair-Id=APKEXAMPLE`,
+		},
+	];
+	const promptAt = (url: string, token: string, start: number) => {
+		const urlStart = start - url.indexOf(token);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
+		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+	}
+
+	const nearMisses = [
+		{ url: `Signature=${signature}`, signature },
+		{ url: `Signature=${signature}&KeyPairId=APKEXAMPLE`, signature },
+		{ url: `Signature=${"A".repeat(39)}&Key-Pair-Id=APKEXAMPLE`, signature: "A".repeat(39) },
+		{ url: `Signature=${"A".repeat(769)}&Key-Pair-Id=APKEXAMPLE`, signature: "A".repeat(769) },
+		{ url: `Key-Pair-Id=APKEXAMPLE&Expires=1790000000`, signature: "APKEXAMPLE" },
+		{ url: `NotSignature=${signature}&Key-Pair-Id=APKEXAMPLE`, signature },
+	];
+	for (const { url, signature: candidate } of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, candidate, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens HTTP Signature Authorization proofs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

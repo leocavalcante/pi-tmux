@@ -1167,6 +1167,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const googleSignedUrlStart = prefixLength - 10 - truncatedGoogleSignedUrl.indexOf(googleSignedSignature);
 	const truncatedGoogleSignedUrlPrompt = `${"x".repeat(googleSignedUrlStart - 1)} ${truncatedGoogleSignedUrl} ${"y".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedGoogleSignedUrlPrompt, googleSignedSignature);
+	const cloudFrontSignature = "A1b_".repeat(24);
+	const truncatedCloudFrontUrl = `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${cloudFrontSignature}&Key-Pair-Id=APKEXAMPLE`;
+	const cloudFrontUrlStart = prefixLength - 10 - truncatedCloudFrontUrl.indexOf(cloudFrontSignature);
+	const truncatedCloudFrontPrompt = `${"x".repeat(cloudFrontUrlStart - 1)} ${truncatedCloudFrontUrl} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedCloudFrontPrompt, cloudFrontSignature);
 	const awsAccessKeyId = `AKIA${"A".repeat(16)}`;
 	const awsAccessKeyStart = prefixLength - 8;
 	const truncatedAwsPrompt = `${"x".repeat(awsAccessKeyStart)}${awsAccessKeyId} ${"x".repeat(1_200)}`;
@@ -1219,6 +1224,13 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), awsPresignedUrl, "a".repeat(64));
 	const googleSignedUrl = `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(512)}`;
 	await suppressed(fixture(), googleSignedUrl, "b".repeat(512));
+	const cloudFrontSignedUrl = `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${cloudFrontSignature}&Key-Pair-Id=APKEXAMPLE`;
+	await suppressed(fixture(), cloudFrontSignedUrl, cloudFrontSignature);
+	await suppressed(
+		fixture(),
+		`https://d111111abcdef8.cloudfront.net/private?Key-Pair-Id=APKEXAMPLE&Signature=${cloudFrontSignature}`,
+		cloudFrontSignature,
+	);
 	const negotiateAuthorization = `Authorization: Negotiate ${httpSignature}`;
 	await suppressed(fixture(), negotiateAuthorization, negotiateAuthorization);
 	const negotiateChallenge = `WWW-Authenticate: Negotiate ${httpSignature}`;
