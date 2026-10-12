@@ -2820,6 +2820,61 @@ test("screens Baidu BCE signed authorization values across retained-context boun
 	}
 });
 
+test("screens OpenStack Swift temporary URLs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const sha1Signature = "f".repeat(40);
+	const sha256Signature = "a".repeat(64);
+	const values = [
+		{
+			value: `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_sig=${sha256Signature}&temp_url_expires=1790000000`,
+			signature: sha256Signature,
+		},
+		{
+			value: `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_expires=1790000000&filename=photo.png&temp_url_sig=${sha1Signature}`,
+			signature: sha1Signature,
+		},
+	];
+	const promptAt = (value: string, token: string, start: number) => {
+		const valueStart = start - value.indexOf(token);
+		const prefix = `${"x".repeat(valueStart - 1)} `;
+		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+	};
+
+	for (const { value, signature } of values) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(value, signature, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const nearMisses = [
+		{ value: `?temp_url_sig=${"a".repeat(39)}&temp_url_expires=1790000000`, signature: "a".repeat(39) },
+		{ value: `?temp_url_sig=${"a".repeat(41)}&temp_url_expires=1790000000`, signature: "a".repeat(41) },
+		{ value: `?temp_url_sig=${"a".repeat(63)}&temp_url_expires=1790000000`, signature: "a".repeat(63) },
+		{ value: `?temp_url_sig=${"a".repeat(65)}&temp_url_expires=1790000000`, signature: "a".repeat(65) },
+		{ value: `?temp_url_sig=${sha256Signature}x&temp_url_expires=1790000000`, signature: `${sha256Signature}x` },
+		{ value: `?temp_url_sig=${sha256Signature}&expires=1790000000`, signature: sha256Signature },
+		{ value: `?temp_url_signature=${sha256Signature}&temp_url_expires=1790000000`, signature: sha256Signature },
+		{ value: `?xtemp_url_sig=${sha256Signature}&temp_url_expires=1790000000`, signature: sha256Signature },
+		{ value: `?temp_url_sig=${sha256Signature}&temp_url_expires=${"1".repeat(21)}`, signature: sha256Signature },
+	];
+	for (const { value, signature } of nearMisses) {
+		expect(hasSensitiveNamingContext(value)).toBe(false);
+		expect(hasSensitiveOutput(value)).toBe(false);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(value, signature, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Tencent COS SHA-1 signed URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
