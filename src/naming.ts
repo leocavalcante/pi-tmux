@@ -164,7 +164,7 @@ const OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN = new RegExp(
 const US_SSN_PATTERN = /(?<![\p{L}\p{N}])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
 // Require a phone-related label and a phone-number-shaped value of 7–15 digits.
 const LABELED_PHONE_PATTERN = /(?<![\p{L}\p{N}])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?number)?\s*["']?\s*[:=]\s*["']?[\s(]*(\+?\p{Nd}(?:[ .()-]?\p{Nd}){6,14})(?![\p{L}\p{N}_])/iu;
-const LABELED_PAYMENT_CARD_PATTERN = /(?<![A-Za-z0-9])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no))?|card(?:[-_\s]?(?:number|no))?|cc[-_\s]?(?:number|no)|ccn)\s*["']?\s*[:=]\s*["']?(\d(?:[ .()-]?\d){12,18})(?![A-Za-z0-9_])/i;
+const LABELED_PAYMENT_CARD_PATTERN = /(?<![\p{L}\p{N}])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no))?|card(?:[-_\s]?(?:number|no))?|cc[-_\s]?(?:number|no)|ccn)\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){12,18})(?![\p{L}\p{N}_])/iu;
 // Some framework, service, session, and cookie credentials lack provider prefixes.
 // Require explicit assignments and long values; do not compact ordinary spaces.
 const LABELED_CREDENTIAL_LABEL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?key(?:[-_\s]?id)?|aes(?:[-_\s]?(?:128|192|256))?[-_\s]?key|(?:app|cookie|encryption|fernet|hmac|master|session|signing)[-_\s]?key|(?<![A-Za-z0-9_-])(?:cookie|session)|(?:auth|logged[-_\s]?in|nonce)[-_\s]?(?:key|salt)|access[-_\s]?token|aws[-_\s]?secret[-_\s]?access[-_\s]?key|client[-_\s]?key[-_\s]?data|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key(?:[-_\s]?base)?)?|passphrase|password|credential|token|azure[-_\s]?devops(?:[-_\s]ext)?[-_\s]?pat)/i;
@@ -1210,8 +1210,8 @@ const LABELED_PHONE_BOUNDARY_PATTERN = makeBoundaryPattern(
 );
 const LABELED_PAYMENT_CARD_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_PAYMENT_CARD_PATTERN,
-	"(\\d(?:[ .()-]?\\d){12,18})",
-	String.raw`(\d(?:[\p{Cc}\p{Cf}\s]*[ .()-]?[\p{Cc}\p{Cf}\s]*\d){12,18})`,
+	"(\\p{Nd}(?:[ .()-]?\\p{Nd}){12,18})",
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s]*[ .()-]?[\p{Cc}\p{Cf}\s]*\p{Nd}){12,18})`,
 );
 const LABELED_CREDENTIAL_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_CREDENTIAL_PATTERN,
@@ -2076,9 +2076,51 @@ const SEPARATOR_TOLERANT_PATTERNS = [
 	EMAIL_ADDRESS_PATTERN,
 ].map((pattern) => new RegExp(`(?<![A-Za-z0-9])(?:${pattern.source})`, pattern.flags));
 
+// Unicode 17 decimal-digit zero code points; digits 0–9 follow each zero.
+// Keep the table explicit because JavaScript has no decimal-digit value property.
+const UNICODE_DECIMAL_DIGIT_PATTERN = /\p{Nd}/u;
+const UNICODE_DECIMAL_DIGIT_ZEROES = [
+	0x0030, 0x0660, 0x06f0, 0x07c0, 0x0966, 0x09e6, 0x0a66, 0x0ae6,
+	0x0b66, 0x0be6, 0x0c66, 0x0ce6, 0x0d66, 0x0de6, 0x0e50, 0x0ed0,
+	0x0f20, 0x1040, 0x1090, 0x17e0, 0x1810, 0x1946, 0x19d0, 0x1a80,
+	0x1a90, 0x1b50, 0x1bb0, 0x1c40, 0x1c50, 0xa620, 0xa8d0, 0xa900,
+	0xa9d0, 0xa9f0, 0xaa50, 0xabf0, 0xff10, 0x104a0, 0x10d30, 0x10d40,
+	0x11066, 0x110f0, 0x11136, 0x111d0, 0x112f0, 0x11450, 0x114d0, 0x11650,
+	0x116c0, 0x116d0, 0x116da, 0x11730, 0x118e0, 0x11950, 0x11bf0, 0x11c50,
+	0x11d50, 0x11da0, 0x11de0, 0x11f50, 0x16130, 0x16a60, 0x16ac0, 0x16b50,
+	0x16d70, 0x1ccf0, 0x1d7ce, 0x1d7d8, 0x1d7e2, 0x1d7ec, 0x1d7f6, 0x1e140,
+	0x1e2f0, 0x1e4f0, 0x1e5f1, 0x1e950, 0x1fbf0,
+];
+
+function decimalDigitValue(character: string): number | undefined {
+	const codePoint = character.codePointAt(0)!;
+	let low = 0;
+	let high = UNICODE_DECIMAL_DIGIT_ZEROES.length - 1;
+	while (low <= high) {
+		const middle = Math.floor((low + high) / 2);
+		const zero = UNICODE_DECIMAL_DIGIT_ZEROES[middle]!;
+		if (codePoint < zero) high = middle - 1;
+		else if (codePoint >= zero + 10) low = middle + 1;
+		else return codePoint - zero;
+	}
+	return undefined;
+}
+
+function asciiDecimalDigits(value: string): string | undefined {
+	let digits = "";
+	for (const character of value) {
+		if (!UNICODE_DECIMAL_DIGIT_PATTERN.test(character)) continue;
+		const digit = decimalDigitValue(character);
+		// Fail closed for decimal digits added after the table's Unicode version.
+		if (digit === undefined) return undefined;
+		digits += digit;
+	}
+	return digits;
+}
+
 function isLuhnValidPaymentCardNumber(value: string): boolean {
-	const digits = value.replace(/\D/gu, "");
-	if (digits.length < 13 || digits.length > 19) return false;
+	const digits = asciiDecimalDigits(value);
+	if (digits === undefined || digits.length < 13 || digits.length > 19) return false;
 	let sum = 0;
 	let doubleDigit = false;
 	for (let index = digits.length - 1; index >= 0; index--) {

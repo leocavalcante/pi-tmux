@@ -5376,6 +5376,67 @@ test("screens Luhn-valid labeled payment cards across retained-context truncatio
 	expect(buildNamingRequestContext([], invalidLuhnPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens Luhn-valid labeled payment cards written with Unicode decimal digits", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const label = " Card Number: ";
+	const value = "٠٠٠٠-٠٠٠٠-٠٠٠٠-٠٠٠٠";
+	const labeledValue = `${label}${value}`;
+	expect(hasSensitiveNamingContext(labeledValue)).toBe(true);
+	expect(hasSensitiveOutput(labeledValue)).toBe(true);
+
+	const valueStart = prefixLength - 8;
+	const prompt = `${"x".repeat(valueStart - label.length)}${labeledValue} ${"y".repeat(1_200)}`;
+	const context = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(true);
+
+	const obfuscated = `${value.slice(0, 8)}\u0000${value.slice(8)}`;
+	const obfuscatedPrompt = `${"x".repeat(valueStart - label.length)}${label}${obfuscated} ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const historyContent = `${"x".repeat(988 - label.length)}${label}${value} y`;
+	for (const input of [
+		[{ role: "user", content: historyContent }],
+		[{ role: "compactionSummary", summary: historyContent }],
+	] as any[]) {
+		const history = buildNamingRequestContext(input);
+		expect(hasSensitiveNamingContext(history.text)).toBe(false);
+		expect(history.hasSensitiveBoundary()).toBe(true);
+	}
+
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const suffixValueStart = suffixStart - 8;
+	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} `
+		+ `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+	const suffix = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffix.text)).toBe(false);
+	expect(suffix.hasSensitiveBoundary()).toBe(true);
+
+	const cardInDigitSet = (zero: number, finalDigit = 0) => {
+		const digits = Array.from({ length: 16 }, (_, index) =>
+			String.fromCodePoint(zero + (index === 15 ? finalDigit : 0)));
+		return [0, 4, 8, 12].map((start) => digits.slice(start, start + 4).join("")).join("-");
+	};
+	for (const zero of [0x06f0, 0x0966, 0x09e6, 0x1e950]) {
+		expect(hasSensitiveNamingContext(`${label}${cardInDigitSet(zero)}`)).toBe(true);
+		expect(hasSensitiveOutput(`${label}${cardInDigitSet(zero)}`)).toBe(true);
+		expect(hasSensitiveNamingContext(`${label}${cardInDigitSet(zero, 1)}`)).toBe(false);
+		expect(hasSensitiveOutput(`${label}${cardInDigitSet(zero, 1)}`)).toBe(false);
+	}
+	const invalidLuhn = "٠٠٠٠-٠٠٠٠-٠٠٠٠-٠٠٠١";
+	const overlong = `Card Number: ${"٠".repeat(20)}`;
+	for (const nearMiss of [`${label}${invalidLuhn}`, overlong]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const unlabeled = `  ${value} `;
+	expect(hasSensitiveNamingContext(unlabeled)).toBe(false);
+	expect(hasSensitiveOutput(unlabeled)).toBe(false);
+});
+
 test("screens email addresses across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

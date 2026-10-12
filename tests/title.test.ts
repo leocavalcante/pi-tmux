@@ -1393,6 +1393,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	for (const [label, value] of [
 		[" SSN: ", "000-00-0000"],
 		[" SSN: ", "٠٠٠-٠٠-٠٠٠٠"],
+		[" Card Number: ", "٠٠٠٠-٠٠٠٠-٠٠٠٠-٠٠٠٠"],
 		[" Phone: ", "000-000-0000"],
 	] as const) {
 		const valueStart = prefixLength - 6;
