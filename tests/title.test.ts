@@ -1183,6 +1183,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const cloudFrontUrlStart = prefixLength - 10 - truncatedCloudFrontUrl.indexOf(cloudFrontSignature);
 	const truncatedCloudFrontPrompt = `${"x".repeat(cloudFrontUrlStart - 1)} ${truncatedCloudFrontUrl} ${"y".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedCloudFrontPrompt, cloudFrontSignature);
+	const cloudFrontCookieSignature = "C3d4".repeat(24);
+	const truncatedCloudFrontCookie = `Set-Cookie: CloudFront-Signature=${cloudFrontCookieSignature}; Path=/; Secure; HttpOnly`;
+	const cloudFrontCookieStart = prefixLength - 10 - truncatedCloudFrontCookie.indexOf(cloudFrontCookieSignature);
+	const truncatedCloudFrontCookiePrompt = `${"x".repeat(cloudFrontCookieStart - 1)} ${truncatedCloudFrontCookie} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedCloudFrontCookiePrompt, cloudFrontCookieSignature);
 	const tencentCosSignature = "a".repeat(40);
 	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
 	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
@@ -1265,6 +1270,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		fixture(),
 		`https://d111111abcdef8.cloudfront.net/private?Key-Pair-Id=APKEXAMPLE&Signature=${cloudFrontSignature}`,
 		cloudFrontSignature,
+	);
+	await suppressed(
+		fixture(),
+		`Set-Cookie: CloudFront-Signature=${cloudFrontCookieSignature}; Path=/; Secure; HttpOnly`,
+		cloudFrontCookieSignature,
 	);
 	const tencentCosSignedUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-ak=EXAMPLEID&q-signature=${tencentCosSignature}`;
 	await suppressed(fixture(), tencentCosSignedUrl, tencentCosSignature);
