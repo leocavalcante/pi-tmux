@@ -161,7 +161,7 @@ const OBFUSCATED_BEARER_TOKEN_PATTERN = new RegExp(
 const OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN = new RegExp(
 	OBFUSCATED_BEARER_TOKEN_PATTERN.source, `${OBFUSCATED_BEARER_TOKEN_PATTERN.flags}g`,
 );
-const US_SSN_PATTERN = /(?<![A-Za-z0-9])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?(\d{3}[-\s]?\d{2}[-\s]?\d{4})(?![A-Za-z0-9_])/i;
+const US_SSN_PATTERN = /(?<![\p{L}\p{N}])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
 // Require a phone-related label and a phone-number-shaped value of 7–15 digits.
 const LABELED_PHONE_PATTERN = /(?<![\p{L}\p{N}])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?number)?\s*["']?\s*[:=]\s*["']?[\s(]*(\+?\p{Nd}(?:[ .()-]?\p{Nd}){6,14})(?![\p{L}\p{N}_])/iu;
 const LABELED_PAYMENT_CARD_PATTERN = /(?<![A-Za-z0-9])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no))?|card(?:[-_\s]?(?:number|no))?|cc[-_\s]?(?:number|no)|ccn)\s*["']?\s*[:=]\s*["']?(\d(?:[ .()-]?\d){12,18})(?![A-Za-z0-9_])/i;
@@ -1200,8 +1200,8 @@ const DOCKER_AUTH_BOUNDARY_PATTERN = new RegExp(
 
 const US_SSN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	US_SSN_PATTERN,
-	"(\\d{3}[-\\s]?\\d{2}[-\\s]?\\d{4})",
-	String.raw`(\d(?:[\p{Cc}\p{Cf}]*\d){2}[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\d(?:[\p{Cc}\p{Cf}]*\d)[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\d(?:[\p{Cc}\p{Cf}]*\d){3})`,
+	"(\\p{Nd}{3}[-\\s]?\\p{Nd}{2}[-\\s]?\\p{Nd}{4})",
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){2}[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){3})`,
 );
 const LABELED_PHONE_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_PHONE_PATTERN,
