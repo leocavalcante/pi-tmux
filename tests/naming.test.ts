@@ -2704,6 +2704,69 @@ test("screens Cloudinary signed delivery URLs across retained-context boundaries
 	}
 });
 
+test("screens Imgix Secure URL signatures across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const signatures = ["a".repeat(32), "b".repeat(32)];
+	const values = [
+		{
+			url: `https://assets.imgix.net/examples/bridge.jpg?auto=format&fit=crop&w=200&s=${signatures[0]}`,
+			signature: signatures[0]!,
+		},
+		{
+			url: `https://images.example.test/private/logo.png?s=${signatures[1]}&expires=1790000000`,
+			signature: signatures[1]!,
+		},
+	];
+	const promptAt = (url: string, signature: string, start: number) => {
+		const urlStart = start - url.indexOf(signature);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, signature } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscated = url.replace(signature, `${signature.slice(0, 16)}\u200b${signature.slice(16)}`);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const tokenStart of [prefixLength - 16, suffixStart - 16]) {
+			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const obfuscatedSignature = `${signature.slice(0, 16)}\u200b${signature.slice(16)}`;
+		const obfuscatedContext = buildNamingRequestContext([], promptAt(obfuscated, obfuscatedSignature, prefixLength - 16));
+		expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
+		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+
+		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
+		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+	}
+
+	const nearMisses = [
+		{ url: `?s=${"a".repeat(31)}`, signature: "a".repeat(31) },
+		{ url: `?s=${"a".repeat(33)}`, signature: "a".repeat(33) },
+		{ url: `?s=${"a".repeat(31)}g`, signature: `${"a".repeat(31)}g` },
+		{ url: `?xs=${signatures[0]}`, signature: signatures[0]! },
+		{ url: `?ss=${signatures[0]}`, signature: signatures[0]! },
+		{ url: `?s=${signatures[0]}x`, signature: `${signatures[0]}x` },
+	];
+	for (const { url, signature } of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 16, suffixStart - 16]) {
+			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Google Cloud CDN signed URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

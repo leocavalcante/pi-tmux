@@ -1211,6 +1211,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const cloudinarySignature = "A1b_2C3d";
 	const cloudinarySignedUrl = `https://res.cloudinary.com/demo/image/authenticated/s--${cloudinarySignature}--/c_fill,w_300,h_250/sample.png`;
 	await suppressed(fixture(), `Review protected media ${cloudinarySignedUrl}`, cloudinarySignature);
+	const imgixSignature = "a".repeat(32);
+	const imgixSignedUrl = `https://assets.imgix.net/examples/bridge.jpg?auto=format&w=200&s=${imgixSignature}`;
+	await suppressed(fixture(), `Review secure image delivery ${imgixSignedUrl}`, imgixSignature);
 	const tencentCosSignature = "a".repeat(40);
 	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
 	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
