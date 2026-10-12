@@ -6408,6 +6408,84 @@ test("ABA routing numbers crossing either retained prompt boundary skip model lo
 	}
 });
 
+test("rejects explicitly labeled numeric bank-account values without exposing them", async () => {
+	const identifiers = [
+		"Bank Account Number: 4829163705",
+		"bank account no.: 0375918642",
+		"Bank Acct #: 7305-1948-62",
+		"Bank Account=804193762510",
+		"Bank Account Number: ٨٢٠٥١٩٣٧",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the financial record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"4829163705",
+		"Account Number: 4829163705",
+		"Bank Account Number: 12345",
+		"Bank Account Number: 123456789012345678",
+		"Bank Account Number: 12--345678",
+		"Bank Account Number: 12A4567890",
+		"Bank Account Number format",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("bank-account parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("bank-account parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("bank-account numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const label of [" Bank Account Number: ", " Bank Acct #: "]) {
+		for (const value of ["4829163705", "7305-1948-62"]) {
+			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const f = fixture();
+				const find = spyOn(f.ctx.modelRegistry, "find");
+				f.input(prompt);
+				await settle();
+				expect(find).not.toHaveBeenCalled();
+				expect(f.requests).toHaveLength(0);
+				expect(f.state.title).toBe("existing task");
+				expect(f.warnings).toEqual([warning]);
+				expect(f.warnings.join(" ")).not.toContain(value);
+			}
+		}
+	}
+});
+
 test("rejects explicitly labeled passport numbers without exposing them", async () => {
 	const identifiers = [
 		"Passport Number: QX730194",
@@ -8583,6 +8661,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		"Passport Number: QX730194",
 		"Passport Card Number: R8K2M519",
+		"Bank Account Number: 4829163705",
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`client-key-data: ${"A".repeat(44)}`,
