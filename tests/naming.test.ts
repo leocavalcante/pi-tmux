@@ -6121,6 +6121,63 @@ test("card security codes crossing either retained prompt boundary are detected"
 	}
 });
 
+test("screens numeric PINs only with an explicit PIN label", () => {
+	const pins = [
+		"PIN: 4827",
+		"PIN Code: 736194",
+		"PIN Number=8026",
+		"PIN No.: 0000",
+		"Card PIN: 7482",
+		"Personal Identification Number: ٣٩٢٨",
+		"PIN: 48\u200b27",
+	];
+	for (const pin of pins) {
+		expect(hasSensitiveNamingContext(pin)).toBe(true);
+		expect(hasSensitiveOutput(pin)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"4827",
+		"PIN the task to the front",
+		"pinning: 4827",
+		"PIN: 123",
+		"PIN: 123456789",
+		"PIN: 1234AB",
+		"Personal Identification Number: 123",
+		"Personal Identification Number: 123456789",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("numeric PINs crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+
+	for (const label of [" PIN: ", " Personal Identification Number: "]) {
+		for (const value of ["4827", "736194"]) {
+			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const label = " PIN: ";
+	for (const invalidValue of ["123", "123456789"]) {
+		const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens Luhn-valid labeled payment cards across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
