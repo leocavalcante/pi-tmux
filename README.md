@@ -441,7 +441,8 @@ values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are
 checked too. Explicitly labeled New Zealand IRD numbers in the current issued
-range with valid mod-11 checksums are checked too.
+range (up to 200,000,000) with valid mod-11 checksums are checked too; see
+Inland Revenue's [2026 increase to the validation ceiling][new-zealand-ird-range].
 Explicitly labeled IBANs with supported country lengths and valid MOD 97
 checksums are checked too. Explicitly labeled U.S. ABA routing numbers with
 accepted routing-symbol prefixes and valid weighted checksums are checked too.
@@ -521,8 +522,10 @@ values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are
 checked too. Explicitly labeled New Zealand IRD numbers in the current issued
-range with valid mod-11 checksums are checked too. Explicitly labeled IBANs
-with supported country lengths and valid MOD 97 checksums are checked too.
+range (up to 200,000,000) with valid mod-11 checksums are checked too; see
+Inland Revenue's [2026 increase to the validation ceiling][new-zealand-ird-range].
+Explicitly labeled IBANs with supported country lengths and valid MOD 97
+checksums are checked too.
 Explicitly labeled U.S. ABA routing numbers with accepted routing-symbol
 prefixes and valid weighted checksums are checked too. Because bank-account
 formats vary, only explicitly labeled bank-account-like values with 6–17
@@ -611,3 +614,4 @@ and the [package-existence prerequisite](https://docs.npmjs.com/cli/v11/commands
 [spanish-nif-guide]: https://www.interior.gob.es/opencms/en/servicios-al-ciudadano/tramites-y-gestiones/dni/calculo-del-digito-de-control-del-nif-nie/
 [nhs-number-standard]: https://www.datadictionary.nhs.uk/attributes/nhs_number.html
 [swedish-personnummer-standard]: https://www4.skatteverket.se/rattsligvagledning/edition/2026.6/330245.html
+[new-zealand-ird-range]: https://www.ird.govt.nz/updates/news-folder/2026/increase-to-ird-number-validation-upper-limit
