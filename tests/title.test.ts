@@ -2965,6 +2965,35 @@ test("OneDrive short links stay out of naming context and model output", async (
 	expect(sensitiveOutput.warnings.join(" ")).not.toContain(id);
 });
 
+test("OneDrive s! share keys stay out of naming context and model output", async () => {
+	const keys = ["A1b2".repeat(7), "ab_CD-".repeat(4)];
+	const links = [
+		`https://1drv.ms/f/s!${keys[0]}?e=example`,
+		`https://1drv.ms/u/s!${keys[1]}`,
+	];
+	for (const [index, url] of links.entries()) {
+		const key = keys[index]!;
+		const sensitiveContext = fixture();
+		sensitiveContext.input(`Review this OneDrive file: ${url}`);
+		await settle();
+		expect(sensitiveContext.requests).toHaveLength(0);
+		expect(sensitiveContext.state.title).toBe("existing task");
+		expect(sensitiveContext.warnings).toEqual([
+			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+		]);
+		expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
+
+		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+		sensitiveOutput.input("Name a task");
+		await settle();
+		expect(sensitiveOutput.requests).toHaveLength(1);
+		expect(sensitiveOutput.state.title).toBe("existing task");
+		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
+	}
+});
+
 test("Box shared-link URLs stay out of naming context and model output", async () => {
 	const sharedLinkId = "a".repeat(20);
 	const link = `https://app.box.com/s/${sharedLinkId}`;

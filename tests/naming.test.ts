@@ -3732,6 +3732,80 @@ test("screens OneDrive short-link IDs across retained-context boundaries", () =>
 	}
 });
 
+test("screens OneDrive s! short-link share keys across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const values = [
+		{
+			url: `https://1drv.ms/f/s!${"A1b2".repeat(7)}?e=example`,
+			key: "A1b2".repeat(7),
+		},
+		{
+			url: `https://1drv.ms/u/s!${"ab_CD-".repeat(4)}`,
+			key: "ab_CD-".repeat(4),
+		},
+	];
+	const promptAt = (url: string, key: string, start: number) => {
+		const urlStart = start - url.indexOf(key);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, key } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscatedKey = `${key.slice(0, 12)}\u200b${key.slice(12)}`;
+		const obfuscated = url.replace(key, obfuscatedKey);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const candidate of [
+			{ text: url, key },
+			{ text: obfuscated, key: obfuscatedKey },
+		]) {
+			for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.key, tokenStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+
+		const historyContent = `${"x".repeat(996 - url.indexOf(key))} ${url} trailing text`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const context = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const key = values[0]!.key;
+	const nearMisses = [
+		`https://1drv.ms/f/s!${key.slice(0, 19)}`,
+		`https://1drv.ms/f/s!${key}${"A".repeat(101)}`,
+		`https://1drv.ms.evil.test/f/s!${key}`,
+		`https://evil.1drv.ms/f/s!${key}`,
+		`https://1drv.ms/f/t!${key}`,
+		`https://1drv.ms/f/${key}`,
+		`https://example.test/f/s!${key}`,
+		`discussion of OneDrive share keys ${key}`,
+	];
+	for (const url of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 11, suffixStart - key.length + 11]) {
+			expect(buildNamingRequestContext([], promptAt(url, key, tokenStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+
+	expect(buildNamingRequestContext([], promptAt(values[0]!.url, key, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Microsoft Graph OneDrive share tokens across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
