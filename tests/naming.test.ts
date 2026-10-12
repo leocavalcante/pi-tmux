@@ -3552,6 +3552,73 @@ test("screens Proton Drive share-link passwords across retained-context boundari
 	}
 });
 
+test("screens GoFile shared-link IDs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const values = [
+		{ url: "https://gofile.io/d/SXwLDt", id: "SXwLDt" },
+		{ url: "https://www.gofile.io/d/AbC123?lang=en", id: "AbC123" },
+	];
+	const promptAt = (text: string, id: string, start: number) => {
+		const textStart = start - text.indexOf(id);
+		const prefix = `${"x".repeat(textStart - 1)} `;
+		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+	};
+
+	for (const { url, id } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscatedId = `${id.slice(0, 3)}\u200b${id.slice(3)}`;
+		const obfuscated = url.replace(id, obfuscatedId);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const candidate of [
+			{ text: url, id },
+			{ text: obfuscated, id: obfuscatedId },
+		]) {
+			for (const idStart of [prefixLength - 2, suffixStart - candidate.id.length + 2]) {
+				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.id, idStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+
+		const historyContent = `${"x".repeat(996 - url.indexOf(id))} ${url} trailing text`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const context = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const id = values[0]!.id;
+	const nearMisses = [
+		`https://gofile.io/d/${id.slice(1)}`,
+		`https://gofile.io/d/${id}a`,
+		`https://gofile.io.evil.test/d/${id}`,
+		`https://cdn.gofile.io/d/${id}`,
+		`https://gofile.io/d/${id}/extra`,
+		`https://gofile.io/download/${id}`,
+		`https://example.test/d/${id}`,
+		`discussion of a GoFile link ${id}`,
+	];
+	for (const url of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		expect(buildNamingRequestContext([], promptAt(url, id, prefixLength - 2)).hasSensitiveBoundary()).toBe(false);
+		expect(buildNamingRequestContext([], promptAt(url, id, suffixStart - id.length + 2)).hasSensitiveBoundary()).toBe(false);
+	}
+
+	expect(buildNamingRequestContext([], promptAt(values[0]!.url, id, prefixLength + 2)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Filemail transfer IDs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
