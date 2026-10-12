@@ -356,8 +356,9 @@ Slack API tokens, Discord and Slack webhook URLs, Microsoft Teams webhook URLs,
 Azure DevOps
 PATs, Google OAuth/API keys, and other service tokens), npm `.npmrc` `_auth`
 username/password pairs, Docker config `auth` values encoding username/password pairs,
-and legacy Base64 `_password` values, credential-bearing URLs, including AWS and
-Google Cloud Storage V4 signed URLs, Bearer, Token, and ApiKey authorization values,
+and legacy Base64 `_password` values, credential-bearing URLs, including
+CloudFront, AWS, and Google Cloud Storage V4 signed URLs,
+Bearer, Token, and ApiKey authorization values,
 Negotiate/NTLM/Kerberos authentication tokens and challenges, legacy HTTP Signature
 proofs, RFC 9421 HTTP Message Signature proofs,
 Digest Authorization response hashes, and Authentication-Info rspauth hashes,
