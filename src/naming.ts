@@ -164,6 +164,12 @@ const OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN = new RegExp(
 );
 const US_TAX_ID_PATTERN = /(?<![\p{L}\p{N}])(?:ssn(?:[-_\s]?(?:number|no\.?))?|social[-_\s]+security(?:[-_\s]+(?:number|no\.?))?|tin(?:[-_\s]?(?:number|no\.?))?|tax(?:payer)?[-_\s]+(?:id(?:[-_\s]?(?:number|no\.?))?|identification(?:[-_\s]+(?:number|no\.?))?))\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
 const DATE_OF_BIRTH_VALUE_PATTERN = String.raw`(?:\p{Nd}{4}[./-]\p{Nd}{1,2}[./-]\p{Nd}{1,2}|\p{Nd}{1,2}[./-]\p{Nd}{1,2}[./-]\p{Nd}{4})`;
+// EINs have a distinct nine-digit, 2-7 format; require an EIN/employer label.
+const US_EIN_VALUE_PATTERN = String.raw`\p{Nd}{2}[-\s]?\p{Nd}{7}`;
+const US_EIN_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])(?:(?:federal[-_\s]+)?(?:(?:ein|fein)(?:[-_\s]?(?:number|no\.?))?|employer[-_\s]+(?:identification(?:[-_\s]+(?:number|no\.?))?|id(?:[-_\s]?(?:number|no\.?))?)))\s*#?\s*["']?\s*[:=]\s*["']?(${US_EIN_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	"iu",
+);
 const IBAN_VALUE_PATTERN = String.raw`[A-Z]{2}[-\s]?\p{Nd}{2}(?:[-\s]?[A-Z0-9]){11,30}`;
 const LABELED_IBAN_PATTERN = new RegExp(
 	String.raw`(?=(?<![\p{L}\p{N}])(?:iban(?:[-_\s]?(?:number|no\.?))?|international[-_\s]+bank[-_\s]+account[-_\s]+number)\s*#?\s*["']?\s*[:=]\s*["']?(${IBAN_VALUE_PATTERN})(?![\p{L}\p{N}_]))`,
@@ -1252,6 +1258,11 @@ const DOCKER_AUTH_BOUNDARY_PATTERN = new RegExp(
 	"iu",
 );
 
+const US_EIN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	US_EIN_PATTERN,
+	`(${US_EIN_VALUE_PATTERN})`,
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})[\p{Cc}\p{Cf}\s-]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){6})`,
+);
 const US_TAX_ID_BOUNDARY_PATTERN = makeBoundaryPattern(
 	US_TAX_ID_PATTERN,
 	"(\\p{Nd}{3}[-\\s]?\\p{Nd}{2}[-\\s]?\\p{Nd}{4})",
@@ -2504,8 +2515,9 @@ function hasObfuscatedBearerToken(value: string): boolean {
 export function hasSensitiveNamingContext(text: string): boolean {
 	const hasSensitiveValue = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 		|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
-		|| US_TAX_ID_PATTERN.test(value) || hasLabeledUsItin(value) || hasLabeledDateOfBirth(value)
-		|| hasLabeledIban(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
+		|| US_TAX_ID_PATTERN.test(value) || US_EIN_PATTERN.test(value)
+		|| hasLabeledUsItin(value) || hasLabeledDateOfBirth(value) || hasLabeledIban(value)
+		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
@@ -2521,7 +2533,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| hasWhitespaceSeparatedCredential(value)
 			|| COMPACTED_CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
 			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_TAX_ID_PATTERN.test(compacted)
-			|| hasLabeledUsItin(compacted) || hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted)
+			|| US_EIN_PATTERN.test(compacted) || hasLabeledUsItin(compacted)
+			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
@@ -2539,7 +2552,8 @@ export function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_TAX_ID_PATTERN.test(value)
-			|| hasLabeledUsItin(value) || hasLabeledDateOfBirth(value) || hasLabeledIban(value)
+			|| US_EIN_PATTERN.test(value) || hasLabeledUsItin(value)
+			|| hasLabeledDateOfBirth(value) || hasLabeledIban(value)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
@@ -2554,7 +2568,8 @@ export function hasSensitiveOutput(text: string): boolean {
 		return (withoutFormatCharacters !== value && hasPattern(withoutFormatCharacters))
 			|| hasWhitespaceSeparatedCredential(value)
 			|| SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
-			|| hasLabeledUsItin(compacted) || hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledCpf(compacted)
+			|| US_EIN_PATTERN.test(compacted) || hasLabeledUsItin(compacted)
+			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
@@ -2723,6 +2738,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	DISCORD_MFA_TOKEN_BOUNDARY_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_BOUNDARY_PATTERN,
 	US_TAX_ID_BOUNDARY_PATTERN,
+	US_EIN_BOUNDARY_PATTERN,
 	LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN,
 	LABELED_IBAN_BOUNDARY_PATTERN,
 	US_ITIN_BOUNDARY_PATTERN,
