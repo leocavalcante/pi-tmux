@@ -328,8 +328,10 @@ const LABELED_JAPANESE_MY_NUMBER_PATTERN = new RegExp(
 	String.raw`${JAPANESE_MY_NUMBER_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${JAPANESE_MY_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
 	"iu",
 );
-// Swedish personnummer and samordningsnummer use a birth date, birth number,
-// and Luhn control digit; allow both short/full years and official separators.
+// Skatteverket specifies the personal-number control digit as Modulus 10 with
+// alternating weights 1 and 2; the shared Luhn helper implements this check.
+// https://www4.skatteverket.se/rattsligvagledning/edition/2026.6/330245.html
+// Allow both short/full years and official separators.
 const SWEDISH_PERSONAL_ID_VALUE_PATTERN = String.raw`(?:\p{Nd}{6}[-+]?\p{Nd}{4}|\p{Nd}{8}[-+]?\p{Nd}{4})`;
 const SWEDISH_PERSONAL_ID_EXACT_PATTERN = /^(?:\p{Nd}{10}|\p{Nd}{12})$/u;
 const SWEDISH_PERSONAL_ID_LABEL_PATTERN = String.raw`(?:(?<![\p{L}\p{N}])(?:swedish|sweden)[-_\s]+(?:(?:personal[-_\s]+)?(?:identity|identification|id)(?:[-_\s]+(?:number|no\.?))?|coordination[-_\s]+number)|(?<![\p{L}\p{N}])(?:personnummer|samordningsnummer))`;

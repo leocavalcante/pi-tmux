@@ -423,10 +423,11 @@ remain unmatched. The exact rule is published in the
 [J-LIS check-digit rule (Japanese PDF)](https://www.j-lis.go.jp/data/open/cnt/3/1282/1/H2707_qa.pdf).
 Explicitly labeled Swedish personal identity and coordination numbers,
 including `personnummer` and `samordningsnummer`, are checked in the
-10- or 12-digit form with a calendar-valid birth date and Luhn control digit;
-the coordination-number date offset and standard hyphen/plus separators are
-supported. Generic ID labels remain unmatched. French social security/NIR
-values with a 13-character identifier (including
+10- or 12-digit form with a calendar-valid birth date and Luhn control digit,
+consistent with [Skatteverket's Modulus 10 method][swedish-personnummer-standard],
+which uses alternating weights 1 and 2; the coordination-number date offset
+and standard hyphen/plus separators are supported. Generic ID labels remain
+unmatched. French social security/NIR values with a 13-character identifier (including
 Corsican `2A`/`2B` department codes) and a matching 2-digit control key are
 checked only with explicit French-specific labels; generic ID and NIR labels
 remain unmatched ([official overview](https://www.service-public.fr/particuliers/vosdroits/F33078);
@@ -502,10 +503,11 @@ remain unmatched. The exact rule is published in the
 [J-LIS check-digit rule (Japanese PDF)](https://www.j-lis.go.jp/data/open/cnt/3/1282/1/H2707_qa.pdf).
 Explicitly labeled Swedish personal identity and coordination numbers,
 including `personnummer` and `samordningsnummer`, are checked in the
-10- or 12-digit form with a calendar-valid birth date and Luhn control digit;
-the coordination-number date offset and standard hyphen/plus separators are
-supported. Generic ID labels remain unmatched. French social security/NIR
-values with a 13-character identifier (including
+10- or 12-digit form with a calendar-valid birth date and Luhn control digit,
+consistent with [Skatteverket's Modulus 10 method][swedish-personnummer-standard],
+which uses alternating weights 1 and 2; the coordination-number date offset
+and standard hyphen/plus separators are supported. Generic ID labels remain
+unmatched. French social security/NIR values with a 13-character identifier (including
 Corsican `2A`/`2B` department codes) and a matching 2-digit control key are
 checked only with explicit French-specific labels; generic ID and NIR labels
 remain unmatched ([official overview](https://www.service-public.fr/particuliers/vosdroits/F33078);
@@ -608,3 +610,4 @@ and the [package-existence prerequisite](https://docs.npmjs.com/cli/v11/commands
 
 [spanish-nif-guide]: https://www.interior.gob.es/opencms/en/servicios-al-ciudadano/tramites-y-gestiones/dni/calculo-del-digito-de-control-del-nif-nie/
 [nhs-number-standard]: https://www.datadictionary.nhs.uk/attributes/nhs_number.html
+[swedish-personnummer-standard]: https://www4.skatteverket.se/rattsligvagledning/edition/2026.6/330245.html
