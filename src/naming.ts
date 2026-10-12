@@ -162,8 +162,8 @@ const OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN = new RegExp(
 	OBFUSCATED_BEARER_TOKEN_PATTERN.source, `${OBFUSCATED_BEARER_TOKEN_PATTERN.flags}g`,
 );
 const US_SSN_PATTERN = /(?<![\p{L}\p{N}])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
-// Require an explicit UK NI label and the standard two-letter, six-digit, A–D suffix shape.
-const UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN = String.raw`[A-CEGHJ-PR-TW-Z]{2}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{2}[-\s]?[A-D]`;
+// UK NI prefixes exclude D/F/I/Q/U/V first, and D/F/I/O/Q/U/V second; suffixes are A–D.
+const UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN = String.raw`[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z][-\s]?\p{Nd}{2}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{2}[-\s]?[A-D]`;
 const UK_NATIONAL_INSURANCE_NUMBER_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])(?:national[-_\s]+insurance(?:[-_\s]+(?:number|no))?|ni(?:[-_\s]+(?:number|no))?|nino)\s*["']?\s*[:=]\s*["']?(${UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
 	"iu",
@@ -1212,7 +1212,7 @@ const US_SSN_BOUNDARY_PATTERN = makeBoundaryPattern(
 const UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	UK_NATIONAL_INSURANCE_NUMBER_PATTERN,
 	`(${UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN})`,
-	String.raw`([A-CEGHJ-PR-TW-Z](?:[\p{Cc}\p{Cf}]*[A-CEGHJ-PR-TW-Z])(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd})){3}[\p{Cc}\p{Cf}\s-]*[A-D])`,
+	String.raw`([A-CEGHJ-PR-TW-Z](?:[\p{Cc}\p{Cf}]*[A-CEGHJ-NPR-TW-Z])(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd})){3}[\p{Cc}\p{Cf}\s-]*[A-D])`,
 );
 const LABELED_PHONE_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_PHONE_PATTERN,
