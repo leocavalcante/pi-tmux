@@ -6333,6 +6333,9 @@ test("rejects explicitly labeled checksum-valid Chinese resident IDs without exp
 		"PRC ID No.: 129999199912310026",
 		"Resident Identity Card Number: 129999200402290032",
 		`Chinese Identity Card Number: ${syntheticId.slice(0, -1)}x`,
+		`居民身份证号码：${syntheticId}`,
+		"本人身份证号: 129999199912310026",
+		"中国公民身份号码=129999200402290032",
 		`Chinese National ID Number: ${arabicDigitsId}`,
 		`PRC ID: ${fullwidthId}`,
 		`Resident Identity Card No.: ${syntheticId.slice(0, 8)}\u200b${syntheticId.slice(8)}`,
@@ -6369,6 +6372,9 @@ test("rejects explicitly labeled checksum-valid Chinese resident IDs without exp
 		"Chinese National ID Number: 199999200001010012",
 		"Chinese National ID Number: 12999920000101001",
 		"Chinese National ID Number 12999920000101001X",
+		`身份证: ${syntheticId}`,
+		`个人信息: ${syntheticId}`,
+		`身份证号码 ${syntheticId}`,
 		"Chinese national ID number validation",
 	]) {
 		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
@@ -6389,7 +6395,12 @@ test("Chinese resident ID numbers crossing either retained prompt boundary skip 
 	const suffixStart = promptLength - Math.floor(retainedLength / 2);
 	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const label of [" Chinese National ID Number: ", " Resident Identity Card Number: "]) {
+	for (const label of [
+		" Chinese National ID Number: ",
+		" Resident Identity Card Number: ",
+		" 居民身份证号码：",
+		" 本人身份证号: ",
+	]) {
 		for (const value of ["12999920000101001X", "129999199912310026"]) {
 			for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
 				const before = "x".repeat(valueStart - label.length);
@@ -6408,9 +6419,10 @@ test("Chinese resident ID numbers crossing either retained prompt boundary skip 
 		}
 	}
 
-	const label = " Chinese National ID Number: ";
-	const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}129999200001010011 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+	for (const label of [" Chinese National ID Number: ", " 居民身份证号码："]) {
+		const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}129999200001010011 ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+	}
 });
 
 test("rejects explicitly labeled checksum-valid ABA routing numbers without exposing them", async () => {
@@ -9174,6 +9186,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 		"DL Number: X9428576",
 		"Chinese National ID Number: 12999920000101001X",
 		"Resident Identity Card Number: 129999199912310026",
+		"居民身份证号码：12999920000101001X",
+		"公民身份号码: 129999199912310026",
 		"Bank Account Number: 4829163705",
 		"CVV: 483",
 		"Card Verification Value: 9304",

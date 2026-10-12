@@ -5979,6 +5979,9 @@ test("screens checksum-valid Chinese resident ID numbers only with explicit labe
 		"PRC ID No.: 129999199912310026",
 		"Resident Identity Card Number: 129999200402290032",
 		"Chinese Identity Card Number: 12999920000101001x",
+		"居民身份证号码：12999920000101001X",
+		"本人身份证号: 129999199912310026",
+		"中国公民身份号码=129999200402290032",
 	];
 	for (const identifier of identifiers) {
 		expect(hasSensitiveNamingContext(identifier)).toBe(true);
@@ -6008,6 +6011,9 @@ test("screens checksum-valid Chinese resident ID numbers only with explicit labe
 		"Chinese National ID Number: 199999200001010012",
 		"Chinese National ID Number: 12999920000101001",
 		"Chinese National ID Number 12999920000101001X",
+		`身份证: ${syntheticId}`,
+		`个人信息: ${syntheticId}`,
+		`身份证号码 ${syntheticId}`,
 		"Chinese national ID number validation",
 	]) {
 		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
@@ -6021,7 +6027,12 @@ test("Chinese resident ID numbers crossing either retained prompt boundary are d
 	const prefixLength = Math.ceil(retainedLength / 2);
 	const promptLength = MAX_PROMPT_LENGTH + 1_000;
 	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	for (const label of [" Chinese National ID Number: ", " Resident Identity Card Number: "]) {
+	for (const label of [
+		" Chinese National ID Number: ",
+		" Resident Identity Card Number: ",
+		" 居民身份证号码：",
+		" 本人身份证号: ",
+	]) {
 		for (const value of ["12999920000101001X", "129999199912310026"]) {
 			for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
 				const before = "x".repeat(valueStart - label.length);
@@ -6034,9 +6045,10 @@ test("Chinese resident ID numbers crossing either retained prompt boundary are d
 		}
 	}
 
-	const label = " Chinese National ID Number: ";
-	const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}129999200001010011 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+	for (const label of [" Chinese National ID Number: ", " 居民身份证号码："]) {
+		const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}129999200001010011 ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+	}
 });
 
 test("screens conventionally formatted Indian PAN values only with an explicit label", () => {
