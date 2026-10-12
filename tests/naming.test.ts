@@ -5842,12 +5842,13 @@ test("screens checksum-valid Australian Medicare numbers only with an explicit l
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
-test("screens valid New Zealand IRD numbers only with an explicit label", () => {
+test("screens valid New Zealand IRD numbers in the current range only with an explicit label", () => {
 	const identifiers = [
 		"IRD: 138629473",
 		"IRD Number=138-629-473",
 		"NZ IRD No.: 27-384-919",
 		"New Zealand IRD Number: 100000131",
+		"NZ IRD Number: 199999990", // Synthetic checksum-valid value above the former 150,000,000 ceiling.
 		"Inland Revenue Department Number: 138629473",
 	];
 	for (const identifier of identifiers) {

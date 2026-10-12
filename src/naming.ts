@@ -2628,6 +2628,8 @@ function hasLabeledAustralianMedicareNumber(value: string): boolean {
 }
 
 const NEW_ZEALAND_IRD_NUMBER_LOWER_LIMIT = 10_000_000;
+// Inland Revenue raised the upper limit to 200,000,000 in its 2026 update.
+// https://www.ird.govt.nz/updates/news-folder/2026/increase-to-ird-number-validation-upper-limit
 const NEW_ZEALAND_IRD_NUMBER_UPPER_LIMIT = 200_000_000;
 const NEW_ZEALAND_IRD_PRIMARY_WEIGHTS = [3, 2, 7, 6, 5, 4, 3, 2] as const;
 const NEW_ZEALAND_IRD_SECONDARY_WEIGHTS = [7, 4, 3, 2, 5, 2, 7, 6] as const;

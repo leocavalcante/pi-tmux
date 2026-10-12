@@ -88,6 +88,13 @@ test("README cites Skatteverket for Swedish personal-number checks", () => {
 	expect(readme).toContain("https://www4.skatteverket.se/rattsligvagledning/edition/2026.6/330245.html");
 });
 
+test("README cites Inland Revenue for the current New Zealand IRD range", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
+	expect(readme).toContain("up to 200,000,000");
+	expect(readme).toContain("2026 increase to the validation ceiling");
+	expect(readme).toContain("https://www.ird.govt.nz/updates/news-folder/2026/increase-to-ird-number-validation-upper-limit");
+});
+
 test("CONTRIBUTING documents current privacy screening test coverage", () => {
 	const contributorGuide = readFileSync(fileURLToPath(new URL("../CONTRIBUTING.md", import.meta.url)), "utf8")
 		.replace(/\s+/gu, " ");
