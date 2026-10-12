@@ -1208,6 +1208,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const openStackSwiftUrlStart = prefixLength - 10 - truncatedOpenStackSwiftUrl.indexOf(openStackSwiftSignature);
 	const truncatedOpenStackSwiftPrompt = `${"x".repeat(openStackSwiftUrlStart - 1)} ${truncatedOpenStackSwiftUrl} ${"y".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedOpenStackSwiftPrompt, openStackSwiftSignature);
+	const cloudinarySignature = "A1b_2C3d";
+	const cloudinarySignedUrl = `https://res.cloudinary.com/demo/image/authenticated/s--${cloudinarySignature}--/c_fill,w_300,h_250/sample.png`;
+	await suppressed(fixture(), `Review protected media ${cloudinarySignedUrl}`, cloudinarySignature);
 	const tencentCosSignature = "a".repeat(40);
 	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
 	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);

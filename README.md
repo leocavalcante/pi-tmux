@@ -363,6 +363,7 @@ Google Cloud Storage V2/V4, Google Cloud CDN signed URLs,
 OpenStack Swift temporary URLs, Baidu BOS signed authorization URLs,
 Tencent COS SHA-1 query-signed URLs,
 Alibaba Cloud OSS V1/V4 signed URLs,
+Cloudinary signed delivery URLs,
 Oracle Object Storage pre-authenticated request URLs,
 Bearer, Token, and ApiKey authorization values,
 Negotiate/NTLM/Kerberos authentication tokens and challenges, legacy HTTP Signature
