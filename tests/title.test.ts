@@ -2824,6 +2824,29 @@ test("new credential-looking context cancels in-flight naming without sending it
 	expect(f.state.title).toBe("existing task");
 });
 
+test("MEGA share links stay out of naming context and are rejected from model output", async () => {
+	const key = "A".repeat(43);
+	const link = `https://mega.nz/file/abcdefgh#${key}`;
+	const sensitiveContext = fixture();
+	sensitiveContext.input(`Review this file: ${link}`);
+	await settle();
+	expect(sensitiveContext.requests).toHaveLength(0);
+	expect(sensitiveContext.state.title).toBe("existing task");
+	expect(sensitiveContext.warnings).toEqual([
+		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+	]);
+	expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
+
+	const sensitiveOutput = fixture([Promise.resolve(response(link))]);
+	sensitiveOutput.input("Name a task");
+	await settle();
+	expect(sensitiveOutput.requests).toHaveLength(1);
+	expect(sensitiveOutput.state.title).toBe("existing task");
+	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+	expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
+});
+
 test("credential-shaped model output is rejected without applying or disclosing it", async () => {
 	const githubToken = ["ghp_", "a".repeat(20)].join("");
 	const googleApiKey = `AIza${"A".repeat(35)}`;
