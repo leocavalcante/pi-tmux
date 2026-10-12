@@ -1157,6 +1157,16 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const tokenStart = prefixLength - 10;
 	const truncatedVercelPrompt = `${"x".repeat(tokenStart - 9)} Vercel: ${vercelApiToken} ${"x".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedVercelPrompt, vercelApiToken);
+	const awsPresignedSignature = "a".repeat(64);
+	const truncatedAwsPresignedUrl = `https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${awsPresignedSignature}`;
+	const awsPresignedUrlStart = prefixLength - 10 - truncatedAwsPresignedUrl.indexOf(awsPresignedSignature);
+	const truncatedAwsPresignedPrompt = `${"x".repeat(awsPresignedUrlStart - 1)} ${truncatedAwsPresignedUrl} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedAwsPresignedPrompt, awsPresignedSignature);
+	const googleSignedSignature = "b".repeat(512);
+	const truncatedGoogleSignedUrl = `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${googleSignedSignature}`;
+	const googleSignedUrlStart = prefixLength - 10 - truncatedGoogleSignedUrl.indexOf(googleSignedSignature);
+	const truncatedGoogleSignedUrlPrompt = `${"x".repeat(googleSignedUrlStart - 1)} ${truncatedGoogleSignedUrl} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedGoogleSignedUrlPrompt, googleSignedSignature);
 	const awsAccessKeyId = `AKIA${"A".repeat(16)}`;
 	const awsAccessKeyStart = prefixLength - 8;
 	const truncatedAwsPrompt = `${"x".repeat(awsAccessKeyStart)}${awsAccessKeyId} ${"x".repeat(1_200)}`;
@@ -1205,6 +1215,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), httpSignatureAuthorization, httpSignatureAuthorization);
 	const httpMessageSignature = `Signature: sig1=:${httpSignature}:`;
 	await suppressed(fixture(), httpMessageSignature, httpMessageSignature);
+	const awsPresignedUrl = `https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(64)}`;
+	await suppressed(fixture(), awsPresignedUrl, "a".repeat(64));
+	const googleSignedUrl = `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(512)}`;
+	await suppressed(fixture(), googleSignedUrl, "b".repeat(512));
 	const negotiateAuthorization = `Authorization: Negotiate ${httpSignature}`;
 	await suppressed(fixture(), negotiateAuthorization, negotiateAuthorization);
 	const negotiateChallenge = `WWW-Authenticate: Negotiate ${httpSignature}`;
@@ -2879,6 +2893,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`Proxy-Authorization: NTLM ${Buffer.from("E".repeat(64)).toString("base64")}`,
 		`WWW-Authenticate: Negotiate ${Buffer.from("F".repeat(32)).toString("base64")}`,
 		`Proxy-Authenticate: NTLM ${Buffer.from("G".repeat(64)).toString("base64")}`,
+		`https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(64)}`,
+		`https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(512)}`,
 		["Proxy-Authorization: Digest username=alice, response=", "A1b2".repeat(8)].join(""),
 		["Authentication-Info: rspauth=", "C3d4".repeat(8)].join(""),
 		["Proxy-Authentication-Info: qop=auth, rspauth=", "E5f6".repeat(16)].join(""),
