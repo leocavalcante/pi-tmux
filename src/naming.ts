@@ -238,6 +238,12 @@ const LABELED_AUSTRALIAN_MEDICARE_NUMBER_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])medicare[-_\s]+(?:card[-_\s]+)?(?:number|no\.?|card)\s*#?\s*["']?\s*[:=]\s*["']?(${AUSTRALIAN_MEDICARE_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
 	"iu",
 );
+// New Zealand IRD numbers are eight or nine digits and use Inland Revenue's mod-11 check.
+const NEW_ZEALAND_IRD_NUMBER_VALUE_PATTERN = String.raw`\p{Nd}(?:[-\s]?\p{Nd}){7,8}`;
+const LABELED_NEW_ZEALAND_IRD_NUMBER_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])(?:(?:nz|new[-_\s]+zealand)[-_\s]+)?(?:ird(?:[-_\s]?(?:number|no\.?))?|inland[-_\s]+revenue(?:[-_\s]+department)?[-_\s]+(?:number|no\.?))\s*#?\s*["']?\s*[:=]\s*["']?(${NEW_ZEALAND_IRD_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	"iu",
+);
 // Some framework, service, session, and cookie credentials lack provider prefixes.
 // Require explicit assignments and long values; do not compact ordinary spaces.
 const LABELED_CREDENTIAL_LABEL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?key(?:[-_\s]?id)?|aes(?:[-_\s]?(?:128|192|256))?[-_\s]?key|(?:app|cookie|encryption|fernet|hmac|master|session|signing)[-_\s]?key|(?<![A-Za-z0-9_-])(?:cookie|session)|(?:auth|logged[-_\s]?in|nonce)[-_\s]?(?:key|salt)|access[-_\s]?token|aws[-_\s]?secret[-_\s]?access[-_\s]?key|client[-_\s]?key[-_\s]?data|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key(?:[-_\s]?base)?)?|passphrase|password|credential|token|azure[-_\s]?devops(?:[-_\s]ext)?[-_\s]?pat)/i;
@@ -1324,6 +1330,11 @@ const LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	`(${AUSTRALIAN_MEDICARE_NUMBER_VALUE_PATTERN})`,
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){9,10})`,
 );
+const LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_NEW_ZEALAND_IRD_NUMBER_PATTERN,
+	`(${NEW_ZEALAND_IRD_NUMBER_VALUE_PATTERN})`,
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){7,8})`,
+);
 const LABELED_PHONE_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_PHONE_PATTERN,
 	"(\\+?\\p{Nd}(?:[ .()-]?\\p{Nd}){6,14})",
@@ -2319,6 +2330,45 @@ function hasLabeledAustralianMedicareNumber(value: string): boolean {
 	return false;
 }
 
+const NEW_ZEALAND_IRD_NUMBER_LOWER_LIMIT = 10_000_000;
+const NEW_ZEALAND_IRD_NUMBER_UPPER_LIMIT = 200_000_000;
+const NEW_ZEALAND_IRD_PRIMARY_WEIGHTS = [3, 2, 7, 6, 5, 4, 3, 2] as const;
+const NEW_ZEALAND_IRD_SECONDARY_WEIGHTS = [7, 4, 3, 2, 5, 2, 7, 6] as const;
+function getNewZealandIrdCheckDigit(base: string, weights: readonly number[]): number {
+	let weightedSum = 0;
+	for (let index = 0; index < weights.length; index++) {
+		weightedSum += (base.charCodeAt(index) - 48) * weights[index]!;
+	}
+	const remainder = weightedSum % 11;
+	return remainder === 0 ? 0 : 11 - remainder;
+}
+
+function isValidNewZealandIrdNumber(value: string): boolean {
+	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) => {
+		if ((digits.length !== 8 && digits.length !== 9)
+			|| Number(digits) < NEW_ZEALAND_IRD_NUMBER_LOWER_LIMIT
+			|| Number(digits) > NEW_ZEALAND_IRD_NUMBER_UPPER_LIMIT) return false;
+		const padded = digits.padStart(9, "0");
+		const base = padded.slice(0, 8);
+		const checkDigit = padded.charCodeAt(8) - 48;
+		const primaryCheckDigit = getNewZealandIrdCheckDigit(base, NEW_ZEALAND_IRD_PRIMARY_WEIGHTS);
+		if (primaryCheckDigit <= 9) return primaryCheckDigit === checkDigit;
+		const secondaryCheckDigit = getNewZealandIrdCheckDigit(base, NEW_ZEALAND_IRD_SECONDARY_WEIGHTS);
+		return secondaryCheckDigit <= 9 && secondaryCheckDigit === checkDigit;
+	});
+}
+
+function hasLabeledNewZealandIrdNumber(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_NEW_ZEALAND_IRD_NUMBER_PATTERN.source,
+		`${LABELED_NEW_ZEALAND_IRD_NUMBER_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidNewZealandIrdNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
 // ITINs start with 9; the fourth and fifth digits use the IRS-issued ranges.
 function isValidUsItinNumber(value: string): boolean {
 	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) => {
@@ -2591,7 +2641,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| hasLabeledUsItin(value) || hasLabeledDateOfBirth(value) || hasLabeledIban(value)
 		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
-		|| hasLabeledAustralianMedicareNumber(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
+		|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
+		|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2610,7 +2661,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
-			|| hasLabeledAustralianMedicareNumber(compacted) || LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
+			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
+			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	const lowercased = compatibilityNormalized.toLowerCase();
@@ -2630,7 +2682,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledDateOfBirth(value) || hasLabeledIban(value)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
-			|| hasLabeledAustralianMedicareNumber(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
+			|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
+			|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2646,7 +2699,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| US_EIN_PATTERN.test(compacted) || hasLabeledUsItin(compacted)
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
-			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledPaymentCard(compacted);
+			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
+			|| hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	return distinctTextVariants(text, compatibilityNormalized, compatibilityNormalized.toLowerCase()).some((value) =>
@@ -2823,6 +2877,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CANADIAN_SIN_BOUNDARY_PATTERN,
 	LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN,
 	LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN,
+	LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
 	EMAIL_ADDRESS_BOUNDARY_PATTERN,
@@ -2919,6 +2974,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== LABELED_CANADIAN_SIN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN
+		&& pattern !== LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 		&& pattern !== EMAIL_ADDRESS_BOUNDARY_PATTERN
@@ -2999,6 +3055,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidAustralianTfnNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN
 					&& !isValidAustralianMedicareNumber(match[1]!)) continue;
+				if (sourcePattern === LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN
+					&& !isValidNewZealandIrdNumber(match[1]!)) continue;
 				if (sourcePattern === US_ITIN_BOUNDARY_PATTERN
 					&& !isValidUsItinNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN

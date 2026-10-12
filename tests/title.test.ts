@@ -6166,6 +6166,85 @@ test("Australian Medicare numbers crossing either retained prompt boundary skip 
 	}
 });
 
+test("rejects explicitly labeled valid New Zealand IRD numbers without exposing them", async () => {
+	const identifiers = [
+		"IRD: 138629473",
+		"IRD Number=138-629-473",
+		"NZ IRD No.: 27-384-919",
+		"New Zealand IRD Number: 100000131",
+		"IRD: ١٣٨٦٢٩٤٧٣",
+		"IRD: 13862\u200b9473",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the New Zealand tax record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"138629473",
+		"IRD Number: 138629472",
+		"IRD: 100000130",
+		"IRD: 100010640",
+		"IRD: 01000004",
+		"IRD: 200000005",
+		"IRD No 138629473",
+		"Tax number: 138629473",
+		"IRD number validation",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("ird parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("ird parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("New Zealand IRD numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const label = " NZ IRD Number: ";
+	const value = "138629473";
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+		const before = "x".repeat(valueStart - label.length);
+		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+		expect(prompt).toHaveLength(promptLength);
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(value);
+	}
+});
+
 test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them", async () => {
 	const identifiers = [
 		"SIN: 712-345-677",
