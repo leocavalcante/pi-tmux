@@ -2919,6 +2919,29 @@ test("OneDrive shared-link auth keys stay out of naming context and model output
 	expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
 });
 
+test("Microsoft Graph OneDrive share tokens stay out of naming context and model output", async () => {
+	const token = "A".repeat(48);
+	const link = `https://graph.microsoft.com/v1.0/shares/u!${token}`;
+	const sensitiveContext = fixture();
+	sensitiveContext.input(`Review this OneDrive file: ${link}`);
+	await settle();
+	expect(sensitiveContext.requests).toHaveLength(0);
+	expect(sensitiveContext.state.title).toBe("existing task");
+	expect(sensitiveContext.warnings).toEqual([
+		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+	]);
+	expect(sensitiveContext.warnings.join(" ")).not.toContain(token);
+
+	const sensitiveOutput = fixture([Promise.resolve(response(link))]);
+	sensitiveOutput.input("Name a task");
+	await settle();
+	expect(sensitiveOutput.requests).toHaveLength(1);
+	expect(sensitiveOutput.state.title).toBe("existing task");
+	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+	expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
+});
+
 test("OneDrive short links stay out of naming context and model output", async () => {
 	const id = "A".repeat(32);
 	const link = `https://1drv.ms/${id}`;
