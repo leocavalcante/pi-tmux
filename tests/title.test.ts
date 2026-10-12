@@ -1229,6 +1229,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const googleDriveHeaderKey = `0-${"E".repeat(28)}`;
 	const googleDriveResourceKeysHeader = `X-Goog-Drive-Resource-Keys: ${"F".repeat(33)}/${googleDriveHeaderKey}`;
 	await suppressed(fixture(), `Fetch protected Drive file with ${googleDriveResourceKeysHeader}`, googleDriveHeaderKey);
+	const googleDriveResponseKey = `0-${"G".repeat(28)}`;
+	const googleDriveFileResponse = `{"id":"${"H".repeat(33)}","resourceKey":"${googleDriveResponseKey}"}`;
+	await suppressed(fixture(), `Summarize this Drive API response: ${googleDriveFileResponse}`, googleDriveResponseKey);
 	const tencentCosSignature = "a".repeat(40);
 	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
 	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
