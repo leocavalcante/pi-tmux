@@ -9,6 +9,21 @@ Follow-ups such as `continue` or `yes, do it` use recent dialogue to keep the
 task recognizable. Resuming a Pi session restores a task title without a new
 prompt. Naming runs in the background and does not delay Pi's answer.
 
+## Contents
+
+- [Installation](#installation)
+  - [Naming model](#naming-model)
+  - [Retry a title](#retry-a-title)
+  - [Pin a manual title](#pin-a-manual-title)
+  - [Inspect title status](#inspect-title-status)
+  - [Synchronize without AI](#synchronize-without-ai)
+- [Behavior](#behavior)
+  - [Shared panes and cleanup](#shared-panes-and-cleanup)
+- [Privacy and security](#privacy-and-security)
+- [Development](#development)
+- [Publishing](#publishing)
+- [License](#license)
+
 | State | Window name | tmux session name |
 | --- | --- | --- |
 | Pi is working alone in its window | `fix auth tests` | Existing name |
