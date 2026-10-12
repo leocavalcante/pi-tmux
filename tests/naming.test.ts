@@ -5973,6 +5973,72 @@ test("Aadhaar values crossing either retained prompt boundary are detected", () 
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens checksum-valid Chinese resident ID numbers only with explicit labels", () => {
+	const identifiers = [
+		"Chinese National ID Number: 12999920000101001X",
+		"PRC ID No.: 129999199912310026",
+		"Resident Identity Card Number: 129999200402290032",
+		"Chinese Identity Card Number: 12999920000101001x",
+	];
+	for (const identifier of identifiers) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	const syntheticId = "12999920000101001X";
+	const arabicDigitsId = syntheticId.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	const fullwidthId = syntheticId.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0xff10 + Number(digit)));
+	for (const identifier of [
+		`Chinese National ID Number: ${arabicDigitsId}`,
+		`PRC ID: ${fullwidthId}`,
+		`Resident Identity Card No.: ${syntheticId.slice(0, 8)}\u200b${syntheticId.slice(8)}`,
+	]) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		syntheticId,
+		`ID Number: ${syntheticId}`,
+		`National ID Number: ${syntheticId}`,
+		"Chinese National ID Number: 129999200001010011",
+		"Chinese National ID Number: 129999200002300019",
+		"Chinese National ID Number: 199999200001010012",
+		"Chinese National ID Number: 12999920000101001",
+		"Chinese National ID Number 12999920000101001X",
+		"Chinese national ID number validation",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("Chinese resident ID numbers crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	for (const label of [" Chinese National ID Number: ", " Resident Identity Card Number: "]) {
+		for (const value of ["12999920000101001X", "129999199912310026"]) {
+			for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const label = " Chinese National ID Number: ";
+	const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}129999200001010011 ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens conventionally formatted Indian PAN values only with an explicit label", () => {
 	const identifiers = [
 		"PAN: ZZZPZ9876Q",

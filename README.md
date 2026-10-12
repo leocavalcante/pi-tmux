@@ -408,12 +408,15 @@ date-of-birth labels, UK National Insurance numbers, explicitly labeled
 Brazilian CPF values with valid check digits, explicitly labeled Canadian SIN
 values with valid Luhn check digits, and explicitly labeled Aadhaar numbers
 with 12 digits, a leading digit from 2–9, and valid Verhoeff check digits.
-Explicitly labeled Indian PAN values in the conventional 10-character
-letter/digit layout with a recognized fourth-character category are checked
-too. Explicitly labeled Australian TFNs with valid checksums and Australian
-Medicare-card numbers with valid check digits are checked too. Explicitly
-labeled New Zealand IRD numbers in the current issued range with valid mod-11
-checksums are checked too.
+Explicitly labeled Chinese/PRC national-ID and resident-identity-card values
+are checked only in the 18-character form with an accepted regional prefix, a
+calendar-valid birth date, and the standard weighted check character; generic
+ID labels remain unmatched. Explicitly labeled Indian PAN values with the
+conventional 10-character letter/digit layout and a recognized category in
+the fourth character are checked too. Explicitly labeled Australian TFNs with
+valid checksums and Medicare-card numbers with valid check digits are checked
+too. Explicitly labeled New Zealand IRD numbers in the current issued range
+with valid mod-11 checksums are checked too.
 Explicitly labeled IBANs with supported country lengths and valid MOD 97
 checksums are checked too. Explicitly labeled U.S. ABA routing numbers with
 accepted routing-symbol prefixes and valid weighted checksums are checked too.
@@ -460,12 +463,15 @@ following explicit date-of-birth labels, UK National Insurance numbers,
 explicitly labeled Brazilian CPF values with valid check digits, explicitly
 labeled Canadian SIN values with valid Luhn check digits, and explicitly labeled
 Aadhaar numbers with 12 digits, a leading digit from 2–9, and valid Verhoeff
-check digits. Explicitly labeled Indian PAN values in the conventional
-10-character letter/digit layout with a recognized fourth-character category
-are checked too. Explicitly labeled Australian TFNs with valid checksums and
-Australian Medicare-card numbers with valid check digits are checked too.
-Explicitly labeled New Zealand IRD numbers in the current issued range with
-valid mod-11 checksums are checked too. Explicitly labeled IBANs with
+check digits. Explicitly labeled Chinese/PRC national-ID and resident-identity-card
+values are checked only in the 18-character form with an accepted regional
+prefix, a calendar-valid birth date, and the standard weighted check character;
+generic ID labels remain unmatched. Explicitly labeled Indian PAN values with
+the conventional 10-character letter/digit layout and a recognized category
+in the fourth character are checked too. Explicitly labeled Australian TFNs with
+valid checksums and Medicare-card numbers with valid check digits are checked
+too. Explicitly labeled New Zealand IRD numbers in the current issued range
+with valid mod-11 checksums are checked too. Explicitly labeled IBANs with
 supported country lengths and valid MOD 97 checksums are checked too.
 Explicitly labeled U.S. ABA routing numbers with accepted routing-symbol
 prefixes and valid weighted checksums are checked too. Because bank-account

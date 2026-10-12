@@ -302,6 +302,17 @@ const LABELED_AADHAAR_NUMBER_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])aadhaar(?:[-_\s]?(?:number|no\.?|id))?\s*#?\s*["']?\s*[:=]\s*["']?(${AADHAAR_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
 	"iu",
 );
+// PRC resident identity-card numbers have 17 decimal digits and a weighted
+// check character; require a specific national-ID or resident-card label.
+const CHINESE_RESIDENT_ID_NUMBER_VALUE_PATTERN = String.raw`\p{Nd}{17}[\p{Nd}X]`;
+const CHINESE_RESIDENT_ID_NUMBER_EXACT_PATTERN = new RegExp(
+	`^${CHINESE_RESIDENT_ID_NUMBER_VALUE_PATTERN}$`, "iu",
+);
+const CHINESE_RESIDENT_ID_NUMBER_LABEL_PATTERN = String.raw`(?:(?:chinese|prc)[-_\s]+(?:national[-_\s]+)?(?:id|identity|identification)(?:[-_\s]+(?:card|number|no\.?))*|(?:chinese[-_\s]+)?resident[-_\s]+identity[-_\s]+card(?:[-_\s]+(?:number|no\.?))*)`;
+const LABELED_CHINESE_RESIDENT_ID_NUMBER_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])${CHINESE_RESIDENT_ID_NUMBER_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${CHINESE_RESIDENT_ID_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
+	"iu",
+);
 // Indian PANs use a 10-character layout; the fourth letter is a holder-category code.
 const INDIAN_PAN_VALUE_PATTERN = String.raw`[A-Z]{3}[ABCFGHJLPT][A-Z]\p{Nd}{4}[A-Z]`;
 const INDIAN_PAN_EXACT_PATTERN = new RegExp(`^${INDIAN_PAN_VALUE_PATTERN}$`, "iu");
@@ -1425,6 +1436,11 @@ const LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_AADHAAR_NUMBER_PATTERN,
 	`(${AADHAAR_NUMBER_VALUE_PATTERN})`,
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){11})`,
+);
+const LABELED_CHINESE_RESIDENT_ID_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_CHINESE_RESIDENT_ID_NUMBER_PATTERN,
+	`(${CHINESE_RESIDENT_ID_NUMBER_VALUE_PATTERN})`,
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s]*\p{Nd}){16}[\p{Cc}\p{Cf}\s]*(?:\p{Nd}|X))`,
 );
 const LABELED_INDIAN_PAN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_INDIAN_PAN_PATTERN,
@@ -2588,6 +2604,45 @@ function hasLabeledAadhaarNumber(value: string): boolean {
 	return false;
 }
 
+const CHINESE_RESIDENT_ID_NUMBER_WEIGHTS = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2] as const;
+const CHINESE_RESIDENT_ID_NUMBER_CHECK_DIGITS = "10X98765432";
+const CHINESE_RESIDENT_ID_AREA_CODE_PATTERN = /^(?:1[1-5]|2[1-3]|3[1-7]|4[1-6]|5[0-4]|6[1-5]|71|81|82)\d{4}$/u;
+
+function isValidChineseResidentIdNumber(value: string): boolean {
+	const normalized = value.replace(/[\p{Cc}\p{Cf}\s-]+/gu, "");
+	const characters = [...normalized];
+	if (characters.length !== 18 || !CHINESE_RESIDENT_ID_NUMBER_EXACT_PATTERN.test(normalized)) {
+		return false;
+	}
+	const checkCharacter = characters[17]!.toUpperCase();
+	const digits = asciiDecimalDigits(characters.slice(0, 17).join(""));
+	return conservativelyValidateLabeledDigits(digits, (knownDigits) => {
+		if (knownDigits.length !== 17 || !CHINESE_RESIDENT_ID_AREA_CODE_PATTERN.test(knownDigits.slice(0, 6))) return false;
+		const birthDate = knownDigits.slice(6, 14);
+		if (!isValidDateOfBirth(`${birthDate.slice(0, 4)}-${birthDate.slice(4, 6)}-${birthDate.slice(6, 8)}`)) {
+			return false;
+		}
+		const sum = knownDigits.split("").reduce((total, digit, index) =>
+			total + Number(digit) * CHINESE_RESIDENT_ID_NUMBER_WEIGHTS[index]!, 0);
+		const expectedCheckDigit = CHINESE_RESIDENT_ID_NUMBER_CHECK_DIGITS[sum % 11]!;
+		const actualCheckDigit = /\p{Nd}/u.test(checkCharacter)
+			? asciiDecimalDigits(checkCharacter)
+			: checkCharacter;
+		return actualCheckDigit === undefined || expectedCheckDigit === actualCheckDigit;
+	});
+}
+
+function hasLabeledChineseResidentIdNumber(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_CHINESE_RESIDENT_ID_NUMBER_PATTERN.source,
+		`${LABELED_CHINESE_RESIDENT_ID_NUMBER_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidChineseResidentIdNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
 function isValidIndianPanNumber(value: string): boolean {
 	const normalized = value.replace(/[\p{Cc}\p{Cf}]/gu, "");
 	if (!INDIAN_PAN_EXACT_PATTERN.test(normalized)) return false;
@@ -2970,7 +3025,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 		|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
-		|| hasLabeledAadhaarNumber(value) || hasLabeledIndianPanNumber(value)
+		|| hasLabeledAadhaarNumber(value) || hasLabeledChineseResidentIdNumber(value)
+		|| hasLabeledIndianPanNumber(value)
 		|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value)
 		|| hasLabeledCardSecurityCode(value) || hasLabeledPin(value)
 		|| hasLabeledOneTimeAuthCode(value) || hasLabeledRecoveryCode(value);
@@ -2995,7 +3051,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
-			|| hasLabeledAadhaarNumber(compacted) || hasLabeledIndianPanNumber(compacted)
+			|| hasLabeledAadhaarNumber(compacted) || hasLabeledChineseResidentIdNumber(compacted)
+			|| hasLabeledIndianPanNumber(compacted)
 			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted)
 			|| hasLabeledCardSecurityCode(compacted) || hasLabeledPin(compacted)
 			|| hasLabeledOneTimeAuthCode(compacted) || hasLabeledRecoveryCode(compacted);
@@ -3021,7 +3078,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 			|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
-			|| hasLabeledAadhaarNumber(value) || hasLabeledIndianPanNumber(value)
+			|| hasLabeledAadhaarNumber(value) || hasLabeledChineseResidentIdNumber(value)
+			|| hasLabeledIndianPanNumber(value)
 			|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value)
 			|| hasLabeledCardSecurityCode(value) || hasLabeledPin(value)
 			|| hasLabeledOneTimeAuthCode(value) || hasLabeledRecoveryCode(value)
@@ -3044,7 +3102,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledBankAccountNumber(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
-			|| hasLabeledAadhaarNumber(compacted) || hasLabeledIndianPanNumber(compacted)
+			|| hasLabeledAadhaarNumber(compacted) || hasLabeledChineseResidentIdNumber(compacted)
+			|| hasLabeledIndianPanNumber(compacted)
 			|| hasLabeledPaymentCard(compacted) || hasLabeledCardSecurityCode(compacted)
 			|| hasLabeledPin(compacted) || hasLabeledOneTimeAuthCode(compacted)
 			|| hasLabeledRecoveryCode(compacted);
@@ -3230,6 +3289,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN,
 	LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN,
+	LABELED_CHINESE_RESIDENT_ID_NUMBER_BOUNDARY_PATTERN,
 	LABELED_INDIAN_PAN_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
@@ -3337,6 +3397,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN
+		&& pattern !== LABELED_CHINESE_RESIDENT_ID_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_INDIAN_PAN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
@@ -3434,6 +3495,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidNewZealandIrdNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN
 					&& !isValidAadhaarNumber(match[1]!)) continue;
+				if (sourcePattern === LABELED_CHINESE_RESIDENT_ID_NUMBER_BOUNDARY_PATTERN
+					&& !isValidChineseResidentIdNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_INDIAN_PAN_BOUNDARY_PATTERN
 					&& !isValidIndianPanNumber(match[1]!)) continue;
 				if (sourcePattern === US_ITIN_BOUNDARY_PATTERN
