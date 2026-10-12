@@ -5743,6 +5743,64 @@ test("Aadhaar values crossing either retained prompt boundary are detected", () 
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens conventionally formatted Indian PAN values only with an explicit label", () => {
+	const identifiers = [
+		"PAN: ZZZPZ9876Q",
+		"PAN Number=QQQFQ2345Z",
+		"PAN No.: XXXTZ3141Y",
+		"PAN Card: RRRHR6789M",
+		"Permanent Account Number: LLLAL5432N",
+	];
+	for (const identifier of identifiers) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const identifier of [
+		"PAN: ZZZPZ٩٨٧٦Q",
+		"PAN: ZZZPZ98\u200b76Q",
+	]) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"ZZZPZ9876Q",
+		"PAN: ZZZXZ9876Q",
+		"PAN: ZZZPZ987Q",
+		"PAN: ZZZPZ98765Q",
+		"PAN Number ZZZPZ9876Q",
+		"PAN: ZZZPZABCDQ",
+		"PAN number validation in the task",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("Indian PAN values crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const label = " PAN Number: ";
+
+	for (const value of ["ZZZPZ9876Q", "ZZZPZ٩٨٧٦Q"]) {
+		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+			const before = "x".repeat(valueStart - label.length);
+			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const invalidPrompt = `${"x".repeat(prefixLength - 4 - label.length)}${label}ZZZXZ9876Q ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens check-digit-valid Brazilian CPF values only with an explicit label", () => {
 	const identifiers = [
 		"CPF: 529.982.247-25",

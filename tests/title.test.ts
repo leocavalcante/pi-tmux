@@ -6322,6 +6322,85 @@ test("Aadhaar numbers crossing either retained prompt boundary skip model lookup
 	}
 });
 
+test("rejects explicitly labeled structurally valid Indian PANs without exposing them", async () => {
+	const identifiers = [
+		"PAN: ZZZPZ9876Q",
+		"PAN Number=QQQFQ2345Z",
+		"PAN No.: XXXTZ3141Y",
+		"PAN Card: RRRHR6789M",
+		"Permanent Account Number: LLLAL5432N",
+		"PAN: ZZZPZ٩٨٧٦Q",
+		"PAN: ZZZPZ98\u200b76Q",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the Indian tax record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"ZZZPZ9876Q",
+		"PAN: ZZZXZ9876Q",
+		"PAN: ZZZPZ987Q",
+		"PAN: ZZZPZ98765Q",
+		"PAN Number ZZZPZ9876Q",
+		"PAN: ZZZPZABCDQ",
+		"PAN number validation in the task",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("pan parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("pan parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("Indian PAN numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const label = " PAN Number: ";
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const value of ["ZZZPZ9876Q", "ZZZPZ٩٨٧٦Q"]) {
+		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+			const before = "x".repeat(valueStart - label.length);
+			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const f = fixture();
+			const find = spyOn(f.ctx.modelRegistry, "find");
+			f.input(prompt);
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(f.requests).toHaveLength(0);
+			expect(f.state.title).toBe("existing task");
+			expect(f.warnings).toEqual([warning]);
+			expect(f.warnings.join(" ")).not.toContain(value);
+		}
+	}
+});
+
 test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them", async () => {
 	const identifiers = [
 		"SIN: 712-345-677",
