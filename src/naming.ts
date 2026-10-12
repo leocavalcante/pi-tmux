@@ -176,7 +176,7 @@ const UK_NATIONAL_INSURANCE_NUMBER_PATTERN = new RegExp(
 );
 // Require a phone-related label and a phone-number-shaped value of 7–15 digits.
 const LABELED_PHONE_PATTERN = /(?<![\p{L}\p{N}])(?:phone|telephone|mobile|cell(?:ular)?)(?:[-_\s]?number)?\s*["']?\s*[:=]\s*["']?[\s(]*(\+?\p{Nd}(?:[ .()-]?\p{Nd}){6,14})(?![\p{L}\p{N}_])/iu;
-const LABELED_PAYMENT_CARD_PATTERN = /(?<![\p{L}\p{N}])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no))?|card(?:[-_\s]?(?:number|no))?|cc[-_\s]?(?:number|no)|ccn)\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){12,18})(?![\p{L}\p{N}_])/iu;
+const LABELED_PAYMENT_CARD_PATTERN = /(?<![\p{L}\p{N}])(?:(?:credit|debit|payment)[-_\s]?card(?:[-_\s]?(?:number|no\.?))?|card(?:[-_\s]?(?:number|no\.?))?|cc[-_\s]?(?:number|no\.?|#)|ccn)\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){12,18})(?![\p{L}\p{N}_])/iu;
 // CPF is Brazil's 11-digit personal tax identifier. Require an explicit label
 // and validate both check digits to avoid flagging arbitrary digit strings as PII.
 const LABELED_CPF_PATTERN = /(?<![\p{L}\p{N}])(?:cpf(?:[-_\s]?(?:number|no))?|cadastro[-_\s]+de[-_\s]+pessoas[-_\s]+f[ií]sicas?)\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){10})(?![\p{L}\p{N}_])/iu;
