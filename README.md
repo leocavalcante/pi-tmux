@@ -401,15 +401,17 @@ For supported credential labels, YAML block scalars with tags or anchors are als
 checked, as are shorter non-placeholder password/passphrase assignments and
 recognizable PEM, OpenSSH, PGP, SSH2, and PuTTY private-key file markers. The
 context scanner also checks recognizable ASCII and internationalized email
-addresses, explicitly labeled U.S. SSN-shaped values, ITINs in recognized IRS
-number ranges, and EINs in the conventional 2-7 digit format,
-calendar-valid numeric dates following explicit date-of-birth labels,
-UK National Insurance numbers, explicitly labeled Brazilian CPF values
-with valid check digits, and explicitly labeled Canadian SIN values with valid
-Luhn check digits. Explicitly labeled IBANs with supported country lengths and
-valid MOD 97 checksums are checked too. Phone numbers and Luhn-valid, explicitly
-labeled payment-card-shaped values are checked too,
-including values written with Unicode decimal digits.
+addresses, explicitly labeled U.S. SSN-shaped values, explicitly labeled
+ITINs in recognized IRS number ranges, and explicitly labeled EINs in the
+conventional 2-7 digit format, calendar-valid numeric dates following explicit
+date-of-birth labels, UK National Insurance numbers, explicitly labeled
+Brazilian CPF values with valid check digits, explicitly labeled Canadian SIN
+values with valid Luhn check digits, and explicitly labeled Australian TFNs
+with valid checksums.
+Explicitly labeled IBANs with supported country lengths and valid MOD 97
+checksums are checked too. Phone numbers and Luhn-valid, explicitly labeled
+payment-card-shaped values are checked too, including values written with
+Unicode decimal digits.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
 deduplication cache. This is a limited, best-effort check, not comprehensive
@@ -429,14 +431,15 @@ provider-specific credential formats and private-key file markers,
 credential-bearing URLs, authorization
 values, and labeled credential patterns. It also checks recognizable ASCII
 and internationalized email addresses, explicitly labeled U.S. SSN-shaped
-values, ITINs in recognized IRS number ranges, and EINs in the conventional 2-7
-digit format, calendar-valid numeric dates following explicit date-of-birth
-labels, UK National Insurance numbers, explicitly labeled Brazilian
-CPF values with valid check digits, and explicitly labeled Canadian SIN values
-with valid Luhn check digits. Explicitly labeled IBANs with supported country
-lengths and valid MOD 97 checksums are checked too. Phone numbers and Luhn-valid,
-explicitly labeled payment-card-shaped values are checked too, including values
-written with Unicode decimal digits.
+values, explicitly labeled ITINs in recognized IRS number ranges, and explicitly
+labeled EINs in the conventional 2-7 digit format, calendar-valid numeric dates
+following explicit date-of-birth labels, UK National Insurance numbers,
+explicitly labeled Brazilian CPF values with valid check digits, explicitly
+labeled Canadian SIN values with valid Luhn check digits, and explicitly
+labeled Australian TFNs with valid checksums. Explicitly labeled IBANs with
+supported country lengths and valid MOD 97 checksums are checked too. Phone numbers and Luhn-valid, explicitly
+labeled payment-card-shaped values are checked too, including values written
+with Unicode decimal digits.
 Supported YAML block-scalar forms with tags or anchors, plus shorter
 non-placeholder password/passphrase assignments, are checked too. A view with whitespace, control, and format
 characters removed catches some obfuscated values.

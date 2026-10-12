@@ -6016,6 +6016,82 @@ test("rejects Grafana tokens without mistaking near-miss strings for tokens", as
 	}
 });
 
+test("rejects explicitly labeled Australian TFNs with valid checksums without exposing them", async () => {
+	const identifiers = [
+		"TFN: 806 314 275",
+		"TFN Number=806314275",
+		"TFN No.: 806-314-275",
+		"Tax File Number: 806314275",
+		"Australian Tax File No.: 806314275",
+		"TFN: ٨٠٦٣١٤٢٧٥",
+		"TFN: 806 31\u200b4 275",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the tax record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"806314275",
+		"TFN: 806 314 276",
+		"TFN: 000000000",
+		"TFN No. 806314275",
+		"TFN processing",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("tfn parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("tfn parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("Australian TFNs crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const label = " TFN: ";
+	const value = "806314275";
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const valueStart of [prefixLength - 4, suffixStart - 4]) {
+		const before = "x".repeat(valueStart - label.length);
+		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+		expect(prompt).toHaveLength(promptLength);
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(value);
+	}
+});
+
 test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them", async () => {
 	const identifiers = [
 		"SIN: 712-345-677",
