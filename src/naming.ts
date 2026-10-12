@@ -2052,7 +2052,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 
 // Require the beginning of a local-part run; without this, long non-email text
 // makes the unbounded local-part repetition retry from every character.
-const EMAIL_ADDRESS_PATTERN = /(?<![A-Z0-9._%+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+const EMAIL_ADDRESS_PATTERN = /(?<![\p{L}\p{M}\p{N}._%+-])[\p{L}\p{M}\p{N}._%+-]+@[\p{L}\p{M}\p{N}.-]+\.[\p{L}\p{M}]{2,}/iu;
 const EMAIL_ADDRESS_BOUNDARY_PATTERN = makeBoundaryPattern(
 	EMAIL_ADDRESS_PATTERN,
 	EMAIL_ADDRESS_PATTERN.source,

@@ -395,8 +395,9 @@ values, and long values assigned to common credential labels, including explicit
 For supported credential labels, YAML block scalars with tags or anchors are also
 checked, as are shorter non-placeholder password/passphrase assignments and
 recognizable PEM, OpenSSH, PGP, SSH2, and PuTTY private-key file markers. The
-context scanner also checks conventional email addresses and explicitly
-labeled U.S. SSN-, phone-, and Luhn-valid payment-card-shaped values.
+context scanner also checks recognizable ASCII and internationalized email
+addresses and explicitly labeled U.S. SSN-, phone-, and Luhn-valid
+payment-card-shaped values.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
 deduplication cache. This is a limited, best-effort check, not comprehensive
@@ -414,12 +415,12 @@ titles. Before applying a response, the extension checks raw and
 compatibility-normalized output against the same limited set of selected
 provider-specific credential formats and private-key file markers,
 credential-bearing URLs, authorization
-values, and labeled credential patterns. It also checks conventional email
-addresses and explicitly labeled U.S. SSN-, phone-, and Luhn-valid
-payment-card-shaped values. Supported YAML block-scalar forms with tags or
-anchors and shorter non-placeholder password/passphrase assignments are
-checked too. A view with whitespace, control, and format characters removed
-catches some obfuscated values.
+values, and labeled credential patterns. It also checks recognizable ASCII
+and internationalized email addresses and explicitly labeled U.S. SSN-,
+phone-, and Luhn-valid payment-card-shaped values. Supported YAML block-scalar
+forms with tags or anchors and shorter non-placeholder password/passphrase
+assignments are checked too. A view with whitespace, control, and format
+characters removed catches some obfuscated values.
 Rejected responses are not included in warnings. These limited checks are
 defense in depth, not comprehensive secret or personal-information redaction.
 Do not put secrets into prompts.
