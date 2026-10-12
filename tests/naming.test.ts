@@ -3441,6 +3441,64 @@ test("screens OneDrive short-link IDs across retained-context boundaries", () =>
 	}
 });
 
+test("screens Microsoft Graph OneDrive share tokens across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const tokens = ["A".repeat(48), "ab_CD-".repeat(8)];
+	const urls = [
+		`https://graph.microsoft.com/v1.0/shares/u!${tokens[0]}`,
+		`https://graph.microsoft.com/beta/shares/u!${tokens[1]}/driveItem?$select=id`,
+	];
+	const promptAt = (url: string, token: string, start: number) => {
+		const urlStart = start - url.indexOf(token);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const [index, url] of urls.entries()) {
+		const token = tokens[index]!;
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscatedToken = `${token.slice(0, 16)}\u200b${token.slice(16)}`;
+		const obfuscated = url.replace(token, obfuscatedToken);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			for (const { text, value } of [{ text: url, value: token }, { text: obfuscated, value: obfuscatedToken }]) {
+				const context = buildNamingRequestContext([], promptAt(text, value, tokenStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const omitted = buildNamingRequestContext([], promptAt(urls[0]!, tokens[0]!, prefixLength + 5));
+	expect(omitted.hasSensitiveBoundary()).toBe(false);
+
+	const nearMisses = [
+		`https://graph.microsoft.com/v1.0/shares/u!${"a".repeat(23)}`,
+		`https://graph.microsoft.com/v1.0/shares/u!${"a".repeat(513)}`,
+		`https://graph.microsoft.com.evil.test/v1.0/shares/u!${tokens[0]}`,
+		`https://evil.graph.microsoft.com/v1.0/shares/u!${tokens[0]}`,
+		`https://example.test/v1.0/shares/u!${tokens[0]}`,
+		`https://graph.microsoft.com/v2.0/shares/u!${tokens[0]}`,
+		`https://graph.microsoft.com/v1.0/users/me/drive/sharedWithMe/u!${tokens[0]}`,
+		`https://graph.microsoft.com/v1.0/shares/${tokens[0]}`,
+		`discussion of an encoded OneDrive share token u!${tokens[0]}`,
+	];
+	for (const value of nearMisses) {
+		expect(hasSensitiveNamingContext(value)).toBe(false);
+		expect(hasSensitiveOutput(value)).toBe(false);
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			expect(buildNamingRequestContext([], promptAt(value, tokens[0]!, tokenStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Google Drive resource-key API headers across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
