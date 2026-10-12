@@ -3021,6 +3021,39 @@ test("Apple iCloud shared-album links stay out of naming context and model outpu
 	}
 });
 
+test("Apple iCloud Photo links stay out of naming context and model output", async () => {
+	const links = [
+		{
+			url: `https://www.icloud.com/photos/#/icloudlinks/${"A".repeat(16)}`,
+			token: "A".repeat(16),
+		},
+		{
+			url: `https://share.icloud.com/photos/${"B".repeat(18)}`,
+			token: "B".repeat(18),
+		},
+	];
+	for (const { url, token } of links) {
+		const sensitiveContext = fixture();
+		sensitiveContext.input(`Review this iCloud photo: ${url}`);
+		await settle();
+		expect(sensitiveContext.requests).toHaveLength(0);
+		expect(sensitiveContext.state.title).toBe("existing task");
+		expect(sensitiveContext.warnings).toEqual([
+			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+		]);
+		expect(sensitiveContext.warnings.join(" ")).not.toContain(token);
+
+		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+		sensitiveOutput.input("Name a task");
+		await settle();
+		expect(sensitiveOutput.requests).toHaveLength(1);
+		expect(sensitiveOutput.state.title).toBe("existing task");
+		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
+	}
+});
+
 test("credential-shaped model output is rejected without applying or disclosing it", async () => {
 	const githubToken = ["ghp_", "a".repeat(20)].join("");
 	const googleApiKey = `AIza${"A".repeat(35)}`;
