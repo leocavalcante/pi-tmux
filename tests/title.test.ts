@@ -6486,6 +6486,90 @@ test("bank-account numbers crossing either retained prompt boundary skip model l
 	}
 });
 
+test("rejects explicitly labeled payment-card security codes without exposing them", async () => {
+	const codes = [
+		"CVV: 483",
+		"CVV2 Code: 6190",
+		"CVC=274",
+		"CVC2: 615",
+		"Card CVV: 741",
+		"Credit Card Security Code: 3805",
+		"Card Verification Value: 9304",
+		"Card Verification Code: ٨٢٠",
+		"Card Security Code: １２３４",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const code of codes) {
+		expect(hasSensitiveNamingContext(code)).toBe(true);
+		expect(hasSensitiveOutput(code)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the card detail ${code}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(code);
+
+		const output = fixture([Promise.resolve(response(code))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(code);
+	}
+
+	for (const nearMiss of [
+		"483",
+		"Security Code: 483",
+		"Order security code: 483",
+		"CVV: 12",
+		"CVV: 12345",
+		"CVV 483",
+		"CVV is 483",
+		"Card Security Code: 12345",
+		"Card Verification Value: 12",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("CVV parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("cvv parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("payment-card security codes crossing retained prompt boundaries skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const label of [" CVV: ", " Card Security Code: ", " Card Verification Value: "]) {
+		for (const value of ["483", "6190"]) {
+			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const f = fixture();
+				const find = spyOn(f.ctx.modelRegistry, "find");
+				f.input(prompt);
+				await settle();
+				expect(find).not.toHaveBeenCalled();
+				expect(f.requests).toHaveLength(0);
+				expect(f.state.title).toBe("existing task");
+				expect(f.warnings).toEqual([warning]);
+				expect(f.warnings.join(" ")).not.toContain(value);
+			}
+		}
+	}
+});
+
 test("rejects explicitly labeled passport numbers without exposing them", async () => {
 	const identifiers = [
 		"Passport Number: QX730194",
@@ -8662,6 +8746,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 		"Passport Number: QX730194",
 		"Passport Card Number: R8K2M519",
 		"Bank Account Number: 4829163705",
+		"CVV: 483",
+		"Card Verification Value: 9304",
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`client-key-data: ${"A".repeat(44)}`,

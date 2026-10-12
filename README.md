@@ -421,8 +421,11 @@ Because bank-account formats vary, only explicitly labeled bank-account-like
 values with 6–17 decimal digits are screened; spaces or hyphens may separate
 the digits. Because passport formats vary, only explicitly labeled passport-like
 values with 6–12 ASCII alphanumeric characters and at least one digit are checked.
-Phone numbers and Luhn-valid, explicitly labeled payment-card-shaped values
-are checked too, including values written with Unicode decimal digits.
+Explicitly labeled card verification codes (CVV/CVC and card-specific
+verification/security-code labels) with 3–4 decimal digits are also screened;
+generic security-code labels are not. Phone numbers and Luhn-valid, explicitly
+labeled payment-card-shaped values are checked too, including values written
+with Unicode decimal digits.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
 deduplication cache. This is a limited, best-effort check, not comprehensive
@@ -461,8 +464,11 @@ formats vary, only explicitly labeled bank-account-like values with 6–17
 decimal digits are screened; spaces or hyphens may separate the digits.
 Because passport formats vary, only explicitly labeled passport-like values
 with 6–12 ASCII alphanumeric characters and at least one digit are checked.
-Phone numbers and Luhn-valid, explicitly labeled payment-card-shaped values
-are checked too, including values written with Unicode decimal digits.
+Explicitly labeled card verification codes (CVV/CVC and card-specific
+verification/security-code labels) with 3–4 decimal digits are also screened;
+generic security-code labels are not. Phone numbers and Luhn-valid, explicitly
+labeled payment-card-shaped values are checked too, including values written
+with Unicode decimal digits.
 Supported YAML block-scalar forms with tags or anchors, plus shorter
 non-placeholder password/passphrase assignments, are checked too. A view with whitespace, control, and format
 characters removed catches some obfuscated values.
