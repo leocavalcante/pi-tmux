@@ -430,7 +430,9 @@ remain unmatched ([official overview](https://www.service-public.fr/particuliers
 [INSEE format and check-key specification](https://xml.insee.fr/schema/nir.html)).
 Spanish DNI and NIE numbers with a valid modulo-23 control letter are checked
 only with Spain-specific or unambiguous Spanish-language labels; generic DNI,
-NIE, and NIF labels remain unmatched. Explicitly labeled Indian PAN
+NIE, and NIF labels remain unmatched. See the [Ministry of the Interior
+control-digit guide][spanish-nif-guide] for the modulo-23 remainder rule and
+NIE-prefix conversion. Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are
@@ -504,7 +506,9 @@ remain unmatched ([official overview](https://www.service-public.fr/particuliers
 [INSEE format and check-key specification](https://xml.insee.fr/schema/nir.html)).
 Spanish DNI and NIE numbers with a valid modulo-23 control letter are checked
 only with Spain-specific or unambiguous Spanish-language labels; generic DNI,
-NIE, and NIF labels remain unmatched. Explicitly labeled Indian PAN
+NIE, and NIF labels remain unmatched. See the [Ministry of the Interior
+control-digit guide][spanish-nif-guide] for the modulo-23 remainder rule and
+NIE-prefix conversion. Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are
@@ -595,3 +599,5 @@ and the [package-existence prerequisite](https://docs.npmjs.com/cli/v11/commands
 ## License
 
 [MIT](LICENSE).
+
+[spanish-nif-guide]: https://www.interior.gob.es/opencms/en/servicios-al-ciudadano/tramites-y-gestiones/dni/calculo-del-digito-de-control-del-nif-nie/
