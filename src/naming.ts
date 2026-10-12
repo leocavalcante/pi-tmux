@@ -163,6 +163,11 @@ const OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN = new RegExp(
 	OBFUSCATED_BEARER_TOKEN_PATTERN.source, `${OBFUSCATED_BEARER_TOKEN_PATTERN.flags}g`,
 );
 const US_SSN_PATTERN = /(?<![\p{L}\p{N}])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
+const US_ITIN_VALUE_PATTERN = String.raw`\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4}`;
+const US_ITIN_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])(?:itin(?:[-_\s]?(?:number|no))?|individual[-_\s]+taxpayer[-_\s]+identification(?:[-_\s]+(?:number|no))?)\s*["']?\s*[:=]\s*["']?(${US_ITIN_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	"iu",
+);
 // UK NI prefixes exclude D/F/I/Q/U/V first, and D/F/I/O/Q/U/V second; suffixes are A–D.
 const UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN = String.raw`[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z][-\s]?\p{Nd}{2}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{2}[-\s]?[A-D]`;
 const UK_NATIONAL_INSURANCE_NUMBER_PATTERN = new RegExp(
@@ -1215,6 +1220,11 @@ const US_SSN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"(\\p{Nd}{3}[-\\s]?\\p{Nd}{2}[-\\s]?\\p{Nd}{4})",
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){2}[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){3})`,
 );
+const US_ITIN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	US_ITIN_PATTERN,
+	`(${US_ITIN_VALUE_PATTERN})`,
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){2}[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){3})`,
+);
 const UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	UK_NATIONAL_INSURANCE_NUMBER_PATTERN,
 	`(${UK_NATIONAL_INSURANCE_NUMBER_VALUE_PATTERN})`,
@@ -2176,6 +2186,23 @@ function hasLabeledCanadianSin(value: string): boolean {
 	return false;
 }
 
+// ITINs start with 9; the fourth and fifth digits use the IRS-issued ranges.
+function isValidUsItinNumber(value: string): boolean {
+	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) => {
+		if (digits.length !== 9 || digits[0] !== "9") return false;
+		const group = Number(digits.slice(3, 5));
+		return (group >= 70 && group <= 88) || (group >= 90 && group <= 92) || (group >= 94 && group <= 99);
+	});
+}
+
+function hasLabeledUsItin(value: string): boolean {
+	const pattern = new RegExp(US_ITIN_PATTERN.source, `${US_ITIN_PATTERN.flags}g`);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidUsItinNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
 function hasBearerToken(value: string): boolean {
 	const pattern = new RegExp(BEARER_TOKEN_PATTERN.source, `${BEARER_TOKEN_PATTERN.flags}g`);
 	for (const match of value.matchAll(pattern)) {
@@ -2362,7 +2389,7 @@ function hasObfuscatedBearerToken(value: string): boolean {
 export function hasSensitiveNamingContext(text: string): boolean {
 	const hasSensitiveValue = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 		|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
-		|| US_SSN_PATTERN.test(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
+		|| US_SSN_PATTERN.test(value) || hasLabeledUsItin(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
@@ -2378,7 +2405,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| hasWhitespaceSeparatedCredential(value)
 			|| COMPACTED_CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
 			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_SSN_PATTERN.test(compacted)
-			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
+			|| hasLabeledUsItin(compacted) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
@@ -2395,7 +2422,7 @@ export function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_SSN_PATTERN.test(value)
-			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
+			|| hasLabeledUsItin(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
@@ -2409,7 +2436,8 @@ export function hasSensitiveOutput(text: string): boolean {
 		return (withoutFormatCharacters !== value && hasPattern(withoutFormatCharacters))
 			|| hasWhitespaceSeparatedCredential(value)
 			|| SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
-			|| hasLabeledCpf(compacted) || hasLabeledCanadianSin(compacted) || hasLabeledPaymentCard(compacted);
+			|| hasLabeledUsItin(compacted) || hasLabeledCpf(compacted)
+			|| hasLabeledCanadianSin(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	return distinctTextVariants(text, compatibilityNormalized, compatibilityNormalized.toLowerCase()).some((value) =>
@@ -2577,6 +2605,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	DISCORD_MFA_TOKEN_BOUNDARY_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_BOUNDARY_PATTERN,
 	US_SSN_BOUNDARY_PATTERN,
+	US_ITIN_BOUNDARY_PATTERN,
 	UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_CPF_BOUNDARY_PATTERN,
 	LABELED_CANADIAN_SIN_BOUNDARY_PATTERN,
@@ -2668,6 +2697,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== BASIC_AUTHORIZATION_BLOCK_BOUNDARY_PATTERN
 		&& pattern !== DOCKER_AUTH_BOUNDARY_PATTERN
 		&& pattern !== US_SSN_BOUNDARY_PATTERN
+		&& pattern !== US_ITIN_BOUNDARY_PATTERN
 		&& pattern !== UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CPF_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CANADIAN_SIN_BOUNDARY_PATTERN
@@ -2747,6 +2777,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidCpfNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_CANADIAN_SIN_BOUNDARY_PATTERN
 					&& !isValidCanadianSinNumber(match[1]!)) continue;
+				if (sourcePattern === US_ITIN_BOUNDARY_PATTERN
+					&& !isValidUsItinNumber(match[1]!)) continue;
 				const encoded = match[1]!.replace(/[\p{Cc}\p{Cf}]/gu, "");
 				if ((sourcePattern === NPM_AUTH_BOUNDARY_PATTERN
 					|| sourcePattern === BASIC_AUTHORIZATION_BOUNDARY_PATTERN

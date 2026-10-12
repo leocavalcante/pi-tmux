@@ -401,10 +401,11 @@ For supported credential labels, YAML block scalars with tags or anchors are als
 checked, as are shorter non-placeholder password/passphrase assignments and
 recognizable PEM, OpenSSH, PGP, SSH2, and PuTTY private-key file markers. The
 context scanner also checks recognizable ASCII and internationalized email
-addresses, explicitly labeled U.S. SSNs and UK National Insurance numbers,
-explicitly labeled Brazilian CPF values with valid check digits, and explicitly
-labeled Canadian SIN values with valid Luhn check digits. Phone numbers and
-Luhn-valid, explicitly labeled payment-card-shaped values are checked too,
+addresses, explicitly labeled U.S. SSNs and ITINs in recognized IRS number
+ranges, UK National Insurance numbers, explicitly labeled Brazilian CPF values
+with valid check digits, and explicitly labeled Canadian SIN values with valid
+Luhn check digits. Phone numbers and Luhn-valid, explicitly labeled
+payment-card-shaped values are checked too,
 including values written with Unicode decimal digits.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
@@ -424,11 +425,12 @@ compatibility-normalized output against the same limited set of selected
 provider-specific credential formats and private-key file markers,
 credential-bearing URLs, authorization
 values, and labeled credential patterns. It also checks recognizable ASCII
-and internationalized email addresses, explicitly labeled U.S. SSNs and UK
-National Insurance numbers, explicitly labeled Brazilian CPF values with valid
-check digits, and explicitly labeled Canadian SIN values with valid Luhn check
-digits. Phone numbers and Luhn-valid, explicitly labeled payment-card-shaped
-values are checked too, including values written with Unicode decimal digits.
+and internationalized email addresses, explicitly labeled U.S. SSNs and ITINs
+in recognized IRS number ranges, UK National Insurance numbers, explicitly
+labeled Brazilian CPF values with valid check digits, and explicitly labeled
+Canadian SIN values with valid Luhn check digits. Phone numbers and Luhn-valid,
+explicitly labeled payment-card-shaped values are checked too, including values
+written with Unicode decimal digits.
 Supported YAML block-scalar forms with tags or anchors, plus shorter
 non-placeholder password/passphrase assignments, are checked too. A view with whitespace, control, and format
 characters removed catches some obfuscated values.
