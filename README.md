@@ -149,11 +149,13 @@ A bare `/tmux-title` leaves an active pin alone.
 ### Inspect title status
 
 Run `/tmux-title status` for a read-only snapshot of the title mode, naming
-configuration, pending naming work, and local waiting state. It shows pane,
-window, and session IDs, their waiting flags, and queued former-location repairs.
+configuration, pending naming work, the last rejected-title category, and local
+waiting state. It shows pane, window, and session IDs, their waiting flags, and
+queued former-location repairs.
 
 Status makes no AI requests, collects no dialogue, and never writes titles or
-flags to tmux. It omits names, model-setting values, and provider errors.
+flags to tmux. It omits names, model-setting values, model output, and provider
+errors; rejection details are limited to a fixed category and a manual-title hint.
 `AI naming: configured` means the setting is valid, not that the model or its
 credentials are available. Status checks the tmux server identity in its
 snapshot. If it detects a restart, it fails closed locally, cancelling naming
@@ -273,7 +275,9 @@ Repeat the command to retry them.
   Extension-injected input does not directly request a title; later refreshes
   can include resulting dialogue.
 - Naming failures keep the existing task name; waiting status can still
-  update. At most one automatic warning appears per extension load. Identical
+  update. Shape-only rejections (multiple lines, title length, or word count)
+  are quiet and appear only as a fixed category in `/tmux-title status`. Other
+  failures can show at most one automatic warning per extension load. Identical
   context is not retried automatically after a failed naming request.
   `/tmux-title` allows another warning if the explicit retry fails.
 

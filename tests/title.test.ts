@@ -1004,12 +1004,12 @@ test("accepts ordinary surrounding spaces in naming output", async () => {
 });
 
 test.each([
-	["I'll inspect the conversation and choose a title.", "The naming model title exceeded the 24-character limit; the current title was kept.", true],
-	["one two three four five", "The naming model title exceeded the 4-word limit; the current title was kept.", true],
-	["fix ssh\nhelpers", "The naming model returned multiple lines; the current title was kept. Retry with /tmux-title or set it with /tmux-title set <name>.", true],
-	["investigate authentication failures", "The naming model title exceeded the 24-character limit; the current title was kept.", true],
-	["---", "The naming model returned no usable title; the current title was kept.", false],
-])("rejects output that remains invalid after at most one retry: %s", async (output, warning, retry) => {
+	{ output: "I'll inspect the conversation and choose a title.", warning: undefined, retry: true, category: "title length" },
+	{ output: "one two three four five", warning: undefined, retry: true, category: "word count" },
+	{ output: "fix ssh\nhelpers", warning: undefined, retry: true, category: "multiple lines" },
+	{ output: "investigate authentication failures", warning: undefined, retry: true, category: "title length" },
+	{ output: "---", warning: "The naming model returned no usable title; the current title was kept.", retry: false, category: "empty response" },
+])("rejects output that remains invalid after at most one retry: $output", async ({ output, warning, retry, category }) => {
 	const results = [Promise.resolve(response(output))];
 	if (retry) results.push(Promise.resolve(response(output)));
 	const f = fixture(results);
@@ -1018,7 +1018,42 @@ test.each([
 	expect(f.requests).toHaveLength(retry ? 2 : 1);
 	expect(f.state.title).toBe("existing task");
 	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual([warning]);
+	expect(f.warnings).toEqual(warning ? [warning] : []);
+	await f.refresh("status");
+	const status = f.notices.at(-1)!;
+	expect(status).toContain(`Last naming rejection: ${category}; current title kept. Set manually with /tmux-title set <name>.`);
+	expect(status).not.toContain(output);
+});
+
+test("shape-only rejections do not hide a later actionable naming warning", async () => {
+	const f = fixture([
+		Promise.resolve(response("one two three four five")),
+		Promise.resolve(response("one two three four five")),
+		Promise.resolve(response("", "error")),
+	]);
+	f.input("First task");
+	await settle();
+	expect(f.warnings).toEqual([]);
+	f.input("Second task");
+	await settle();
+	expect(f.warnings).toEqual(["tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry."]);
+});
+
+test("a successful title clears the last rejection from status", async () => {
+	const f = fixture([
+		Promise.resolve(response("one two three four five")),
+		Promise.resolve(response("one two three four five")),
+		Promise.resolve(response("fix auth tests")),
+	]);
+	f.input("First task");
+	await settle();
+	await f.refresh("status");
+	expect(f.notices.at(-1)).toContain("Last naming rejection: word count;");
+	f.input("Second task");
+	await settle();
+	expect(f.state.title).toBe("fix auth tests");
+	await f.refresh("status");
+	expect(f.notices.at(-1)).toContain("Last naming rejection: none");
 });
 
 test("does not apply a short-looking response truncated by the token limit", async () => {
@@ -8099,6 +8134,7 @@ test.each([
 	expect(f.state.waitingPanes.size).toBe(0);
 	expect(f.state.activePanes.size).toBe(0);
 	expect(f.notices[0]).toContain("AI naming: " + expected);
+	expect(f.notices[0]).toContain("Last naming rejection: none");
 	expect(f.notices[0]).toContain("Targets: pane %1, window @2, session $0");
 	expect(f.notices[0]).toContain("Pending move repairs: windows 0, sessions 0");
 	expect(f.notices[0]).not.toContain(f.state.title);

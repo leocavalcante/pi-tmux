@@ -9,6 +9,7 @@ import {
 	NAMING_REQUEST_TIMEOUT_MS,
 	parseNamingModel,
 	requestNamingTitle,
+	type InvalidNamingTitleReason,
 } from "./naming.ts";
 import { cleanTitle, formatTitle, MAX_TITLE_INPUT_LENGTH, READY_PREFIX } from "./title.ts";
 import { notifySafely } from "./notify.ts";
@@ -46,15 +47,27 @@ import {
 
 const MAX_FORMER_TARGETS = 8;
 const MAX_LOCATION_PASSES = 4;
+type ShapeOnlyNamingRejection = Extract<InvalidNamingTitleReason, "multiple-lines" | "too-long" | "too-many-words">;
+
+const isShapeOnlyNamingRejection = (reason: InvalidNamingTitleReason): reason is ShapeOnlyNamingRejection =>
+	reason === "multiple-lines" || reason === "too-long" || reason === "too-many-words";
+
 const INVALID_NAMING_TITLE_WARNINGS = {
 	truncated: "The naming model hit its token limit before finishing a title; the current title was kept.",
 	"no-final-answer": "The naming model did not return a final answer; the current title was kept.",
-	"multiple-lines": "The naming model returned multiple lines; the current title was kept. Retry with /tmux-title or set it with /tmux-title set <name>.",
 	empty: "The naming model returned no usable title; the current title was kept.",
 	"too-many-blocks": "The naming model returned too many content blocks; the current title was kept.",
-	"too-long": "The naming model title exceeded the 24-character limit; the current title was kept.",
-	"too-many-words": "The naming model title exceeded the 4-word limit; the current title was kept.",
-} satisfies Record<InvalidNamingTitleError["reason"], string>;
+} satisfies Record<Exclude<InvalidNamingTitleReason, ShapeOnlyNamingRejection>, string>;
+
+const NAMING_REJECTION_CATEGORIES = {
+	truncated: "truncated response",
+	"no-final-answer": "no final answer",
+	"multiple-lines": "multiple lines",
+	empty: "empty response",
+	"too-many-blocks": "too many content blocks",
+	"too-long": "title length",
+	"too-many-words": "word count",
+} satisfies Record<InvalidNamingTitleReason, string>;
 
 export function createController(tmux: RunTmux) {
 	const idleTitleSetting = process.env.PI_TMUX_IDLE_TITLE ?? "zsh";
@@ -70,6 +83,7 @@ export function createController(tmux: RunTmux) {
 	let pending: AbortController | undefined;
 	let generation = 0;
 	let warned = false;
+	let lastNamingRejection: InvalidNamingTitleReason | undefined;
 	let baseTitle: string | undefined;
 	let manualTitle = false;
 	let candidateTitle: string | undefined;
@@ -141,6 +155,7 @@ export function createController(tmux: RunTmux) {
 		baseTitle = undefined;
 		manualTitle = false;
 		lastNamingContext = undefined;
+		lastNamingRejection = undefined;
 		cancel();
 		titleRevision++;
 		titleLifetime.abort();
@@ -511,6 +526,7 @@ export function createController(tmux: RunTmux) {
 		manualTitle = false;
 		pinnedTitleNeedsApply = false;
 		lastNamingContext = undefined;
+		lastNamingRejection = undefined;
 		return setWaiting(ctx, waitingValue);
 	};
 
@@ -528,6 +544,7 @@ export function createController(tmux: RunTmux) {
 			if (!namingModel) return;
 			const title = await requestNamingTitle(text, ctx, namingModel, controller.signal, isCurrent, true);
 			if (title === undefined || controller.signal.aborted || !isCurrent()) return;
+			lastNamingRejection = undefined;
 			candidateTitle = title;
 			// A late summary must retain the latest busy/waiting status.
 			void refreshTitle(ctx, pane, requestGeneration);
@@ -539,6 +556,8 @@ export function createController(tmux: RunTmux) {
 			} else if (error instanceof UnsafeNamingOutputError) {
 				warning = "Sensitive-looking naming output was not applied.";
 			} else if (error instanceof InvalidNamingTitleError) {
+				lastNamingRejection = error.reason;
+				if (isShapeOnlyNamingRejection(error.reason)) return;
 				warning = INVALID_NAMING_TITLE_WARNINGS[error.reason];
 			} else {
 				warning = "tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.";
@@ -623,6 +642,9 @@ export function createController(tmux: RunTmux) {
 				`Title mode: ${manualTitle ? "manual" : "automatic"}`,
 				`AI naming: ${invalidModelSetting ? "invalid configuration" : namingModel ? "configured" : "off"}`,
 				`Naming request: ${pending ? "pending" : candidateTitle ? "ready to apply" : "idle"}`,
+				`Last naming rejection: ${lastNamingRejection
+					? `${NAMING_REJECTION_CATEGORIES[lastNamingRejection]}; current title kept. Set manually with /tmux-title set <name>.`
+					: "none"}`,
 				`Local waiting: ${waiting ? "yes" : "no"}`,
 				`Targets: pane ${pane}, window ${window}, session ${session}`,
 				`tmux writes: ${serverIdentityChanged ? "stopped (server changed; restart Pi to resume)" : "enabled"}`,
@@ -655,6 +677,7 @@ export function createController(tmux: RunTmux) {
 		baseTitle = title;
 		pinnedTitleNeedsApply = true;
 		lastNamingContext = undefined;
+		lastNamingRejection = undefined;
 		const signal = titleLifetime.signal;
 		const commandGeneration = generation;
 		const update = refreshTitle(ctx, pane, undefined, true);
