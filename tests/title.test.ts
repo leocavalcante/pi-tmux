@@ -3048,6 +3048,34 @@ test("GoFile shared links stay out of naming context and model output", async ()
 	}
 });
 
+test("Wormhole share keys stay out of naming context and model output", async () => {
+	const keys = [`${"Ab3_-X".repeat(3)}QWER`, `${"A1b2_-".repeat(3)}QWER`];
+	const links = [
+		{ url: `https://wormhole.app/Test42#${keys[0]}`, key: keys[0]! },
+		{ url: `https://www.wormhole.app/Fake99#${keys[1]}`, key: keys[1]! },
+	];
+	for (const { url, key } of links) {
+		const sensitiveContext = fixture();
+		sensitiveContext.input(`Review this Wormhole share: ${url}`);
+		await settle();
+		expect(sensitiveContext.requests).toHaveLength(0);
+		expect(sensitiveContext.state.title).toBe("existing task");
+		expect(sensitiveContext.warnings).toEqual([
+			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+		]);
+		expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
+
+		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+		sensitiveOutput.input("Name a task");
+		await settle();
+		expect(sensitiveOutput.requests).toHaveLength(1);
+		expect(sensitiveOutput.state.title).toBe("existing task");
+		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
+	}
+});
+
 test("Filemail transfer links stay out of naming context and model output", async () => {
 	const links = [
 		{ url: "https://www.filemail.com/d/ifyvssdfbjbnzni", id: "ifyvssdfbjbnzni" },

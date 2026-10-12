@@ -3619,6 +3619,76 @@ test("screens GoFile shared-link IDs across retained-context boundaries", () => 
 	expect(buildNamingRequestContext([], promptAt(values[0]!.url, id, prefixLength + 2)).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens Wormhole share keys across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const keys = [`${"Ab3_-X".repeat(3)}QWER`, `${"A1b2_-".repeat(3)}QWER`];
+	const values = [
+		{ url: `https://wormhole.app/Test42#${keys[0]}`, key: keys[0]! },
+		{ url: `https://www.wormhole.app/Fake99#${keys[1]}`, key: keys[1]! },
+	];
+	const promptAt = (text: string, key: string, start: number) => {
+		const textStart = start - text.indexOf(key);
+		const prefix = `${"x".repeat(textStart - 1)} `;
+		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+	};
+
+	for (const { url, key } of values) {
+		expect(key).toHaveLength(22);
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscatedKey = `${key.slice(0, 11)}\u200b${key.slice(11)}`;
+		const obfuscated = url.replace(key, obfuscatedKey);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const candidate of [
+			{ text: url, key },
+			{ text: obfuscated, key: obfuscatedKey },
+		]) {
+			for (const keyStart of [prefixLength - 4, suffixStart - candidate.key.length + 4]) {
+				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.key, keyStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+
+		const historyContent = `${"x".repeat(996 - url.indexOf(key))} ${url} trailing text`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const context = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const { url, key } = values[0]!;
+	const nearMisses = [
+		`https://wormhole.app/Test42#${key.slice(1)}`,
+		`https://wormhole.app/Test42#${key}a`,
+		`https://wormhole.app/Test4#${key}`,
+		`https://wormhole.app/Test420#${key}`,
+		`https://wormhole.app.evil.test/Test42#${key}`,
+		`https://files.wormhole.app/Test42#${key}`,
+		`https://wormhole.app/share/Test42#${key}`,
+		`https://wormhole.app/Test42`,
+		`discussion of a Wormhole share key ${key}`,
+	];
+	for (const candidate of nearMisses) {
+		expect(hasSensitiveNamingContext(candidate)).toBe(false);
+		expect(hasSensitiveOutput(candidate)).toBe(false);
+		expect(buildNamingRequestContext([], promptAt(candidate, key, prefixLength - 4)).hasSensitiveBoundary()).toBe(false);
+		expect(buildNamingRequestContext([], promptAt(candidate, key, suffixStart - key.length + 4)).hasSensitiveBoundary()).toBe(false);
+	}
+
+	expect(buildNamingRequestContext([], promptAt(url, key, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Filemail transfer IDs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
