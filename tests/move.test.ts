@@ -158,7 +158,14 @@ test.skipIf(!hasTmux)("a server restart after lookup cannot apply the pending ba
 		expect(f.rawCalls.slice(beforeStatus)).toEqual([[
 			"display-message", "-p", "-t", pane, STATUS_SNAPSHOT_FORMAT,
 		]]);
-		expect(f.warnings).toEqual([]);
+		const serverChangeWarning = "The tmux server changed; restart Pi to resume title updates.";
+		expect(f.warnings).toEqual([serverChangeWarning]);
+		expect(f.warnings.join(" ")).not.toContain("Replacement");
+
+		const beforeLaterEvents = f.warnings.length;
+		await f.emit("agent_start");
+		await f.emit("agent_settled");
+		expect(f.warnings).toHaveLength(beforeLaterEvents);
 	});
 });
 

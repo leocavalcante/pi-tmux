@@ -47,6 +47,7 @@ import {
 
 const MAX_FORMER_TARGETS = 8;
 const MAX_LOCATION_PASSES = 4;
+const SERVER_CHANGED_WARNING = "The tmux server changed; restart Pi to resume title updates.";
 type ShapeOnlyNamingRejection = Extract<InvalidNamingTitleReason, "multiple-lines" | "too-long" | "too-many-words">;
 type NamingRejectionCategory = InvalidNamingTitleReason | "unsafe-output";
 
@@ -133,6 +134,7 @@ export function createController(tmux: RunTmux) {
 	let lastTitleLocation: { session: string; window: string } | undefined;
 	let pinnedTitleNeedsApply = false;
 	let serverIdentityChanged = false;
+	let serverChangeWarningShown = false;
 	const formerWindows = new Set<string>();
 	const formerSessions = new Set<string>();
 
@@ -175,9 +177,15 @@ export function createController(tmux: RunTmux) {
 		notifySafely(ctx, message, "warning");
 	};
 
+	const warnAutomaticServerChangeOnce = (ctx: ExtensionContext) => {
+		if (serverChangeWarningShown) return;
+		serverChangeWarningShown = true;
+		notifySafely(ctx, SERVER_CHANGED_WARNING, "warning");
+	};
+
 	const warnIfServerChanged = (ctx: ExtensionContext) => {
 		if (!serverIdentityChanged) return false;
-		notifySafely(ctx, "The tmux server changed; restart Pi to resume title updates.", "warning");
+		notifySafely(ctx, SERVER_CHANGED_WARNING, "warning");
 		return true;
 	};
 
@@ -198,11 +206,12 @@ export function createController(tmux: RunTmux) {
 		], signal);
 	};
 
-	const rememberLocation = (location: WindowSnapshot) => {
+	const rememberLocation = (location: WindowSnapshot, ctx: ExtensionContext, notifyOnServerChange: boolean) => {
 		// Once the server changes, the inherited TMUX_PANE could name an unrelated
 		// reused pane. Discard cached IDs and stop writes rather than claim ownership.
 		if (lastLocation?.server && location.server && lastLocation.server !== location.server) {
 			stopAfterServerChange();
+			if (notifyOnServerChange) warnAutomaticServerChangeOnce(ctx);
 			return;
 		}
 		if (location.sessionMetadataAvailable) trackedSessions.add(location.session);
@@ -316,6 +325,7 @@ export function createController(tmux: RunTmux) {
 		pane: string,
 		requestGeneration?: number,
 		applyStoredTitle = false,
+		notifyOnServerChange = false,
 	) => {
 		const revision = ++titleRevision;
 		const signal = titleLifetime.signal;
@@ -332,7 +342,7 @@ export function createController(tmux: RunTmux) {
 			// Validate the pane's current window before updating its status.
 			let current = await readWindowTitle(tmux, pane, signal);
 			if (!isCurrent()) return;
-			rememberLocation(current);
+			rememberLocation(current, ctx, notifyOnServerChange);
 			if (!isCurrent()) return;
 			// A pane can move again during marker writes or former-location repair.
 			// Refresh the new session and drain new targets, but bound repeated moves.
@@ -370,7 +380,7 @@ export function createController(tmux: RunTmux) {
 				// Resolve the fallback title and destination after the marker write.
 				current = await readWindowTitle(tmux, pane, signal);
 				if (!isCurrent()) return;
-				rememberLocation(current);
+				rememberLocation(current, ctx, notifyOnServerChange);
 				if (!isCurrent()) return;
 				const afterWrite = current;
 				if (formerWindows.size || formerSessions.size) {
@@ -378,7 +388,7 @@ export function createController(tmux: RunTmux) {
 					if (!isCurrent()) return;
 					current = await readWindowTitle(tmux, pane, signal);
 					if (!isCurrent()) return;
-					rememberLocation(current);
+					rememberLocation(current, ctx, notifyOnServerChange);
 					if (!isCurrent()) return;
 				}
 				if (before.window === current.window && before.session === current.session
@@ -448,7 +458,7 @@ export function createController(tmux: RunTmux) {
 				if (renameLocation.server && tmux.supportsServerPidGuard) {
 					current = await readWindowTitle(tmux, pane, signal);
 					if (!isCurrent()) return;
-					rememberLocation(current);
+					rememberLocation(current, ctx, notifyOnServerChange);
 					if (!isCurrent()) return;
 					if (current.window !== renameLocation.window || current.session !== renameLocation.session) stable = false;
 				}
@@ -479,7 +489,7 @@ export function createController(tmux: RunTmux) {
 				if (renameLocation.server && tmux.supportsServerPidGuard) {
 					current = await readWindowTitle(tmux, pane, signal);
 					if (!isCurrent()) return;
-					rememberLocation(current);
+					rememberLocation(current, ctx, notifyOnServerChange);
 					if (!isCurrent()) return;
 					if (current.window !== renameLocation.window || current.session !== renameLocation.session) stable = false;
 				}
@@ -511,15 +521,21 @@ export function createController(tmux: RunTmux) {
 		});
 	};
 
-	const setWaiting = (ctx: ExtensionContext, value: boolean) => {
+	const setWaiting = (ctx: ExtensionContext, value: boolean, notifyOnServerChange = true) => {
 		const pane = getPane(ctx);
 		if (!pane) return;
 		waiting = value;
 		// Lifecycle notifications keep their Promise<void> contract.
-		return refreshTitle(ctx, pane).then(() => {});
+		return refreshTitle(ctx, pane, undefined, false, notifyOnServerChange).then(() => {});
 	};
 
-	const reset = (ctx: ExtensionContext, title?: string, alive = true, waitingValue = false) => {
+	const reset = (
+		ctx: ExtensionContext,
+		title?: string,
+		alive = true,
+		waitingValue = false,
+		notifyOnServerChange = false,
+	) => {
 		cancel();
 		titleLifetime.abort();
 		titleLifetime = new AbortController();
@@ -529,7 +545,7 @@ export function createController(tmux: RunTmux) {
 		pinnedTitleNeedsApply = false;
 		lastNamingContext = undefined;
 		lastNamingRejection = undefined;
-		return setWaiting(ctx, waitingValue);
+		return setWaiting(ctx, waitingValue, notifyOnServerChange);
 	};
 
 	const nameWindow = async (
@@ -538,6 +554,7 @@ export function createController(tmux: RunTmux) {
 		ctx: ExtensionContext,
 		controller: AbortController,
 		requestGeneration: number,
+		notifyOnServerChange: boolean,
 	) => {
 		const timeout = setTimeout(() => controller.abort(), NAMING_REQUEST_TIMEOUT_MS);
 		timeout.unref();
@@ -549,7 +566,7 @@ export function createController(tmux: RunTmux) {
 			lastNamingRejection = undefined;
 			candidateTitle = title;
 			// A late summary must retain the latest busy/waiting status.
-			void refreshTitle(ctx, pane, requestGeneration);
+			void refreshTitle(ctx, pane, requestGeneration, false, notifyOnServerChange);
 		} catch (error) {
 			if (!isCurrent()) return;
 			let warning: string;
@@ -572,7 +589,7 @@ export function createController(tmux: RunTmux) {
 		}
 	};
 
-	const requestTitle = (ctx: ExtensionContext, prompt = "", force = false) => {
+	const requestTitle = (ctx: ExtensionContext, prompt = "", force = false, notifyOnServerChange = false) => {
 		const pane = getPane(ctx);
 		if (!pane || manualTitle || serverIdentityChanged) return false;
 		if (invalidModelSetting) {
@@ -608,13 +625,13 @@ export function createController(tmux: RunTmux) {
 		const controller = new AbortController();
 		pending = controller;
 		// Do not await: naming must never delay the agent's response.
-		void nameWindow(text, pane, ctx, controller, generation);
+		void nameWindow(text, pane, ctx, controller, generation, notifyOnServerChange);
 		return true;
 	};
 
 	const restoreTitle = (ctx: ExtensionContext, preserveWaiting = false) => {
-		const status = reset(ctx, undefined, true, preserveWaiting && waiting);
-		requestTitle(ctx);
+		const status = reset(ctx, undefined, true, preserveWaiting && waiting, true);
+		requestTitle(ctx, "", false, true);
 		return status;
 	};
 

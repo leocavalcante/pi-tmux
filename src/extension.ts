@@ -79,7 +79,7 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	pi.on("input", (event, ctx) => {
 		if (event.source !== "interactive" || !controller.getPane(ctx) || !HAS_NON_WHITESPACE.test(event.text)) return { action: "continue" };
 		void controller.setWaiting(ctx, false);
-		controller.requestTitle(ctx, event.text);
+		controller.requestTitle(ctx, event.text, false, true);
 		return { action: "continue" };
 	});
 
@@ -87,13 +87,13 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	// agent_end/turn_end can precede retries, tool work, or queued continuations.
 	pi.on("agent_settled", (_event, ctx) => {
 		const status = controller.setWaiting(ctx, true);
-		controller.requestTitle(ctx);
+		controller.requestTitle(ctx, "", false, true);
 		return status;
 	});
 	pi.on("session_start", (_event, ctx) => controller.restoreTitle(ctx));
 	// Tree navigation changes the active branch, not whether the agent is waiting.
 	pi.on("session_tree", (_event, ctx) => controller.restoreTitle(ctx, true));
-	pi.on("session_compact", (_event, ctx) => { controller.requestTitle(ctx); });
+	pi.on("session_compact", (_event, ctx) => { controller.requestTitle(ctx, "", false, true); });
 	// Reload and session replacement tear down extensions without exiting Pi.
 	pi.on("session_shutdown", (event, ctx) => controller.reset(ctx, undefined, event.reason !== "quit"));
 }
