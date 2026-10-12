@@ -1198,6 +1198,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const akamaiEdgeAuthUrlStart = prefixLength - 10 - truncatedAkamaiEdgeAuthUrl.indexOf(akamaiEdgeAuthSignature);
 	const truncatedAkamaiEdgeAuthPrompt = `${"x".repeat(akamaiEdgeAuthUrlStart - 1)} ${truncatedAkamaiEdgeAuthUrl} ${"y".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedAkamaiEdgeAuthPrompt, akamaiEdgeAuthSignature);
+	const baiduBceSignature = "e".repeat(64);
+	const truncatedBaiduBceUrl = `https://bj.bcebos.com/bucket/object?authorization=bce-auth-v1%2FABCDEFGHIJKLMNOPQRST%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${baiduBceSignature}`;
+	const baiduBceUrlStart = prefixLength - 10 - truncatedBaiduBceUrl.indexOf(baiduBceSignature);
+	const truncatedBaiduBcePrompt = `${"x".repeat(baiduBceUrlStart - 1)} ${truncatedBaiduBceUrl} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedBaiduBcePrompt, baiduBceSignature);
 	const tencentCosSignature = "a".repeat(40);
 	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
 	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
@@ -1278,6 +1283,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), googleCloudCdnSignedUrl, googleCloudCdnSignature);
 	const akamaiEdgeAuthUrl = `https://media.example.com/video.mp4?hdnts=exp=1790000000~acl=/video/*~hmac=${akamaiEdgeAuthSignature}`;
 	await suppressed(fixture(), akamaiEdgeAuthUrl, akamaiEdgeAuthSignature);
+	const baiduBceUrl = `https://bj.bcebos.com/bucket/object?authorization=bce-auth-v1%2FABCDEFGHIJKLMNOPQRST%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${baiduBceSignature}`;
+	await suppressed(fixture(), baiduBceUrl, baiduBceSignature);
 	const cloudFrontSignedUrl = `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${cloudFrontSignature}&Key-Pair-Id=APKEXAMPLE`;
 	await suppressed(fixture(), cloudFrontSignedUrl, cloudFrontSignature);
 	await suppressed(

@@ -2759,6 +2759,67 @@ test("screens Akamai EdgeAuth tokens across retained-context boundaries", () => 
 	}
 });
 
+test("screens Baidu BCE signed authorization values across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const signature = "e".repeat(64);
+	const accessKey = "ABCDEFGHIJKLMNOPQRST";
+	const values = [
+		{
+			value: `https://bj.bcebos.com/bucket/object?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}`,
+			signature,
+		},
+		{
+			value: `Authorization: bce-auth-v1/${accessKey}/2026-06-13T12:00:00Z/1800/host;x-bce-content-sha256/${signature}`,
+			signature,
+		},
+		{
+			value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%3Bx-bce-content-sha256%2F${signature}`,
+			signature,
+		},
+		{
+			value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2F%2F${signature}`,
+			signature,
+		},
+	];
+	const promptAt = (value: string, token: string, start: number) => {
+		const valueStart = start - value.indexOf(token);
+		const prefix = `${"x".repeat(valueStart - 1)} `;
+		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+	};
+
+	for (const { value, signature: digest } of values) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(value, digest, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const nearMisses = [
+		{ value: `?authorization=bce-auth-v2%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}`, digest: signature },
+		{ value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00.000Z%2F1800%2Fhost%2F${signature}`, digest: signature },
+		{ value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2Fabc%2Fhost%2F${signature}`, digest: signature },
+		{ value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${"e".repeat(63)}`, digest: "e".repeat(63) },
+		{ value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${"e".repeat(65)}`, digest: "e".repeat(65) },
+		{ value: `?authorizationx=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}`, digest: signature },
+		{ value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}x`, digest: `${signature}x` },
+	];
+	for (const { value, digest } of nearMisses) {
+		expect(hasSensitiveNamingContext(value)).toBe(false);
+		expect(hasSensitiveOutput(value)).toBe(false);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(value, digest, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Tencent COS SHA-1 signed URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
