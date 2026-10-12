@@ -2597,6 +2597,52 @@ test("screens CloudFront signed URLs across retained-context boundaries", () => 
 	}
 });
 
+test("screens CloudFront signed-cookie signatures across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const signature = "A1b_".repeat(24);
+	const values = [
+		`Set-Cookie: CloudFront-Signature=${signature}; Path=/; Secure; HttpOnly`,
+		`CloudFront-Policy=eyJTdGF0ZW1lbnQiOiJleGFtcGxlIn0; CloudFront-Signature=${signature}; CloudFront-Key-Pair-Id=APKEXAMPLE`,
+	];
+	const promptAt = (value: string, token: string, start: number) => {
+		const valueStart = start - value.indexOf(token);
+		const prefix = `${"x".repeat(valueStart - 1)} `;
+		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+	};
+
+	for (const value of values) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(value, signature, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const omittedSignature = buildNamingRequestContext([], promptAt(values[0]!, signature, prefixLength + 5));
+	expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+
+	const nearMisses = [
+		{ value: `CloudFront-Signature=${"A".repeat(39)}`, signature: "A".repeat(39) },
+		{ value: `CloudFront-Signature=${"A".repeat(769)}`, signature: "A".repeat(769) },
+		{ value: `NotCloudFront-Signature=${signature}`, signature },
+		{ value: `CloudFront-Signaturex=${signature}`, signature },
+	];
+	for (const { value, signature: candidate } of nearMisses) {
+		expect(hasSensitiveNamingContext(value)).toBe(false);
+		expect(hasSensitiveOutput(value)).toBe(false);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(value, candidate, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Tencent COS SHA-1 signed URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
