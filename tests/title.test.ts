@@ -1200,10 +1200,17 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), authorizationToken, authorizationToken);
 	const authorizationApiKey = `Authorization: ApiKey ${"C3d4".repeat(6)}`;
 	await suppressed(fixture(), authorizationApiKey, authorizationApiKey);
+	const digestAuthorization = `Authorization: Digest username="alice", realm="example", nonce="n", uri="/private", response="${"A1b2".repeat(8)}"`;
+	await suppressed(fixture(), digestAuthorization, digestAuthorization);
 	const setCookieSessionId = `Set-Cookie: JSESSIONID=${"E5f6".repeat(8)}; Path=/; HttpOnly`;
 	await suppressed(fixture(), setCookieSessionId, setCookieSessionId);
 	const appSessionCookie = `Set-Cookie: _my_app_session=${"K9l0".repeat(8)}; Path=/; HttpOnly`;
 	await suppressed(fixture(), appSessionCookie, appSessionCookie);
+	const digestResponse = "A1b2".repeat(8);
+	const digestHeader = 'Authorization: Digest username="alice", response="';
+	const digestTokenStart = prefixLength - 8;
+	const truncatedDigestPrompt = `${"x".repeat(digestTokenStart - digestHeader.length - 1)} ${digestHeader}${digestResponse}" ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedDigestPrompt, digestResponse);
 	const longBearerToken = "A1b2".repeat(20);
 	const spacedBearerToken = `${longBearerToken.slice(0, 10)} ${longBearerToken.slice(10)}`;
 	const suffixLength = Math.floor(retainedPromptLength / 2);
@@ -2849,6 +2856,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["Proxy-Authorization: Token ", "C3d4".repeat(6)].join(""),
 		["Authorization: ApiKey ", "E5f6".repeat(6)].join(""),
 		["Proxy-Authorization: API-Key ", "G7h8".repeat(6)].join(""),
+		["Proxy-Authorization: Digest username=alice, response=", "A1b2".repeat(8)].join(""),
 		["Set-Cookie: JSESSIONID=", "A1b2".repeat(8), "; Path=/; HttpOnly"].join(""),
 		["Set-Cookie: _my_app_session=", "K9l0".repeat(8), "; Path=/; HttpOnly"].join(""),
 		["B e a r e r ", "A1b2".repeat(8)].join(""),

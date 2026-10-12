@@ -84,6 +84,20 @@ const AUTHORIZATION_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"([A-Za-z0-9._~+/_-]{20,}={0,2})",
 	String.raw`([A-Za-z0-9._~+/_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9._~+/_-]){19,}(?:[\p{Cc}\p{Cf}]*=){0,2})`,
 );
+// HTTP Digest Authorization carries a credential-derived response hash.
+const DIGEST_AUTHORIZATION_RESPONSE_PATTERN = String.raw`([a-f0-9]{32}|[a-f0-9]{64})`;
+const DIGEST_AUTHORIZATION_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?digest\b`
+		+ String.raw`[^\r\n]{0,512}?\bresponse\s*=\s*["']?`
+		+ DIGEST_AUTHORIZATION_RESPONSE_PATTERN
+		+ String.raw`(?![A-Za-z0-9_-])`,
+	"iu",
+);
+const DIGEST_AUTHORIZATION_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DIGEST_AUTHORIZATION_PATTERN,
+	DIGEST_AUTHORIZATION_RESPONSE_PATTERN,
+	String.raw`([a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){31}|[a-f0-9](?:[\p{Cc}\p{Cf}]*[a-f0-9]){63})`,
+);
 // Common framework cookies use fixed IDs or an app-prefixed `session` name.
 const APP_PREFIXED_SESSION_COOKIE_PATTERN = String.raw`(?:_?[A-Za-z0-9._-]{1,64}[-_])?session(?:[-_]?id)?`;
 const SET_COOKIE_SESSION_NAME_PATTERN = String.raw`(?:__Host-|__Secure-)?(?:${APP_PREFIXED_SESSION_COOKIE_PATTERN}|sid|connect\.sid|phpsessid|jsessionid|asp\.net_sessionid|laravel_session|rack\.session)`;
@@ -1076,6 +1090,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	URI_USER_INFO_CREDENTIAL_PATTERN,
 	AUTHORIZATION_TOKEN_PATTERN,
 	AUTHORIZATION_API_KEY_PATTERN,
+	DIGEST_AUTHORIZATION_PATTERN,
 	SET_COOKIE_SESSION_CREDENTIAL_PATTERN,
 	AZURE_SAS_PATTERN,
 	AZURE_DEVOPS_PAT_PATTERN,
@@ -1204,7 +1219,7 @@ const EMAIL_ADDRESS_BOUNDARY_PATTERN = makeBoundaryPattern(
 const COMPACTED_CREDENTIAL_LIKE_PATTERNS = CREDENTIAL_LIKE_PATTERNS.filter(
 	(pattern) => pattern !== GENERIC_SK_RK_API_TOKEN_PATTERN
 		&& pattern !== AUTHORIZATION_TOKEN_PATTERN && pattern !== AUTHORIZATION_API_KEY_PATTERN
-		&& pattern !== SET_COOKIE_SESSION_CREDENTIAL_PATTERN,
+		&& pattern !== DIGEST_AUTHORIZATION_PATTERN && pattern !== SET_COOKIE_SESSION_CREDENTIAL_PATTERN,
 );
 // Compacted scans require a left boundary so unrelated title words do not combine into tokens.
 const SEPARATOR_TOLERANT_PATTERNS = [
@@ -1576,6 +1591,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	BEARER_TOKEN_BOUNDARY_PATTERN,
 	AUTHORIZATION_TOKEN_BOUNDARY_PATTERN,
 	AUTHORIZATION_API_KEY_BOUNDARY_PATTERN,
+	DIGEST_AUTHORIZATION_BOUNDARY_PATTERN,
 	SET_COOKIE_SESSION_CREDENTIAL_BOUNDARY_PATTERN,
 	GITHUB_TOKEN_BOUNDARY_PATTERN,
 	VERCEL_API_TOKEN_BOUNDARY_PATTERN,
