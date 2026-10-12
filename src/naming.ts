@@ -1424,6 +1424,20 @@ const DISCORD_WEBHOOK_URL_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"[A-Za-z0-9_-]{68}",
 	String.raw`([A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){67})`,
 );
+// Discord invite codes grant access to a server when used with the recognized invite URLs.
+const DISCORD_INVITE_CODE_SOURCE = String.raw`[A-Za-z0-9_-]{2,32}`;
+const DISCORD_INVITE_CODE_BOUNDARY_SOURCE =
+	String.raw`([A-Za-z0-9_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9_-]){1,31})`;
+const DISCORD_INVITE_LINK_PATTERN = new RegExp(
+	String.raw`(?<![A-Za-z0-9.-])(?:https?://)?(?:(?:www\.)?discord\.gg/|(?:www\.)?discord(?:app)?\.com/invite/)${DISCORD_INVITE_CODE_SOURCE}`
+		+ String.raw`(?=[?#\s"'<>),.;:!?}\]]|\x60|$|/(?=[?#\s"'<>),.;:!?}\]]|\x60|$))`,
+	"iu",
+);
+const DISCORD_INVITE_LINK_BOUNDARY_PATTERN = makeBoundaryPattern(
+	DISCORD_INVITE_LINK_PATTERN,
+	DISCORD_INVITE_CODE_SOURCE,
+	DISCORD_INVITE_CODE_BOUNDARY_SOURCE,
+);
 // Discord authentication tokens use three fixed-length URL-safe segments; MFA
 // tokens use a distinct prefix and an 84-character URL-safe body.
 const DISCORD_AUTH_TOKEN_PATTERN = /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{24}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27}(?![A-Za-z0-9_-])/;
@@ -1961,6 +1975,7 @@ const CREDENTIAL_LIKE_PATTERNS = [
 	SLACK_WEBHOOK_URL_PATTERN,
 	SLACK_LEGACY_WEBHOOK_URL_PATTERN,
 	DISCORD_WEBHOOK_URL_PATTERN,
+	DISCORD_INVITE_LINK_PATTERN,
 	DISCORD_AUTH_TOKEN_PATTERN,
 	DISCORD_MFA_TOKEN_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_PATTERN,
@@ -2479,6 +2494,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	SLACK_WEBHOOK_URL_BOUNDARY_PATTERN,
 	SLACK_LEGACY_WEBHOOK_URL_BOUNDARY_PATTERN,
 	DISCORD_WEBHOOK_URL_BOUNDARY_PATTERN,
+	DISCORD_INVITE_LINK_BOUNDARY_PATTERN,
 	DISCORD_AUTH_TOKEN_BOUNDARY_PATTERN,
 	DISCORD_MFA_TOKEN_BOUNDARY_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_BOUNDARY_PATTERN,
