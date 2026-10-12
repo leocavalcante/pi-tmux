@@ -3209,6 +3209,70 @@ test("screens Box shared-link IDs across retained-context boundaries", () => {
 	}
 });
 
+test("screens legacy OneDrive shared-link auth keys across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const keys = ["1201919!12921!1", "!KLMNOPQRST_uvWX"];
+	const values = [
+		{
+			url: `https://onedrive.live.com/redir?resid=1231244193912!12&authKey=${keys[0]}`,
+			key: keys[0]!,
+		},
+		{
+			url: `https://www.onedrive.live.com/embed?cid=example&authkey=${keys[1]}`,
+			key: keys[1]!,
+		},
+	];
+	const promptAt = (url: string, key: string, start: number) => {
+		const urlStart = start - url.indexOf(key);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, key } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscated = url.replace(key, `${key.slice(0, 7)}\u200b${key.slice(7)}`);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			const context = buildNamingRequestContext([], promptAt(url, key, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const obfuscatedKey = `${key.slice(0, 7)}\u200b${key.slice(7)}`;
+		const obfuscatedContext = buildNamingRequestContext(
+			[], promptAt(obfuscated, obfuscatedKey, prefixLength - 11),
+		);
+		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+		expect(buildNamingRequestContext([], promptAt(url, key, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+	}
+
+	const key = keys[0]!;
+	const nearMisses = [
+		`https://onedrive.live.com/redir?resid=id&authkey=${"a".repeat(14)}`,
+		`https://onedrive.live.com.evil.test/redir?resid=id&authkey=${key}`,
+		`https://onedrive.live.com/redir.evil.test?resid=id&authkey=${key}`,
+		`https://onedrive.live.com/download?resid=id&authkey=${key}`,
+		`https://1drv.ms/redir?resid=id&authkey=${key}`,
+		`https://example.test/redir?resid=id&authkey=${key}`,
+		`https://onedrive.live.com/redir?resid=id&xauthkey=${key}`,
+		`discussion of OneDrive authkey=${key}`,
+	];
+	for (const url of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			expect(buildNamingRequestContext([], promptAt(url, key, tokenStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Google Drive resource-key API headers across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
