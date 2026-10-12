@@ -359,6 +359,7 @@ username/password pairs, Docker config `auth` values encoding username/password 
 and legacy Base64 `_password` values, credential-bearing URLs, including
 CloudFront, AWS V4, Google Cloud Storage V2/V4, Tencent COS SHA-1 query-signed URLs,
 Alibaba Cloud OSS V1/V4 signed URLs,
+Oracle Object Storage pre-authenticated request URLs,
 Bearer, Token, and ApiKey authorization values,
 Negotiate/NTLM/Kerberos authentication tokens and challenges, legacy HTTP Signature
 proofs, RFC 9421 HTTP Message Signature proofs,
