@@ -1177,6 +1177,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const cloudFrontUrlStart = prefixLength - 10 - truncatedCloudFrontUrl.indexOf(cloudFrontSignature);
 	const truncatedCloudFrontPrompt = `${"x".repeat(cloudFrontUrlStart - 1)} ${truncatedCloudFrontUrl} ${"y".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedCloudFrontPrompt, cloudFrontSignature);
+	const tencentCosSignature = "a".repeat(40);
+	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
+	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
+	const truncatedTencentCosPrompt = `${"x".repeat(tencentCosUrlStart - 1)} ${truncatedTencentCosUrl} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedTencentCosPrompt, tencentCosSignature);
 	const awsAccessKeyId = `AKIA${"A".repeat(16)}`;
 	const awsAccessKeyStart = prefixLength - 8;
 	const truncatedAwsPrompt = `${"x".repeat(awsAccessKeyStart)}${awsAccessKeyId} ${"x".repeat(1_200)}`;
@@ -1237,6 +1242,13 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		fixture(),
 		`https://d111111abcdef8.cloudfront.net/private?Key-Pair-Id=APKEXAMPLE&Signature=${cloudFrontSignature}`,
 		cloudFrontSignature,
+	);
+	const tencentCosSignedUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-ak=EXAMPLEID&q-signature=${tencentCosSignature}`;
+	await suppressed(fixture(), tencentCosSignedUrl, tencentCosSignature);
+	await suppressed(
+		fixture(),
+		`https://example.cos.ap-guangzhou.myqcloud.com/private?q-signature=${tencentCosSignature}&q-sign-algorithm=sha1`,
+		tencentCosSignature,
 	);
 	const negotiateAuthorization = `Authorization: Negotiate ${httpSignature}`;
 	await suppressed(fixture(), negotiateAuthorization, negotiateAuthorization);
