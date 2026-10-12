@@ -156,6 +156,7 @@ queued former-location repairs.
 Status makes no AI requests, collects no dialogue, and never writes titles or
 flags to tmux. It omits names, model-setting values, model output, and provider
 errors; rejection details are limited to a fixed category and a manual-title hint.
+Sensitive-looking model output is reported only by that fixed category.
 `AI naming: configured` means the setting is valid, not that the model or its
 credentials are available. Status checks the tmux server identity in its
 snapshot. If it detects a restart, it fails closed locally, cancelling naming

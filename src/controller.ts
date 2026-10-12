@@ -48,6 +48,7 @@ import {
 const MAX_FORMER_TARGETS = 8;
 const MAX_LOCATION_PASSES = 4;
 type ShapeOnlyNamingRejection = Extract<InvalidNamingTitleReason, "multiple-lines" | "too-long" | "too-many-words">;
+type NamingRejectionCategory = InvalidNamingTitleReason | "unsafe-output";
 
 const isShapeOnlyNamingRejection = (reason: InvalidNamingTitleReason): reason is ShapeOnlyNamingRejection =>
 	reason === "multiple-lines" || reason === "too-long" || reason === "too-many-words";
@@ -67,7 +68,8 @@ const NAMING_REJECTION_CATEGORIES = {
 	"too-many-blocks": "too many content blocks",
 	"too-long": "title length",
 	"too-many-words": "word count",
-} satisfies Record<InvalidNamingTitleReason, string>;
+	"unsafe-output": "sensitive-looking output",
+} satisfies Record<NamingRejectionCategory, string>;
 
 export function createController(tmux: RunTmux) {
 	const idleTitleSetting = process.env.PI_TMUX_IDLE_TITLE ?? "zsh";
@@ -83,7 +85,7 @@ export function createController(tmux: RunTmux) {
 	let pending: AbortController | undefined;
 	let generation = 0;
 	let warned = false;
-	let lastNamingRejection: InvalidNamingTitleReason | undefined;
+	let lastNamingRejection: NamingRejectionCategory | undefined;
 	let baseTitle: string | undefined;
 	let manualTitle = false;
 	let candidateTitle: string | undefined;
@@ -554,6 +556,7 @@ export function createController(tmux: RunTmux) {
 			if (error instanceof UnsafeNamingContextError) {
 				warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 			} else if (error instanceof UnsafeNamingOutputError) {
+				lastNamingRejection = "unsafe-output";
 				warning = "Sensitive-looking naming output was not applied.";
 			} else if (error instanceof InvalidNamingTitleError) {
 				lastNamingRejection = error.reason;
