@@ -175,6 +175,12 @@ const LABELED_IBAN_PATTERN = new RegExp(
 	String.raw`(?=(?<![\p{L}\p{N}])(?:iban(?:[-_\s]?(?:number|no\.?))?|international[-_\s]+bank[-_\s]+account[-_\s]+number)\s*#?\s*["']?\s*[:=]\s*["']?(${IBAN_VALUE_PATTERN})(?![\p{L}\p{N}_]))`,
 	"iu",
 );
+// U.S. ABA routing numbers have nine digits, a routing-symbol prefix, and a checksum.
+const ABA_ROUTING_NUMBER_VALUE_PATTERN = String.raw`\p{Nd}(?:[-\s]?\p{Nd}){8}`;
+const LABELED_ABA_ROUTING_NUMBER_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])(?:(?:aba[-_\s]+)?routing(?:[-_\s]+transit)?[-_\s]+(?:number|no\.?)|aba[-_\s]+rtn)\s*#?\s*["']?\s*[:=]\s*["']?(${ABA_ROUTING_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	"iu",
+);
 // Keep the accepted IBAN registry subset explicit to avoid shape-only matches.
 const SUPPORTED_IBAN_LENGTHS = {
 	AE: 23,
@@ -1306,6 +1312,11 @@ const LABELED_IBAN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_IBAN_PATTERN,
 	`(${IBAN_VALUE_PATTERN})`,
 	`(${IBAN_VALUE_BOUNDARY_PATTERN})`,
+);
+const LABELED_ABA_ROUTING_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_ABA_ROUTING_NUMBER_PATTERN,
+	`(${ABA_ROUTING_NUMBER_VALUE_PATTERN})`,
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){8})`,
 );
 const DATE_OF_BIRTH_VALUE_BOUNDARY_CAPTURE_PATTERN = `(${DATE_OF_BIRTH_VALUE_BOUNDARY_PATTERN})`;
 const LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN = makeBoundaryPattern(
@@ -2540,6 +2551,36 @@ function hasLabeledIban(value: string): boolean {
 	return false;
 }
 
+function hasValidAbaRoutingPrefix(digits: string): boolean {
+	const prefix = Number(digits.slice(0, 2));
+	return prefix <= 12 || (prefix >= 21 && prefix <= 32) || (prefix >= 61 && prefix <= 72) || prefix === 80;
+}
+
+function hasValidAbaRoutingChecksum(digits: string): boolean {
+	let weightedSum = 0;
+	const weights = [3, 7, 1] as const;
+	for (let index = 0; index < digits.length; index++) {
+		weightedSum += (digits.charCodeAt(index) - 48) * weights[index % weights.length]!;
+	}
+	return weightedSum % 10 === 0;
+}
+
+function isValidAbaRoutingNumber(value: string): boolean {
+	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) =>
+		digits.length === 9 && hasValidAbaRoutingPrefix(digits) && hasValidAbaRoutingChecksum(digits));
+}
+
+function hasLabeledAbaRoutingNumber(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_ABA_ROUTING_NUMBER_PATTERN.source,
+		`${LABELED_ABA_ROUTING_NUMBER_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidAbaRoutingNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
 function hasBearerToken(value: string): boolean {
 	const pattern = new RegExp(BEARER_TOKEN_PATTERN.source, `${BEARER_TOKEN_PATTERN.flags}g`);
 	for (const match of value.matchAll(pattern)) {
@@ -2728,7 +2769,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
 		|| US_TAX_ID_PATTERN.test(value) || US_EIN_PATTERN.test(value)
 		|| hasLabeledUsItin(value) || hasLabeledDateOfBirth(value) || hasLabeledIban(value)
-		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
+		|| hasLabeledAbaRoutingNumber(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 		|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
 		|| hasLabeledAadhaarNumber(value) || hasLabeledIndianPanNumber(value)
@@ -2749,7 +2790,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_TAX_ID_PATTERN.test(compacted)
 			|| US_EIN_PATTERN.test(compacted) || hasLabeledUsItin(compacted)
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted)
-			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
+			|| hasLabeledAbaRoutingNumber(compacted) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledIndianPanNumber(compacted)
@@ -2770,7 +2811,7 @@ export function hasSensitiveOutput(text: string): boolean {
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_TAX_ID_PATTERN.test(value)
 			|| US_EIN_PATTERN.test(value) || hasLabeledUsItin(value)
-			|| hasLabeledDateOfBirth(value) || hasLabeledIban(value)
+			|| hasLabeledDateOfBirth(value) || hasLabeledIban(value) || hasLabeledAbaRoutingNumber(value)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 			|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
@@ -2789,7 +2830,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasWhitespaceSeparatedCredential(value)
 			|| SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
 			|| US_EIN_PATTERN.test(compacted) || hasLabeledUsItin(compacted)
-			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledCpf(compacted)
+			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledAbaRoutingNumber(compacted)
+			|| hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledIndianPanNumber(compacted)
@@ -2964,6 +3006,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	US_EIN_BOUNDARY_PATTERN,
 	LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN,
 	LABELED_IBAN_BOUNDARY_PATTERN,
+	LABELED_ABA_ROUTING_NUMBER_BOUNDARY_PATTERN,
 	US_ITIN_BOUNDARY_PATTERN,
 	UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_CPF_BOUNDARY_PATTERN,
@@ -3063,6 +3106,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== US_TAX_ID_BOUNDARY_PATTERN
 		&& pattern !== LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN
 		&& pattern !== LABELED_IBAN_BOUNDARY_PATTERN
+		&& pattern !== LABELED_ABA_ROUTING_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== US_ITIN_BOUNDARY_PATTERN
 		&& pattern !== UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CPF_BOUNDARY_PATTERN
@@ -3164,6 +3208,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidDateOfBirth(match[1]!)) continue;
 				if (sourcePattern === LABELED_IBAN_BOUNDARY_PATTERN
 					&& !isValidIbanNumber(match[1]!)) continue;
+				if (sourcePattern === LABELED_ABA_ROUTING_NUMBER_BOUNDARY_PATTERN
+					&& !isValidAbaRoutingNumber(match[1]!)) continue;
 				const encoded = match[1]!.replace(/[\p{Cc}\p{Cf}]/gu, "");
 				if ((sourcePattern === NPM_AUTH_BOUNDARY_PATTERN
 					|| sourcePattern === BASIC_AUTHORIZATION_BOUNDARY_PATTERN

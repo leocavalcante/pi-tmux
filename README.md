@@ -415,9 +415,10 @@ Medicare-card numbers with valid check digits are checked too. Explicitly
 labeled New Zealand IRD numbers in the current issued range with valid mod-11
 checksums are checked too.
 Explicitly labeled IBANs with supported country lengths and valid MOD 97
-checksums are checked too. Phone numbers and Luhn-valid, explicitly labeled
-payment-card-shaped values are checked too, including values written with
-Unicode decimal digits.
+checksums are checked too. Explicitly labeled U.S. ABA routing numbers with
+accepted routing-symbol prefixes and valid weighted checksums are checked too.
+Phone numbers and Luhn-valid, explicitly labeled payment-card-shaped values are
+checked too, including values written with Unicode decimal digits.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
 deduplication cache. This is a limited, best-effort check, not comprehensive
@@ -449,9 +450,11 @@ are checked too. Explicitly labeled Australian TFNs with valid checksums and
 Australian Medicare-card numbers with valid check digits are checked too.
 Explicitly labeled New Zealand IRD numbers in the current issued range with
 valid mod-11 checksums are checked too. Explicitly labeled IBANs with
-supported country lengths and valid MOD 97 checksums are checked too. Phone numbers and Luhn-valid, explicitly
-labeled payment-card-shaped values are checked too, including values written
-with Unicode decimal digits.
+supported country lengths and valid MOD 97 checksums are checked too.
+Explicitly labeled U.S. ABA routing numbers with accepted routing-symbol
+prefixes and valid weighted checksums are checked too. Phone numbers and
+Luhn-valid, explicitly labeled payment-card-shaped values are checked too,
+including values written with Unicode decimal digits.
 Supported YAML block-scalar forms with tags or anchors, plus shorter
 non-placeholder password/passphrase assignments, are checked too. A view with whitespace, control, and format
 characters removed catches some obfuscated values.
