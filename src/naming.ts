@@ -195,6 +195,14 @@ const LABELED_PASSPORT_NUMBER_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])passport(?:[-_\s]+card)?(?:[-_\s]+(?:number|no\.?|id))?\s*#?\s*["']?\s*[:=]\s*["']?(${PASSPORT_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
 	"iu",
 );
+// Driver-license formats vary; require an explicit driver-license/ID label and a
+// bounded, digit-bearing ASCII identifier, allowing optional hyphen grouping.
+const DRIVER_LICENSE_NUMBER_LABEL_PATTERN = String.raw`(?:driver'?s?[-_\s]+(?:licen[cs]e|id)(?:[-_\s]+(?:number|no\.?|id))?|driving[-_\s]+licen[cs]e(?:[-_\s]+(?:number|no\.?))?|dl[-_\s]+(?:number|no\.?))`;
+const DRIVER_LICENSE_NUMBER_VALUE_PATTERN = String.raw`[A-Z0-9](?:-?[A-Z0-9]){5,19}`;
+const LABELED_DRIVER_LICENSE_NUMBER_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])${DRIVER_LICENSE_NUMBER_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${DRIVER_LICENSE_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
+	"iu",
+);
 // Keep the accepted IBAN registry subset explicit to avoid shape-only matches.
 const SUPPORTED_IBAN_LENGTHS = {
 	AE: 23,
@@ -1366,6 +1374,11 @@ const LABELED_PASSPORT_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_PASSPORT_NUMBER_PATTERN,
 	`(${PASSPORT_NUMBER_VALUE_PATTERN})`,
 	String.raw`([A-Z0-9](?:[\p{Cc}\p{Cf}\s]*[A-Z0-9]){5,11})`,
+);
+const LABELED_DRIVER_LICENSE_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_DRIVER_LICENSE_NUMBER_PATTERN,
+	`(${DRIVER_LICENSE_NUMBER_VALUE_PATTERN})`,
+	String.raw`([A-Z0-9](?:[\p{Cc}\p{Cf}\s-]*[A-Z0-9]){5,19})`,
 );
 const LABELED_BANK_ACCOUNT_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_BANK_ACCOUNT_NUMBER_PATTERN,
@@ -2748,6 +2761,22 @@ function hasLabeledPassportNumber(value: string): boolean {
 	return false;
 }
 
+function isValidDriverLicenseNumber(value: string): boolean {
+	const normalized = value.replace(/[\p{Cc}\p{Cf}\s-]+/gu, "");
+	return /^[A-Za-z0-9]{6,20}$/u.test(normalized) && /[0-9]/u.test(normalized);
+}
+
+function hasLabeledDriverLicenseNumber(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_DRIVER_LICENSE_NUMBER_PATTERN.source,
+		`${LABELED_DRIVER_LICENSE_NUMBER_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidDriverLicenseNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
 function hasBearerToken(value: string): boolean {
 	const pattern = new RegExp(BEARER_TOKEN_PATTERN.source, `${BEARER_TOKEN_PATTERN.flags}g`);
 	for (const match of value.matchAll(pattern)) {
@@ -2937,7 +2966,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| US_TAX_ID_PATTERN.test(value) || US_EIN_PATTERN.test(value)
 		|| hasLabeledUsItin(value) || hasLabeledDateOfBirth(value) || hasLabeledIban(value)
 		|| hasLabeledAbaRoutingNumber(value) || hasLabeledPassportNumber(value)
-		|| hasLabeledBankAccountNumber(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
+		|| hasLabeledDriverLicenseNumber(value) || hasLabeledBankAccountNumber(value)
+		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 		|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
 		|| hasLabeledAadhaarNumber(value) || hasLabeledIndianPanNumber(value)
@@ -2961,7 +2991,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| US_EIN_PATTERN.test(compacted) || hasLabeledUsItin(compacted)
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted)
 			|| hasLabeledAbaRoutingNumber(compacted) || hasLabeledPassportNumber(compacted)
-			|| hasLabeledBankAccountNumber(compacted) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
+			|| hasLabeledDriverLicenseNumber(compacted) || hasLabeledBankAccountNumber(compacted)
+			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledIndianPanNumber(compacted)
@@ -2985,8 +3016,9 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_TAX_ID_PATTERN.test(value)
 			|| US_EIN_PATTERN.test(value) || hasLabeledUsItin(value)
 			|| hasLabeledDateOfBirth(value) || hasLabeledIban(value) || hasLabeledAbaRoutingNumber(value)
-			|| hasLabeledPassportNumber(value) || hasLabeledBankAccountNumber(value)
-			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
+			|| hasLabeledPassportNumber(value) || hasLabeledDriverLicenseNumber(value)
+			|| hasLabeledBankAccountNumber(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
+			|| hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 			|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
 			|| hasLabeledAadhaarNumber(value) || hasLabeledIndianPanNumber(value)
@@ -3008,8 +3040,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
 			|| US_EIN_PATTERN.test(compacted) || hasLabeledUsItin(compacted)
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledAbaRoutingNumber(compacted)
-			|| hasLabeledPassportNumber(compacted) || hasLabeledBankAccountNumber(compacted)
-			|| hasLabeledCpf(compacted)
+			|| hasLabeledPassportNumber(compacted) || hasLabeledDriverLicenseNumber(compacted)
+			|| hasLabeledBankAccountNumber(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledIndianPanNumber(compacted)
@@ -3188,6 +3220,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_IBAN_BOUNDARY_PATTERN,
 	LABELED_ABA_ROUTING_NUMBER_BOUNDARY_PATTERN,
 	LABELED_PASSPORT_NUMBER_BOUNDARY_PATTERN,
+	LABELED_DRIVER_LICENSE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_BANK_ACCOUNT_NUMBER_BOUNDARY_PATTERN,
 	US_ITIN_BOUNDARY_PATTERN,
 	UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN,
@@ -3294,6 +3327,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== LABELED_IBAN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_ABA_ROUTING_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PASSPORT_NUMBER_BOUNDARY_PATTERN
+		&& pattern !== LABELED_DRIVER_LICENSE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_BANK_ACCOUNT_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== US_ITIN_BOUNDARY_PATTERN
 		&& pattern !== UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN
@@ -3412,6 +3446,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidAbaRoutingNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_PASSPORT_NUMBER_BOUNDARY_PATTERN
 					&& !isValidPassportNumber(match[1]!)) continue;
+				if (sourcePattern === LABELED_DRIVER_LICENSE_NUMBER_BOUNDARY_PATTERN
+					&& !isValidDriverLicenseNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_BANK_ACCOUNT_NUMBER_BOUNDARY_PATTERN
 					&& !isValidBankAccountNumber(match[1]!)) continue;
 				const encoded = match[1]!.replace(/[\p{Cc}\p{Cf}]/gu, "");

@@ -6901,6 +6901,92 @@ test("passport numbers crossing either retained prompt boundary skip model looku
 	}
 });
 
+test("rejects explicitly labeled driver-license numbers without exposing them", async () => {
+	const identifiers = [
+		"Driver's License Number: A1234567",
+		"Driver License No.: D8F4K21",
+		"Driver Licence: 83920145",
+		"Drivers Licence Number: Z4-8K-2J9",
+		"Driving License No.: B7152048",
+		"Driver ID: C7429051",
+		"Driver's ID Number: W3F-57291",
+		"DL Number: X9428576",
+		"Driver License #: 12-345-6789",
+		"Driver ID: C742\u200b9051",
+		"Driver License: １２３４５６",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the driver record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"A1234567",
+		"License Number: A1234567",
+		"State ID: C7429051",
+		"Driver License: ABCDEF",
+		"Driver License: 12345",
+		"Driver License: A12345678901234567890",
+		"Driver License: A--123456",
+		"Driver License Reference: A1234567",
+		"Driver license format",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("driver license parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("driver license parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("driver-license numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const label of [" Driver's License No.: ", " DL Number: "]) {
+		for (const value of ["A1234567", "X9-428576"]) {
+			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const f = fixture();
+				const find = spyOn(f.ctx.modelRegistry, "find");
+				f.input(prompt);
+				await settle();
+				expect(find).not.toHaveBeenCalled();
+				expect(f.requests).toHaveLength(0);
+				expect(f.state.title).toBe("existing task");
+				expect(f.warnings).toEqual([warning]);
+				expect(f.warnings.join(" ")).not.toContain(value);
+			}
+		}
+	}
+});
+
 test("rejects explicitly labeled structurally valid Indian PANs without exposing them", async () => {
 	const identifiers = [
 		"PAN: ZZZPZ9876Q",
@@ -8993,6 +9079,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		"Passport Number: QX730194",
 		"Passport Card Number: R8K2M519",
+		"Driver's License Number: A1234567",
+		"DL Number: X9428576",
 		"Bank Account Number: 4829163705",
 		"CVV: 483",
 		"Card Verification Value: 9304",

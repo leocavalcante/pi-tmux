@@ -421,6 +421,9 @@ Because bank-account formats vary, only explicitly labeled bank-account-like
 values with 6–17 decimal digits are screened; spaces or hyphens may separate
 the digits. Because passport formats vary, only explicitly labeled passport-like
 values with 6–12 ASCII alphanumeric characters and at least one digit are checked.
+Explicit driver-license/licence, driving-licence, driver-ID, and DL-number fields
+with 6–20 ASCII alphanumeric characters, at least one digit, and optional hyphen
+grouping are screened; other labels remain unmatched.
 Explicitly labeled card verification codes (CVV/CVC and card-specific
 verification/security-code labels) with 3–4 decimal digits are also screened;
 generic security-code labels are not. Explicitly labeled PINs and personal
@@ -470,6 +473,9 @@ formats vary, only explicitly labeled bank-account-like values with 6–17
 decimal digits are screened; spaces or hyphens may separate the digits.
 Because passport formats vary, only explicitly labeled passport-like values
 with 6–12 ASCII alphanumeric characters and at least one digit are checked.
+Explicit driver-license/licence, driving-licence, driver-ID, and DL-number fields
+with 6–20 ASCII alphanumeric characters, at least one digit, and optional hyphen
+grouping are screened; other labels remain unmatched.
 Explicitly labeled card verification codes (CVV/CVC and card-specific
 verification/security-code labels) with 3–4 decimal digits are also screened;
 generic security-code labels are not. Explicitly labeled PINs and personal
