@@ -420,7 +420,11 @@ remain unmatched. Explicitly labeled Swedish personal identity and coordination
 numbers, including `personnummer` and `samordningsnummer`, are checked in the
 10- or 12-digit form with a calendar-valid birth date and Luhn control digit;
 the coordination-number date offset and standard hyphen/plus separators are
-supported. Generic ID labels remain unmatched. Explicitly labeled Indian PAN
+supported. Generic ID labels remain unmatched. French social security/NIR
+values with 13 digits and a matching 2-digit control key are checked only with
+explicit French-specific labels; generic ID and NIR labels remain unmatched
+([official overview](https://www.service-public.fr/particuliers/vosdroits/F33078)).
+Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are
@@ -484,7 +488,10 @@ remain unmatched. Explicitly labeled Swedish personal identity and coordination
 numbers, including `personnummer` and `samordningsnummer`, are checked in the
 10- or 12-digit form with a calendar-valid birth date and Luhn control digit;
 the coordination-number date offset and standard hyphen/plus separators are
-supported. Generic ID labels remain unmatched. Explicitly labeled Indian PAN
+supported. Generic ID labels remain unmatched. French social security/NIR
+values with 13 digits and a matching 2-digit control key are checked only with
+explicit French-specific labels; generic ID and NIR labels remain unmatched.
+Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are
