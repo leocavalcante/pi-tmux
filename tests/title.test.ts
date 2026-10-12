@@ -3076,6 +3076,35 @@ test("Wormhole share keys stay out of naming context and model output", async ()
 	}
 });
 
+test("Discord invite links stay out of naming context and model output", async () => {
+	// These synthetic codes do not grant access to any server.
+	const links = [
+		{ url: "https://discord.gg/SYNTHETIC-ONLY-123", code: "SYNTHETIC-ONLY-123" },
+		{ url: "discord.com/invite/synthetic-discord-code?event=fake", code: "synthetic-discord-code" },
+		{ url: "https://discordapp.com/invite/legacy-synthetic-code", code: "legacy-synthetic-code" },
+	];
+	for (const { url, code } of links) {
+		const sensitiveContext = fixture();
+		sensitiveContext.input(`Review this Discord server invite: ${url}`);
+		await settle();
+		expect(sensitiveContext.requests).toHaveLength(0);
+		expect(sensitiveContext.state.title).toBe("existing task");
+		expect(sensitiveContext.warnings).toEqual([
+			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+		]);
+		expect(sensitiveContext.warnings.join(" ")).not.toContain(code);
+
+		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+		sensitiveOutput.input("Name a task");
+		await settle();
+		expect(sensitiveOutput.requests).toHaveLength(1);
+		expect(sensitiveOutput.state.title).toBe("existing task");
+		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(sensitiveOutput.warnings.join(" ")).not.toContain(code);
+	}
+});
+
 test("Webex meeting passwords stay out of naming context and model output", async () => {
 	// These deliberately synthetic hosts and passwords are not real invitations.
 	const links = [

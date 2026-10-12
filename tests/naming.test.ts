@@ -4285,6 +4285,73 @@ test("screens Zoom meeting passcodes in join URLs across retained-context bounda
 	expect(buildNamingRequestContext([], promptAt(values[0]!.url, passcode, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens Discord invite codes across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	// All invite codes are synthetic and do not grant access to any server.
+	const links = [
+		{ url: "https://discord.gg/SYNTHETIC-ONLY-123", code: "SYNTHETIC-ONLY-123" },
+		{ url: "`https://discord.gg/MARKDOWN-SYNTHETIC-45`", code: "MARKDOWN-SYNTHETIC-45" },
+		{ url: "discord.com/invite/synthetic-discord-code?event=fake", code: "synthetic-discord-code" },
+		{ url: "https://discordapp.com/invite/legacy-synthetic-code", code: "legacy-synthetic-code" },
+	];
+	const promptAt = (url: string, code: string, start: number) => {
+		const urlStart = start - url.indexOf(code);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, code } of links) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscatedCode = `${code.slice(0, 7)}\u200b${code.slice(7)}`;
+		const obfuscated = url.replace(code, obfuscatedCode);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const candidate of [
+			{ text: url, value: code },
+			{ text: obfuscated, value: obfuscatedCode },
+		]) {
+			for (const tokenStart of [prefixLength - 1, suffixStart - candidate.value.length + 1]) {
+				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.value, tokenStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const code = links[0]!.code;
+	const nearMisses = [
+		"https://discord.gg/",
+		"https://discord.gg/a",
+		`https://discord.gg/${"A".repeat(33)}`,
+		`https://discord.gg.evil.test/${code}`,
+		`https://evil.discord.gg/${code}`,
+		`https://notdiscord.gg/${code}`,
+		`https://discord.com/${code}`,
+		`https://discord.com/invites/${code}`,
+		`https://discord.com/invite/${code}/extra`,
+		`https://discordapp.com.evil.test/invite/${code}`,
+		`https://example.test/invite/${code}`,
+		`discussion of a Discord invite code ${code}`,
+	];
+	for (const candidate of nearMisses) {
+		expect(hasSensitiveNamingContext(candidate)).toBe(false);
+		expect(hasSensitiveOutput(candidate)).toBe(false);
+		if (candidate.includes(code)) {
+			for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
+				expect(buildNamingRequestContext([], promptAt(candidate, code, tokenStart)).hasSensitiveBoundary()).toBe(false);
+			}
+		}
+	}
+
+	expect(buildNamingRequestContext([], promptAt(links[0]!.url, code, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Webex meeting passwords in join URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
