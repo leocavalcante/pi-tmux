@@ -20,7 +20,9 @@ Generated and pinned task titles are lowercase and limited to 24 ASCII
 characters, including the waiting prefix. tmux session names keep their
 original text and length. The waiting marker means at least one Pi pane has
 stopped running, not that the task succeeded. A window stays marked while any Pi pane in that window waits.
-A session stays marked while any Pi pane across its windows waits.
+A session stays marked while any Pi pane across its windows waits. Reloading
+clears the pane's waiting marker but preserves its task title, so immediately
+after `/reload` the title is unmarked until a later Pi event updates it.
 
 ## Installation
 
