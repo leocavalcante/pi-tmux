@@ -6061,6 +6061,66 @@ test("screens common punctuation in explicitly labeled payment-card numbers", ()
 	}
 });
 
+test("screens explicitly labeled payment-card security codes without flagging generic codes", () => {
+	const codes = [
+		"CVV: 483",
+		"CVV2 Code: 6190",
+		"CVC=274",
+		"CVC2: 615",
+		"Card CVV: 741",
+		"Credit Card Security Code: 3805",
+		"Card Verification Value: 9304",
+		"Card Verification Code: ٨٢٠",
+		"Card Security Code: １２３４",
+	];
+	for (const code of codes) {
+		expect(hasSensitiveNamingContext(code)).toBe(true);
+		expect(hasSensitiveOutput(code)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"483",
+		"Security Code: 483",
+		"Order security code: 483",
+		"CVV: 12",
+		"CVV: 12345",
+		"CVV 483",
+		"CVV is 483",
+		"Card Security Code: 12345",
+		"Card Verification Value: 12",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("card security codes crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+
+	for (const label of [" CVV: ", " Card Security Code: ", " Card Verification Value: "]) {
+		for (const value of ["483", "6190"]) {
+			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const label = " CVV: ";
+	for (const invalidValue of ["12", "12345"]) {
+		const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens Luhn-valid labeled payment cards across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
