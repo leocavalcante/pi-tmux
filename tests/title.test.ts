@@ -6092,6 +6092,80 @@ test("Australian TFNs crossing either retained prompt boundary skip model lookup
 	}
 });
 
+test("rejects explicitly labeled checksum-valid Australian Medicare numbers without exposing them", async () => {
+	const identifiers = [
+		"Medicare Card Number: 5271 84638 4 2",
+		"Medicare Number=5271846384",
+		"Medicare No.: 52718463842",
+		"Medicare Card: 52718\u200b463842",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the medical record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"52718463842",
+		"Medicare: 52718463842",
+		"Medicare Number: 52718463942",
+		"Medicare Card: 12718463442",
+		"Medicare Number: 527184638420",
+		"Medicare number validation",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("medicare parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("medicare parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("Australian Medicare numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const label = " Medicare Card Number: ";
+	const value = "52718463842";
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
+		const before = "x".repeat(valueStart - label.length);
+		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+		expect(prompt).toHaveLength(promptLength);
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(value);
+	}
+});
+
 test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them", async () => {
 	const identifiers = [
 		"SIN: 712-345-677",

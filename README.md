@@ -406,8 +406,9 @@ ITINs in recognized IRS number ranges, and explicitly labeled EINs in the
 conventional 2-7 digit format, calendar-valid numeric dates following explicit
 date-of-birth labels, UK National Insurance numbers, explicitly labeled
 Brazilian CPF values with valid check digits, explicitly labeled Canadian SIN
-values with valid Luhn check digits, and explicitly labeled Australian TFNs
-with valid checksums.
+values with valid Luhn check digits, explicitly labeled Australian TFNs with
+valid checksums, and explicitly labeled Australian Medicare-card numbers with
+valid check digits.
 Explicitly labeled IBANs with supported country lengths and valid MOD 97
 checksums are checked too. Phone numbers and Luhn-valid, explicitly labeled
 payment-card-shaped values are checked too, including values written with
@@ -435,8 +436,9 @@ values, explicitly labeled ITINs in recognized IRS number ranges, and explicitly
 labeled EINs in the conventional 2-7 digit format, calendar-valid numeric dates
 following explicit date-of-birth labels, UK National Insurance numbers,
 explicitly labeled Brazilian CPF values with valid check digits, explicitly
-labeled Canadian SIN values with valid Luhn check digits, and explicitly
-labeled Australian TFNs with valid checksums. Explicitly labeled IBANs with
+labeled Canadian SIN values with valid Luhn check digits, explicitly labeled
+Australian TFNs with valid checksums, and explicitly labeled Australian
+Medicare-card numbers with valid check digits. Explicitly labeled IBANs with
 supported country lengths and valid MOD 97 checksums are checked too. Phone numbers and Luhn-valid, explicitly
 labeled payment-card-shaped values are checked too, including values written
 with Unicode decimal digits.

@@ -231,6 +231,13 @@ const LABELED_AUSTRALIAN_TFN_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])(?:tfn(?:[-_\s]?(?:number|no\.?))?|(?:australian[-_\s]+)?tax[-_\s]+file[-_\s]+(?:number|no\.?))\s*#?\s*["']?\s*[:=]\s*["']?(${AUSTRALIAN_TFN_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
 	"iu",
 );
+// Australian Medicare numbers have ten digits (including the checksum) and may
+// be followed by a one-digit individual reference number (IRN).
+const AUSTRALIAN_MEDICARE_NUMBER_VALUE_PATTERN = String.raw`\p{Nd}(?:[-\s]?\p{Nd}){9,10}`;
+const LABELED_AUSTRALIAN_MEDICARE_NUMBER_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])medicare[-_\s]+(?:card[-_\s]+)?(?:number|no\.?|card)\s*#?\s*["']?\s*[:=]\s*["']?(${AUSTRALIAN_MEDICARE_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	"iu",
+);
 // Some framework, service, session, and cookie credentials lack provider prefixes.
 // Require explicit assignments and long values; do not compact ordinary spaces.
 const LABELED_CREDENTIAL_LABEL_PATTERN = /(?:account[-_\s]?key|api[-_\s]?key|access[-_\s]?key(?:[-_\s]?id)?|aes(?:[-_\s]?(?:128|192|256))?[-_\s]?key|(?:app|cookie|encryption|fernet|hmac|master|session|signing)[-_\s]?key|(?<![A-Za-z0-9_-])(?:cookie|session)|(?:auth|logged[-_\s]?in|nonce)[-_\s]?(?:key|salt)|access[-_\s]?token|aws[-_\s]?secret[-_\s]?access[-_\s]?key|client[-_\s]?key[-_\s]?data|client[-_\s]?secret|refresh[-_\s]?token|private[-_\s]?key|preshared[-_\s]?key|secret[-_\s]?access[-_\s]?key|secret(?:[-_\s]?key(?:[-_\s]?base)?)?|passphrase|password|credential|token|azure[-_\s]?devops(?:[-_\s]ext)?[-_\s]?pat)/i;
@@ -1312,6 +1319,11 @@ const LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	`(${AUSTRALIAN_TFN_VALUE_PATTERN})`,
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){8})`,
 );
+const LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_AUSTRALIAN_MEDICARE_NUMBER_PATTERN,
+	`(${AUSTRALIAN_MEDICARE_NUMBER_VALUE_PATTERN})`,
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){9,10})`,
+);
 const LABELED_PHONE_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_PHONE_PATTERN,
 	"(\\+?\\p{Nd}(?:[ .()-]?\\p{Nd}){6,14})",
@@ -2282,6 +2294,31 @@ function hasLabeledAustralianTfn(value: string): boolean {
 	return false;
 }
 
+// Services Australia uses weights 1,3,7,9 across the first eight digits; the
+// ninth digit is the modulo-10 check digit. The first digit is in the 2–6 range.
+const AUSTRALIAN_MEDICARE_NUMBER_CHECKSUM_WEIGHTS = [1, 3, 7, 9, 1, 3, 7, 9] as const;
+function isValidAustralianMedicareNumber(value: string): boolean {
+	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) => {
+		if ((digits.length !== 10 && digits.length !== 11) || digits[0] < "2" || digits[0] > "6") return false;
+		let weightedSum = 0;
+		for (let index = 0; index < AUSTRALIAN_MEDICARE_NUMBER_CHECKSUM_WEIGHTS.length; index++) {
+			weightedSum += (digits.charCodeAt(index) - 48) * AUSTRALIAN_MEDICARE_NUMBER_CHECKSUM_WEIGHTS[index]!;
+		}
+		return weightedSum % 10 === digits.charCodeAt(8) - 48;
+	});
+}
+
+function hasLabeledAustralianMedicareNumber(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_AUSTRALIAN_MEDICARE_NUMBER_PATTERN.source,
+		`${LABELED_AUSTRALIAN_MEDICARE_NUMBER_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidAustralianMedicareNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
 // ITINs start with 9; the fourth and fifth digits use the IRS-issued ranges.
 function isValidUsItinNumber(value: string): boolean {
 	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) => {
@@ -2554,7 +2591,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| hasLabeledUsItin(value) || hasLabeledDateOfBirth(value) || hasLabeledIban(value)
 		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
-		|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
+		|| hasLabeledAustralianMedicareNumber(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2573,7 +2610,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
-			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
+			|| hasLabeledAustralianMedicareNumber(compacted) || LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	const lowercased = compatibilityNormalized.toLowerCase();
@@ -2593,7 +2630,7 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledDateOfBirth(value) || hasLabeledIban(value)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
-			|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
+			|| hasLabeledAustralianMedicareNumber(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2609,7 +2646,7 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| US_EIN_PATTERN.test(compacted) || hasLabeledUsItin(compacted)
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
-			|| hasLabeledPaymentCard(compacted);
+			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	return distinctTextVariants(text, compatibilityNormalized, compatibilityNormalized.toLowerCase()).some((value) =>
@@ -2785,6 +2822,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_CPF_BOUNDARY_PATTERN,
 	LABELED_CANADIAN_SIN_BOUNDARY_PATTERN,
 	LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN,
+	LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
 	EMAIL_ADDRESS_BOUNDARY_PATTERN,
@@ -2880,6 +2918,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== LABELED_CPF_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CANADIAN_SIN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN
+		&& pattern !== LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 		&& pattern !== EMAIL_ADDRESS_BOUNDARY_PATTERN
@@ -2958,6 +2997,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidCanadianSinNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN
 					&& !isValidAustralianTfnNumber(match[1]!)) continue;
+				if (sourcePattern === LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN
+					&& !isValidAustralianMedicareNumber(match[1]!)) continue;
 				if (sourcePattern === US_ITIN_BOUNDARY_PATTERN
 					&& !isValidUsItinNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN
