@@ -6178,6 +6178,68 @@ test("numeric PINs crossing either retained prompt boundary are detected", () =>
 	}
 });
 
+test("screens explicitly labeled one-time authentication codes without flagging generic codes", () => {
+	const codes = [
+		"OTP: 482739",
+		"OTP Code: 736194",
+		"TOTP=8026",
+		"MFA: 184926",
+		"MFA Verification Code: 583017",
+		"2FA Code: 743926",
+		"2FA Verification Code: 2937",
+		"One-Time Password: 740182",
+		"One-time passcode: 684201",
+		"Authenticator Code: ٤٣٢١",
+		"OTP: 48\u200b27",
+	];
+	for (const code of codes) {
+		expect(hasSensitiveNamingContext(code)).toBe(true);
+		expect(hasSensitiveOutput(code)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"482739",
+		"Verification Code: 482739",
+		"Security Code: 482739",
+		"Authentication Code: 482739",
+		"OTP is a type of one-time password",
+		"OTP: 123",
+		"OTP: 123456789",
+		"OTP: 1234AB",
+		"One-time password support is enabled",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("one-time authentication codes crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+
+	for (const label of [" OTP: ", " MFA Code: ", " One-Time Password: ", " Authenticator Code: "]) {
+		for (const value of ["4827", "736194"]) {
+			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const label = " OTP: ";
+	for (const invalidValue of ["123", "123456789"]) {
+		const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens Luhn-valid labeled payment cards across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
