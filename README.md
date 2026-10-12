@@ -396,8 +396,9 @@ For supported credential labels, YAML block scalars with tags or anchors are als
 checked, as are shorter non-placeholder password/passphrase assignments and
 recognizable PEM, OpenSSH, PGP, SSH2, and PuTTY private-key file markers. The
 context scanner also checks recognizable ASCII and internationalized email
-addresses, explicitly labeled U.S. SSNs and phone numbers (including Unicode
-decimal digits), and explicitly labeled, Luhn-valid payment-card-shaped values.
+addresses, explicitly labeled U.S. SSNs and phone numbers, including values
+written with Unicode decimal digits, and explicitly labeled, Luhn-valid
+payment-card-shaped values.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
 deduplication cache. This is a limited, best-effort check, not comprehensive
@@ -417,8 +418,8 @@ provider-specific credential formats and private-key file markers,
 credential-bearing URLs, authorization
 values, and labeled credential patterns. It also checks recognizable ASCII
 and internationalized email addresses, explicitly labeled U.S. SSNs and phone
-numbers (including Unicode decimal digits), and explicitly labeled, Luhn-valid
-payment-card-shaped values. Supported YAML block-scalar
+numbers, including values written with Unicode decimal digits, and explicitly
+labeled, Luhn-valid payment-card-shaped values. Supported YAML block-scalar
 forms with tags or anchors and shorter non-placeholder password/passphrase
 assignments are checked too. A view with whitespace, control, and format
 characters removed catches some obfuscated values.

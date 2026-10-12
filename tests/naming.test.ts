@@ -5270,11 +5270,14 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 	const prefixLength = Math.ceil(retainedLength / 2);
 	const cases = [
 		{ label: " SSN: ", value: "000-00-0000", shortValue: "000-00-000" },
+		{ label: " SSN: ", value: "٠٠٠-٠٠-٠٠٠٠", shortValue: "٠٠٠-٠٠-٠٠٠" },
 		{ label: " Phone: ", value: "000-000-0000", shortValue: "000-000" },
 		{ label: " Phone: ", value: "٠٠٠-٠٠٠-٠٠٠٠", shortValue: "٠٠٠-٠٠" },
 	];
 
 	for (const { label, value, shortValue } of cases) {
+		expect(hasSensitiveNamingContext(`${label}${value}`)).toBe(true);
+		expect(hasSensitiveOutput(`${label}${value}`)).toBe(true);
 		const prefixValueStart = prefixLength - 6;
 		const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"x".repeat(1_200)}`;
 		const prefixContext = buildNamingRequestContext([], prompt);
@@ -5316,6 +5319,14 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 	const overlongPhone = `Phone: ${"٠".repeat(16)}`;
 	expect(hasSensitiveNamingContext(overlongPhone)).toBe(false);
 	expect(hasSensitiveOutput(overlongPhone)).toBe(false);
+	for (const nearMiss of [
+		`SSN: ${"٠".repeat(10)}`,
+		"éSSN: 000-00-0000",
+		"SSN: ٠٠٠-٠٠-٠٠٠٠٠",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
 });
 
 test("screens Luhn-valid labeled payment cards across retained-context truncation boundaries", () => {
