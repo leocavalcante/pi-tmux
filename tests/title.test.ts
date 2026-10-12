@@ -6039,6 +6039,18 @@ test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them"
 	expect(ordinaryTitle.warnings).toEqual([]);
 });
 
+test("matches exactly the explicitly recognized ITIN group ranges", () => {
+	const validRanges = [[50, 65], [70, 88], [90, 92], [94, 99]] as const;
+	const validGroups = new Set(validRanges.flatMap(([first, last]) =>
+		Array.from({ length: last - first + 1 }, (_, index) => first + index)));
+	for (let group = 0; group <= 99; group++) {
+		const value = `ITIN: 900-${String(group).padStart(2, "0")}-0000`;
+		const expected = validGroups.has(group);
+		expect(hasSensitiveOutput(value)).toBe(expected);
+		expect(hasSensitiveNamingContext(value)).toBe(expected);
+	}
+});
+
 test("rejects explicitly labeled U.S. ITINs in recognized IRS ranges without exposing them", async () => {
 	const identifiers = [
 		"ITIN: 900-50-0000",
