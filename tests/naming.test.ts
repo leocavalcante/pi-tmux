@@ -5353,6 +5353,60 @@ test("screens labeled U.S. tax IDs, dates of birth, and phone numbers across ret
 	}
 });
 
+test("screens explicitly labeled IBANs only for selected country lengths and valid checksums", () => {
+	const values = [
+		["IBAN: ", "GB05TEST00000000000000"],
+		["IBAN No.: ", "DE41SYNTHETIC000000000"],
+		["International Bank Account Number: ", "NO92SYNTHETIC01"],
+	] as const;
+	for (const [label, value] of values) {
+		expect(hasSensitiveNamingContext(`${label}${value}`)).toBe(true);
+		expect(hasSensitiveOutput(`${label}${value}`)).toBe(true);
+	}
+	expect(hasSensitiveNamingContext("IBAN: GB05 TEST 0000 0000 0000 00")).toBe(true);
+	expect(hasSensitiveNamingContext("IBAN: GB06TEST00000000000000; IBAN: DE41SYNTHETIC000000000")).toBe(true);
+	expect(hasSensitiveNamingContext("GB05TEST00000000000000")).toBe(false);
+	for (const nearMiss of [
+		"IBAN: GB06TEST00000000000000",
+		"IBAN: GB05TEST0000000000000",
+		"IBAN: XX95SYNTHETIC000000000",
+		"Account Number: GB05TEST00000000000000",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("screens labeled IBANs across retained-context boundaries and control obfuscation", () => {
+	const iban = "GB05 TEST 0000 0000 0000 00";
+	const label = " IBAN: ";
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const valueStart = prefixLength - 5;
+	const prompt = `${"x".repeat(valueStart - label.length)}${label}${iban} ${"y".repeat(1_200)}`;
+	const context = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(true);
+
+	const obfuscated = `${iban.slice(0, 8)}\u200b${iban.slice(8)}`;
+	const obfuscatedPrompt = `${"x".repeat(valueStart - label.length)}${label}${obfuscated} ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const suffixLength = Math.floor(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixStart = promptLength - suffixLength;
+	const suffixValueStart = suffixStart - 5;
+	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${iban} `
+		+ "y".repeat(promptLength - suffixValueStart - iban.length - 1);
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+	const invalidPrompt = `${"x".repeat(valueStart - label.length)}${label}GB06TEST00000000000000 ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Luhn-valid Canadian SIN values only with an explicit label", () => {
 	const identifiers = [
 		"SIN: 712-345-677",
