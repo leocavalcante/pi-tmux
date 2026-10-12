@@ -2250,7 +2250,7 @@ test("screens Token and ApiKey authorization credentials across retained-context
 	}
 });
 
-test("screens Negotiate, NTLM, and Kerberos authorization tokens across retained-context boundaries", () => {
+test("screens Negotiate, NTLM, and Kerberos auth tokens and challenges across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
@@ -2266,6 +2266,18 @@ test("screens Negotiate, NTLM, and Kerberos authorization tokens across retained
 		{
 			label: "Authorization: Kerberos ",
 			token: Buffer.from("C".repeat(32)).toString("base64"),
+		},
+		{
+			label: "WWW-Authenticate: Negotiate ",
+			token: Buffer.from("D".repeat(32)).toString("base64"),
+		},
+		{
+			label: "Proxy-Authenticate: NTLM ",
+			token: Buffer.from("E".repeat(64)).toString("base64"),
+		},
+		{
+			label: "WWW-Authenticate: Kerberos ",
+			token: Buffer.from("F".repeat(32)).toString("base64"),
 		},
 	];
 
@@ -2306,7 +2318,7 @@ test("screens Negotiate, NTLM, and Kerberos authorization tokens across retained
 		}
 	}
 
-	const token = Buffer.from("D".repeat(32)).toString("base64");
+	const token = Buffer.from("G".repeat(32)).toString("base64");
 	for (const nearMiss of [
 		`Authorization: Negotiate ${"A".repeat(19)}`,
 		"Authorization: Negotiate authentication is supported",
@@ -2315,6 +2327,9 @@ test("screens Negotiate, NTLM, and Kerberos authorization tokens across retained
 		`Authorization: NTLMish ${token}`,
 		`Authorization: Kerberos ${"A".repeat(19)}`,
 		`Proxy-Authorization: SPNEGO ${token}`,
+		`WWW-Authenticate: Negotiate ${"A".repeat(19)}`,
+		"WWW-Authenticate: Negotiate this ordinary exchange is enabled",
+		`WWW-Authenticate: Negotiateish ${token}`,
 		`prefixAuthorization: Negotiate ${token}`,
 	]) {
 		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);

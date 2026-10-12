@@ -1207,6 +1207,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), httpMessageSignature, httpMessageSignature);
 	const negotiateAuthorization = `Authorization: Negotiate ${httpSignature}`;
 	await suppressed(fixture(), negotiateAuthorization, negotiateAuthorization);
+	const negotiateChallenge = `WWW-Authenticate: Negotiate ${httpSignature}`;
+	await suppressed(fixture(), negotiateChallenge, negotiateChallenge);
 	const digestAuthorization = `Authorization: Digest username="alice", realm="example", nonce="n", uri="/private", response="${"A1b2".repeat(8)}"`;
 	await suppressed(fixture(), digestAuthorization, digestAuthorization);
 	const rspauthHeader = 'Authentication-Info: rspauth="';
@@ -2875,6 +2877,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		`Signature: sig1=:${Buffer.from("C".repeat(32)).toString("base64")}:`,
 		`Authorization: Negotiate ${Buffer.from("D".repeat(32)).toString("base64")}`,
 		`Proxy-Authorization: NTLM ${Buffer.from("E".repeat(64)).toString("base64")}`,
+		`WWW-Authenticate: Negotiate ${Buffer.from("F".repeat(32)).toString("base64")}`,
+		`Proxy-Authenticate: NTLM ${Buffer.from("G".repeat(64)).toString("base64")}`,
 		["Proxy-Authorization: Digest username=alice, response=", "A1b2".repeat(8)].join(""),
 		["Authentication-Info: rspauth=", "C3d4".repeat(8)].join(""),
 		["Proxy-Authentication-Info: qop=auth, rspauth=", "E5f6".repeat(16)].join(""),
