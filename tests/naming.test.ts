@@ -2314,6 +2314,66 @@ test("screens Digest Authorization response hashes across retained-context bound
 	}
 });
 
+test("screens Digest Authentication-Info rspauth hashes across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const headers = [
+		{ label: 'Authentication-Info: rspauth="', token: "A1b2".repeat(8) },
+		{ label: 'Proxy-Authentication-Info: nextnonce="next", rspauth="', token: "C3d4".repeat(16) },
+	];
+
+	for (const { label, token } of headers) {
+		const value = `${label}${token}"`;
+		const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}"`;
+		for (const candidate of [value, obfuscated]) {
+			expect(hasSensitiveNamingContext(candidate)).toBe(true);
+			expect(hasSensitiveOutput(candidate)).toBe(true);
+		}
+
+		const tokenStart = prefixLength - 8;
+		const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+		const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
+		const context = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+
+		const promptLength = MAX_PROMPT_LENGTH + 300;
+		const suffixStart = promptLength - Math.floor(retainedLength / 2);
+		const suffixTokenStart = suffixStart - 8;
+		const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+		const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
+			promptLength - suffixPrefix.length - value.length - 1,
+		)}`;
+		const suffixContext = buildNamingRequestContext([], suffixPrompt);
+		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+		const historyContent = `${"x".repeat(990 - label.length - 1)} ${value}`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const historyContext = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
+			expect(historyContext.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	for (const nearMiss of [
+		`Authentication-Info: rspauth="${"A".repeat(31)}"`,
+		`Authentication-Info: rspauth="${"A".repeat(33)}"`,
+		`Authentication-Info: rspauth="${"A".repeat(32)}g"`,
+		`Authentication-Info: nextnonce="${"A".repeat(32)}"`,
+		`Authentication-Info: response="${"A".repeat(32)}"`,
+		`NotAuthentication-Info: rspauth="${"A".repeat(32)}"`,
+		"Authentication-Info describes the Digest response parameters",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens common session-cookie IDs in Set-Cookie headers across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
