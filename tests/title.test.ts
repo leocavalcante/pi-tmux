@@ -1223,6 +1223,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const dropboxSharedLinkKey = "C".repeat(32);
 	const dropboxSharedLink = `https://www.dropbox.com/scl/fi/example/file.pdf?rlkey=${dropboxSharedLinkKey}&dl=0`;
 	await suppressed(fixture(), `Review shared project document ${dropboxSharedLink}`, dropboxSharedLinkKey);
+	const googleDriveResourceKey = `0-${"D".repeat(28)}`;
+	const googleDriveSharedLink = `https://drive.google.com/file/d/example/view?usp=sharing&resourcekey=${googleDriveResourceKey}`;
+	await suppressed(fixture(), `Review shared project document ${googleDriveSharedLink}`, googleDriveResourceKey);
 	const tencentCosSignature = "a".repeat(40);
 	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
 	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
