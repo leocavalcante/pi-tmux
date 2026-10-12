@@ -6468,11 +6468,13 @@ test("startup, resume, fork, and reload name from the active session projection 
 	}
 });
 
-test("tree navigation cancels an old summary and names only the newly active branch", async () => {
+test("tree navigation cancels an old summary, preserves waiting, and names the newly active branch", async () => {
 	const old = deferred();
 	const f = fixture([old.promise, Promise.resolve(response("registry routing"))]);
 	f.messages.push({ role: "user", content: "Fix authentication tests" });
 	await f.emit("session_start");
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* existing task");
 	f.messages.splice(0, f.messages.length, { role: "user", content: "Fix registry routing" });
 	await f.emit("session_tree");
 	await settle();
@@ -6480,7 +6482,9 @@ test("tree navigation cancels an old summary and names only the newly active bra
 	expect(f.requests[1].context.messages[0].content).toBe("user: Fix registry routing");
 	old.resolve(response("fix auth tests"));
 	await settle();
-	expect(f.state.title).toBe("registry routing");
+	expect(f.state.title).toBe("* registry routing");
+	expect(f.state.waitingPanes.get("%1")).toBe("1");
+	expect(f.state.sessionTitle).toBe("* My Session");
 });
 
 test("compaction refreshes from the projected summary without resurrecting original messages", async () => {
