@@ -416,8 +416,10 @@ character; generic ID labels remain unmatched. Explicitly labeled Japanese My
 Number and Japan individual-number values, including labels such as `個人番号`
 and `マイナンバー`, are checked when 12 decimal digits (optionally separated
 by spaces or hyphens) pass the weighted MOD 11 check; generic number/ID labels
-remain unmatched. Explicitly labeled Swedish personal identity and coordination
-numbers, including `personnummer` and `samordningsnummer`, are checked in the
+remain unmatched. The exact rule is published in the
+[J-LIS check-digit rule (Japanese PDF)](https://www.j-lis.go.jp/data/open/cnt/3/1282/1/H2707_qa.pdf).
+Explicitly labeled Swedish personal identity and coordination numbers,
+including `personnummer` and `samordningsnummer`, are checked in the
 10- or 12-digit form with a calendar-valid birth date and Luhn control digit;
 the coordination-number date offset and standard hyphen/plus separators are
 supported. Generic ID labels remain unmatched. French social security/NIR
@@ -486,8 +488,10 @@ character; generic ID labels remain unmatched. Explicitly labeled Japanese My
 Number and Japan individual-number values, including labels such as `個人番号`
 and `マイナンバー`, are checked when 12 decimal digits (optionally separated
 by spaces or hyphens) pass the weighted MOD 11 check; generic number/ID labels
-remain unmatched. Explicitly labeled Swedish personal identity and coordination
-numbers, including `personnummer` and `samordningsnummer`, are checked in the
+remain unmatched. The exact rule is published in the
+[J-LIS check-digit rule (Japanese PDF)](https://www.j-lis.go.jp/data/open/cnt/3/1282/1/H2707_qa.pdf).
+Explicitly labeled Swedish personal identity and coordination numbers,
+including `personnummer` and `samordningsnummer`, are checked in the
 10- or 12-digit form with a calendar-valid birth date and Luhn control digit;
 the coordination-number date offset and standard hyphen/plus separators are
 supported. Generic ID labels remain unmatched. French social security/NIR

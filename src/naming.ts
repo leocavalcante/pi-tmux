@@ -2699,6 +2699,9 @@ function hasLabeledChineseResidentIdNumber(value: string): boolean {
 	return false;
 }
 
+// J-LIS specifies weights 2–7 repeated from the right, with remainders 0/1
+// mapping to zero; this equivalent table follows the left-to-right digit scan.
+// https://www.j-lis.go.jp/data/open/cnt/3/1282/1/H2707_qa.pdf
 const JAPANESE_MY_NUMBER_WEIGHTS = [6, 5, 4, 3, 2, 7, 6, 5, 4, 3, 2] as const;
 
 function isValidJapaneseMyNumber(value: string): boolean {

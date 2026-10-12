@@ -57,6 +57,12 @@ test("README documents the bounded manual and idle-title input limit", () => {
 	expect(readme).toContain("Inputs longer than 64 Ki UTF-16 code units are rejected before screening");
 });
 
+test("README cites J-LIS for the Japanese My Number checksum rule", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
+	expect(readme).toContain("J-LIS check-digit rule (Japanese PDF)");
+	expect(readme).toContain("https://www.j-lis.go.jp/data/open/cnt/3/1282/1/H2707_qa.pdf");
+});
+
 test("CONTRIBUTING documents current privacy screening test coverage", () => {
 	const contributorGuide = readFileSync(fileURLToPath(new URL("../CONTRIBUTING.md", import.meta.url)), "utf8")
 		.replace(/\s+/gu, " ");
