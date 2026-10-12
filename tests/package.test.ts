@@ -114,6 +114,7 @@ test("package subprocesses are terminated on timeout and cancellation", async ()
 	expect((cancellation as { name?: unknown } | undefined)?.name).toBe("AbortError");
 });
 
+// Packing and importing the entrypoint can exceed Bun's default timeout on slower CI runners.
 test("the packed Pi entrypoint imports without runtime SDK dependencies and runs its status-only lifecycle", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-package-"));
 	const originalPane = process.env.TMUX_PANE;
@@ -209,4 +210,4 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 		else process.env.PI_TMUX_MODEL = originalModel;
 		cleanupPackageDirectory(directory);
 	}
-});
+}, 15_000);
