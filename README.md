@@ -423,9 +423,11 @@ including `personnummer` and `samordningsnummer`, are checked in the
 10- or 12-digit form with a calendar-valid birth date and Luhn control digit;
 the coordination-number date offset and standard hyphen/plus separators are
 supported. Generic ID labels remain unmatched. French social security/NIR
-values with 13 digits and a matching 2-digit control key are checked only with
-explicit French-specific labels; generic ID and NIR labels remain unmatched
-([official overview](https://www.service-public.fr/particuliers/vosdroits/F33078)).
+values with a 13-character identifier (including
+Corsican `2A`/`2B` department codes) and a matching 2-digit control key are
+checked only with explicit French-specific labels; generic ID and NIR labels
+remain unmatched ([official overview](https://www.service-public.fr/particuliers/vosdroits/F33078);
+[INSEE format and check-key specification](https://xml.insee.fr/schema/nir.html)).
 Spanish DNI and NIE numbers with a valid modulo-23 control letter are checked
 only with Spain-specific or unambiguous Spanish-language labels; generic DNI,
 NIE, and NIF labels remain unmatched. Explicitly labeled Indian PAN
@@ -495,8 +497,11 @@ including `personnummer` and `samordningsnummer`, are checked in the
 10- or 12-digit form with a calendar-valid birth date and Luhn control digit;
 the coordination-number date offset and standard hyphen/plus separators are
 supported. Generic ID labels remain unmatched. French social security/NIR
-values with 13 digits and a matching 2-digit control key are checked only with
-explicit French-specific labels; generic ID and NIR labels remain unmatched.
+values with a 13-character identifier (including
+Corsican `2A`/`2B` department codes) and a matching 2-digit control key are
+checked only with explicit French-specific labels; generic ID and NIR labels
+remain unmatched ([official overview](https://www.service-public.fr/particuliers/vosdroits/F33078);
+[INSEE format and check-key specification](https://xml.insee.fr/schema/nir.html)).
 Spanish DNI and NIE numbers with a valid modulo-23 control letter are checked
 only with Spain-specific or unambiguous Spanish-language labels; generic DNI,
 NIE, and NIF labels remain unmatched. Explicitly labeled Indian PAN

@@ -6173,12 +6173,16 @@ test("Swedish personal identity numbers crossing either retained prompt boundary
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
-test("screens French NIR values with a valid control key only with French-specific labels", () => {
+test("screens French NIR values with valid control keys only with French-specific labels", () => {
 	const syntheticNir = "123456789012311";
+	const corsicanNirA = "123452A67890102";
+	const corsicanNirB = "123452B67890129";
 	const arabicDigits = syntheticNir.replace(/[0-9]/gu, (digit) =>
 		String.fromCodePoint(0x0660 + Number(digit)));
 	const fullwidthDigits = syntheticNir.replace(/[0-9]/gu, (digit) =>
 		String.fromCodePoint(0xff10 + Number(digit)));
+	const arabicCorsicanNirA = corsicanNirA.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
 	for (const identifier of [
 		`French NIR: ${syntheticNir}`,
 		`French NIR Number=${syntheticNir}`,
@@ -6189,6 +6193,10 @@ test("screens French NIR values with a valid control key only with French-specif
 		`NIR français : ${syntheticNir}`,
 		`French NIR: ${arabicDigits}`,
 		`French NIR: ${fullwidthDigits}`,
+		`French NIR: ${corsicanNirA}`,
+		`French NIR: ${corsicanNirB.toLowerCase()}`,
+		`French social security number: 1 2345 2 A 6789 01 02`,
+		`NIR français : ${arabicCorsicanNirA}`,
 		`French NIR: 123456\u200b789012311`,
 	]) {
 		expect(hasSensitiveNamingContext(identifier)).toBe(true);
@@ -6198,8 +6206,12 @@ test("screens French NIR values with a valid control key only with French-specif
 	for (const nearMiss of [
 		syntheticNir,
 		`NIR: ${syntheticNir}`,
+		`NIR: ${corsicanNirA}`,
 		`ID Number: ${syntheticNir}`,
 		`French NIR: 123456789012310`,
+		`French NIR: ${corsicanNirA.slice(0, -1)}3`,
+		`French NIR: 12345A267890102`,
+		`French NIR: 123453A67890102`,
 		`French NIR: 12345678901231`,
 		`French NIR: 1234567890123110`,
 		`French NIR ${syntheticNir}`,
@@ -6210,25 +6222,26 @@ test("screens French NIR values with a valid control key only with French-specif
 	}
 });
 
-test("French NIR values crossing either retained prompt boundary are detected", () => {
+test("French NIR values, including Corsican codes, crossing either retained prompt boundary are detected", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
 	const promptLength = MAX_PROMPT_LENGTH + 1_000;
 	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const value = "123456789012311";
-	for (const label of [" French NIR: ", " Numéro de sécurité sociale : "]) {
-		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-			const before = "x".repeat(valueStart - label.length);
-			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
+	for (const value of ["123456789012311", "123452A67890102", "123452B67890129"]) {
+		for (const label of [" French NIR: ", " Numéro de sécurité sociale : "]) {
+			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
 		}
 	}
 
-	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " French NIR: ".length)} French NIR: 123456789012310 ${"y".repeat(1_200)}`;
+	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " French NIR: ".length)} French NIR: 123452A67890103 ${"y".repeat(1_200)}`;
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 

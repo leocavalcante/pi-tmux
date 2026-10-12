@@ -330,10 +330,11 @@ const LABELED_SWEDISH_PERSONAL_ID_PATTERN = new RegExp(
 	String.raw`${SWEDISH_PERSONAL_ID_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${SWEDISH_PERSONAL_ID_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
 	"iu",
 );
-// French NIRs contain 13 identifier digits and a 2-digit control key. Require
-// country-specific or French-language labels rather than generic ID labels.
-const FRENCH_NIR_VALUE_PATTERN = String.raw`\p{Nd}(?:[-\s]?\p{Nd}){14}`;
-const FRENCH_NIR_EXACT_PATTERN = /^\p{Nd}{15}$/u;
+// French NIRs contain a 13-character identifier and a 2-digit control key.
+// Corsican department codes 2A/2B are adjusted specially for the MOD 97 key.
+// Require country-specific or French-language labels rather than generic IDs.
+const FRENCH_NIR_VALUE_PATTERN = String.raw`(?:\p{Nd}(?:[-\s]?\p{Nd}){14}|\p{Nd}(?:[-\s]?\p{Nd}){4}[-\s]?\p{Nd}[-\s]?[AB](?:[-\s]?\p{Nd}){8})`;
+const FRENCH_NIR_EXACT_PATTERN = /^(?:\p{Nd}{15}|\p{Nd}{6}[AB]\p{Nd}{8})$/iu;
 const FRENCH_NIR_LABEL_PATTERN = String.raw`(?:(?<![\p{L}\p{N}])(?:french|france)[-_\s]+(?:(?:social[-_\s]+security|national[-_\s]+(?:id|identification|registration))[-_\s]+(?:number|no\.?)|nir(?:[-_\s]+(?:number|no\.?))?)|(?<![\p{L}\p{N}])(?:num[eé]ro[-_\s]+de[-_\s]+s[eé]curit[eé][-_\s]+sociale(?:[-_\s]+fran[cç]ais(?:e)?)?|num[eé]ro[-_\s]+d['’]inscription[-_\s]+au[-_\s]+r[eé]pertoire|nir[-_\s]+fran[cç]ais(?:e)?))`;
 const LABELED_FRENCH_NIR_PATTERN = new RegExp(
 	String.raw`${FRENCH_NIR_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${FRENCH_NIR_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
@@ -1491,7 +1492,7 @@ const LABELED_SWEDISH_PERSONAL_ID_BOUNDARY_PATTERN = makeBoundaryPattern(
 const LABELED_FRENCH_NIR_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_FRENCH_NIR_PATTERN,
 	`(${FRENCH_NIR_VALUE_PATTERN})`,
-	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){14})`,
+	String.raw`((?:\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){14}|\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){4}[\p{Cc}\p{Cf}\s-]*\p{Nd}[\p{Cc}\p{Cf}\s-]*[AB](?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){8}))`,
 );
 const LABELED_SPANISH_NATIONAL_ID_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_SPANISH_NATIONAL_ID_PATTERN,
@@ -2763,14 +2764,21 @@ function hasLabeledSwedishPersonalId(value: string): boolean {
 	return false;
 }
 
+// INSEE specifies replacing A/B with zero and subtracting 1,000,000/2,000,000.
+// https://xml.insee.fr/schema/nir.html
 function isValidFrenchNir(value: string): boolean {
-	const normalized = value.replace(/[\p{Cc}\p{Cf}\s-]+/gu, "");
+	const normalized = value.replace(/[\p{Cc}\p{Cf}\s-]+/gu, "").toUpperCase()
+		.replace(/\p{Nd}/gu, (digit) => asciiDecimalDigits(digit) ?? digit);
 	if (!FRENCH_NIR_EXACT_PATTERN.test(normalized)) return false;
-	return conservativelyValidateLabeledDigits(asciiDecimalDigits(normalized), (digits) => {
-		if (digits.length !== 15) return false;
-		const identifier = digits.slice(0, 13);
-		const key = Number(digits.slice(13));
-		return key === 97 - (Number(identifier) % 97);
+	const hasCorsicanDepartment = normalized[6] === "A" || normalized[6] === "B";
+	const digits = asciiDecimalDigits(normalized.replace(/[AB]/gu, "0"));
+	return conservativelyValidateLabeledDigits(digits, (knownDigits) => {
+		if (knownDigits.length !== 15) return false;
+		if (hasCorsicanDepartment && knownDigits[5] !== "2") return false;
+		const adjustment = normalized[6] === "A" ? 1_000_000 : normalized[6] === "B" ? 2_000_000 : 0;
+		const identifier = Number(knownDigits.slice(0, 13)) - adjustment;
+		const key = Number(knownDigits.slice(13));
+		return key === 97 - (identifier % 97);
 	});
 }
 
