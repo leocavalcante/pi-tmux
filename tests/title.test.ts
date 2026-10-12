@@ -6041,6 +6041,8 @@ test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them"
 
 test("rejects explicitly labeled U.S. ITINs in recognized IRS ranges without exposing them", async () => {
 	const identifiers = [
+		"ITIN: 900-50-0000",
+		"ITIN: 900-65-0000",
 		"ITIN: 900-70-0000",
 		"ITIN number=900700000",
 		"Individual Taxpayer Identification Number: 900 90 0000",
@@ -6073,6 +6075,8 @@ test("rejects explicitly labeled U.S. ITINs in recognized IRS ranges without exp
 	for (const nearMiss of [
 		"900-70-0000",
 		"ITIN: 800-70-0000",
+		"ITIN: 900-49-0000",
+		"ITIN: 900-66-0000",
 		"ITIN: 900-69-0000",
 		"ITIN: 900-89-0000",
 		"ITIN: 900-93-0000",
@@ -6086,11 +6090,13 @@ test("rejects explicitly labeled U.S. ITINs in recognized IRS ranges without exp
 	const promptMarker = "[... middle of prompt omitted ...]";
 	const retainedPromptLength = MAX_PROMPT_LENGTH - promptMarker.length - 2;
 	const prefixLength = Math.ceil(retainedPromptLength / 2);
-	const invalidSplitValue = "900-93-0000";
 	const itinLabel = " ITIN: ";
-	const invalidSplitStart = prefixLength - 4;
-	const invalidSplitPrompt = `${"x".repeat(invalidSplitStart - itinLabel.length)}${itinLabel}${invalidSplitValue} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidSplitPrompt).hasSensitiveBoundary()).toBe(false);
+	const splitPrompt = (value: string) => {
+		const splitStart = prefixLength - 4;
+		return `${"x".repeat(splitStart - itinLabel.length)}${itinLabel}${value} ${"y".repeat(1_200)}`;
+	};
+	expect(buildNamingRequestContext([], splitPrompt("900-93-0000")).hasSensitiveBoundary()).toBe(false);
+	expect(buildNamingRequestContext([], splitPrompt("900-50-0000")).hasSensitiveBoundary()).toBe(true);
 
 	const ordinaryTitle = fixture([Promise.resolve(response("itin parser"))]);
 	ordinaryTitle.input("Name a task");
