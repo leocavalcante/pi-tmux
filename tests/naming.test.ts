@@ -5401,6 +5401,43 @@ test("screens email addresses across retained-context truncation boundaries", ()
 	expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens internationalized email addresses across context and truncation boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const addresses = [
+		"δοκιμή@παράδειγμα.δοκιμή",
+		"用户@example.test",
+		"e\u0301@example.test",
+		"𐐀@example.test",
+	];
+
+	for (const address of addresses) {
+		expect(hasSensitiveNamingContext(address)).toBe(true);
+		expect(hasSensitiveOutput(address)).toBe(true);
+
+		const addressOffset = Math.floor(address.length / 2);
+		const promptLength = MAX_PROMPT_LENGTH + 300;
+		const prefixAddressStart = prefixLength - addressOffset;
+		const prefixPrompt = `${"x".repeat(prefixAddressStart - 1)} ${address} ${"y".repeat(promptLength - prefixAddressStart - address.length - 1)}`;
+		const prefixContext = buildNamingRequestContext([], prefixPrompt);
+		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+
+		const suffixStart = promptLength - Math.floor(retainedLength / 2);
+		const suffixAddressStart = suffixStart - addressOffset;
+		const suffixPrompt = `${"x".repeat(suffixAddressStart - 1)} ${address} ${"y".repeat(promptLength - suffixAddressStart - address.length - 1)}`;
+		const suffixContext = buildNamingRequestContext([], suffixPrompt);
+		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+	}
+
+	for (const nearMiss of ["δοκιμή@παράδειγμα.x", "用户@example.1"]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens GitHub tokens across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
@@ -6408,6 +6445,8 @@ test("long variable-length tokens stay detectable when a retained suffix starts 
 test("requestNamingTitle screens sensitive context before model-registry access", async () => {
 	const contextTexts = [
 		"task: pi-tmux@example.invalid",
+		"task: δοκιμή@παράδειγμα.δοκιμή",
+		"task: 用户@example.test",
 		`${"A1b_".repeat(6)}.${"cD9_-Z"}.${"QwErTy9_-".repeat(3)}`,
 		`mfa.${"a1B_".repeat(21)}`,
 	];

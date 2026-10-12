@@ -6035,7 +6035,13 @@ test.each([
 
 test("email-address-like model output is rejected before normalization and not disclosed", async () => {
 	const address = ["person", "@", "example", ".", "invalid"].join("");
-	for (const output of [address, `${address}_x`, "person @example.invalid"]) {
+	const internationalizedAddresses = [
+		"δοκιμή@παράδειγμα.δοκιμή",
+		"用户@example.test",
+		"e\u0301@example.test",
+		"𐐀@example.test",
+	];
+	for (const output of [address, `${address}_x`, "person @example.invalid", ...internationalizedAddresses]) {
 		const f = fixture([Promise.resolve(response(output))]);
 		f.input("Name a task");
 		await settle();
@@ -6043,6 +6049,7 @@ test("email-address-like model output is rejected before normalization and not d
 		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
 		expect(f.warnings.join(" ")).not.toContain(address);
+		expect(f.warnings.join(" ")).not.toContain(output);
 	}
 
 	const splitAddress = ["pi-tmux", "@", "example", ".", "invalid"].join("");
