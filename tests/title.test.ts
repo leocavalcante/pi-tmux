@@ -7631,6 +7631,46 @@ test("rejects explicitly labeled UK National Insurance numbers without blocking 
 	expect(ordinaryTitle.warnings).toEqual([]);
 });
 
+test("UK National Insurance numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const label = " NI number: ";
+	const value = "AB 12 34 56 C";
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+		const before = "x".repeat(valueStart - label.length);
+		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+		expect(prompt).toHaveLength(promptLength);
+		const context = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+
+		const f = fixture();
+		const find = spyOn(f.ctx.modelRegistry, "find");
+		f.input(prompt);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(f.requests).toHaveLength(0);
+		expect(f.state.title).toBe("existing task");
+		expect(f.warnings).toEqual([warning]);
+		expect(f.warnings.join(" ")).not.toContain(value);
+	}
+
+	const invalidValue = "DD 12 34 56 C";
+	for (const valueStart of [prefixLength - 4, suffixStart - invalidValue.length + 4]) {
+		const before = "x".repeat(valueStart - label.length);
+		const prompt = `${before}${label}${invalidValue} ${"y".repeat(promptLength - before.length - label.length - invalidValue.length - 1)}`;
+		expect(prompt).toHaveLength(promptLength);
+		const context = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",
