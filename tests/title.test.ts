@@ -1090,6 +1090,19 @@ test("does not apply a French NIR returned by the naming model", async () => {
 	expect(f.warnings.join(" ")).not.toContain(syntheticNir);
 });
 
+test("does not apply checksum-valid Spanish DNI or NIE returned by the naming model", async () => {
+	for (const identifier of ["Spanish DNI: 00000000T", "Spanish NIE: X0000000T"]) {
+		const f = fixture([Promise.resolve(response(identifier))]);
+		f.input("Name a task");
+		await settle();
+		expect(f.requests).toHaveLength(1);
+		expect(f.state.title).toBe("existing task");
+		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(f.warnings.join(" ")).not.toContain(identifier);
+	}
+});
+
 test("does not apply a short-looking response truncated by the token limit", async () => {
 	const f = fixture([Promise.resolve(response("fix ssh", "length"))]);
 	f.input("Name a task");
@@ -1116,6 +1129,10 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), `Review the auth flow with ${token}`);
 	const frenchNir = "123456789012311";
 	await suppressed(fixture(), `French NIR: ${frenchNir}`, frenchNir);
+	const spanishDni = "00000000T";
+	await suppressed(fixture(), `Spanish DNI: ${spanishDni}`, spanishDni);
+	const spanishNie = "X0000000T";
+	await suppressed(fixture(), `Spanish NIE: ${spanishNie}`, spanishNie);
 	const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
 	await suppressed(fixture(), `Review Airtable data access ${airtableToken}`, airtableToken);
 	const onePasswordToken = `ops_eyJ${"Aa0+/".repeat(50)}`;
@@ -9383,6 +9400,10 @@ test("manual titles reject sensitive text before normalization without disclosin
 		"Samordningsnummer: 900162-1235",
 		"French NIR: 123456789012311",
 		"Numéro de sécurité sociale français : 123456789012311",
+		"Spanish DNI: 00000000T",
+		"DNI español: 00.000.000-T",
+		"Spanish NIE: X0000000T",
+		"Número de identidad de extranjero: X0000000T",
 		"Bank Account Number: 4829163705",
 		"CVV: 483",
 		"Card Verification Value: 9304",

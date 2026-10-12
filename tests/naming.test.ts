@@ -6232,6 +6232,70 @@ test("French NIR values crossing either retained prompt boundary are detected", 
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens checksum-valid Spanish DNI and NIE values only with Spain-specific labels", () => {
+	const dni = "00000000T";
+	const nie = "X0000000T";
+	const arabicDni = dni.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	const fullwidthNie = nie.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0xff10 + Number(digit)));
+	for (const identifier of [
+		`Spanish DNI: ${dni}`,
+		`Spain national identity number=${dni}`,
+		`DNI español: 00.000.000-T`,
+		`Documento Nacional de Identidad español: ${dni}`,
+		`Spanish NIE: ${nie}`,
+		`Spain NIE Number=${nie}`,
+		`Número de identidad de extranjero: ${nie}`,
+		`Spanish DNI: ${arabicDni}`,
+		`Spanish NIE: ${fullwidthNie}`,
+		`Spanish NIE: X1234\u200b567L`,
+	]) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		dni,
+		nie,
+		`DNI: ${dni}`,
+		`NIE: ${nie}`,
+		`ID Number: ${dni}`,
+		`Spanish NIF: ${dni}`,
+		`Spanish DNI: 00000000A`,
+		`Spanish NIE: X0000000A`,
+		`Spanish DNI ${dni}`,
+		`Documento Nacional de Identidad: ${dni}`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("Spanish DNI and NIE values crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	for (const [label, value] of [
+		[" Spanish DNI: ", "00000000T"],
+		[" Número de identidad de extranjero: ", "X0000000T"],
+	]) {
+		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+			const before = "x".repeat(valueStart - label.length);
+			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " Spanish DNI: ".length)} Spanish DNI: 00000000A ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens conventionally formatted Indian PAN values only with an explicit label", () => {
 	const identifiers = [
 		"PAN: ZZZPZ9876Q",

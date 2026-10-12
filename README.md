@@ -424,7 +424,9 @@ supported. Generic ID labels remain unmatched. French social security/NIR
 values with 13 digits and a matching 2-digit control key are checked only with
 explicit French-specific labels; generic ID and NIR labels remain unmatched
 ([official overview](https://www.service-public.fr/particuliers/vosdroits/F33078)).
-Explicitly labeled Indian PAN
+Spanish DNI and NIE numbers with a valid modulo-23 control letter are checked
+only with Spain-specific or unambiguous Spanish-language labels; generic DNI,
+NIE, and NIF labels remain unmatched. Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are
@@ -491,7 +493,9 @@ the coordination-number date offset and standard hyphen/plus separators are
 supported. Generic ID labels remain unmatched. French social security/NIR
 values with 13 digits and a matching 2-digit control key are checked only with
 explicit French-specific labels; generic ID and NIR labels remain unmatched.
-Explicitly labeled Indian PAN
+Spanish DNI and NIE numbers with a valid modulo-23 control letter are checked
+only with Spain-specific or unambiguous Spanish-language labels; generic DNI,
+NIE, and NIF labels remain unmatched. Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are

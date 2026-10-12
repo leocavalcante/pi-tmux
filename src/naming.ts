@@ -339,6 +339,16 @@ const LABELED_FRENCH_NIR_PATTERN = new RegExp(
 	String.raw`${FRENCH_NIR_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${FRENCH_NIR_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
 	"iu",
 );
+// Spanish DNI/NIE identifiers carry a modulo-23 check letter. Require explicit
+// Spanish-specific labels because the acronyms are ambiguous outside Spain.
+const SPANISH_NATIONAL_ID_VALUE_PATTERN = String.raw`(?:\p{Nd}(?:[.\s-]?\p{Nd}){7}[-\s]?[A-Z]|[XYZ][-\s]?\p{Nd}(?:[.\s-]?\p{Nd}){6}[-\s]?[A-Z])`;
+const SPANISH_DNI_EXACT_PATTERN = /^\p{Nd}{8}[A-Z]$/iu;
+const SPANISH_NIE_EXACT_PATTERN = /^[XYZ]\p{Nd}{7}[A-Z]$/iu;
+const SPANISH_NATIONAL_ID_LABEL_PATTERN = String.raw`(?:(?<![\p{L}\p{N}])(?:spanish|spain)[-_\s]+(?:(?:national[-_\s]+)?(?:id|identity|identification)[-_\s]+(?:document|card|number|no\.?)|dni|nie)(?:[-_\s]+(?:number|no\.?))?|(?<![\p{L}\p{N}])(?:dni|nie)[-_\s]+(?:espa[nñ]ol(?:a)?|espanol(?:a)?)|(?<![\p{L}\p{N}])documento[-_\s]+nacional[-_\s]+de[-_\s]+identidad[-_\s]+(?:espa[nñ]ol(?:a)?|espanol(?:a)?)|(?<![\p{L}\p{N}])n[uú]mero[-_\s]+de[-_\s]+identidad[-_\s]+de[-_\s]+extranjeros?)`;
+const LABELED_SPANISH_NATIONAL_ID_PATTERN = new RegExp(
+	String.raw`${SPANISH_NATIONAL_ID_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${SPANISH_NATIONAL_ID_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
+	"iu",
+);
 // Indian PANs use a 10-character layout; the fourth letter is a holder-category code.
 const INDIAN_PAN_VALUE_PATTERN = String.raw`[A-Z]{3}[ABCFGHJLPT][A-Z]\p{Nd}{4}[A-Z]`;
 const INDIAN_PAN_EXACT_PATTERN = new RegExp(`^${INDIAN_PAN_VALUE_PATTERN}$`, "iu");
@@ -1482,6 +1492,11 @@ const LABELED_FRENCH_NIR_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_FRENCH_NIR_PATTERN,
 	`(${FRENCH_NIR_VALUE_PATTERN})`,
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){14})`,
+);
+const LABELED_SPANISH_NATIONAL_ID_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_SPANISH_NATIONAL_ID_PATTERN,
+	`(${SPANISH_NATIONAL_ID_VALUE_PATTERN})`,
+	String.raw`((?:\p{Nd}(?:[\p{Cc}\p{Cf}\s.-]*\p{Nd}){7}[\p{Cc}\p{Cf}\s-]*[A-Z]|[XYZ][\p{Cc}\p{Cf}\s-]*\p{Nd}(?:[\p{Cc}\p{Cf}\s.-]*\p{Nd}){6}[\p{Cc}\p{Cf}\s-]*[A-Z]))`,
 );
 const LABELED_INDIAN_PAN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_INDIAN_PAN_PATTERN,
@@ -2767,6 +2782,36 @@ function hasLabeledFrenchNir(value: string): boolean {
 	return false;
 }
 
+const SPANISH_NIF_CHECK_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
+function isValidSpanishNationalId(value: string): boolean {
+	const normalized = value.replace(/[\p{Cc}\p{Cf}\s.-]+/gu, "");
+	let number: string | undefined;
+	if (SPANISH_DNI_EXACT_PATTERN.test(normalized)) {
+		number = asciiDecimalDigits(normalized.slice(0, 8));
+	} else if (SPANISH_NIE_EXACT_PATTERN.test(normalized)) {
+		const prefix = normalized[0]!.toUpperCase();
+		const digits = asciiDecimalDigits(normalized.slice(1, 8));
+		const prefixDigit = prefix === "X" ? "0" : prefix === "Y" ? "1" : "2";
+		number = digits === undefined ? undefined : `${prefixDigit}${digits}`;
+	} else {
+		return false;
+	}
+	const checkLetter = normalized.at(-1)!.toUpperCase();
+	return conservativelyValidateLabeledDigits(number, (digits) =>
+		digits.length === 8 && SPANISH_NIF_CHECK_LETTERS[Number(digits) % 23] === checkLetter);
+}
+
+function hasLabeledSpanishNationalId(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_SPANISH_NATIONAL_ID_PATTERN.source,
+		`${LABELED_SPANISH_NATIONAL_ID_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidSpanishNationalId(match[1]!)) return true;
+	}
+	return false;
+}
+
 function isValidIndianPanNumber(value: string): boolean {
 	const normalized = value.replace(/[\p{Cc}\p{Cf}]/gu, "");
 	if (!INDIAN_PAN_EXACT_PATTERN.test(normalized)) return false;
@@ -3151,8 +3196,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
 		|| hasLabeledAadhaarNumber(value) || hasLabeledChineseResidentIdNumber(value)
 		|| hasLabeledJapaneseMyNumber(value) || hasLabeledSwedishPersonalId(value)
-		|| hasLabeledFrenchNir(value) || hasLabeledIndianPanNumber(value)
-		|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value)
+		|| hasLabeledFrenchNir(value) || hasLabeledSpanishNationalId(value)
+		|| hasLabeledIndianPanNumber(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value)
 		|| hasLabeledCardSecurityCode(value) || hasLabeledPin(value)
 		|| hasLabeledOneTimeAuthCode(value) || hasLabeledRecoveryCode(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
@@ -3178,8 +3223,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledChineseResidentIdNumber(compacted)
 			|| hasLabeledJapaneseMyNumber(compacted) || hasLabeledSwedishPersonalId(compacted)
-			|| hasLabeledFrenchNir(compacted) || hasLabeledIndianPanNumber(compacted)
-			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted)
+			|| hasLabeledFrenchNir(compacted) || hasLabeledSpanishNationalId(compacted)
+			|| hasLabeledIndianPanNumber(compacted) || LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted)
 			|| hasLabeledCardSecurityCode(compacted) || hasLabeledPin(compacted)
 			|| hasLabeledOneTimeAuthCode(compacted) || hasLabeledRecoveryCode(compacted);
 	};
@@ -3206,8 +3251,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
 			|| hasLabeledAadhaarNumber(value) || hasLabeledChineseResidentIdNumber(value)
 			|| hasLabeledJapaneseMyNumber(value) || hasLabeledSwedishPersonalId(value)
-			|| hasLabeledFrenchNir(value) || hasLabeledIndianPanNumber(value)
-			|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value)
+			|| hasLabeledFrenchNir(value) || hasLabeledSpanishNationalId(value)
+			|| hasLabeledIndianPanNumber(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value)
 			|| hasLabeledCardSecurityCode(value) || hasLabeledPin(value)
 			|| hasLabeledOneTimeAuthCode(value) || hasLabeledRecoveryCode(value)
 			|| EMAIL_ADDRESS_PATTERN.test(value);
@@ -3231,8 +3276,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledChineseResidentIdNumber(compacted)
 			|| hasLabeledJapaneseMyNumber(compacted) || hasLabeledSwedishPersonalId(compacted)
-			|| hasLabeledFrenchNir(compacted) || hasLabeledIndianPanNumber(compacted)
-			|| hasLabeledPaymentCard(compacted) || hasLabeledCardSecurityCode(compacted)
+			|| hasLabeledFrenchNir(compacted) || hasLabeledSpanishNationalId(compacted)
+			|| hasLabeledIndianPanNumber(compacted) || hasLabeledPaymentCard(compacted) || hasLabeledCardSecurityCode(compacted)
 			|| hasLabeledPin(compacted) || hasLabeledOneTimeAuthCode(compacted)
 			|| hasLabeledRecoveryCode(compacted);
 	};
@@ -3421,6 +3466,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_JAPANESE_MY_NUMBER_BOUNDARY_PATTERN,
 	LABELED_SWEDISH_PERSONAL_ID_BOUNDARY_PATTERN,
 	LABELED_FRENCH_NIR_BOUNDARY_PATTERN,
+	LABELED_SPANISH_NATIONAL_ID_BOUNDARY_PATTERN,
 	LABELED_INDIAN_PAN_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
@@ -3532,6 +3578,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== LABELED_JAPANESE_MY_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_SWEDISH_PERSONAL_ID_BOUNDARY_PATTERN
 		&& pattern !== LABELED_FRENCH_NIR_BOUNDARY_PATTERN
+		&& pattern !== LABELED_SPANISH_NATIONAL_ID_BOUNDARY_PATTERN
 		&& pattern !== LABELED_INDIAN_PAN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
@@ -3637,6 +3684,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidSwedishPersonalId(match[1]!)) continue;
 				if (sourcePattern === LABELED_FRENCH_NIR_BOUNDARY_PATTERN
 					&& !isValidFrenchNir(match[1]!)) continue;
+				if (sourcePattern === LABELED_SPANISH_NATIONAL_ID_BOUNDARY_PATTERN
+					&& !isValidSpanishNationalId(match[1]!)) continue;
 				if (sourcePattern === LABELED_INDIAN_PAN_BOUNDARY_PATTERN
 					&& !isValidIndianPanNumber(match[1]!)) continue;
 				if (sourcePattern === US_ITIN_BOUNDARY_PATTERN
