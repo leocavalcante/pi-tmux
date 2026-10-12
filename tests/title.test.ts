@@ -1202,6 +1202,13 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), authorizationApiKey, authorizationApiKey);
 	const digestAuthorization = `Authorization: Digest username="alice", realm="example", nonce="n", uri="/private", response="${"A1b2".repeat(8)}"`;
 	await suppressed(fixture(), digestAuthorization, digestAuthorization);
+	const rspauthHeader = 'Authentication-Info: rspauth="';
+	const rspauthHash = "C3d4".repeat(8);
+	const authenticationInfo = `${rspauthHeader}${rspauthHash}"`;
+	await suppressed(fixture(), authenticationInfo, authenticationInfo);
+	const rspauthTokenStart = prefixLength - 8;
+	const truncatedRspauthPrompt = `${"x".repeat(rspauthTokenStart - rspauthHeader.length - 1)} ${rspauthHeader}${rspauthHash}" ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedRspauthPrompt, rspauthHash);
 	const setCookieSessionId = `Set-Cookie: JSESSIONID=${"E5f6".repeat(8)}; Path=/; HttpOnly`;
 	await suppressed(fixture(), setCookieSessionId, setCookieSessionId);
 	const appSessionCookie = `Set-Cookie: _my_app_session=${"K9l0".repeat(8)}; Path=/; HttpOnly`;
@@ -2857,6 +2864,8 @@ test("credential-shaped model output is rejected without applying or disclosing 
 		["Authorization: ApiKey ", "E5f6".repeat(6)].join(""),
 		["Proxy-Authorization: API-Key ", "G7h8".repeat(6)].join(""),
 		["Proxy-Authorization: Digest username=alice, response=", "A1b2".repeat(8)].join(""),
+		["Authentication-Info: rspauth=", "C3d4".repeat(8)].join(""),
+		["Proxy-Authentication-Info: qop=auth, rspauth=", "E5f6".repeat(16)].join(""),
 		["Set-Cookie: JSESSIONID=", "A1b2".repeat(8), "; Path=/; HttpOnly"].join(""),
 		["Set-Cookie: _my_app_session=", "K9l0".repeat(8), "; Path=/; HttpOnly"].join(""),
 		["B e a r e r ", "A1b2".repeat(8)].join(""),
