@@ -195,6 +195,52 @@ async function settle() {
 	for (let i = 0; i < 40; i++) await Promise.resolve();
 }
 
+test("automatic server-change warnings stay deduplicated across extension reloads", async () => {
+	const warningKey = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
+	const previousWarningDescriptor = Object.getOwnPropertyDescriptor(process, warningKey);
+	Reflect.deleteProperty(process, warningKey);
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const warnings: string[] = [];
+		const ctx = {
+			mode: "tui",
+			ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
+		} as unknown as ExtensionContext;
+		let serverPid = "123";
+		const tmux: RunTmux = async (args) => args[0] === "display-message"
+			? `$0:1:${serverPid}:0\t@2\t0\texisting task`
+			: "";
+		const load = () => {
+			const handlers = new Map<string, Function>();
+			piTmux({
+				on: (event: string, handler: Function) => handlers.set(event, handler),
+				registerCommand: () => {},
+			} as unknown as ExtensionAPI, tmux);
+			return async (event: string, reason = "startup") => {
+				await handlers.get(event)!({ type: event, reason }, ctx);
+				await settle();
+			};
+		};
+
+		const firstRuntime = load();
+		await firstRuntime("session_start");
+		serverPid = "124";
+		await firstRuntime("agent_start");
+		const warning = "The tmux server changed; restart Pi to resume title updates.";
+		expect(warnings).toEqual([warning]);
+
+		await firstRuntime("session_shutdown", "reload");
+		const secondRuntime = load();
+		await secondRuntime("session_start", "reload");
+		serverPid = "125";
+		await secondRuntime("agent_start");
+		expect(warnings).toEqual([warning]);
+	} finally {
+		if (previousWarningDescriptor) Object.defineProperty(process, warningKey, previousWarningDescriptor);
+		else Reflect.deleteProperty(process, warningKey);
+	}
+});
+
 const renameCommand = (title: string) => ["rename-window", "-t", "%1", "--", buildWindowTitleFormat(title)];
 const quitCommand = () => ["rename-window", "-t", "%1", "--", QUIT_TITLE_FORMAT];
 

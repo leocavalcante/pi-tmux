@@ -48,6 +48,7 @@ import {
 const MAX_FORMER_TARGETS = 8;
 const MAX_LOCATION_PASSES = 4;
 const SERVER_CHANGED_WARNING = "The tmux server changed; restart Pi to resume title updates.";
+const SERVER_CHANGE_WARNING_PROCESS_KEY = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
 type ShapeOnlyNamingRejection = Extract<InvalidNamingTitleReason, "multiple-lines" | "too-long" | "too-many-words">;
 type NamingRejectionCategory = InvalidNamingTitleReason | "unsafe-output";
 
@@ -134,7 +135,6 @@ export function createController(tmux: RunTmux) {
 	let lastTitleLocation: { session: string; window: string } | undefined;
 	let pinnedTitleNeedsApply = false;
 	let serverIdentityChanged = false;
-	let serverChangeWarningShown = false;
 	const formerWindows = new Set<string>();
 	const formerSessions = new Set<string>();
 
@@ -178,8 +178,8 @@ export function createController(tmux: RunTmux) {
 	};
 
 	const warnAutomaticServerChangeOnce = (ctx: ExtensionContext) => {
-		if (serverChangeWarningShown) return;
-		serverChangeWarningShown = true;
+		if (Reflect.get(process, SERVER_CHANGE_WARNING_PROCESS_KEY) === true) return;
+		Object.defineProperty(process, SERVER_CHANGE_WARNING_PROCESS_KEY, { configurable: true, value: true });
 		notifySafely(ctx, SERVER_CHANGED_WARNING, "warning");
 	};
 
