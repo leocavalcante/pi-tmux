@@ -1217,6 +1217,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const imageKitSignature = "b".repeat(40);
 	const imageKitSignedUrl = `https://ik.imagekit.io/demo/image.jpg?ik-s=${imageKitSignature}&ik-t=1790000000`;
 	await suppressed(fixture(), `Review secure image delivery ${imageKitSignedUrl}`, imageKitSignature);
+	const nginxSecureLinkSignature = "A1b2C3d4E5f6G7h8I9j0kA";
+	const nginxSecureLinkUrl = `https://downloads.example.test/s/link?md5=${nginxSecureLinkSignature}&expires=1790000000`;
+	await suppressed(fixture(), `Review protected download ${nginxSecureLinkUrl}`, nginxSecureLinkSignature);
 	const tencentCosSignature = "a".repeat(40);
 	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
 	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
