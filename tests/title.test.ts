@@ -1182,6 +1182,16 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
 	const truncatedTencentCosPrompt = `${"x".repeat(tencentCosUrlStart - 1)} ${truncatedTencentCosUrl} ${"y".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedTencentCosPrompt, tencentCosSignature);
+	const alibabaOssLegacySignature = `${"C".repeat(27)}=`;
+	const truncatedAlibabaOssLegacyUrl = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?OSSAccessKeyId=EXAMPLE_ID&Expires=1790000000&Signature=${alibabaOssLegacySignature}`;
+	const alibabaOssLegacyUrlStart = prefixLength - 10 - truncatedAlibabaOssLegacyUrl.indexOf(alibabaOssLegacySignature);
+	const truncatedAlibabaOssLegacyPrompt = `${"x".repeat(alibabaOssLegacyUrlStart - 1)} ${truncatedAlibabaOssLegacyUrl} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedAlibabaOssLegacyPrompt, alibabaOssLegacySignature);
+	const alibabaOssV4Signature = "d".repeat(64);
+	const truncatedAlibabaOssV4Url = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${alibabaOssV4Signature}`;
+	const alibabaOssV4UrlStart = prefixLength - 10 - truncatedAlibabaOssV4Url.indexOf(alibabaOssV4Signature);
+	const truncatedAlibabaOssV4Prompt = `${"x".repeat(alibabaOssV4UrlStart - 1)} ${truncatedAlibabaOssV4Url} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedAlibabaOssV4Prompt, alibabaOssV4Signature);
 	const awsAccessKeyId = `AKIA${"A".repeat(16)}`;
 	const awsAccessKeyStart = prefixLength - 8;
 	const truncatedAwsPrompt = `${"x".repeat(awsAccessKeyStart)}${awsAccessKeyId} ${"x".repeat(1_200)}`;
@@ -1249,6 +1259,20 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		fixture(),
 		`https://example.cos.ap-guangzhou.myqcloud.com/private?q-signature=${tencentCosSignature}&q-sign-algorithm=sha1`,
 		tencentCosSignature,
+	);
+	const alibabaOssLegacySignedUrl = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?OSSAccessKeyId=EXAMPLE_ID&Expires=1790000000&Signature=${alibabaOssLegacySignature}`;
+	await suppressed(fixture(), alibabaOssLegacySignedUrl, alibabaOssLegacySignature);
+	await suppressed(
+		fixture(),
+		`https://bucket.oss-cn-hangzhou.aliyuncs.com/object?Signature=${alibabaOssLegacySignature}&OSSAccessKeyId=EXAMPLE_ID`,
+		alibabaOssLegacySignature,
+	);
+	const alibabaOssV4SignedUrl = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${alibabaOssV4Signature}`;
+	await suppressed(fixture(), alibabaOssV4SignedUrl, alibabaOssV4Signature);
+	await suppressed(
+		fixture(),
+		`https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature=${alibabaOssV4Signature}&x-oss-signature-version=OSS4-HMAC-SHA256`,
+		alibabaOssV4Signature,
 	);
 	const negotiateAuthorization = `Authorization: Negotiate ${httpSignature}`;
 	await suppressed(fixture(), negotiateAuthorization, negotiateAuthorization);
