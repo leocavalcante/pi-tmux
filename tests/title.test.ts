@@ -1192,6 +1192,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const alibabaOssV4UrlStart = prefixLength - 10 - truncatedAlibabaOssV4Url.indexOf(alibabaOssV4Signature);
 	const truncatedAlibabaOssV4Prompt = `${"x".repeat(alibabaOssV4UrlStart - 1)} ${truncatedAlibabaOssV4Url} ${"y".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedAlibabaOssV4Prompt, alibabaOssV4Signature);
+	const oracleParToken = "Ab3_".repeat(16);
+	const truncatedOracleParUrl = `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${oracleParToken}/n/MyNamespace/b/MyParBucket/o/`;
+	const oracleParUrlStart = prefixLength - 10 - truncatedOracleParUrl.indexOf(oracleParToken);
+	const truncatedOracleParPrompt = `${"x".repeat(oracleParUrlStart - 1)} ${truncatedOracleParUrl} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedOracleParPrompt, oracleParToken);
 	const awsAccessKeyId = `AKIA${"A".repeat(16)}`;
 	const awsAccessKeyStart = prefixLength - 8;
 	const truncatedAwsPrompt = `${"x".repeat(awsAccessKeyStart)}${awsAccessKeyId} ${"x".repeat(1_200)}`;
@@ -1274,6 +1279,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 		`https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature=${alibabaOssV4Signature}&x-oss-signature-version=OSS4-HMAC-SHA256`,
 		alibabaOssV4Signature,
 	);
+	await suppressed(fixture(), `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${oracleParToken}/n/MyNamespace/b/MyParBucket/o/`, oracleParToken);
 	const negotiateAuthorization = `Authorization: Negotiate ${httpSignature}`;
 	await suppressed(fixture(), negotiateAuthorization, negotiateAuthorization);
 	const negotiateChallenge = `WWW-Authenticate: Negotiate ${httpSignature}`;

@@ -2650,6 +2650,52 @@ test("screens Alibaba Cloud OSS V1 and V4 signed URLs across retained-context bo
 	}
 });
 
+test("screens Oracle Object Storage pre-authenticated URLs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const token = "Ab3_".repeat(16);
+	const url = `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${token}/n/MyNamespace/b/MyParBucket/o/`;
+	const promptAt = (value: string, secret: string, start: number) => {
+		const valueStart = start - value.indexOf(secret);
+		const prefix = `${"x".repeat(valueStart - 1)} `;
+		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+	};
+
+	expect(hasSensitiveNamingContext(url)).toBe(true);
+	expect(hasSensitiveOutput(url)).toBe(true);
+	for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+		const context = buildNamingRequestContext([], promptAt(url, token, tokenStart));
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+	}
+
+	const omittedToken = buildNamingRequestContext([], promptAt(url, token, prefixLength + 5));
+	expect(omittedToken.hasSensitiveBoundary()).toBe(false);
+
+	const nearMisses = [
+		{
+			value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${"a".repeat(63)}/n/MyNamespace/b/MyParBucket/o/`,
+			token: "a".repeat(63),
+		},
+		{
+			value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${"a".repeat(65)}/n/MyNamespace/b/MyParBucket/o/`,
+			token: "a".repeat(65),
+		},
+		{ value: `https://objectstorage.us-phoenix-1.oraclecloud.com/q/${token}/n/MyNamespace/b/MyParBucket/o/`, token },
+		{ value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${token}/b/MyParBucket/o/`, token },
+		{ value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${token}/n/MyNamespace/b/MyParBucket/`, token },
+		{ value: `https://example.com/p/${token}/n/MyNamespace/b/MyParBucket/object/`, token },
+	];
+	for (const { value, token: nearMissToken } of nearMisses) {
+		expect(hasSensitiveNamingContext(value)).toBe(false);
+		expect(hasSensitiveOutput(value)).toBe(false);
+		expect(buildNamingRequestContext([], promptAt(value, nearMissToken, prefixLength - 10)).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens HTTP Signature Authorization proofs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
