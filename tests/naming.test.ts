@@ -2259,6 +2259,8 @@ test("screens common session-cookie IDs in Set-Cookie headers across retained-co
 		{ name: "PHPSESSID", token: "C3d4".repeat(8) },
 		{ name: "connect.sid", token: `s%3A${"E5f6".repeat(7)}` },
 		{ name: "__Host-session_id", token: "G7h8".repeat(8) },
+		{ name: "_my_app_session", token: "K9l0".repeat(8) },
+		{ name: "myapp_session_id", token: "M1n2".repeat(8) },
 	];
 
 	for (const { name, token } of cookies) {
@@ -2303,6 +2305,8 @@ test("screens common session-cookie IDs in Set-Cookie headers across retained-co
 		`Set-Cookie: PHPSESSID=${"A".repeat(19)}`,
 		`Set-Cookie: PHPSESSID authentication is recommended`,
 		`Set-Cookie: tracking_id=${"A".repeat(32)}`,
+		`Set-Cookie: _myapp_setting=${"A".repeat(32)}`,
+		`Set-Cookie: _myapp_sessions=${"A".repeat(32)}`,
 		`X-Set-Cookie: JSESSIONID=${"A".repeat(32)}`,
 	]) {
 		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
