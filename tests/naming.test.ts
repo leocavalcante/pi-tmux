@@ -2835,6 +2835,72 @@ test("screens ImageKit Secure URL signatures across retained-context boundaries"
 	}
 });
 
+test("screens expiring NGINX Secure Link URLs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const signatures = ["a".repeat(22), "b".repeat(22)];
+	const values = [
+		{
+			url: `https://downloads.example.test/s/link?md5=${signatures[0]}&format=raw&expires=1790000000`,
+			signature: signatures[0]!,
+		},
+		{
+			url: `https://cdn.example.test/private/file.zip?expires=2147483647&md5=${signatures[1]}`,
+			signature: signatures[1]!,
+		},
+	];
+	const promptAt = (url: string, signature: string, start: number) => {
+		const urlStart = start - url.indexOf(signature);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, signature } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscated = url.replace(signature, `${signature.slice(0, 11)}\u200b${signature.slice(11)}`);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const obfuscatedSignature = `${signature.slice(0, 11)}\u200b${signature.slice(11)}`;
+		const obfuscatedContext = buildNamingRequestContext([], promptAt(obfuscated, obfuscatedSignature, prefixLength - 11));
+		expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
+		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+
+		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
+		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+	}
+
+	const signature = signatures[0]!;
+	const nearMisses = [
+		{ url: `?md5=${"a".repeat(21)}&expires=1790000000`, signature: "a".repeat(21) },
+		{ url: `?md5=${"a".repeat(23)}&expires=1790000000`, signature: "a".repeat(23) },
+		{ url: `?md5=${"a".repeat(21)}.&expires=1790000000`, signature: `${"a".repeat(21)}.` },
+		{ url: `?md5=${signature}`, signature },
+		{ url: `?md5=${signature}&expire=1790000000`, signature },
+		{ url: `?expires=not-a-timestamp&md5=${signature}`, signature },
+		{ url: `?xmd5=${signature}&expires=1790000000`, signature },
+		{ url: `?md5=${signature}x&expires=1790000000`, signature: `${signature}x` },
+	];
+	for (const { url, signature: candidate } of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			const context = buildNamingRequestContext([], promptAt(url, candidate, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Google Cloud CDN signed URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
