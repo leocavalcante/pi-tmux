@@ -1450,6 +1450,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	for (const [label, value] of [
 		[" SSN: ", "000-00-0000"],
 		[" SSN: ", "٠٠٠-٠٠-٠٠٠٠"],
+		[" ITIN: ", "900-70-0000"],
 		[" NI number: ", "AB 12 34 56 C"],
 		[" Card Number: ", "٠٠٠٠-٠٠٠٠-٠٠٠٠-٠٠٠٠"],
 		[" Phone: ", "000-000-0000"],
@@ -6035,6 +6036,66 @@ test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them"
 	ordinaryTitle.input("Name a task");
 	await settle();
 	expect(ordinaryTitle.state.title).toBe("sin parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("rejects explicitly labeled U.S. ITINs in recognized IRS ranges without exposing them", async () => {
+	const identifiers = [
+		"ITIN: 900-70-0000",
+		"ITIN number=900700000",
+		"Individual Taxpayer Identification Number: 900 90 0000",
+		"ITIN: ９００-９４-００００",
+		"I\u200bTIN: 900-99-0000",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the tax record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"900-70-0000",
+		"ITIN: 800-70-0000",
+		"ITIN: 900-69-0000",
+		"ITIN: 900-89-0000",
+		"ITIN: 900-93-0000",
+		"ITIN: 900-9\u200b3-0000",
+		"ITIN: 900-70-000",
+		"ITIN parsing in a task",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const promptMarker = "[... middle of prompt omitted ...]";
+	const retainedPromptLength = MAX_PROMPT_LENGTH - promptMarker.length - 2;
+	const prefixLength = Math.ceil(retainedPromptLength / 2);
+	const invalidSplitValue = "900-93-0000";
+	const itinLabel = " ITIN: ";
+	const invalidSplitStart = prefixLength - 4;
+	const invalidSplitPrompt = `${"x".repeat(invalidSplitStart - itinLabel.length)}${itinLabel}${invalidSplitValue} ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidSplitPrompt).hasSensitiveBoundary()).toBe(false);
+
+	const ordinaryTitle = fixture([Promise.resolve(response("itin parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("itin parser");
 	expect(ordinaryTitle.warnings).toEqual([]);
 });
 
