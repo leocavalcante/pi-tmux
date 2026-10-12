@@ -5992,6 +5992,52 @@ test("rejects Grafana tokens without mistaking near-miss strings for tokens", as
 	}
 });
 
+test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them", async () => {
+	const identifiers = [
+		"SIN: 712-345-677",
+		"SIN Number=712345677",
+		"Social Insurance Number: 712 345 677",
+		"SIN: 712.34\u200b5.677",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"712-345-677",
+		"SIN: 712-345-678",
+		"SIN: 000-000-000",
+		"SIN validation in a task",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("SIN parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("sin parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
 test("rejects explicitly labeled valid CPF values without exposing them", async () => {
 	const identifiers = [
 		"CPF: 529.982.247-25",
