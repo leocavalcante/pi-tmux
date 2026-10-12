@@ -5612,6 +5612,81 @@ test("screens checksum-valid Australian Medicare numbers only with an explicit l
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens valid New Zealand IRD numbers only with an explicit label", () => {
+	const identifiers = [
+		"IRD: 138629473",
+		"IRD Number=138-629-473",
+		"NZ IRD No.: 27-384-919",
+		"New Zealand IRD Number: 100000131",
+		"Inland Revenue Department Number: 138629473",
+	];
+	for (const identifier of identifiers) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	const unicodeIrdNumber = "138629473".replace(/\d/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	for (const identifier of [`IRD Number: ${unicodeIrdNumber}`, "IRD: 13862\u200b9473"]) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"138629473",
+		"IRD Number: 138629472",
+		"IRD: 100000130",
+		"IRD: 100010640",
+		"IRD: 01000004",
+		"IRD: 200000005",
+		"IRD Number: 2738491",
+		"IRD Number: 1386294730",
+		"IRD No 138629473",
+		"Tax number: 138629473",
+		"IRD number validation in the task",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const label = " NZ IRD Number: ";
+	const value = "138629473";
+	const prefixValueStart = prefixLength - 4;
+	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
+	const prefixContext = buildNamingRequestContext([], prompt);
+	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+
+	const obfuscatedValue = `${value.slice(0, 5)}\u0000${value.slice(5)}`;
+	const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+
+	const historyContent = `${"x".repeat(995 - label.length)}${label}${value} y`;
+	for (const messages of [
+		[{ role: "user", content: historyContent }],
+		[{ role: "compactionSummary", summary: historyContent }],
+	] as any[]) {
+		const context = buildNamingRequestContext(messages);
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+	}
+
+	const promptLength = MAX_PROMPT_LENGTH + 300;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const suffixValueStart = suffixStart - value.length + 4;
+	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} `
+		+ `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+	const suffixContext = buildNamingRequestContext([], suffixPrompt);
+	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+
+	const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}138629472 ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens check-digit-valid Brazilian CPF values only with an explicit label", () => {
 	const identifiers = [
 		"CPF: 529.982.247-25",

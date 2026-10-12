@@ -408,7 +408,8 @@ date-of-birth labels, UK National Insurance numbers, explicitly labeled
 Brazilian CPF values with valid check digits, explicitly labeled Canadian SIN
 values with valid Luhn check digits, explicitly labeled Australian TFNs with
 valid checksums, and explicitly labeled Australian Medicare-card numbers with
-valid check digits.
+valid check digits. Explicitly labeled New Zealand IRD numbers in the current
+issued range with valid mod-11 checksums are checked too.
 Explicitly labeled IBANs with supported country lengths and valid MOD 97
 checksums are checked too. Phone numbers and Luhn-valid, explicitly labeled
 payment-card-shaped values are checked too, including values written with
@@ -438,7 +439,9 @@ following explicit date-of-birth labels, UK National Insurance numbers,
 explicitly labeled Brazilian CPF values with valid check digits, explicitly
 labeled Canadian SIN values with valid Luhn check digits, explicitly labeled
 Australian TFNs with valid checksums, and explicitly labeled Australian
-Medicare-card numbers with valid check digits. Explicitly labeled IBANs with
+Medicare-card numbers with valid check digits. Explicitly labeled New Zealand
+IRD numbers in the current issued range with valid mod-11 checksums are checked
+too. Explicitly labeled IBANs with
 supported country lengths and valid MOD 97 checksums are checked too. Phone numbers and Luhn-valid, explicitly
 labeled payment-card-shaped values are checked too, including values written
 with Unicode decimal digits.
