@@ -1945,7 +1945,10 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		// The fully compacted view below remains useful for credentials split by whitespace.
 		const withoutFormatCharacters = stripNonWhitespaceControls(value);
 		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
-		return hasSensitiveValue(withoutFormatCharacters) || hasWhitespaceSeparatedCredential(value)
+		// The caller already scanned `value`; only rescan full patterns if stripping
+		// invisible controls actually changed it.
+		return (withoutFormatCharacters !== value && hasSensitiveValue(withoutFormatCharacters))
+			|| hasWhitespaceSeparatedCredential(value)
 			|| COMPACTED_CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
 			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_SSN_PATTERN.test(compacted)
 			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
@@ -1969,7 +1972,10 @@ export function hasSensitiveOutput(text: string): boolean {
 		// Keep ordinary whitespace as a boundary while stripping invisible controls.
 		const withoutFormatCharacters = stripNonWhitespaceControls(value);
 		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
-		return hasPattern(withoutFormatCharacters) || hasWhitespaceSeparatedCredential(value)
+		// The caller already scanned `value`; only rescan full patterns if stripping
+		// invisible controls actually changed it.
+		return (withoutFormatCharacters !== value && hasPattern(withoutFormatCharacters))
+			|| hasWhitespaceSeparatedCredential(value)
 			|| SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
 			|| hasLabeledPaymentCard(compacted);
 	};
