@@ -2824,6 +2824,29 @@ test("new credential-looking context cancels in-flight naming without sending it
 	expect(f.state.title).toBe("existing task");
 });
 
+test("legacy Dropbox shared links stay out of naming context and model output", async () => {
+	const id = "a".repeat(15);
+	const link = `https://www.dropbox.com/s/${id}/manual.pdf?dl=0`;
+	const sensitiveContext = fixture();
+	sensitiveContext.input(`Review this Dropbox file: ${link}`);
+	await settle();
+	expect(sensitiveContext.requests).toHaveLength(0);
+	expect(sensitiveContext.state.title).toBe("existing task");
+	expect(sensitiveContext.warnings).toEqual([
+		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+	]);
+	expect(sensitiveContext.warnings.join(" ")).not.toContain(id);
+
+	const sensitiveOutput = fixture([Promise.resolve(response(link))]);
+	sensitiveOutput.input("Name a task");
+	await settle();
+	expect(sensitiveOutput.requests).toHaveLength(1);
+	expect(sensitiveOutput.state.title).toBe("existing task");
+	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+	expect(sensitiveOutput.warnings.join(" ")).not.toContain(id);
+});
+
 test("MEGA share links stay out of naming context and are rejected from model output", async () => {
 	const key = "A".repeat(43);
 	const link = `https://mega.nz/file/abcdefgh#${key}`;

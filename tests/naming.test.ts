@@ -2967,6 +2967,62 @@ test("screens Dropbox shared-link keys across retained-context boundaries", () =
 	}
 });
 
+test("screens legacy Dropbox file and folder share IDs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const ids = ["a".repeat(15), "B".repeat(32)];
+	const values = [
+		{ url: `https://www.dropbox.com/s/${ids[0]}/manual.pdf?dl=0`, id: ids[0]! },
+		{ url: `https://dropbox.com/sh/${ids[1]}/shared-folder`, id: ids[1]! },
+	];
+	const promptAt = (url: string, id: string, start: number) => {
+		const urlStart = start - url.indexOf(id);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, id } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscated = url.replace(id, `${id.slice(0, 7)}\u200b${id.slice(7)}`);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			const context = buildNamingRequestContext([], promptAt(url, id, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const obfuscatedId = `${id.slice(0, 7)}\u200b${id.slice(7)}`;
+		const obfuscatedContext = buildNamingRequestContext(
+			[], promptAt(obfuscated, obfuscatedId, prefixLength - 11),
+		);
+		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+		expect(buildNamingRequestContext([], promptAt(url, id, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+	}
+
+	const id = ids[0]!;
+	const nearMisses = [
+		`https://www.dropbox.com/s/${"a".repeat(14)}/file.pdf`,
+		`https://www.dropbox.com/sh/${"a".repeat(65)}/folder`,
+		`https://www.dropbox.com.evil.test/s/${id}/file.pdf`,
+		`https://dropbox.com/scl/fi/${id}/file.pdf`,
+		`https://files.example.test/s/${id}/file.pdf`,
+		`discussion of Dropbox shared link ${id}`,
+	];
+	for (const url of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			expect(buildNamingRequestContext([], promptAt(url, id, tokenStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Google Drive shared-link resource keys across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
