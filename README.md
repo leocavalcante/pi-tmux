@@ -439,8 +439,12 @@ control-digit guide][spanish-nif-guide] for the modulo-23 remainder rule and
 NIE-prefix conversion. Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
-with valid checksums and Medicare-card numbers with valid check digits are
-checked too. Explicitly labeled New Zealand IRD numbers in the current issued
+matching the local weighted Modulus 11 checksum pattern, along with
+Medicare-card numbers with valid check digits, are screened too. This local
+TFN check is best-effort screening and does not confirm ATO issuance. The ATO
+says software developers may request its TFN validation algorithm ([ATO
+guidance][australian-tfn-validation]).
+Explicitly labeled New Zealand IRD numbers in the current issued
 range (up to 200,000,000) with valid mod-11 checksums are checked too; see
 Inland Revenue's [2026 increase to the validation ceiling][new-zealand-ird-range].
 Explicitly labeled IBANs with supported country lengths and valid MOD 97
@@ -520,8 +524,12 @@ control-digit guide][spanish-nif-guide] for the modulo-23 remainder rule and
 NIE-prefix conversion. Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
-with valid checksums and Medicare-card numbers with valid check digits are
-checked too. Explicitly labeled New Zealand IRD numbers in the current issued
+matching the local weighted Modulus 11 checksum pattern, along with
+Medicare-card numbers with valid check digits, are screened too. This local
+TFN check is best-effort screening and does not confirm ATO issuance. The ATO
+says software developers may request its TFN validation algorithm ([ATO
+guidance][australian-tfn-validation]).
+Explicitly labeled New Zealand IRD numbers in the current issued
 range (up to 200,000,000) with valid mod-11 checksums are checked too; see
 Inland Revenue's [2026 increase to the validation ceiling][new-zealand-ird-range].
 Explicitly labeled IBANs with supported country lengths and valid MOD 97
@@ -615,3 +623,4 @@ and the [package-existence prerequisite](https://docs.npmjs.com/cli/v11/commands
 [nhs-number-standard]: https://www.datadictionary.nhs.uk/attributes/nhs_number.html
 [swedish-personnummer-standard]: https://www4.skatteverket.se/rattsligvagledning/edition/2026.6/330245.html
 [new-zealand-ird-range]: https://www.ird.govt.nz/updates/news-folder/2026/increase-to-ird-number-validation-upper-limit
+[australian-tfn-validation]: https://www.ato.gov.au/tax-and-super-professionals/for-superannuation-professionals/apra-regulated-funds/managing-member-benefits/taxation-of-member-super-benefits/tax-file-numbers-and-super-contributions/obtaining-member-tfns

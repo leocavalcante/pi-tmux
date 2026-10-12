@@ -88,6 +88,14 @@ test("README cites Skatteverket for Swedish personal-number checks", () => {
 	expect(readme).toContain("https://www4.skatteverket.se/rattsligvagledning/edition/2026.6/330245.html");
 });
 
+test("README cites the ATO for local TFN screening limitations", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
+	expect(readme).toContain("local weighted Modulus 11 checksum pattern");
+	expect(readme).toContain("best-effort screening and does not confirm ATO issuance");
+	expect(readme).toContain("software developers may request its TFN validation algorithm");
+	expect(readme).toContain("https://www.ato.gov.au/tax-and-super-professionals/for-superannuation-professionals/apra-regulated-funds/managing-member-benefits/taxation-of-member-super-benefits/tax-file-numbers-and-super-contributions/obtaining-member-tfns");
+});
+
 test("README cites Inland Revenue for the current New Zealand IRD range", () => {
 	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
 	expect(readme).toContain("up to 200,000,000");
