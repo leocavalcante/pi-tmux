@@ -255,6 +255,13 @@ const LABELED_PIN_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])${PIN_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${PIN_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
 	"iu",
 );
+// One-time codes are short; require an explicit OTP/MFA/2FA or authenticator label.
+const ONE_TIME_AUTH_CODE_VALUE_PATTERN = String.raw`\p{Nd}{4,8}`;
+const ONE_TIME_AUTH_CODE_LABEL_PATTERN = String.raw`(?:otp(?:[-_\s]+code)?|totp(?:[-_\s]+code)?|(?:mfa|2fa)(?:[-_\s]+(?:verification[-_\s]+)?code)?|one[-_\s]+time[-_\s]+(?:password|passcode|code)|authenticator[-_\s]+(?:verification[-_\s]+)?(?:code|passcode))`;
+const LABELED_ONE_TIME_AUTH_CODE_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])${ONE_TIME_AUTH_CODE_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${ONE_TIME_AUTH_CODE_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	"iu",
+);
 // CPF is Brazil's 11-digit personal tax identifier. Require an explicit label
 // and validate both check digits to avoid flagging arbitrary digit strings as PII.
 const LABELED_CPF_PATTERN = /(?<![\p{L}\p{N}])(?:cpf(?:[-_\s]?(?:number|no\.?))?|cadastro[-_\s]+de[-_\s]+pessoas[-_\s]+f[ií]sicas?)\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}(?:[ .()-]?\p{Nd}){10})(?![\p{L}\p{N}_])/iu;
@@ -1428,6 +1435,11 @@ const LABELED_PIN_BOUNDARY_PATTERN = makeBoundaryPattern(
 	`(${PIN_VALUE_PATTERN})`,
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s]*\p{Nd}){3,7})`,
 );
+const LABELED_ONE_TIME_AUTH_CODE_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_ONE_TIME_AUTH_CODE_PATTERN,
+	`(${ONE_TIME_AUTH_CODE_VALUE_PATTERN})`,
+	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s]*\p{Nd}){3,7})`,
+);
 const LABELED_CREDENTIAL_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_CREDENTIAL_PATTERN,
 	"([A-Za-z0-9._~+/=-]{20,})",
@@ -2352,6 +2364,22 @@ function hasLabeledPin(value: string): boolean {
 	return false;
 }
 
+function isValidOneTimeAuthCode(value: string): boolean {
+	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) =>
+		digits.length >= 4 && digits.length <= 8);
+}
+
+function hasLabeledOneTimeAuthCode(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_ONE_TIME_AUTH_CODE_PATTERN.source,
+		`${LABELED_ONE_TIME_AUTH_CODE_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidOneTimeAuthCode(match[1]!)) return true;
+	}
+	return false;
+}
+
 function isValidCpfNumber(value: string): boolean {
 	const digits = asciiDecimalDigits(value);
 	return conservativelyValidateLabeledDigits(digits, (knownDigits) => {
@@ -2885,7 +2913,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
 		|| hasLabeledAadhaarNumber(value) || hasLabeledIndianPanNumber(value)
 		|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value)
-		|| hasLabeledCardSecurityCode(value) || hasLabeledPin(value);
+		|| hasLabeledCardSecurityCode(value) || hasLabeledPin(value)
+		|| hasLabeledOneTimeAuthCode(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2908,7 +2937,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledIndianPanNumber(compacted)
 			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted)
-			|| hasLabeledCardSecurityCode(compacted) || hasLabeledPin(compacted);
+			|| hasLabeledCardSecurityCode(compacted) || hasLabeledPin(compacted)
+			|| hasLabeledOneTimeAuthCode(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	const lowercased = compatibilityNormalized.toLowerCase();
@@ -2933,7 +2963,7 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledAadhaarNumber(value) || hasLabeledIndianPanNumber(value)
 			|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value)
 			|| hasLabeledCardSecurityCode(value) || hasLabeledPin(value)
-			|| EMAIL_ADDRESS_PATTERN.test(value);
+			|| hasLabeledOneTimeAuthCode(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2954,7 +2984,7 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
 			|| hasLabeledAadhaarNumber(compacted) || hasLabeledIndianPanNumber(compacted)
 			|| hasLabeledPaymentCard(compacted) || hasLabeledCardSecurityCode(compacted)
-			|| hasLabeledPin(compacted);
+			|| hasLabeledPin(compacted) || hasLabeledOneTimeAuthCode(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	return distinctTextVariants(text, compatibilityNormalized, compatibilityNormalized.toLowerCase()).some((value) =>
@@ -3141,6 +3171,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
 	LABELED_CARD_SECURITY_CODE_BOUNDARY_PATTERN,
 	LABELED_PIN_BOUNDARY_PATTERN,
+	LABELED_ONE_TIME_AUTH_CODE_BOUNDARY_PATTERN,
 	EMAIL_ADDRESS_BOUNDARY_PATTERN,
 	BEARER_TOKEN_BOUNDARY_PATTERN,
 	AUTHORIZATION_TOKEN_BOUNDARY_PATTERN,
@@ -3245,6 +3276,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CARD_SECURITY_CODE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PIN_BOUNDARY_PATTERN
+		&& pattern !== LABELED_ONE_TIME_AUTH_CODE_BOUNDARY_PATTERN
 		&& pattern !== EMAIL_ADDRESS_BOUNDARY_PATTERN
 		&& pattern !== BEARER_TOKEN_BOUNDARY_PATTERN
 		&& pattern !== AUTHORIZATION_TOKEN_BOUNDARY_PATTERN
@@ -3319,6 +3351,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidCardSecurityCode(match[1]!)) continue;
 				if (sourcePattern === LABELED_PIN_BOUNDARY_PATTERN
 					&& !isValidPin(match[1]!)) continue;
+				if (sourcePattern === LABELED_ONE_TIME_AUTH_CODE_BOUNDARY_PATTERN
+					&& !isValidOneTimeAuthCode(match[1]!)) continue;
 				if (sourcePattern === LABELED_CPF_BOUNDARY_PATTERN
 					&& !isValidCpfNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_CANADIAN_SIN_BOUNDARY_PATTERN
