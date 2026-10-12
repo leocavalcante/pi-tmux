@@ -6112,6 +6112,67 @@ test("Japanese My Numbers crossing either retained prompt boundary are detected"
 	}
 });
 
+test("screens Swedish personal and coordination numbers only with explicit labels", () => {
+	const shortNumber = "900102-1238";
+	const fullNumber = "19900102-1237";
+	const arabicDigits = shortNumber.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	const fullwidthDigits = fullNumber.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0xff10 + Number(digit)));
+	for (const identifier of [
+		`Swedish personal identity number: ${shortNumber}`,
+		`Sweden personal identification number=${fullNumber}`,
+		`Swedish ID number: ${shortNumber.replace("-", "+")}`,
+		`Personnummer: ${shortNumber}`,
+		"Samordningsnummer: 900162-1235",
+		"Swedish coordination number: 19900162-1234",
+		`Swedish personal ID number: ${arabicDigits}`,
+		`Personnummer: ${fullwidthDigits}`,
+		"Samordningsnummer: 9001\u200b62-1235",
+	]) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		shortNumber,
+		`ID Number: ${shortNumber}`,
+		`Personal identity number: ${shortNumber}`,
+		`Coordination number: ${shortNumber}`,
+		"Swedish personal identity number: 9001021239",
+		"Swedish personal identity number: 199002301232",
+		"Swedish personal identity number: 900102123",
+		"Swedish personal identity number 900102-1238",
+		"Personnummer: 9001-02-1238",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("Swedish personal identity numbers crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	for (const label of [" Swedish personal identity number: ", " Personnummer: "]) {
+		for (const value of ["900102-1238", "19900102-1237"]) {
+			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " Swedish personal identity number: ".length)} Swedish personal identity number: 900102-1239 ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens conventionally formatted Indian PAN values only with an explicit label", () => {
 	const identifiers = [
 		"PAN: ZZZPZ9876Q",

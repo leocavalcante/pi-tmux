@@ -416,7 +416,11 @@ character; generic ID labels remain unmatched. Explicitly labeled Japanese My
 Number and Japan individual-number values, including labels such as `個人番号`
 and `マイナンバー`, are checked when 12 decimal digits (optionally separated
 by spaces or hyphens) pass the weighted MOD 11 check; generic number/ID labels
-remain unmatched. Explicitly labeled Indian PAN
+remain unmatched. Explicitly labeled Swedish personal identity and coordination
+numbers, including `personnummer` and `samordningsnummer`, are checked in the
+10- or 12-digit form with a calendar-valid birth date and Luhn control digit;
+the coordination-number date offset and standard hyphen/plus separators are
+supported. Generic ID labels remain unmatched. Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are
@@ -476,7 +480,11 @@ character; generic ID labels remain unmatched. Explicitly labeled Japanese My
 Number and Japan individual-number values, including labels such as `個人番号`
 and `マイナンバー`, are checked when 12 decimal digits (optionally separated
 by spaces or hyphens) pass the weighted MOD 11 check; generic number/ID labels
-remain unmatched. Explicitly labeled Indian PAN
+remain unmatched. Explicitly labeled Swedish personal identity and coordination
+numbers, including `personnummer` and `samordningsnummer`, are checked in the
+10- or 12-digit form with a calendar-valid birth date and Luhn control digit;
+the coordination-number date offset and standard hyphen/plus separators are
+supported. Generic ID labels remain unmatched. Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are

@@ -6512,6 +6512,93 @@ test("Japanese My Numbers crossing either retained prompt boundary skip model lo
 	}
 });
 
+test("rejects explicitly labeled Swedish personal identity numbers without disclosing them", async () => {
+	const shortNumber = "900102-1238";
+	const fullNumber = "19900102-1237";
+	const arabicDigits = shortNumber.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	const fullwidthDigits = fullNumber.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0xff10 + Number(digit)));
+	const identifiers = [
+		`Swedish personal identity number: ${shortNumber}`,
+		`Sweden personal identification number=${fullNumber}`,
+		`Swedish ID number: ${shortNumber.replace("-", "+")}`,
+		`Personnummer: ${shortNumber}`,
+		"Samordningsnummer: 900162-1235",
+		"Swedish coordination number: 19900162-1234",
+		`Swedish personal ID number: ${arabicDigits}`,
+		`Personnummer: ${fullwidthDigits}`,
+		"Samordningsnummer: 9001\u200b62-1235",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review a Swedish tax form ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		shortNumber,
+		`ID Number: ${shortNumber}`,
+		`Personal identity number: ${shortNumber}`,
+		`Coordination number: ${shortNumber}`,
+		"Swedish personal identity number: 9001021239",
+		"Swedish personal identity number: 199002301232",
+		"Swedish personal identity number: 900102123",
+		"Swedish personal identity number 900102-1238",
+		"Personnummer: 9001-02-1238",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("Swedish personal identity numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const label of [" Swedish personal identity number: ", " Personnummer: "]) {
+		for (const value of ["900102-1238", "19900102-1237"]) {
+			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const f = fixture();
+				const find = spyOn(f.ctx.modelRegistry, "find");
+				f.input(prompt);
+				await settle();
+				expect(find).not.toHaveBeenCalled();
+				expect(f.requests).toHaveLength(0);
+				expect(f.state.title).toBe("existing task");
+				expect(f.warnings).toEqual([warning]);
+				expect(f.warnings.join(" ")).not.toContain(value);
+			}
+		}
+	}
+
+	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " Swedish personal identity number: ".length)} Swedish personal identity number: 900102-1239 ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("rejects explicitly labeled checksum-valid ABA routing numbers without exposing them", async () => {
 	const identifiers = [
 		"Routing number: 087294619",
@@ -9277,6 +9364,9 @@ test("manual titles reject sensitive text before normalization without disclosin
 		"公民身份号码: 129999199912310026",
 		"Japanese My Number: 012345678903",
 		"個人番号：314159265352",
+		"Swedish personal identity number: 900102-1238",
+		"Personnummer: 19900102-1237",
+		"Samordningsnummer: 900162-1235",
 		"Bank Account Number: 4829163705",
 		"CVV: 483",
 		"Card Verification Value: 9304",
