@@ -3089,6 +3089,64 @@ test("screens Google Drive shared-link resource keys across retained-context bou
 	}
 });
 
+test("screens Google Photos shared-album links across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const values = [
+		{ url: "https://photos.app.goo.gl/Ab3dEf5gHi7jKl9mNo", id: "Ab3dEf5gHi7jKl9mNo" },
+		{ url: "https://photos.app.goo.gl/0123456789ABCDEFGH?utm_source=share", id: "0123456789ABCDEFGH" },
+	];
+	const promptAt = (url: string, id: string, start: number) => {
+		const urlStart = start - url.indexOf(id);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, id } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscatedId = `${id.slice(0, 9)}\u200b${id.slice(9)}`;
+		const obfuscated = url.replace(id, obfuscatedId);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const candidate of [
+			{ text: url, id },
+			{ text: obfuscated, id: obfuscatedId },
+		]) {
+			for (const tokenStart of [prefixLength - 8, suffixStart - 8]) {
+				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.id, tokenStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const id = values[0]!.id;
+	const nearMisses = [
+		`https://photos.app.goo.gl/${id.slice(1)}`,
+		`https://photos.app.goo.gl/${id}A`,
+		`https://photos.app.goo.gl.evil.test/${id}`,
+		`https://evil.photos.app.goo.gl/${id}`,
+		`https://photos.google.com/${id}`,
+		`https://example.test/${id}`,
+		`discussion of a Google Photos shared album ${id}`,
+	];
+	for (const url of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		if (!url.includes(id)) continue;
+		for (const tokenStart of [prefixLength - 8, suffixStart - 8]) {
+			expect(buildNamingRequestContext([], promptAt(url, id, tokenStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+
+	expect(buildNamingRequestContext([], promptAt(values[0]!.url, id, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Google Drive resourceKey fields in API responses across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
