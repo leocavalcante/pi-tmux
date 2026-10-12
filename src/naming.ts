@@ -1941,6 +1941,9 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
 		|| US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
+		// Without whitespace, controls, or format characters, the stripped views
+		// are identical to the value already checked by the full patterns.
+		if (!OBFUSCATION_SEPARATOR_PATTERN.test(value)) return false;
 		// Strip invisible non-whitespace controls without joining a preceding word to the token.
 		// The fully compacted view below remains useful for credentials split by whitespace.
 		const withoutFormatCharacters = stripNonWhitespaceControls(value);
@@ -1969,6 +1972,9 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_SSN_PATTERN.test(value) || LABELED_PHONE_PATTERN.test(value)
 			|| hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
+		// Without whitespace, controls, or format characters, the stripped views
+		// are identical to the value already checked by the full patterns.
+		if (!OBFUSCATION_SEPARATOR_PATTERN.test(value)) return false;
 		// Keep ordinary whitespace as a boundary while stripping invisible controls.
 		const withoutFormatCharacters = stripNonWhitespaceControls(value);
 		const compacted = value.replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
