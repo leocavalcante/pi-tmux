@@ -6322,6 +6322,97 @@ test("Aadhaar numbers crossing either retained prompt boundary skip model lookup
 	}
 });
 
+test("rejects explicitly labeled checksum-valid Chinese resident IDs without exposing them", async () => {
+	const syntheticId = "12999920000101001X";
+	const arabicDigitsId = syntheticId.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	const fullwidthId = syntheticId.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0xff10 + Number(digit)));
+	const identifiers = [
+		`Chinese National ID Number: ${syntheticId}`,
+		"PRC ID No.: 129999199912310026",
+		"Resident Identity Card Number: 129999200402290032",
+		`Chinese Identity Card Number: ${syntheticId.slice(0, -1)}x`,
+		`Chinese National ID Number: ${arabicDigitsId}`,
+		`PRC ID: ${fullwidthId}`,
+		`Resident Identity Card No.: ${syntheticId.slice(0, 8)}\u200b${syntheticId.slice(8)}`,
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the Chinese identity record ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		syntheticId,
+		`ID Number: ${syntheticId}`,
+		`National ID Number: ${syntheticId}`,
+		"Chinese National ID Number: 129999200001010011",
+		"Chinese National ID Number: 129999200002300019",
+		"Chinese National ID Number: 199999200001010012",
+		"Chinese National ID Number: 12999920000101001",
+		"Chinese National ID Number 12999920000101001X",
+		"Chinese national ID number validation",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("Chinese ID card parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("chinese id card parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("Chinese resident ID numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const label of [" Chinese National ID Number: ", " Resident Identity Card Number: "]) {
+		for (const value of ["12999920000101001X", "129999199912310026"]) {
+			for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const f = fixture();
+				const find = spyOn(f.ctx.modelRegistry, "find");
+				f.input(prompt);
+				await settle();
+				expect(find).not.toHaveBeenCalled();
+				expect(f.requests).toHaveLength(0);
+				expect(f.state.title).toBe("existing task");
+				expect(f.warnings).toEqual([warning]);
+				expect(f.warnings.join(" ")).not.toContain(value);
+			}
+		}
+	}
+
+	const label = " Chinese National ID Number: ";
+	const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}129999200001010011 ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("rejects explicitly labeled checksum-valid ABA routing numbers without exposing them", async () => {
 	const identifiers = [
 		"Routing number: 087294619",
@@ -9081,6 +9172,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 		"Passport Card Number: R8K2M519",
 		"Driver's License Number: A1234567",
 		"DL Number: X9428576",
+		"Chinese National ID Number: 12999920000101001X",
+		"Resident Identity Card Number: 129999199912310026",
 		"Bank Account Number: 4829163705",
 		"CVV: 483",
 		"Card Verification Value: 9304",
