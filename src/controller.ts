@@ -78,7 +78,37 @@ export function createController(tmux: RunTmux) {
 	let active = true;
 	let titleRevision = 0;
 	let titleLifetime = new AbortController();
-	let titleQueue: Promise<void> = Promise.resolve();
+	let queuedTitleRefresh: {
+		run: () => Promise<boolean | undefined>;
+		onError: () => void;
+		resolve: (updated: boolean) => void;
+	} | undefined;
+	let drainingTitleQueue = false;
+	const drainTitleQueue = async () => {
+		while (queuedTitleRefresh) {
+			const refresh = queuedTitleRefresh;
+			queuedTitleRefresh = undefined;
+			try {
+				const updated = (await refresh.run()) === true;
+				// Preserve the old chain's separation before callers recheck the revision.
+				await Promise.resolve();
+				refresh.resolve(updated);
+			} catch {
+				try { refresh.onError(); } catch { /* UI notification errors must not poison the queue. */ }
+				refresh.resolve(false);
+			}
+		}
+		drainingTitleQueue = false;
+	};
+	const enqueueTitleRefresh = (run: () => Promise<boolean | undefined>, onError: () => void) => new Promise<boolean>((resolve) => {
+		// A newer revision invalidates any refresh that has not started. Resolve
+		// superseded callers now instead of retaining an unbounded Promise chain.
+		queuedTitleRefresh?.resolve(false);
+		queuedTitleRefresh = { run, onError, resolve };
+		if (drainingTitleQueue) return;
+		drainingTitleQueue = true;
+		void Promise.resolve().then(drainTitleQueue);
+	});
 	// Retain locations across lifecycle resets so interrupted move repairs can finish.
 	let lastLocation: { session: string; window: string; server?: string } | undefined;
 	// Track where this controller last successfully applied its stored title. A move
@@ -278,8 +308,9 @@ export function createController(tmux: RunTmux) {
 		// independent of naming generations.
 		const isCurrent = () => !serverIdentityChanged && !signal.aborted && revision === titleRevision
 			&& (requestGeneration === undefined || requestGeneration === generation);
-		// Serialize writes so a slow rename cannot overwrite a newer status.
-		titleQueue = titleQueue.then(async () => {
+		// Serialize writes so a slow rename cannot overwrite a newer status. Keep
+		// only the latest pending refresh because every newer revision stales the rest.
+		const run = async () => {
 			if (!isCurrent()) return;
 			// Validate the pane's current window before updating its status.
 			let current = await readWindowTitle(tmux, pane, signal);
@@ -372,7 +403,7 @@ export function createController(tmux: RunTmux) {
 			const needsWindowRename = hasTaskTitle || windowWaiting || currentTitle.startsWith(READY_PREFIX);
 			if (!needsWindowRename) {
 				updated = isCurrent() && stable;
-				return;
+				return updated;
 			}
 			// tmux's command parser rewrites control characters and backslashes in names
 			// passed through rename-window. Preserve custom text rather than corrupting
@@ -411,7 +442,7 @@ export function createController(tmux: RunTmux) {
 				}
 				recordAppliedTitleLocation();
 				updated = stable;
-				return;
+				return updated;
 			}
 			const preserveWindowName = !hasTaskTitle && taskTitle.length > 0;
 			const title = preserveWindowName
@@ -454,12 +485,13 @@ export function createController(tmux: RunTmux) {
 			}
 			recordAppliedTitleLocation();
 			updated = stable;
-		}).catch(() => {
+			return updated;
+		};
+		return enqueueTitleRefresh(run, () => {
 			if (isCurrent()) {
 				warnOnce(ctx, "tmux window/session status could not be updated. Check tmux.");
 			}
 		});
-		return titleQueue.then(() => updated);
 	};
 
 	const setWaiting = (ctx: ExtensionContext, value: boolean) => {
