@@ -1203,6 +1203,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const baiduBceUrlStart = prefixLength - 10 - truncatedBaiduBceUrl.indexOf(baiduBceSignature);
 	const truncatedBaiduBcePrompt = `${"x".repeat(baiduBceUrlStart - 1)} ${truncatedBaiduBceUrl} ${"y".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedBaiduBcePrompt, baiduBceSignature);
+	const openStackSwiftSignature = "f".repeat(40);
+	const truncatedOpenStackSwiftUrl = `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_expires=1790000000&temp_url_sig=${openStackSwiftSignature}`;
+	const openStackSwiftUrlStart = prefixLength - 10 - truncatedOpenStackSwiftUrl.indexOf(openStackSwiftSignature);
+	const truncatedOpenStackSwiftPrompt = `${"x".repeat(openStackSwiftUrlStart - 1)} ${truncatedOpenStackSwiftUrl} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedOpenStackSwiftPrompt, openStackSwiftSignature);
 	const tencentCosSignature = "a".repeat(40);
 	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
 	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
@@ -1285,6 +1290,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), akamaiEdgeAuthUrl, akamaiEdgeAuthSignature);
 	const baiduBceUrl = `https://bj.bcebos.com/bucket/object?authorization=bce-auth-v1%2FABCDEFGHIJKLMNOPQRST%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${baiduBceSignature}`;
 	await suppressed(fixture(), baiduBceUrl, baiduBceSignature);
+	const openStackSwiftUrl = `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_sig=${openStackSwiftSignature}&temp_url_expires=1790000000`;
+	await suppressed(fixture(), openStackSwiftUrl, openStackSwiftSignature);
 	const cloudFrontSignedUrl = `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${cloudFrontSignature}&Key-Pair-Id=APKEXAMPLE`;
 	await suppressed(fixture(), cloudFrontSignedUrl, cloudFrontSignature);
 	await suppressed(
