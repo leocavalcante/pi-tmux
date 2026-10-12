@@ -1226,6 +1226,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const googleDriveResourceKey = `0-${"D".repeat(28)}`;
 	const googleDriveSharedLink = `https://drive.google.com/file/d/example/view?usp=sharing&resourcekey=${googleDriveResourceKey}`;
 	await suppressed(fixture(), `Review shared project document ${googleDriveSharedLink}`, googleDriveResourceKey);
+	const googleDriveHeaderKey = `0-${"E".repeat(28)}`;
+	const googleDriveResourceKeysHeader = `X-Goog-Drive-Resource-Keys: ${"F".repeat(33)}/${googleDriveHeaderKey}`;
+	await suppressed(fixture(), `Fetch protected Drive file with ${googleDriveResourceKeysHeader}`, googleDriveHeaderKey);
 	const tencentCosSignature = "a".repeat(40);
 	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
 	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
