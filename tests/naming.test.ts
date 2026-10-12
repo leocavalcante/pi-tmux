@@ -5444,6 +5444,57 @@ test("ABA routing numbers crossing either retained prompt boundary are detected"
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens explicitly labeled passport numbers with bounded digit-bearing ASCII shapes", () => {
+	const identifiers = [
+		"Passport Number: QX730194",
+		"Passport No.: 59381724",
+		"Passport #: A7B29C41",
+		"Passport ID=K4D8P271",
+		"Passport: U20041986",
+		"Passport No.: QX73\u200b0194",
+	];
+	for (const identifier of identifiers) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"QX730194",
+		"Passport Number: ABCDEF",
+		"Passport No.: Q1234",
+		"Passport #: QX73019485730",
+		"Passport Number: QX73019-4",
+		"Travel Document: QX730194",
+		"Passport number validation",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("passport numbers crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const label = " Passport No.: ";
+
+	for (const value of ["QX730194", "59381724"]) {
+		for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
+			const before = "x".repeat(valueStart - label.length);
+			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const invalidPrompt = `${"x".repeat(prefixLength - 3 - label.length)}${label}ABCDEF ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens labeled IBANs across retained-context boundaries and control obfuscation", () => {
 	const iban = "GB05 TEST 0000 0000 0000 00";
 	const label = " IBAN: ";

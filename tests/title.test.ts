@@ -6408,6 +6408,84 @@ test("ABA routing numbers crossing either retained prompt boundary skip model lo
 	}
 });
 
+test("rejects explicitly labeled passport numbers without exposing them", async () => {
+	const identifiers = [
+		"Passport Number: QX730194",
+		"Passport No.: 59381724",
+		"Passport #: A7B29C41",
+		"Passport ID=K4D8P271",
+		"Passport: U20041986",
+		"Passport No.: QX73\u200b0194",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the travel document ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"QX730194",
+		"Passport Number: ABCDEF",
+		"Passport No.: Q1234",
+		"Passport #: QX73019485730",
+		"Passport Number: QX73019-4",
+		"Travel Document: QX730194",
+		"Passport number validation",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("passport parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("passport parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("passport numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const label = " Passport No.: ";
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const value of ["QX730194", "59381724"]) {
+		for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
+			const before = "x".repeat(valueStart - label.length);
+			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const f = fixture();
+			const find = spyOn(f.ctx.modelRegistry, "find");
+			f.input(prompt);
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(f.requests).toHaveLength(0);
+			expect(f.state.title).toBe("existing task");
+			expect(f.warnings).toEqual([warning]);
+			expect(f.warnings.join(" ")).not.toContain(value);
+		}
+	}
+});
+
 test("rejects explicitly labeled structurally valid Indian PANs without exposing them", async () => {
 	const identifiers = [
 		"PAN: ZZZPZ9876Q",
@@ -8498,6 +8576,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`re_${"A1b2".repeat(7)}_C3d4`,
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
+		"Passport Number: QX730194",
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`client-key-data: ${"A".repeat(44)}`,
