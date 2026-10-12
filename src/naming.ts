@@ -2578,7 +2578,9 @@ function hasLabeledCanadianSin(value: string): boolean {
 	return false;
 }
 
-// Official left-to-right TFN weights; a valid nine-digit TFN has a weighted sum divisible by 11.
+// Local weighted Modulus 11 pattern for screening; this does not verify ATO issuance.
+// The ATO says software developers can request its TFN-validation algorithm:
+// https://www.ato.gov.au/tax-and-super-professionals/for-superannuation-professionals/apra-regulated-funds/managing-member-benefits/taxation-of-member-super-benefits/tax-file-numbers-and-super-contributions/obtaining-member-tfns
 const AUSTRALIAN_TFN_WEIGHTS = [1, 4, 3, 7, 5, 8, 6, 9, 10] as const;
 function isValidAustralianTfnNumber(value: string): boolean {
 	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) => {
