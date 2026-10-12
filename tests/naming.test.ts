@@ -2901,6 +2901,72 @@ test("screens expiring NGINX Secure Link URLs across retained-context boundaries
 	}
 });
 
+test("screens Dropbox shared-link keys across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const keys = ["A".repeat(32), "b".repeat(32)];
+	const values = [
+		{
+			url: `https://www.dropbox.com/scl/fi/abc123/manual.pdf?rlkey=${keys[0]}&dl=0`,
+			key: keys[0]!,
+		},
+		{
+			url: `https://dropbox.com/scl/fo/folder123/shared-folder?dl=0&rlkey=${keys[1]}&st=example`,
+			key: keys[1]!,
+		},
+	];
+	const promptAt = (url: string, key: string, start: number) => {
+		const urlStart = start - url.indexOf(key);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, key } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscated = url.replace(key, `${key.slice(0, 16)}\u200b${key.slice(16)}`);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			const context = buildNamingRequestContext([], promptAt(url, key, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
+		const obfuscatedContext = buildNamingRequestContext([], promptAt(obfuscated, obfuscatedKey, prefixLength - 11));
+		expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
+		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+
+		const omittedKey = buildNamingRequestContext([], promptAt(url, key, prefixLength + 5));
+		expect(omittedKey.hasSensitiveBoundary()).toBe(false);
+	}
+
+	const key = keys[0]!;
+	const nearMisses = [
+		{ url: `https://www.dropbox.com/scl/fi/file?rlkey=${"a".repeat(19)}&dl=0`, key: "a".repeat(19) },
+		{ url: `https://www.dropbox.com/scl/fi/file?rlkey=${"a".repeat(129)}&dl=0`, key: "a".repeat(129) },
+		{ url: `https://www.dropbox.com.evil.test/scl/fi/file?rlkey=${key}`, key },
+		{ url: `https://www.dropbox.com/s/file?rlkey=${key}`, key },
+		{ url: `https://www.dropbox.com/scl/fi/file?notrlkey=${key}`, key },
+		{ url: `https://files.example.test/scl/fi/file?rlkey=${key}`, key },
+		{ url: `https://www.dropbox.com/scl/fo/folder?other=${key}`, key },
+		{ url: `discussion about rlkey=${key}`, key },
+	];
+	for (const { url, key: candidate } of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			const context = buildNamingRequestContext([], promptAt(url, candidate, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Google Cloud CDN signed URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

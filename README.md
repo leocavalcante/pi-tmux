@@ -367,6 +367,7 @@ Cloudinary signed delivery URLs,
 Imgix Secure URL signatures,
 ImageKit Secure URL signatures,
 NGINX expiring Secure Link query signatures,
+Dropbox file and folder shared-link keys,
 Oracle Object Storage pre-authenticated request URLs,
 Bearer, Token, and ApiKey authorization values,
 Negotiate/NTLM/Kerberos authentication tokens and challenges, legacy HTTP Signature
