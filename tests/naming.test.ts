@@ -2584,6 +2584,72 @@ test("screens Tencent COS SHA-1 signed URLs across retained-context boundaries",
 	}
 });
 
+test("screens Alibaba Cloud OSS V1 and V4 signed URLs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const legacySignature = "+/" + "A".repeat(25) + "=";
+	const encodedLegacySignature = `%2B%2F${"A".repeat(25)}%3D`;
+	const v4Signature = "b".repeat(64);
+	const values = [
+		{
+			url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?OSSAccessKeyId=EXAMPLE_ID&Expires=1790000000&Signature=${encodedLegacySignature}`,
+			signature: encodedLegacySignature,
+		},
+		{
+			url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?Signature=${legacySignature}&OSSAccessKeyId=EXAMPLE_ID`,
+			signature: legacySignature,
+		},
+		{
+			url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${v4Signature}`,
+			signature: v4Signature,
+		},
+		{
+			url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature=${v4Signature}&x-oss-signature-version=OSS4-HMAC-SHA256`,
+			signature: v4Signature,
+		},
+	];
+	const promptAt = (url: string, token: string, start: number) => {
+		const urlStart = start - url.indexOf(token);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, signature } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
+		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+	}
+
+	const nearMisses = [
+		{ url: `Signature=${legacySignature}`, signature: legacySignature },
+		{ url: `OSSAccessKeyId=EXAMPLE_ID&Signature=${"A".repeat(26)}=`, signature: `${"A".repeat(26)}=` },
+		{ url: `OSSAccessKeyId=EXAMPLE_ID&Signature=${"A".repeat(28)}=`, signature: `${"A".repeat(28)}=` },
+		{ url: `xOSSAccessKeyId=EXAMPLE_ID&Signature=${legacySignature}`, signature: legacySignature },
+		{ url: `x-oss-signature=${v4Signature}`, signature: v4Signature },
+		{ url: `x-oss-signature-version=OSS4-HMAC-SHA1&x-oss-signature=${v4Signature}`, signature: v4Signature },
+		{ url: `x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${"b".repeat(63)}`, signature: "b".repeat(63) },
+		{ url: `x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${"b".repeat(65)}`, signature: "b".repeat(65) },
+	];
+	for (const { url, signature } of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens HTTP Signature Authorization proofs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
