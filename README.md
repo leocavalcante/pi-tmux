@@ -218,9 +218,10 @@ Repeat the command to retry them.
 - The 24-character limit includes the marker. Waiting titles reserve two
   characters for `* `, leaving up to 22 for the task name.
 - New input, another run, session replacement, reload, and graceful shutdown
-  clear that pane's waiting flag. Window and session markers remain while
-  another pane in their scope is waiting. Marker updates make no additional
-  model calls and still work if the naming model is unavailable.
+  clear that pane's waiting flag. Tree navigation refreshes the active branch's
+  title while preserving the current waiting state. Window and session markers
+  remain while another pane in their scope is waiting. Marker updates make no
+  additional model calls and still work if the naming model is unavailable.
 - The extension targets the window and session containing Pi's `TMUX_PANE`,
   even if you have switched focus elsewhere. Renames use the pane ID so a
   move after the title lookup does not rename its former window or session.

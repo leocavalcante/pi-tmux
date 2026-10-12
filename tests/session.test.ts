@@ -158,6 +158,51 @@ test.skipIf(!hasTmux)("leading-hyphen titles remain literal when clearing a wait
 	}
 });
 
+test.skipIf(!hasTmux)("session-tree navigation preserves the waiting marker until quit", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const originalPane = process.env.TMUX_PANE;
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		const pane = tmux("new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "TreeWait", "-n", "existing task", "/bin/sleep 60");
+		process.env.TMUX_PANE = pane;
+		const handlers = new Map<string, Function>();
+		piTmux(mockPi(handlers), async (args) => tmux(...args));
+		const ctx = {
+			mode: "tui",
+			ui: { notify: () => {} },
+		} as unknown as ExtensionContext;
+		const emit = async (event: string, reason = "startup") =>
+			handlers.get(event)!({ type: event, reason }, ctx);
+		const title = () => tmux("display-message", "-p", "-t", pane, "#{window_name}");
+		const sessionTitle = () => tmux("display-message", "-p", "-t", pane, "#{session_name}");
+
+		await emit("session_start");
+		await emit("agent_settled");
+		expect(title()).toBe("* existing task");
+		expect(sessionTitle()).toBe("* TreeWait");
+		expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe("1");
+
+		await emit("session_tree");
+		expect(title()).toBe("* existing task");
+		expect(sessionTitle()).toBe("* TreeWait");
+		expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe("1");
+
+		await emit("session_shutdown", "quit");
+		expect(title()).toBe("zsh");
+		expect(sessionTitle()).toBe("TreeWait");
+		expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe("0");
+		expect(tmux("show-options", "-p", "-v", "-t", pane, ACTIVE_OPTION)).toBe("0");
+	} finally {
+		if (originalPane === undefined) delete process.env.TMUX_PANE;
+		else process.env.TMUX_PANE = originalPane;
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
+	}
+});
+
 test.skipIf(!hasTmux)("waiting markers preserve literal custom window names without a task title", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
 	const socket = join(directory, "socket");

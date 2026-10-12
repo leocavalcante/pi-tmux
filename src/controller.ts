@@ -470,7 +470,7 @@ export function createController(tmux: RunTmux) {
 		return refreshTitle(ctx, pane).then(() => {});
 	};
 
-	const reset = (ctx: ExtensionContext, title?: string, alive = true) => {
+	const reset = (ctx: ExtensionContext, title?: string, alive = true, waitingValue = false) => {
 		cancel();
 		titleLifetime.abort();
 		titleLifetime = new AbortController();
@@ -479,7 +479,7 @@ export function createController(tmux: RunTmux) {
 		manualTitle = false;
 		pinnedTitleNeedsApply = false;
 		lastNamingContext = undefined;
-		return setWaiting(ctx, false);
+		return setWaiting(ctx, waitingValue);
 	};
 
 	const nameWindow = async (
@@ -558,8 +558,8 @@ export function createController(tmux: RunTmux) {
 		return true;
 	};
 
-	const restoreTitle = (ctx: ExtensionContext) => {
-		const status = reset(ctx);
+	const restoreTitle = (ctx: ExtensionContext, preserveWaiting = false) => {
+		const status = reset(ctx, undefined, true, preserveWaiting && waiting);
 		requestTitle(ctx);
 		return status;
 	};

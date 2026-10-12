@@ -91,7 +91,8 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 		return status;
 	});
 	pi.on("session_start", (_event, ctx) => controller.restoreTitle(ctx));
-	pi.on("session_tree", (_event, ctx) => controller.restoreTitle(ctx));
+	// Tree navigation changes the active branch, not whether the agent is waiting.
+	pi.on("session_tree", (_event, ctx) => controller.restoreTitle(ctx, true));
 	pi.on("session_compact", (_event, ctx) => { controller.requestTitle(ctx); });
 	// Reload and session replacement tear down extensions without exiting Pi.
 	pi.on("session_shutdown", (event, ctx) => controller.reset(ctx, undefined, event.reason !== "quit"));
