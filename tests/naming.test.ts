@@ -5500,6 +5500,65 @@ test("passport numbers crossing either retained prompt boundary are detected", (
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens explicitly labeled driver-license numbers with bounded digit-bearing ASCII shapes", () => {
+	const identifiers = [
+		"Driver's License Number: A1234567",
+		"Driver License No.: D8F4K21",
+		"Driver Licence: 83920145",
+		"Drivers Licence Number: Z4-8K-2J9",
+		"Driving License No.: B7152048",
+		"Driver ID: C7429051",
+		"Driver's ID Number: W3F-57291",
+		"DL Number: X9428576",
+		"Driver License #: 12-345-6789",
+		"Driver ID: C742\u200b9051",
+		"Driver License: １２３４５６",
+	];
+	for (const identifier of identifiers) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"A1234567",
+		"License Number: A1234567",
+		"State ID: C7429051",
+		"Driver License: ABCDEF",
+		"Driver License: 12345",
+		"Driver License: A12345678901234567890",
+		"Driver License: A--123456",
+		"Driver License Reference: A1234567",
+		"Driver license format",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("driver-license numbers crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	for (const label of [" Driver's License No.: ", " DL Number: "]) {
+		for (const value of ["A1234567", "X9-428576"]) {
+			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const label = " Driver's License No.: ";
+	const invalidPrompt = `${"x".repeat(prefixLength - 3 - label.length)}${label}ABCDEF ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens numeric bank-account values only with an explicit bank account label", () => {
 	const identifiers = [
 		"Bank Account Number: 4829163705",
