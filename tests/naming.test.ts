@@ -5271,6 +5271,7 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 	const cases = [
 		{ label: " SSN: ", value: "000-00-0000", shortValue: "000-00-000" },
 		{ label: " Phone: ", value: "000-000-0000", shortValue: "000-000" },
+		{ label: " Phone: ", value: "٠٠٠-٠٠٠-٠٠٠٠", shortValue: "٠٠٠-٠٠" },
 	];
 
 	for (const { label, value, shortValue } of cases) {
@@ -5311,6 +5312,10 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 		const nearMissPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${shortValue} ${"x".repeat(1_200)}`;
 		expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
 	}
+
+	const overlongPhone = `Phone: ${"٠".repeat(16)}`;
+	expect(hasSensitiveNamingContext(overlongPhone)).toBe(false);
+	expect(hasSensitiveOutput(overlongPhone)).toBe(false);
 });
 
 test("screens Luhn-valid labeled payment cards across retained-context truncation boundaries", () => {
@@ -6445,6 +6450,7 @@ test("long variable-length tokens stay detectable when a retained suffix starts 
 test("requestNamingTitle screens sensitive context before model-registry access", async () => {
 	const contextTexts = [
 		"task: pi-tmux@example.invalid",
+		"task: phone: ٠٠٠-٠٠٠-٠٠٠٠",
 		"task: δοκιμή@παράδειγμα.δοκιμή",
 		"task: 用户@example.test",
 		`${"A1b_".repeat(6)}.${"cD9_-Z"}.${"QwErTy9_-".repeat(3)}`,

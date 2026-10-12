@@ -5936,6 +5936,7 @@ test("rejects phone-shaped output only when a phone label is present", async () 
 		"cellular_number: (000) 000-0000",
 		"Telephone: +1 (000) 000-0000",
 		"phone: 0000000",
+		"Phone: ٠٠٠-٠٠٠-٠٠٠٠",
 		"Phone: ０００-０００-００００",
 		"Phone: 000-\u200b000-0000",
 		"Phone:\u200b 000-000-0000",
