@@ -43,6 +43,24 @@ test("tmux fixture cleanup does not mask a test failure", () => {
 	expect(observed).toBe(failure);
 });
 
+test("README table of contents links resolve to section headings", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
+	const contents = /^## Contents\n([\s\S]*?)(?=^## )/m.exec(readme)?.[1];
+	if (!contents) throw new Error("README must include a Contents section before its main sections");
+
+	const occurrences = new Map<string, number>();
+	const headingAnchors = new Set([...readme.matchAll(/^#{1,6}\s+(.+?)\s*$/gm)].map(([, heading]) => {
+		const slug = heading!.toLowerCase().replace(/<[^>]*>/gu, "")
+			.replace(/[^\p{L}\p{N}\s_-]/gu, "").trim().replace(/\s+/gu, "-").replace(/-+/gu, "-");
+		const occurrence = occurrences.get(slug) ?? 0;
+		occurrences.set(slug, occurrence + 1);
+		return occurrence === 0 ? slug : `${slug}-${occurrence}`;
+	}));
+	const anchors = [...contents.matchAll(/\]\(#([^)]*)\)/gu)].map(([, anchor]) => anchor!);
+	expect(anchors.length).toBeGreaterThan(0);
+	expect(anchors.filter((anchor) => !headingAnchors.has(anchor))).toEqual([]);
+});
+
 test("README tmux compatibility versions stay aligned with version-checked CI", () => {
 	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8");
 	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
