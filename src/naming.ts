@@ -164,6 +164,37 @@ const OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN = new RegExp(
 );
 const US_TAX_ID_PATTERN = /(?<![\p{L}\p{N}])(?:ssn(?:[-_\s]?(?:number|no\.?))?|social[-_\s]+security(?:[-_\s]+(?:number|no\.?))?|tin(?:[-_\s]?(?:number|no\.?))?|tax(?:payer)?[-_\s]+(?:id(?:[-_\s]?(?:number|no\.?))?|identification(?:[-_\s]+(?:number|no\.?))?))\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
 const DATE_OF_BIRTH_VALUE_PATTERN = String.raw`(?:\p{Nd}{4}[./-]\p{Nd}{1,2}[./-]\p{Nd}{1,2}|\p{Nd}{1,2}[./-]\p{Nd}{1,2}[./-]\p{Nd}{4})`;
+const IBAN_VALUE_PATTERN = String.raw`[A-Z]{2}[-\s]?\p{Nd}{2}(?:[-\s]?[A-Z0-9]){11,30}`;
+const LABELED_IBAN_PATTERN = new RegExp(
+	String.raw`(?=(?<![\p{L}\p{N}])(?:iban(?:[-_\s]?(?:number|no\.?))?|international[-_\s]+bank[-_\s]+account[-_\s]+number)\s*#?\s*["']?\s*[:=]\s*["']?(${IBAN_VALUE_PATTERN})(?![\p{L}\p{N}_]))`,
+	"iu",
+);
+// Keep the accepted IBAN registry subset explicit to avoid shape-only matches.
+const SUPPORTED_IBAN_LENGTHS = {
+	AE: 23,
+	AT: 20,
+	BE: 16,
+	CH: 21,
+	CZ: 24,
+	DE: 22,
+	DK: 18,
+	ES: 24,
+	FI: 18,
+	FR: 27,
+	GB: 22,
+	GR: 27,
+	IE: 22,
+	IT: 27,
+	LU: 20,
+	NL: 18,
+	NO: 15,
+	PL: 28,
+	PT: 25,
+	SA: 24,
+	SE: 24,
+	SK: 24,
+	TR: 26,
+} as const;
 const DATE_OF_BIRTH_VALUE_CAPTURE_PATTERN = `(${DATE_OF_BIRTH_VALUE_PATTERN})`;
 const LABELED_DATE_OF_BIRTH_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])(?:dob|birth[-_\s]?date|date[-_\s]+of[-_\s]+birth)\s*#?\s*["']?\s*[:=]\s*["']?${DATE_OF_BIRTH_VALUE_CAPTURE_PATTERN}(?![\p{L}\p{N}_])`,
@@ -1227,6 +1258,12 @@ const US_TAX_ID_BOUNDARY_PATTERN = makeBoundaryPattern(
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){2}[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){3})`,
 );
 const DATE_OF_BIRTH_VALUE_BOUNDARY_PATTERN = String.raw`(?:\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){3}[\p{Cc}\p{Cf}]*[./-][\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})?[\p{Cc}\p{Cf}]*[./-][\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})?|\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})?[\p{Cc}\p{Cf}]*[./-][\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})?[\p{Cc}\p{Cf}]*[./-][\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){3})`;
+const IBAN_VALUE_BOUNDARY_PATTERN = String.raw`[A-Z](?:[\p{Cc}\p{Cf}]*[A-Z])[\p{Cc}\p{Cf}\s-]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})[\p{Cc}\p{Cf}\s-]*(?:[\p{Cc}\p{Cf}\s-]*[A-Z0-9]){11,30}`;
+const LABELED_IBAN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_IBAN_PATTERN,
+	`(${IBAN_VALUE_PATTERN})`,
+	`(${IBAN_VALUE_BOUNDARY_PATTERN})`,
+);
 const DATE_OF_BIRTH_VALUE_BOUNDARY_CAPTURE_PATTERN = `(${DATE_OF_BIRTH_VALUE_BOUNDARY_PATTERN})`;
 const LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_DATE_OF_BIRTH_PATTERN,
@@ -2248,6 +2285,39 @@ function hasLabeledDateOfBirth(value: string): boolean {
 	return false;
 }
 
+function isValidIbanNumber(value: string): boolean {
+	let normalized = "";
+	for (const character of value.replace(/[\s\p{Cc}\p{Cf}-]+/gu, "")) {
+		if (/\p{Nd}/u.test(character)) {
+			const digit = asciiDecimalDigits(character);
+			if (digit === undefined) return true;
+			normalized += digit;
+		} else if (/^[A-Za-z]$/u.test(character)) normalized += character.toUpperCase();
+		else return false;
+	}
+	const country = normalized.slice(0, 2) as keyof typeof SUPPORTED_IBAN_LENGTHS;
+	const length = SUPPORTED_IBAN_LENGTHS[country];
+	if (length === undefined || normalized.length < length) return false;
+	const iban = normalized.slice(0, length);
+	if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/u.test(iban)) return false;
+	let remainder = 0;
+	for (const character of `${iban.slice(4)}${iban.slice(0, 4)}`) {
+		const expanded = character >= "A" && character <= "Z"
+			? String(character.charCodeAt(0) - 55)
+			: character;
+		for (const digit of expanded) remainder = (remainder * 10 + Number(digit)) % 97;
+	}
+	return remainder === 1;
+}
+
+function hasLabeledIban(value: string): boolean {
+	const pattern = new RegExp(LABELED_IBAN_PATTERN.source, `${LABELED_IBAN_PATTERN.flags}g`);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidIbanNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
 function hasBearerToken(value: string): boolean {
 	const pattern = new RegExp(BEARER_TOKEN_PATTERN.source, `${BEARER_TOKEN_PATTERN.flags}g`);
 	for (const match of value.matchAll(pattern)) {
@@ -2435,7 +2505,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 	const hasSensitiveValue = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 		|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
 		|| US_TAX_ID_PATTERN.test(value) || hasLabeledUsItin(value) || hasLabeledDateOfBirth(value)
-		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
+		|| hasLabeledIban(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
@@ -2451,7 +2521,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| hasWhitespaceSeparatedCredential(value)
 			|| COMPACTED_CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
 			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_TAX_ID_PATTERN.test(compacted)
-			|| hasLabeledUsItin(compacted) || hasLabeledDateOfBirth(compacted)
+			|| hasLabeledUsItin(compacted) || hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted)
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
@@ -2469,7 +2539,8 @@ export function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_TAX_ID_PATTERN.test(value)
-			|| hasLabeledUsItin(value) || hasLabeledDateOfBirth(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
+			|| hasLabeledUsItin(value) || hasLabeledDateOfBirth(value) || hasLabeledIban(value)
+			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
@@ -2483,7 +2554,7 @@ export function hasSensitiveOutput(text: string): boolean {
 		return (withoutFormatCharacters !== value && hasPattern(withoutFormatCharacters))
 			|| hasWhitespaceSeparatedCredential(value)
 			|| SEPARATOR_TOLERANT_PATTERNS.some((pattern) => pattern.test(compacted))
-			|| hasLabeledUsItin(compacted) || hasLabeledDateOfBirth(compacted) || hasLabeledCpf(compacted)
+			|| hasLabeledUsItin(compacted) || hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
@@ -2653,6 +2724,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	MICROSOFT_TEAMS_WEBHOOK_URL_BOUNDARY_PATTERN,
 	US_TAX_ID_BOUNDARY_PATTERN,
 	LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN,
+	LABELED_IBAN_BOUNDARY_PATTERN,
 	US_ITIN_BOUNDARY_PATTERN,
 	UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_CPF_BOUNDARY_PATTERN,
@@ -2746,6 +2818,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== DOCKER_AUTH_BOUNDARY_PATTERN
 		&& pattern !== US_TAX_ID_BOUNDARY_PATTERN
 		&& pattern !== LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN
+		&& pattern !== LABELED_IBAN_BOUNDARY_PATTERN
 		&& pattern !== US_ITIN_BOUNDARY_PATTERN
 		&& pattern !== UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CPF_BOUNDARY_PATTERN
@@ -2830,6 +2903,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidUsItinNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN
 					&& !isValidDateOfBirth(match[1]!)) continue;
+				if (sourcePattern === LABELED_IBAN_BOUNDARY_PATTERN
+					&& !isValidIbanNumber(match[1]!)) continue;
 				const encoded = match[1]!.replace(/[\p{Cc}\p{Cf}]/gu, "");
 				if ((sourcePattern === NPM_AUTH_BOUNDARY_PATTERN
 					|| sourcePattern === BASIC_AUTHORIZATION_BOUNDARY_PATTERN
