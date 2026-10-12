@@ -1220,6 +1220,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const nginxSecureLinkSignature = "A1b2C3d4E5f6G7h8I9j0kA";
 	const nginxSecureLinkUrl = `https://downloads.example.test/s/link?md5=${nginxSecureLinkSignature}&expires=1790000000`;
 	await suppressed(fixture(), `Review protected download ${nginxSecureLinkUrl}`, nginxSecureLinkSignature);
+	const dropboxSharedLinkKey = "C".repeat(32);
+	const dropboxSharedLink = `https://www.dropbox.com/scl/fi/example/file.pdf?rlkey=${dropboxSharedLinkKey}&dl=0`;
+	await suppressed(fixture(), `Review shared project document ${dropboxSharedLink}`, dropboxSharedLinkKey);
 	const tencentCosSignature = "a".repeat(40);
 	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
 	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
