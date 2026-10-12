@@ -2994,6 +2994,33 @@ test("OneDrive s! share keys stay out of naming context and model output", async
 	}
 });
 
+test("WeTransfer short links stay out of naming context and model output", async () => {
+	const links = [
+		{ url: "https://we.tl/t-aB3cD5eF7g", code: "aB3cD5eF7g" },
+		{ url: "https://we.tl/t-0123456789?utm_source=share", code: "0123456789" },
+	];
+	for (const { url, code } of links) {
+		const sensitiveContext = fixture();
+		sensitiveContext.input(`Review this WeTransfer link: ${url}`);
+		await settle();
+		expect(sensitiveContext.requests).toHaveLength(0);
+		expect(sensitiveContext.state.title).toBe("existing task");
+		expect(sensitiveContext.warnings).toEqual([
+			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+		]);
+		expect(sensitiveContext.warnings.join(" ")).not.toContain(code);
+
+		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+		sensitiveOutput.input("Name a task");
+		await settle();
+		expect(sensitiveOutput.requests).toHaveLength(1);
+		expect(sensitiveOutput.state.title).toBe("existing task");
+		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(sensitiveOutput.warnings.join(" ")).not.toContain(code);
+	}
+});
+
 test("Box shared-link URLs stay out of naming context and model output", async () => {
 	const sharedLinkId = "a".repeat(20);
 	const link = `https://app.box.com/s/${sharedLinkId}`;

@@ -3864,6 +3864,73 @@ test("screens Microsoft Graph OneDrive share tokens across retained-context boun
 	}
 });
 
+test("screens WeTransfer short-link codes across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const values = [
+		{ url: "https://we.tl/t-aB3cD5eF7g", code: "aB3cD5eF7g" },
+		{ url: "https://we.tl/t-0123456789?utm_source=share", code: "0123456789" },
+	];
+	const promptAt = (text: string, code: string, start: number) => {
+		const textStart = start - text.indexOf(code);
+		const prefix = `${"x".repeat(textStart - 1)} `;
+		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+	};
+
+	for (const { url, code } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscatedCode = `${code.slice(0, 5)}\u200b${code.slice(5)}`;
+		const obfuscated = url.replace(code, obfuscatedCode);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const candidate of [
+			{ text: url, code },
+			{ text: obfuscated, code: obfuscatedCode },
+		]) {
+			for (const codeStart of [prefixLength - 4, suffixStart - candidate.code.length + 4]) {
+				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.code, codeStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+
+		const historyContent = `${"x".repeat(996 - url.indexOf(code))} ${url} trailing text`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const context = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const code = values[0]!.code;
+	const nearMisses = [
+		{ url: `https://we.tl/t-${code.slice(1)}`, code: code.slice(1) },
+		{ url: `https://we.tl/t-${code}A`, code: `${code}A` },
+		{ url: `https://we.tl.evil.test/t-${code}`, code },
+		{ url: `https://evil.we.tl/t-${code}`, code },
+		{ url: `https://we.tl/u-${code}`, code },
+		{ url: `https://example.test/t-${code}`, code },
+		{ url: `discussion of WeTransfer link code ${code}`, code },
+	];
+	for (const { url, code: nearMissCode } of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const codeStart of [prefixLength - 4, suffixStart - nearMissCode.length + 4]) {
+			expect(buildNamingRequestContext([], promptAt(url, nearMissCode, codeStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+
+	expect(buildNamingRequestContext([], promptAt(values[0]!.url, code, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Zoom meeting passcodes in join URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
