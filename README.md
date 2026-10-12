@@ -427,8 +427,11 @@ generic security-code labels are not. Explicitly labeled PINs and personal
 identification numbers with 4–8 decimal digits are screened too. Explicitly
 labeled OTP/TOTP, MFA/2FA, one-time password/passcode, and authenticator-code
 fields with 4–8 decimal digits are screened; generic verification-code labels
-are not. Phone numbers and Luhn-valid, explicitly labeled payment-card-shaped
-values are checked too, including values written with Unicode decimal digits.
+are not. Explicit backup/recovery code/key fields with 6–32 ASCII alphanumeric
+characters, at least one digit, and optional hyphen grouping are screened;
+generic code/key labels are not. Phone numbers and Luhn-valid, explicitly
+labeled payment-card-shaped values are checked too, including values written
+with Unicode decimal digits.
 If detected, the request is skipped and the current title is kept; warnings do
 not include matching text, and blocked context is not kept in the extension's
 deduplication cache. This is a limited, best-effort check, not comprehensive
@@ -473,8 +476,11 @@ generic security-code labels are not. Explicitly labeled PINs and personal
 identification numbers with 4–8 decimal digits are screened too. Explicitly
 labeled OTP/TOTP, MFA/2FA, one-time password/passcode, and authenticator-code
 fields with 4–8 decimal digits are screened; generic verification-code labels
-are not. Phone numbers and Luhn-valid, explicitly labeled payment-card-shaped
-values are checked too, including values written with Unicode decimal digits.
+are not. Explicit backup/recovery code/key fields with 6–32 ASCII alphanumeric
+characters, at least one digit, and optional hyphen grouping are screened;
+generic code/key labels are not. Phone numbers and Luhn-valid, explicitly
+labeled payment-card-shaped values are checked too, including values written
+with Unicode decimal digits.
 Supported YAML block-scalar forms with tags or anchors, plus shorter
 non-placeholder password/passphrase assignments, are checked too. A view with whitespace, control, and format
 characters removed catches some obfuscated values.

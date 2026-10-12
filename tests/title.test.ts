@@ -6737,6 +6737,87 @@ test("one-time authentication codes crossing retained prompt boundaries skip mod
 	}
 });
 
+test("rejects explicitly labeled backup and recovery codes without exposing them", async () => {
+	const codes = [
+		"Recovery Code: 482739",
+		"Backup Code: 736194",
+		"Recovery Codes=ABCD-EF12",
+		"Backup Key: K4J7-M3Q9",
+		"MFA Recovery Code: Q8R2-17NX",
+		"Recovery Key: 12345678901234567890123456789012",
+		"Backup Code: 4829\u200b3710",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const code of codes) {
+		expect(hasSensitiveNamingContext(code)).toBe(true);
+		expect(hasSensitiveOutput(code)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review account recovery ${code}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(code);
+
+		const output = fixture([Promise.resolve(response(code))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(code);
+	}
+
+	for (const nearMiss of [
+		"482739",
+		"Code: 482739",
+		"Key: AB12345",
+		"Recovery Code: ABCDEF",
+		"Backup Code: 12345",
+		"Recovery Code: 123456789012345678901234567890123",
+		"Recovery Code: please reset my account",
+		"I need to understand recovery codes",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("recovery codes"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("recovery codes");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("backup and recovery codes crossing retained prompt boundaries skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const label of [" Recovery Code: ", " Backup Key: "]) {
+		for (const value of ["482739", "ABCD-EF12"]) {
+			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const f = fixture();
+				const find = spyOn(f.ctx.modelRegistry, "find");
+				f.input(prompt);
+				await settle();
+				expect(find).not.toHaveBeenCalled();
+				expect(f.requests).toHaveLength(0);
+				expect(f.state.title).toBe("existing task");
+				expect(f.warnings).toEqual([warning]);
+				expect(f.warnings.join(" ")).not.toContain(value);
+			}
+		}
+	}
+});
+
 test("rejects explicitly labeled passport numbers without exposing them", async () => {
 	const identifiers = [
 		"Passport Number: QX730194",
@@ -8919,6 +9000,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 		"Personal Identification Number: ٣٩٢٨",
 		"OTP: 482739",
 		"MFA Code: 184926",
+		"Recovery Code: 482739",
+		"Backup Key: K4J7-M3Q9",
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`client-key-data: ${"A".repeat(44)}`,
