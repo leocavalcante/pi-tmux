@@ -1078,6 +1078,18 @@ test("sensitive model output updates the status category without disclosing the 
 	expect(status).not.toContain(syntheticToken);
 });
 
+test("does not apply a French NIR returned by the naming model", async () => {
+	const syntheticNir = "123456789012311";
+	const f = fixture([Promise.resolve(response(`French NIR: ${syntheticNir}`))]);
+	f.input("Name a task");
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	expect(f.state.title).toBe("existing task");
+	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+	expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+	expect(f.warnings.join(" ")).not.toContain(syntheticNir);
+});
+
 test("does not apply a short-looking response truncated by the token limit", async () => {
 	const f = fixture([Promise.resolve(response("fix ssh", "length"))]);
 	f.input("Name a task");
@@ -1102,6 +1114,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	};
 
 	await suppressed(fixture(), `Review the auth flow with ${token}`);
+	const frenchNir = "123456789012311";
+	await suppressed(fixture(), `French NIR: ${frenchNir}`, frenchNir);
 	const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
 	await suppressed(fixture(), `Review Airtable data access ${airtableToken}`, airtableToken);
 	const onePasswordToken = `ops_eyJ${"Aa0+/".repeat(50)}`;
@@ -9367,6 +9381,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 		"Swedish personal identity number: 900102-1238",
 		"Personnummer: 19900102-1237",
 		"Samordningsnummer: 900162-1235",
+		"French NIR: 123456789012311",
+		"Numéro de sécurité sociale français : 123456789012311",
 		"Bank Account Number: 4829163705",
 		"CVV: 483",
 		"Card Verification Value: 9304",

@@ -6173,6 +6173,65 @@ test("Swedish personal identity numbers crossing either retained prompt boundary
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens French NIR values with a valid control key only with French-specific labels", () => {
+	const syntheticNir = "123456789012311";
+	const arabicDigits = syntheticNir.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	const fullwidthDigits = syntheticNir.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0xff10 + Number(digit)));
+	for (const identifier of [
+		`French NIR: ${syntheticNir}`,
+		`French NIR Number=${syntheticNir}`,
+		`French social security number: 1 23 45 67 890 123 11`,
+		`French national identification number: 123-456-789-012-3-11`,
+		`Numéro de sécurité sociale français : ${syntheticNir}`,
+		`Numéro d'inscription au répertoire=${syntheticNir}`,
+		`NIR français : ${syntheticNir}`,
+		`French NIR: ${arabicDigits}`,
+		`French NIR: ${fullwidthDigits}`,
+		`French NIR: 123456\u200b789012311`,
+	]) {
+		expect(hasSensitiveNamingContext(identifier)).toBe(true);
+		expect(hasSensitiveOutput(identifier)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		syntheticNir,
+		`NIR: ${syntheticNir}`,
+		`ID Number: ${syntheticNir}`,
+		`French NIR: 123456789012310`,
+		`French NIR: 12345678901231`,
+		`French NIR: 1234567890123110`,
+		`French NIR ${syntheticNir}`,
+		`French NIR: 12345--67890-12311`,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("French NIR values crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const value = "123456789012311";
+	for (const label of [" French NIR: ", " Numéro de sécurité sociale : "]) {
+		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+			const before = "x".repeat(valueStart - label.length);
+			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " French NIR: ".length)} French NIR: 123456789012310 ${"y".repeat(1_200)}`;
+	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens conventionally formatted Indian PAN values only with an explicit label", () => {
 	const identifiers = [
 		"PAN: ZZZPZ9876Q",
