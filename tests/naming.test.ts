@@ -3089,6 +3089,62 @@ test("screens Google Drive shared-link resource keys across retained-context bou
 	}
 });
 
+test("screens Google Drive resourceKey fields in API responses across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const key = `0-${"a".repeat(28)}`;
+	const shortKey = "a".repeat(19);
+	const longKey = "a".repeat(129);
+	const responses = [
+		`{"id":"${"F".repeat(33)}","resourceKey":"${key}"}`,
+		`resourceKey:\n  ${key}`,
+	];
+	const promptAt = (text: string, token: string, start: number) => {
+		const textStart = start - text.indexOf(token);
+		const prefix = `${"x".repeat(textStart - 1)} `;
+		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+	};
+
+	for (const response of responses) {
+		expect(hasSensitiveNamingContext(response)).toBe(true);
+		expect(hasSensitiveOutput(response)).toBe(true);
+		const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
+		const obfuscated = response.replace(key, obfuscatedKey);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			for (const { text, token } of [{ text: response, token: key }, { text: obfuscated, token: obfuscatedKey }]) {
+				const context = buildNamingRequestContext([], promptAt(text, token, tokenStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const omittedKey = buildNamingRequestContext([], promptAt(responses[0]!, key, prefixLength + 5));
+	expect(omittedKey.hasSensitiveBoundary()).toBe(false);
+
+	const nearMisses = [
+		`{"resourceKey":"${shortKey}"}`,
+		`{"resourceKey":"${longKey}"}`,
+		`{"resourceKeyId":"${key}"}`,
+		`{"notresourceKey":"${key}"}`,
+		`resourceKey=${key}`,
+		`discussion of resourceKey ${key}`,
+	];
+	for (const value of nearMisses) {
+		expect(hasSensitiveNamingContext(value)).toBe(false);
+		expect(hasSensitiveOutput(value)).toBe(false);
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			expect(buildNamingRequestContext([], promptAt(value, key, tokenStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens MEGA file and folder share-link keys across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
