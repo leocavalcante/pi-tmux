@@ -308,9 +308,9 @@ const CHINESE_RESIDENT_ID_NUMBER_VALUE_PATTERN = String.raw`\p{Nd}{17}[\p{Nd}X]`
 const CHINESE_RESIDENT_ID_NUMBER_EXACT_PATTERN = new RegExp(
 	`^${CHINESE_RESIDENT_ID_NUMBER_VALUE_PATTERN}$`, "iu",
 );
-const CHINESE_RESIDENT_ID_NUMBER_LABEL_PATTERN = String.raw`(?:(?:chinese|prc)[-_\s]+(?:national[-_\s]+)?(?:id|identity|identification)(?:[-_\s]+(?:card|number|no\.?))*|(?:chinese[-_\s]+)?resident[-_\s]+identity[-_\s]+card(?:[-_\s]+(?:number|no\.?))*)`;
+const CHINESE_RESIDENT_ID_NUMBER_LABEL_PATTERN = String.raw`(?:(?<![\p{L}\p{N}])(?:chinese|prc)[-_\s]+(?:national[-_\s]+)?(?:id|identity|identification)(?:[-_\s]+(?:card|number|no\.?))*|(?<![\p{L}\p{N}])(?:chinese[-_\s]+)?resident[-_\s]+identity[-_\s]+card(?:[-_\s]+(?:number|no\.?))*|(?<!\p{N})(?:中华人民共和国|中国)?(?:居民身份证(?:号码|号)|公民身份号码|身份证(?:号码|号)))`;
 const LABELED_CHINESE_RESIDENT_ID_NUMBER_PATTERN = new RegExp(
-	String.raw`(?<![\p{L}\p{N}])${CHINESE_RESIDENT_ID_NUMBER_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${CHINESE_RESIDENT_ID_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
+	String.raw`${CHINESE_RESIDENT_ID_NUMBER_LABEL_PATTERN}\s*#?\s*["']?\s*[:=]\s*["']?(${CHINESE_RESIDENT_ID_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
 	"iu",
 );
 // Indian PANs use a 10-character layout; the fourth letter is a holder-category code.
