@@ -6425,6 +6425,93 @@ test("Chinese resident ID numbers crossing either retained prompt boundary skip 
 	}
 });
 
+test("rejects explicitly labeled checksum-valid Japanese My Numbers without disclosing them", async () => {
+	const sample = "012345678903";
+	const arabicDigits = sample.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0x0660 + Number(digit)));
+	const fullwidthDigits = sample.replace(/[0-9]/gu, (digit) =>
+		String.fromCodePoint(0xff10 + Number(digit)));
+	const identifiers = [
+		`Japanese My Number: ${sample}`,
+		"Japan individual number=314159265352",
+		"Japanese national ID number: 987654321093",
+		`個人番号：${sample}`,
+		"マイナンバー=314159265352",
+		"Japanese My Number: 0123-4567-8903",
+		`Japanese My Number: ${arabicDigits}`,
+		`個人番号：${fullwidthDigits}`,
+		`マイナンバー: ${sample.slice(0, 5)}\u200b${sample.slice(5)}`,
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the Japanese tax form ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		sample,
+		`ID Number: ${sample}`,
+		`My Number: ${sample}`,
+		"Japanese My Number: 012345678904",
+		"Japanese My Number: 01234567890",
+		"Japanese My Number 012345678903",
+		`個人番号 ${sample}`,
+		"個人番号 validation",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("Japanese My Numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const label of [" Japanese My Number: ", " 個人番号："]) {
+		for (const value of ["012345678903", "0123-4567-8903"]) {
+			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const f = fixture();
+				const find = spyOn(f.ctx.modelRegistry, "find");
+				f.input(prompt);
+				await settle();
+				expect(find).not.toHaveBeenCalled();
+				expect(f.requests).toHaveLength(0);
+				expect(f.state.title).toBe("existing task");
+				expect(f.warnings).toEqual([warning]);
+				expect(f.warnings.join(" ")).not.toContain(value);
+			}
+		}
+	}
+
+	for (const label of [" Japanese My Number: ", " 個人番号："]) {
+		const invalidPrompt = `${"x".repeat(prefixLength - 4 - label.length)}${label}012345678904 ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("rejects explicitly labeled checksum-valid ABA routing numbers without exposing them", async () => {
 	const identifiers = [
 		"Routing number: 087294619",
@@ -9188,6 +9275,8 @@ test("manual titles reject sensitive text before normalization without disclosin
 		"Resident Identity Card Number: 129999199912310026",
 		"居民身份证号码：12999920000101001X",
 		"公民身份号码: 129999199912310026",
+		"Japanese My Number: 012345678903",
+		"個人番号：314159265352",
 		"Bank Account Number: 4829163705",
 		"CVV: 483",
 		"Card Verification Value: 9304",

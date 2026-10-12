@@ -412,7 +412,11 @@ Explicitly labeled Chinese/PRC national-ID and resident-identity-card values,
 including common Simplified Chinese labels such as `居民身份证号码` and
 `公民身份号码`, are checked only in the 18-character form with an accepted
 regional prefix, a calendar-valid birth date, and the standard weighted check
-character; generic ID labels remain unmatched. Explicitly labeled Indian PAN
+character; generic ID labels remain unmatched. Explicitly labeled Japanese My
+Number and Japan individual-number values, including labels such as `個人番号`
+and `マイナンバー`, are checked when 12 decimal digits (optionally separated
+by spaces or hyphens) pass the weighted MOD 11 check; generic number/ID labels
+remain unmatched. Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are
@@ -468,7 +472,11 @@ check digits. Explicitly labeled Chinese/PRC national-ID and resident-identity-c
 values, including common Simplified Chinese labels such as `居民身份证号码` and
 `公民身份号码`, are checked only in the 18-character form with an accepted
 regional prefix, a calendar-valid birth date, and the standard weighted check
-character; generic ID labels remain unmatched. Explicitly labeled Indian PAN
+character; generic ID labels remain unmatched. Explicitly labeled Japanese My
+Number and Japan individual-number values, including labels such as `個人番号`
+and `マイナンバー`, are checked when 12 decimal digits (optionally separated
+by spaces or hyphens) pass the weighted MOD 11 check; generic number/ID labels
+remain unmatched. Explicitly labeled Indian PAN
 values with the conventional 10-character letter/digit layout and a recognized
 fourth-character category are checked too. Explicitly labeled Australian TFNs
 with valid checksums and Medicare-card numbers with valid check digits are
