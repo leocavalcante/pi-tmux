@@ -1172,6 +1172,12 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const googleCloudV2UrlStart = prefixLength - 10 - truncatedGoogleCloudV2Url.indexOf(googleCloudV2Signature);
 	const truncatedGoogleCloudV2Prompt = `${"x".repeat(googleCloudV2UrlStart - 1)} ${truncatedGoogleCloudV2Url} ${"y".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedGoogleCloudV2Prompt, googleCloudV2Signature);
+	const awsS3V2Signature = Buffer.alloc(20, 0xfb).toString("base64");
+	const awsS3V2AccessId = `AKIA${"A".repeat(16)}`;
+	const truncatedAwsS3V2Url = `https://s3.amazonaws.com/bucket/object?Signature=${awsS3V2Signature}&AWSAccessKeyId=${awsS3V2AccessId}&Expires=1790000000`;
+	const awsS3V2UrlStart = prefixLength - 10 - truncatedAwsS3V2Url.indexOf(awsS3V2Signature);
+	const truncatedAwsS3V2Prompt = `${"x".repeat(awsS3V2UrlStart - 1)} ${truncatedAwsS3V2Url} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedAwsS3V2Prompt, awsS3V2Signature);
 	const cloudFrontSignature = "A1b_".repeat(24);
 	const truncatedCloudFrontUrl = `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${cloudFrontSignature}&Key-Pair-Id=APKEXAMPLE`;
 	const cloudFrontUrlStart = prefixLength - 10 - truncatedCloudFrontUrl.indexOf(cloudFrontSignature);
@@ -1247,6 +1253,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), httpMessageSignature, httpMessageSignature);
 	const awsPresignedUrl = `https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(64)}`;
 	await suppressed(fixture(), awsPresignedUrl, "a".repeat(64));
+	const awsS3V2SignedUrl = `https://s3.amazonaws.com/bucket/object?AWSAccessKeyId=${awsS3V2AccessId}&Expires=1790000000&Signature=${awsS3V2Signature}`;
+	await suppressed(fixture(), awsS3V2SignedUrl, awsS3V2Signature);
 	const googleSignedUrl = `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(512)}`;
 	await suppressed(fixture(), googleSignedUrl, "b".repeat(512));
 	const googleCloudV2SignedUrl = `https://storage.googleapis.com/bucket/object?GoogleAccessId=EXAMPLE_ACCESS_ID&Expires=1790000000&Signature=${googleCloudV2Signature}`;
