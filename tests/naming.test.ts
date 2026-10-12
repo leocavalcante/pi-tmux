@@ -3224,6 +3224,82 @@ test("screens Apple iCloud shared-album links across retained-context boundaries
 	expect(buildNamingRequestContext([], promptAt(values[0]!.url, token, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens Apple iCloud Photo links across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const values = [
+		{
+			url: `https://www.icloud.com/photos/#/icloudlinks/${"A".repeat(16)}`,
+			token: "A".repeat(16),
+		},
+		{
+			url: `https://share.icloud.com/photos/${"B".repeat(18)}?share=1`,
+			token: "B".repeat(18),
+		},
+	];
+	const promptAt = (text: string, token: string, start: number) => {
+		const textStart = start - text.indexOf(token);
+		const prefix = `${"x".repeat(textStart - 1)} `;
+		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+	};
+
+	for (const { url, token } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscatedToken = `${token.slice(0, 7)}\u200b${token.slice(7)}`;
+		const obfuscated = url.replace(token, obfuscatedToken);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const candidate of [
+			{ text: url, token },
+			{ text: obfuscated, token: obfuscatedToken },
+		]) {
+			for (const tokenStart of [prefixLength - 4, suffixStart - candidate.token.length + 4]) {
+				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.token, tokenStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+
+		const historyContent = `${"x".repeat(996 - url.indexOf(token))} ${url} trailing text`;
+		for (const input of [
+			[{ role: "user", content: historyContent }],
+			[{ role: "compactionSummary", summary: historyContent }],
+		] as any[]) {
+			const context = buildNamingRequestContext(input);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const token = values[0]!.token;
+	const nearMisses = [
+		`https://share.icloud.com/photos/${token.slice(0, 9)}`,
+		`https://share.icloud.com/photos/${token}${"A".repeat(113)}`,
+		`https://share.icloud.com.evil.test/photos/${token}`,
+		`https://evil.share.icloud.com/photos/${token}`,
+		`https://share.icloud.com/videos/${token}`,
+		`https://www.icloud.com.evil.test/photos/#/icloudlinks/${token}`,
+		`https://www.icloud.com/photos/#/other/${token}`,
+		`https://example.test/photos/${token}`,
+		`discussion of an iCloud photo link ${token}`,
+	];
+	for (const url of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		if (!url.includes(token)) continue;
+		for (const tokenStart of [prefixLength - 4, suffixStart - token.length + 4]) {
+			expect(buildNamingRequestContext([], promptAt(url, token, tokenStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+
+	expect(buildNamingRequestContext([], promptAt(values[0]!.url, token, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Google Drive resourceKey fields in API responses across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
