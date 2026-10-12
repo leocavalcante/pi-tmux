@@ -1167,6 +1167,11 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	const googleSignedUrlStart = prefixLength - 10 - truncatedGoogleSignedUrl.indexOf(googleSignedSignature);
 	const truncatedGoogleSignedUrlPrompt = `${"x".repeat(googleSignedUrlStart - 1)} ${truncatedGoogleSignedUrl} ${"y".repeat(1_200)}`;
 	await suppressed(fixture(), truncatedGoogleSignedUrlPrompt, googleSignedSignature);
+	const googleCloudV2Signature = "A".repeat(344);
+	const truncatedGoogleCloudV2Url = `https://storage.googleapis.com/bucket/object?GoogleAccessId=EXAMPLE_ACCESS_ID&Expires=1790000000&Signature=${googleCloudV2Signature}`;
+	const googleCloudV2UrlStart = prefixLength - 10 - truncatedGoogleCloudV2Url.indexOf(googleCloudV2Signature);
+	const truncatedGoogleCloudV2Prompt = `${"x".repeat(googleCloudV2UrlStart - 1)} ${truncatedGoogleCloudV2Url} ${"y".repeat(1_200)}`;
+	await suppressed(fixture(), truncatedGoogleCloudV2Prompt, googleCloudV2Signature);
 	const cloudFrontSignature = "A1b_".repeat(24);
 	const truncatedCloudFrontUrl = `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${cloudFrontSignature}&Key-Pair-Id=APKEXAMPLE`;
 	const cloudFrontUrlStart = prefixLength - 10 - truncatedCloudFrontUrl.indexOf(cloudFrontSignature);
@@ -1224,6 +1229,8 @@ test("sensitive-looking prompts and recent history never reach the naming model"
 	await suppressed(fixture(), awsPresignedUrl, "a".repeat(64));
 	const googleSignedUrl = `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(512)}`;
 	await suppressed(fixture(), googleSignedUrl, "b".repeat(512));
+	const googleCloudV2SignedUrl = `https://storage.googleapis.com/bucket/object?GoogleAccessId=EXAMPLE_ACCESS_ID&Expires=1790000000&Signature=${googleCloudV2Signature}`;
+	await suppressed(fixture(), googleCloudV2SignedUrl, googleCloudV2Signature);
 	const cloudFrontSignedUrl = `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${cloudFrontSignature}&Key-Pair-Id=APKEXAMPLE`;
 	await suppressed(fixture(), cloudFrontSignedUrl, cloudFrontSignature);
 	await suppressed(
