@@ -2532,6 +2532,58 @@ test("screens CloudFront signed URLs across retained-context boundaries", () => 
 	}
 });
 
+test("screens Tencent COS SHA-1 signed URLs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const signature = "a".repeat(40);
+	const values = [
+		{
+			url: `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-ak=EXAMPLEID&q-sign-time=1790000000%3B1790003600&q-signature=${signature}`,
+		},
+		{
+			url: `https://example.cos.ap-guangzhou.myqcloud.com/private?q-signature=${signature}&q-sign-algorithm=sha1&q-ak=EXAMPLEID`,
+		},
+	];
+	const promptAt = (url: string, token: string, start: number) => {
+		const urlStart = start - url.indexOf(token);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
+		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+	}
+
+	const nearMisses = [
+		{ url: `q-signature=${signature}`, signature },
+		{ url: `q-sign-algorithm=sha256&q-signature=${signature}`, signature },
+		{ url: `q-sign-algorithm=sha1&q-signature=${"a".repeat(39)}`, signature: "a".repeat(39) },
+		{ url: `q-sign-algorithm=sha1&q-signature=${"a".repeat(41)}`, signature: "a".repeat(41) },
+		{ url: `q-sign-algorithm=sha1ish&q-signature=${signature}`, signature },
+		{ url: `q-sign-algorithm=sha1&q-sign=${signature}`, signature },
+	];
+	for (const { url, signature: token } of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, token, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens HTTP Signature Authorization proofs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
