@@ -6260,6 +6260,8 @@ test("rejects phone-shaped output only when a phone label is present", async () 
 test("rejects Luhn-valid payment-card-shaped output only with an explicit card label", async () => {
 	const labeledNumbers = [
 		"Card Number: 0000 0000 0000 0000",
+		"Card No.: 0000 0000 0000 0000",
+		"Card #: 0000 0000 0000 0000",
 		"Credit Card=0000000000000000",
 		"debit_card_number: 0000-0000-0000-0000",
 		"Payment Card No: 0000 0000 0000 0000",

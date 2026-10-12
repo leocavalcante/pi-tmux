@@ -5458,6 +5458,25 @@ test("screens check-digit-valid Brazilian CPF values only with an explicit label
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("screens common punctuation in explicitly labeled payment-card numbers", () => {
+	const value = "0000-0000-0000-0000";
+	for (const label of ["Card No.:", "Card #:", "Credit Card No.:", "CC#:", "Payment Card Number #="]) {
+		const text = `${label} ${value}`;
+		expect(hasSensitiveNamingContext(text)).toBe(true);
+		expect(hasSensitiveOutput(text)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		`Card No. ${value}`,
+		"Card No.: 0000-0000-0000-0001",
+		`Invoice #: ${value}`,
+		value,
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
 test("screens Luhn-valid labeled payment cards across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
