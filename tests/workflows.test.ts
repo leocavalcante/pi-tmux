@@ -50,8 +50,8 @@ test("README table of contents links resolve to section headings", () => {
 
 	const occurrences = new Map<string, number>();
 	const headingAnchors = new Set([...readme.matchAll(/^#{1,6}\s+(.+?)\s*$/gm)].map(([, heading]) => {
-		const slug = heading!.toLowerCase().replace(/<[^>]*>/gu, "")
-			.replace(/[^\p{L}\p{N}\s_-]/gu, "").trim().replace(/\s+/gu, "-").replace(/-+/gu, "-");
+		const slug = heading!.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "")
+			.trim().replace(/\s+/gu, "-").replace(/-+/gu, "-");
 		const occurrence = occurrences.get(slug) ?? 0;
 		occurrences.set(slug, occurrence + 1);
 		return occurrence === 0 ? slug : `${slug}-${occurrence}`;
