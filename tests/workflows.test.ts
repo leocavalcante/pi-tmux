@@ -57,6 +57,19 @@ test("README documents the bounded manual and idle-title input limit", () => {
 	expect(readme).toContain("Inputs longer than 64 Ki UTF-16 code units are rejected before screening");
 });
 
+test("CONTRIBUTING documents current privacy screening test coverage", () => {
+	const contributorGuide = readFileSync(fileURLToPath(new URL("../CONTRIBUTING.md", import.meta.url)), "utf8")
+		.replace(/\s+/gu, " ");
+	expect(contributorGuide).toContain("explicitly labeled personal-data screening");
+	expect(contributorGuide).toContain("Unicode variants, near-misses, and retained-context-boundary cases");
+	expect(contributorGuide).toContain("context is screened before model-registry access without echoing matches");
+	expect(contributorGuide).toContain("sensitive-looking context is not sent to the model");
+	expect(contributorGuide).toContain("sensitive-looking output is neither applied nor disclosed");
+	expect(contributorGuide).toContain("identifier examples are synthetic");
+	expect(contributorGuide).toContain("runtime-supported decimal digit mappings");
+	expect(contributorGuide).toContain("conservative handling of unmappable digits");
+});
+
 test("README distinguishes shared title updates from status-only markers", () => {
 	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
 	expect(readme).toContain("Waiting-marker updates alone preserve the current shared title instead of replaying a stale per-pane title");
