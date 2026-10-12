@@ -3273,6 +3273,62 @@ test("screens legacy OneDrive shared-link auth keys across retained-context boun
 	}
 });
 
+test("screens OneDrive short-link IDs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const ids = ["A".repeat(32), "0123456789abcdef0123456789abcdef"];
+	const values = [
+		{ url: `https://1drv.ms/${ids[0]}?e=example`, id: ids[0]! },
+		{ url: `https://1drv.ms/${ids[1]}`, id: ids[1]! },
+	];
+	const promptAt = (url: string, id: string, start: number) => {
+		const urlStart = start - url.indexOf(id);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, id } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscated = url.replace(id, `${id.slice(0, 16)}\u200b${id.slice(16)}`);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			const context = buildNamingRequestContext([], promptAt(url, id, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const obfuscatedId = `${id.slice(0, 16)}\u200b${id.slice(16)}`;
+		const obfuscatedContext = buildNamingRequestContext(
+			[], promptAt(obfuscated, obfuscatedId, prefixLength - 11),
+		);
+		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+		expect(buildNamingRequestContext([], promptAt(url, id, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+	}
+
+	const id = ids[0]!;
+	const nearMisses = [
+		`https://1drv.ms/${id.slice(1)}`,
+		`https://1drv.ms/${id}0`,
+		`https://1drv.ms.evil.test/${id}`,
+		`https://evil.1drv.ms/${id}`,
+		`https://example.test/${id}`,
+		`discussion of OneDrive share ID ${id}`,
+	];
+	for (const url of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			expect(buildNamingRequestContext([], promptAt(url, id, tokenStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Google Drive resource-key API headers across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
