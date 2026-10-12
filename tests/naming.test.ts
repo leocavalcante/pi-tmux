@@ -6240,6 +6240,63 @@ test("one-time authentication codes crossing either retained prompt boundary are
 	}
 });
 
+test("screens explicitly labeled backup and recovery codes with digits", () => {
+	const codes = [
+		"Recovery Code: 482739",
+		"Backup Code: 736194",
+		"Recovery Codes=ABCD-EF12",
+		"Backup Key: K4J7-M3Q9",
+		"MFA Recovery Code: Q8R2-17NX",
+		"Recovery Key: 12345678901234567890123456789012",
+		"Backup Code: 4829\u200b3710",
+	];
+	for (const code of codes) {
+		expect(hasSensitiveNamingContext(code)).toBe(true);
+		expect(hasSensitiveOutput(code)).toBe(true);
+	}
+
+	for (const nearMiss of [
+		"482739",
+		"Code: 482739",
+		"Key: AB12345",
+		"Recovery Code: ABCDEF",
+		"Backup Code: 12345",
+		"Recovery Code: 123456789012345678901234567890123",
+		"Recovery Code: please reset my account",
+		"I need to understand recovery codes",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+});
+
+test("backup and recovery codes crossing either retained prompt boundary are detected", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+
+	for (const label of [" Recovery Code: ", " Backup Key: "]) {
+		for (const value of ["482739", "ABCD-EF12"]) {
+			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const label = " Recovery Code: ";
+	for (const invalidValue of ["12345", "ABCDEF", "123456789012345678901234567890123"]) {
+		const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
+		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+	}
+});
+
 test("screens Luhn-valid labeled payment cards across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
