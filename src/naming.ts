@@ -2793,6 +2793,8 @@ function hasLabeledFrenchNir(value: string): boolean {
 	return false;
 }
 
+// The Ministry of the Interior documents modulo 23 and NIE X/Y/Z → 0/1/2.
+// https://www.interior.gob.es/opencms/en/servicios-al-ciudadano/tramites-y-gestiones/dni/calculo-del-digito-de-control-del-nif-nie/
 const SPANISH_NIF_CHECK_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
 function isValidSpanishNationalId(value: string): boolean {
 	const normalized = value.replace(/[\p{Cc}\p{Cf}\s.-]+/gu, "");

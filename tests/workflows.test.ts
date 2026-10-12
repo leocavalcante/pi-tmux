@@ -69,6 +69,12 @@ test("README cites INSEE for Corsican NIR check-key support", () => {
 	expect(readme).toContain("https://xml.insee.fr/schema/nir.html");
 });
 
+test("README cites the Ministry of the Interior for Spanish DNI/NIE checks", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
+	expect(readme).toContain("Ministry of the Interior control-digit guide");
+	expect(readme).toContain("https://www.interior.gob.es/opencms/en/servicios-al-ciudadano/tramites-y-gestiones/dni/calculo-del-digito-de-control-del-nif-nie/");
+});
+
 test("CONTRIBUTING documents current privacy screening test coverage", () => {
 	const contributorGuide = readFileSync(fileURLToPath(new URL("../CONTRIBUTING.md", import.meta.url)), "utf8")
 		.replace(/\s+/gu, " ");
