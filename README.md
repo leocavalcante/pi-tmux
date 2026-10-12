@@ -357,10 +357,11 @@ Azure DevOps
 PATs, Google OAuth/API keys, and other service tokens), npm `.npmrc` `_auth`
 username/password pairs, Docker config `auth` values encoding username/password pairs,
 and legacy Base64 `_password` values, credential-bearing URLs, Bearer, Token, and
-ApiKey authorization values, Digest Authorization response hashes and
-Authentication-Info rspauth hashes, selected session-cookie IDs in `Set-Cookie`
-headers, Base64 Basic authorization values, and long values assigned to common
-credential labels, including explicit `session` and `cookie` assignments.
+ApiKey authorization values, legacy HTTP Signature authorization proofs, Digest
+Authorization response hashes, and Authentication-Info rspauth hashes, selected
+session-cookie IDs in `Set-Cookie` headers, Base64 Basic authorization values, and
+long values assigned to common credential labels, including explicit `session` and
+`cookie` assignments.
 For supported credential labels, YAML block scalars with tags or anchors are also
 checked, as are shorter non-placeholder password/passphrase assignments and
 recognizable PEM, OpenSSH, PGP, SSH2, and PuTTY private-key file markers. The
