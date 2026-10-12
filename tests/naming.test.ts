@@ -5264,7 +5264,7 @@ test("screens short labeled passwords and passphrases across retained-context tr
 	expect(buildNamingRequestContext([], npmPlaceholderPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
-test("screens labeled SSNs and phone numbers across retained-context truncation boundaries", () => {
+test("screens labeled U.S. tax IDs and phone numbers across retained-context truncation boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
@@ -5275,6 +5275,9 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 		{ label: " SSN#: ", value: "000-00-0000", shortValue: "000-00-000" },
 		{ label: " Social Security No.: ", value: "000-00-0000", shortValue: "000-00-000" },
 		{ label: " Social Security #: ", value: "000-00-0000", shortValue: "000-00-000" },
+		{ label: " TIN: ", value: "000-00-0000", shortValue: "000-00-000" },
+		{ label: " Tax ID No.: ", value: "000000000", shortValue: "00000000" },
+		{ label: " Taxpayer Identification Number: ", value: "000-00-0000", shortValue: "000-00-000" },
 		{ label: " Phone: ", value: "000-000-0000", shortValue: "000-000" },
 		{ label: " Phone #: ", value: "000-000-0000", shortValue: "000-000" },
 		{ label: " Phone No.: ", value: "000-000-0000", shortValue: "000-000" },
@@ -5330,6 +5333,9 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 		"éSSN: 000-00-0000",
 		"SSN: ٠٠٠-٠٠-٠٠٠٠٠",
 		"SSN No. 000-00-0000",
+		"TIN No. 000-00-0000",
+		"Tax ID No. 000-00-0000",
+		"Taxpayer Identification Number: 000-00-000",
 		"Social Security #: 000-00-000",
 		"Phone # 000-000-0000",
 		"Ticket #: 000-000-0000",
