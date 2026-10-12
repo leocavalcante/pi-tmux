@@ -6415,6 +6415,9 @@ test("rejects explicitly labeled passport numbers without exposing them", async 
 		"Passport #: A7B29C41",
 		"Passport ID=K4D8P271",
 		"Passport: U20041986",
+		"Passport Card Number: R8K2M519",
+		"Passport Card No.: 84027195",
+		"Passport Card #: C7N49218",
 		"Passport No.: QX73\u200b0194",
 	];
 	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
@@ -6446,6 +6449,7 @@ test("rejects explicitly labeled passport numbers without exposing them", async 
 		"Passport No.: Q1234",
 		"Passport #: QX73019485730",
 		"Passport Number: QX73019-4",
+		"Passport Card Reference: R8K2M519",
 		"Travel Document: QX730194",
 		"Passport number validation",
 	]) {
@@ -6465,23 +6469,24 @@ test("passport numbers crossing either retained prompt boundary skip model looku
 	const prefixLength = Math.ceil(retainedLength / 2);
 	const promptLength = MAX_PROMPT_LENGTH + 1_000;
 	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " Passport No.: ";
 	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of ["QX730194", "59381724"]) {
-		for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
-			const before = "x".repeat(valueStart - label.length);
-			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const f = fixture();
-			const find = spyOn(f.ctx.modelRegistry, "find");
-			f.input(prompt);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(f.requests).toHaveLength(0);
-			expect(f.state.title).toBe("existing task");
-			expect(f.warnings).toEqual([warning]);
-			expect(f.warnings.join(" ")).not.toContain(value);
+	for (const label of [" Passport No.: ", " Passport Card Number: "]) {
+		for (const value of ["QX730194", "59381724"]) {
+			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const f = fixture();
+				const find = spyOn(f.ctx.modelRegistry, "find");
+				f.input(prompt);
+				await settle();
+				expect(find).not.toHaveBeenCalled();
+				expect(f.requests).toHaveLength(0);
+				expect(f.state.title).toBe("existing task");
+				expect(f.warnings).toEqual([warning]);
+				expect(f.warnings.join(" ")).not.toContain(value);
+			}
 		}
 	}
 });
@@ -8577,6 +8582,7 @@ test("manual titles reject sensitive text before normalization without disclosin
 		`client_secret=${"B".repeat(24)}`,
 		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
 		"Passport Number: QX730194",
+		"Passport Card Number: R8K2M519",
 		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
 		`AccountKey=${"A".repeat(86)}==`,
 		`client-key-data: ${"A".repeat(44)}`,

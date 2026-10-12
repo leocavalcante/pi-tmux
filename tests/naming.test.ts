@@ -5451,6 +5451,9 @@ test("screens explicitly labeled passport numbers with bounded digit-bearing ASC
 		"Passport #: A7B29C41",
 		"Passport ID=K4D8P271",
 		"Passport: U20041986",
+		"Passport Card Number: R8K2M519",
+		"Passport Card No.: 84027195",
+		"Passport Card #: C7N49218",
 		"Passport No.: QX73\u200b0194",
 	];
 	for (const identifier of identifiers) {
@@ -5464,6 +5467,7 @@ test("screens explicitly labeled passport numbers with bounded digit-bearing ASC
 		"Passport No.: Q1234",
 		"Passport #: QX73019485730",
 		"Passport Number: QX73019-4",
+		"Passport Card Reference: R8K2M519",
 		"Travel Document: QX730194",
 		"Passport number validation",
 	]) {
@@ -5478,20 +5482,21 @@ test("passport numbers crossing either retained prompt boundary are detected", (
 	const prefixLength = Math.ceil(retainedLength / 2);
 	const promptLength = MAX_PROMPT_LENGTH + 1_000;
 	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " Passport No.: ";
-
-	for (const value of ["QX730194", "59381724"]) {
-		for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
-			const before = "x".repeat(valueStart - label.length);
-			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
+	for (const label of [" Passport No.: ", " Passport Card Number: "]) {
+		for (const value of ["QX730194", "59381724"]) {
+			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
+				const before = "x".repeat(valueStart - label.length);
+				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+				expect(prompt).toHaveLength(promptLength);
+				const context = buildNamingRequestContext([], prompt);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
 		}
 	}
 
-	const invalidPrompt = `${"x".repeat(prefixLength - 3 - label.length)}${label}ABCDEF ${"y".repeat(1_200)}`;
+	const invalidLabel = " Passport No.: ";
+	const invalidPrompt = `${"x".repeat(prefixLength - 3 - invalidLabel.length)}${invalidLabel}ABCDEF ${"y".repeat(1_200)}`;
 	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
 });
 

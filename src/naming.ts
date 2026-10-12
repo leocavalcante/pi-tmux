@@ -185,7 +185,7 @@ const LABELED_ABA_ROUTING_NUMBER_PATTERN = new RegExp(
 // Passport formats vary by country; require an explicit passport label and a digit-bearing ID shape.
 const PASSPORT_NUMBER_VALUE_PATTERN = String.raw`(?=[A-Z0-9]{6,12}(?![A-Z0-9]))(?=[A-Z0-9]*[0-9])[A-Z0-9]{6,12}`;
 const LABELED_PASSPORT_NUMBER_PATTERN = new RegExp(
-	String.raw`(?<![\p{L}\p{N}])passport(?:[-_\s]+(?:number|no\.?|id))?\s*#?\s*["']?\s*[:=]\s*["']?(${PASSPORT_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
+	String.raw`(?<![\p{L}\p{N}])passport(?:[-_\s]+card)?(?:[-_\s]+(?:number|no\.?|id))?\s*#?\s*["']?\s*[:=]\s*["']?(${PASSPORT_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_-])`,
 	"iu",
 );
 // Keep the accepted IBAN registry subset explicit to avoid shape-only matches.
