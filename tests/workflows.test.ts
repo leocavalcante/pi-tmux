@@ -81,6 +81,13 @@ test("README cites the NHS Data Dictionary for NHS number validation", () => {
 	expect(readme).toContain("https://www.datadictionary.nhs.uk/attributes/nhs_number.html");
 });
 
+test("README cites Skatteverket for Swedish personal-number checks", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
+	expect(readme).toContain("Skatteverket's Modulus 10 method");
+	expect(readme).toContain("alternating weights 1 and 2");
+	expect(readme).toContain("https://www4.skatteverket.se/rattsligvagledning/edition/2026.6/330245.html");
+});
+
 test("CONTRIBUTING documents current privacy screening test coverage", () => {
 	const contributorGuide = readFileSync(fileURLToPath(new URL("../CONTRIBUTING.md", import.meta.url)), "utf8")
 		.replace(/\s+/gu, " ");
