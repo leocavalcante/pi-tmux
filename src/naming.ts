@@ -162,7 +162,7 @@ const OBFUSCATED_BEARER_TOKEN_PATTERN = new RegExp(
 const OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN = new RegExp(
 	OBFUSCATED_BEARER_TOKEN_PATTERN.source, `${OBFUSCATED_BEARER_TOKEN_PATTERN.flags}g`,
 );
-const US_SSN_PATTERN = /(?<![\p{L}\p{N}])(?:ssn|social[-\s]+security(?:[-\s]+number)?)\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
+const US_SSN_PATTERN = /(?<![\p{L}\p{N}])(?:ssn(?:[-_\s]?(?:number|no\.?))?|social[-_\s]+security(?:[-_\s]+(?:number|no\.?))?)\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
 const US_ITIN_VALUE_PATTERN = String.raw`\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4}`;
 const US_ITIN_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])(?:itin(?:[-_\s]?(?:number|no))?|individual[-_\s]+taxpayer[-_\s]+identification(?:[-_\s]+(?:number|no))?)\s*["']?\s*[:=]\s*["']?(${US_ITIN_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
