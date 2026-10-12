@@ -245,6 +245,8 @@ export function writeOnServer(tmux: RunTmux, server: string | undefined, args: s
 
 export function targetDisappeared(error: unknown, target: string) {
 	const stderr = error && typeof error === "object" && "stderr" in error ? error.stderr : undefined;
-	const message = Buffer.isBuffer(stderr) ? stderr.toString("utf8") : typeof stderr === "string" ? stderr : "";
+	const message = Buffer.isBuffer(stderr) ? stderr.toString("utf8")
+		: typeof stderr === "string" ? stderr
+			: error instanceof Error ? error.message : "";
 	return message.trim() === `can't find ${target.startsWith("@") ? "window" : "session"}: ${target}`;
 }
