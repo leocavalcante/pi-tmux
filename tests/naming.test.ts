@@ -3499,6 +3499,77 @@ test("screens Microsoft Graph OneDrive share tokens across retained-context boun
 	}
 });
 
+test("screens Zoom meeting passcodes in join URLs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const values = [
+		{
+			url: "https://us02web.zoom.us/j/12345678901?pwd=QWxwaGE3ODk=",
+			passcode: "QWxwaGE3ODk=",
+		},
+		{
+			url: "https://zoom.us/wc/join/987654321?from=direct&pwd=123456",
+			passcode: "123456",
+		},
+	];
+	const promptAt = (url: string, passcode: string, start: number) => {
+		const urlStart = start - url.indexOf(passcode);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, passcode } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscatedPasscode = `${passcode.slice(0, 3)}\u200b${passcode.slice(3)}`;
+		const obfuscated = url.replace(passcode, obfuscatedPasscode);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const candidate of [
+			{ text: url, value: passcode },
+			{ text: obfuscated, value: obfuscatedPasscode },
+		]) {
+			for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
+				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.value, tokenStart));
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(true);
+			}
+		}
+	}
+
+	const passcode = values[0]!.passcode;
+	const nearMisses = [
+		`https://us02web.zoom.us/j/12345678901?pwd=`,
+		"https://us02web.zoom.us/j/12345678901?pwd=abc",
+		`https://us02web.zoom.us/j/12345678901?from=direct&xpwd=${passcode}`,
+		`https://us02web.zoom.us/j/12345678901/extra?pwd=${passcode}`,
+		`https://us02web.zoom.us/j/12345678?pwd=${passcode}`,
+		`https://us02web.zoom.us/j/123456789012?pwd=${passcode}`,
+		`https://zoom.us.evil.test/j/12345678901?pwd=${passcode}`,
+		`https://evilzoom.us/j/12345678901?pwd=${passcode}`,
+		`https://zoom.us.example.test/j/12345678901?pwd=${passcode}`,
+		`https://example.test/j/12345678901?pwd=${passcode}`,
+		`https://zoom.us/meeting/12345678901?pwd=${passcode}`,
+		`https://zoom.us/j/not-a-meeting-id?pwd=${passcode}`,
+		`https://zoom.us/j/12345678901`,
+		`discussion of a Zoom passcode pwd=${passcode}`,
+	];
+	for (const url of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		if (!url.includes(passcode)) continue;
+		for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
+			expect(buildNamingRequestContext([], promptAt(url, passcode, tokenStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+
+	expect(buildNamingRequestContext([], promptAt(values[0]!.url, passcode, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Google Drive resource-key API headers across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
