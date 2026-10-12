@@ -2337,6 +2337,89 @@ test("screens Negotiate, NTLM, and Kerberos auth tokens and challenges across re
 	}
 });
 
+test("screens AWS and Google Cloud Storage V4 signed URLs across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const awsSignature = "a".repeat(64);
+	const googleSignature = "b".repeat(512);
+	const values = [
+		{
+			url: `https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EXAMPLE%2F20261012%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=${awsSignature}`,
+			signature: awsSignature,
+		},
+		{
+			url: `https://s3.example.test/object?X-Amz-Signature=${awsSignature}&X-Amz-Algorithm=AWS4-HMAC-SHA256`,
+			signature: awsSignature,
+		},
+		{
+			url: `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=service%40example.test%2F20261012%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Signature=${googleSignature}`,
+			signature: googleSignature,
+		},
+		{
+			url: `https://storage.googleapis.com/object?X-Goog-Signature=${googleSignature}&X-Goog-Algorithm=GOOG4-RSA-SHA256`,
+			signature: googleSignature,
+		},
+	];
+	const promptAt = (url: string, signature: string, start: number) => {
+		const urlStart = start - url.indexOf(signature);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, signature } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
+		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+	}
+
+	const nearMisses = [
+		{ url: `X-Amz-Signature=${awsSignature}`, signature: awsSignature },
+		{
+			url: `X-Amz-Algorithm=AWS4-HMAC-SHA1&X-Amz-Signature=${awsSignature}`,
+			signature: awsSignature,
+		},
+		{
+			url: `X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(63)}`,
+			signature: "a".repeat(63),
+		},
+		{
+			url: `X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(65)}`,
+			signature: "a".repeat(65),
+		},
+		{ url: `X-Goog-Signature=${googleSignature}`, signature: googleSignature },
+		{
+			url: `X-Goog-Algorithm=GOOG4-RSA-SHA1&X-Goog-Signature=${googleSignature}`,
+			signature: googleSignature,
+		},
+		{
+			url: `X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(255)}`,
+			signature: "b".repeat(255),
+		},
+		{
+			url: `X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(513)}`,
+			signature: "b".repeat(513),
+		},
+	];
+	for (const { url, signature } of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens HTTP Signature Authorization proofs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
