@@ -2191,7 +2191,8 @@ function isValidUsItinNumber(value: string): boolean {
 	return conservativelyValidateLabeledDigits(asciiDecimalDigits(value), (digits) => {
 		if (digits.length !== 9 || digits[0] !== "9") return false;
 		const group = Number(digits.slice(3, 5));
-		return (group >= 70 && group <= 88) || (group >= 90 && group <= 92) || (group >= 94 && group <= 99);
+		return (group >= 50 && group <= 65) || (group >= 70 && group <= 88)
+			|| (group >= 90 && group <= 92) || (group >= 94 && group <= 99);
 	});
 }
 
