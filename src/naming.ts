@@ -84,8 +84,9 @@ const AUTHORIZATION_API_KEY_BOUNDARY_PATTERN = makeBoundaryPattern(
 	"([A-Za-z0-9._~+/_-]{20,}={0,2})",
 	String.raw`([A-Za-z0-9._~+/_-](?:[\p{Cc}\p{Cf}]*[A-Za-z0-9._~+/_-]){19,}(?:[\p{Cc}\p{Cf}]*=){0,2})`,
 );
-// Common server-side session cookies often use framework-specific names in Set-Cookie headers.
-const SET_COOKIE_SESSION_NAME_PATTERN = String.raw`(?:__Host-|__Secure-)?(?:session(?:[-_]?id)?|sid|connect\.sid|phpsessid|jsessionid|asp\.net_sessionid|laravel_session|rack\.session)`;
+// Common framework cookies use fixed IDs or an app-prefixed `session` name.
+const APP_PREFIXED_SESSION_COOKIE_PATTERN = String.raw`(?:_?[A-Za-z0-9._-]{1,64}[-_])?session(?:[-_]?id)?`;
+const SET_COOKIE_SESSION_NAME_PATTERN = String.raw`(?:__Host-|__Secure-)?(?:${APP_PREFIXED_SESSION_COOKIE_PATTERN}|sid|connect\.sid|phpsessid|jsessionid|asp\.net_sessionid|laravel_session|rack\.session)`;
 const SET_COOKIE_SESSION_CREDENTIAL_PATTERN = new RegExp(
 	String.raw`(?<![A-Za-z0-9_-])set-cookie\s*:\s*${SET_COOKIE_SESSION_NAME_PATTERN}`
 		+ String.raw`\s*=\s*["']?([A-Za-z0-9._~+/%:-]{20,}={0,2})(?![A-Za-z0-9._~+/%:=-])`,
