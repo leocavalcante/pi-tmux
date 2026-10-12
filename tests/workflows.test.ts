@@ -173,7 +173,7 @@ test("CI history secret scanning verifies its pinned binary and redacts findings
 	expect(execution).toBeGreaterThan(extraction);
 });
 
-test("manual npm bootstrap checks out clean origin/main before logging in", () => {
+test("manual npm bootstrap verifies clean origin/main and version before logging in", () => {
 	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
 	const commands = /Bootstrap version `0\.1\.0`[\s\S]*?```sh\n([\s\S]*?)\n```/u.exec(readme)?.[1];
 	if (!commands) throw new Error("README must document the one-time npm bootstrap commands");
@@ -182,6 +182,7 @@ test("manual npm bootstrap checks out clean origin/main before logging in", () =
 		'test "$(git branch --show-current)" = "main"',
 		'test -z "$(git status --porcelain)"',
 		'test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"',
+		String.raw`test "$(npm pkg get version)" = '"0.1.0"'`,
 	].map((command) => commands.indexOf(command));
 	const login = commands.indexOf("npm login");
 	expect(preflight.every((position, index) => position >= 0 && position < login
