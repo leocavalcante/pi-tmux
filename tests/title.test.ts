@@ -6001,7 +6001,10 @@ test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them"
 	const identifiers = [
 		"SIN: 712-345-677",
 		"SIN Number=712345677",
+		"SIN No.: 712-345-677",
+		"SIN#: 712-345-677",
 		"Social Insurance Number: 712 345 677",
+		"Social Insurance No.: 712 345 677",
 		"SIN: 712.34\u200b5.677",
 	];
 	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
@@ -6029,6 +6032,7 @@ test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them"
 
 	for (const nearMiss of [
 		"712-345-677",
+		"SIN No. 712-345-677",
 		"SIN: 712-345-678",
 		"SIN: 000-000-000",
 		"SIN validation in a task",
@@ -6061,7 +6065,10 @@ test("rejects explicitly labeled U.S. ITINs in recognized IRS ranges without exp
 		"ITIN: 900-65-0000",
 		"ITIN: 900-70-0000",
 		"ITIN number=900700000",
+		"ITIN No.: 900-50-0000",
+		"ITIN#: 900-65-0000",
 		"Individual Taxpayer Identification Number: 900 90 0000",
+		"Individual Taxpayer Identification No.: 900-94-0000",
 		"ITIN: ９００-９４-００００",
 		"I\u200bTIN: 900-99-0000",
 	];
@@ -6096,6 +6103,7 @@ test("rejects explicitly labeled U.S. ITINs in recognized IRS ranges without exp
 		"ITIN: 900-69-0000",
 		"ITIN: 900-89-0000",
 		"ITIN: 900-93-0000",
+		"ITIN No 900-50-0000",
 		"ITIN: 900-9\u200b3-0000",
 		"ITIN: 900-70-000",
 		"ITIN parsing in a task",
@@ -6106,7 +6114,7 @@ test("rejects explicitly labeled U.S. ITINs in recognized IRS ranges without exp
 	const promptMarker = "[... middle of prompt omitted ...]";
 	const retainedPromptLength = MAX_PROMPT_LENGTH - promptMarker.length - 2;
 	const prefixLength = Math.ceil(retainedPromptLength / 2);
-	const itinLabel = " ITIN: ";
+	const itinLabel = " ITIN No.: ";
 	const splitPrompt = (value: string) => {
 		const splitStart = prefixLength - 4;
 		return `${"x".repeat(splitStart - itinLabel.length)}${itinLabel}${value} ${"y".repeat(1_200)}`;
@@ -6125,6 +6133,8 @@ test("rejects explicitly labeled valid CPF values without exposing them", async 
 	const identifiers = [
 		"CPF: 529.982.247-25",
 		"CPF number=52998224725",
+		"CPF No.: 529.982.247-25",
+		"CPF#: 52998224725",
 		"Cadastro de Pessoas Físicas: 529 982 247 25",
 		"CPF: 529.98\u200b2.247-25",
 	];
@@ -6153,6 +6163,7 @@ test("rejects explicitly labeled valid CPF values without exposing them", async 
 
 	for (const nearMiss of [
 		"529.982.247-25",
+		"CPF No. 529.982.247-25",
 		"CPF: 529.982.247-24",
 		"CPF: 000.000.000-00",
 		"CPF parsing in a task",
@@ -6171,7 +6182,11 @@ test("rejects explicitly labeled UK National Insurance numbers without blocking 
 	const identifiers = [
 		"National Insurance number: AB 12 34 56 C",
 		"National Insurance No=CE123456A",
+		"National Insurance No.: AB 12 34 56 C",
 		"NI number: GW 12-34-56 D",
+		"NI No.: ST 12 34 56 C",
+		"NI#: AB123456B",
+		"NINO#: CE123456A",
 		"NI: ST123456C",
 		"NINO: AB123456B",
 		"NI number: AB ١٢٣٤٥٦A",
@@ -6201,7 +6216,7 @@ test("rejects explicitly labeled UK National Insurance numbers without blocking 
 		expect(output.warnings.join(" ")).not.toContain(value);
 	}
 
-	const fragments = ["NI number: AB 12 34 ", "56 C"];
+	const fragments = ["NI No.: AB 12 34 ", "56 C"];
 	const splitResponse = {
 		...response(""),
 		content: fragments.map((text, index) => ({
@@ -6226,6 +6241,7 @@ test("rejects explicitly labeled UK National Insurance numbers without blocking 
 		"NI number: AB 12 34 56 E",
 		"NI number: AB 12 34 5 C",
 		"NI number: AB 12 34 567 C",
+		"NI No. AB 12 34 56 C",
 		"National Insurance number parsing",
 	]) {
 		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
@@ -6241,6 +6257,8 @@ test("rejects explicitly labeled UK National Insurance numbers without blocking 
 test("rejects phone-shaped output only when a phone label is present", async () => {
 	const labeledNumbers = [
 		"Phone: 000-000-0000",
+		"Phone #: 000-000-0000",
+		"Phone No.: 000-000-0000",
 		"Mobile Number=0000000000",
 		"cellular_number: (000) 000-0000",
 		"Telephone: +1 (000) 000-0000",
@@ -6258,6 +6276,15 @@ test("rejects phone-shaped output only when a phone label is present", async () 
 		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
 		expect(f.warnings.join(" ")).not.toContain(output);
+	}
+
+	for (const nearMiss of [
+		"Phone # 000-000-0000",
+		"Ticket #: 000-000-0000",
+		"000-000-0000",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
 	}
 });
 
