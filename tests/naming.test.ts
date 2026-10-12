@@ -2692,6 +2692,73 @@ test("screens Google Cloud CDN signed URLs across retained-context boundaries", 
 	}
 });
 
+test("screens Akamai EdgeAuth tokens across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const md5Signature = "a".repeat(32);
+	const sha1Signature = "b".repeat(40);
+	const sha256Signature = "c".repeat(64);
+	const values = [
+		{
+			value: `https://media.example.com/video.mp4?hdnts=exp=1790000000~acl=/video/*~hmac=${md5Signature}`,
+			signature: md5Signature,
+		},
+		{
+			value: `https://media.example.com/video.mp4?hdnts=st=1790000000~exp=1790003600~hmac=${sha1Signature}`,
+			signature: sha1Signature,
+		},
+		{
+			value: `Set-Cookie: hdnts=exp=1790000000~acl=/video/*~hmac=${sha256Signature}; Path=/; Secure; HttpOnly`,
+			signature: sha256Signature,
+		},
+		{
+			value: `https://media.example.com/video.mp4?__token__=ip=192.0.2.1~st=1790000000~exp=1790003600~acl=/video/*~id=session42~data=foo~hmac=${sha256Signature}`,
+			signature: sha256Signature,
+		},
+	];
+	const promptAt = (value: string, token: string, start: number) => {
+		const valueStart = start - value.indexOf(token);
+		const prefix = `${"x".repeat(valueStart - 1)} `;
+		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+	};
+
+	for (const { value, signature } of values) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(value, signature, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	const omittedSignature = buildNamingRequestContext([], promptAt(values[0]!.value, md5Signature, prefixLength + 5));
+	expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+
+	const nearMisses = [
+		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(31)}`, signature: "a".repeat(31) },
+		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(33)}`, signature: "a".repeat(33) },
+		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(39)}`, signature: "a".repeat(39) },
+		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(41)}`, signature: "a".repeat(41) },
+		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(63)}`, signature: "a".repeat(63) },
+		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(65)}`, signature: "a".repeat(65) },
+		{ value: `?hdntx=exp=1790000000~acl=/video/*~hmac=${sha256Signature}`, signature: sha256Signature },
+		{ value: `?hdnts=acl=/video/*~hmac=${sha256Signature}`, signature: sha256Signature },
+		{ value: `?__token__=exp=1790000000~hmac=${sha256Signature}x`, signature: `${sha256Signature}x` },
+	];
+	for (const { value, signature } of nearMisses) {
+		expect(hasSensitiveNamingContext(value)).toBe(false);
+		expect(hasSensitiveOutput(value)).toBe(false);
+		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+			const context = buildNamingRequestContext([], promptAt(value, signature, tokenStart));
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Tencent COS SHA-1 signed URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
