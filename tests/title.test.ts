@@ -6322,6 +6322,87 @@ test("Aadhaar numbers crossing either retained prompt boundary skip model lookup
 	}
 });
 
+test("rejects explicitly labeled checksum-valid ABA routing numbers without exposing them", async () => {
+	const identifiers = [
+		"Routing number: 087294619",
+		"ABA routing number=126804371",
+		"Routing Transit Number: 329170640",
+		"ABA RTN: 659173045",
+		"Routing Number: 800000006",
+		"Routing No.: 087-294-619",
+		"Routing number: ٠٨٧٢٩٤٦١٩",
+		"Routing number: 08729\u200b4619",
+	];
+	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+	for (const value of identifiers) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		expect(hasSensitiveOutput(value)).toBe(true);
+
+		const input = fixture();
+		const find = spyOn(input.ctx.modelRegistry, "find");
+		input.input(`Review the bank details ${value}`);
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(input.requests).toHaveLength(0);
+		expect(input.warnings).toEqual([contextWarning]);
+		expect(input.warnings.join(" ")).not.toContain(value);
+
+		const output = fixture([Promise.resolve(response(value))]);
+		output.input("Name a task");
+		await settle();
+		expect(output.state.title).toBe("existing task");
+		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(output.warnings.join(" ")).not.toContain(value);
+	}
+
+	for (const nearMiss of [
+		"087294619",
+		"Routing number: 087294618",
+		"Routing number: 139999999",
+		"Routing number: 08729461",
+		"Routing number: 0872946190",
+		"Routing number 087294619",
+		"Bank number: 087294619",
+		"Routing number validation",
+	]) {
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		expect(hasSensitiveOutput(nearMiss)).toBe(false);
+	}
+	const ordinaryTitle = fixture([Promise.resolve(response("routing parser"))]);
+	ordinaryTitle.input("Name a task");
+	await settle();
+	expect(ordinaryTitle.state.title).toBe("routing parser");
+	expect(ordinaryTitle.warnings).toEqual([]);
+});
+
+test("ABA routing numbers crossing either retained prompt boundary skip model lookup", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 1_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const label = " ABA routing number: ";
+	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+
+	for (const value of ["087294619", "٠٨٧٢٩٤٦١٩"]) {
+		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+			const before = "x".repeat(valueStart - label.length);
+			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const f = fixture();
+			const find = spyOn(f.ctx.modelRegistry, "find");
+			f.input(prompt);
+			await settle();
+			expect(find).not.toHaveBeenCalled();
+			expect(f.requests).toHaveLength(0);
+			expect(f.state.title).toBe("existing task");
+			expect(f.warnings).toEqual([warning]);
+			expect(f.warnings.join(" ")).not.toContain(value);
+		}
+	}
+});
+
 test("rejects explicitly labeled structurally valid Indian PANs without exposing them", async () => {
 	const identifiers = [
 		"PAN: ZZZPZ9876Q",
