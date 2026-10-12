@@ -408,7 +408,9 @@ date-of-birth labels, UK National Insurance numbers, explicitly labeled
 Brazilian CPF values with valid check digits, explicitly labeled Canadian SIN
 values with valid Luhn check digits, and explicitly labeled Aadhaar numbers
 with 12 digits, a leading digit from 2–9, and valid Verhoeff check digits.
-Explicitly labeled Australian TFNs with valid checksums and Australian
+Explicitly labeled Indian PAN values in the conventional 10-character
+letter/digit layout with a recognized fourth-character category are checked
+too. Explicitly labeled Australian TFNs with valid checksums and Australian
 Medicare-card numbers with valid check digits are checked too. Explicitly
 labeled New Zealand IRD numbers in the current issued range with valid mod-11
 checksums are checked too.
@@ -441,7 +443,9 @@ following explicit date-of-birth labels, UK National Insurance numbers,
 explicitly labeled Brazilian CPF values with valid check digits, explicitly
 labeled Canadian SIN values with valid Luhn check digits, and explicitly labeled
 Aadhaar numbers with 12 digits, a leading digit from 2–9, and valid Verhoeff
-check digits. Explicitly labeled Australian TFNs with valid checksums and
+check digits. Explicitly labeled Indian PAN values in the conventional
+10-character letter/digit layout with a recognized fourth-character category
+are checked too. Explicitly labeled Australian TFNs with valid checksums and
 Australian Medicare-card numbers with valid check digits are checked too.
 Explicitly labeled New Zealand IRD numbers in the current issued range with
 valid mod-11 checksums are checked too. Explicitly labeled IBANs with

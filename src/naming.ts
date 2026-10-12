@@ -244,6 +244,13 @@ const LABELED_AADHAAR_NUMBER_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])aadhaar(?:[-_\s]?(?:number|no\.?|id))?\s*#?\s*["']?\s*[:=]\s*["']?(${AADHAAR_NUMBER_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
 	"iu",
 );
+// Indian PANs use a 10-character layout; the fourth letter is a holder-category code.
+const INDIAN_PAN_VALUE_PATTERN = String.raw`[A-Z]{3}[ABCFGHJLPT][A-Z]\p{Nd}{4}[A-Z]`;
+const INDIAN_PAN_EXACT_PATTERN = new RegExp(`^${INDIAN_PAN_VALUE_PATTERN}$`, "iu");
+const LABELED_INDIAN_PAN_PATTERN = new RegExp(
+	String.raw`(?<![\p{L}\p{N}])(?:permanent[-_\s]+account[-_\s]+(?:number|no\.?)|pan(?:[-_\s]?(?:number|no\.?|card(?:[-_\s]?(?:number|no\.?))?))?)\s*#?\s*["']?\s*[:=]\s*["']?(${INDIAN_PAN_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
+	"iu",
+);
 // New Zealand IRD numbers are eight or nine digits and use Inland Revenue's mod-11 check.
 const NEW_ZEALAND_IRD_NUMBER_VALUE_PATTERN = String.raw`\p{Nd}(?:[-\s]?\p{Nd}){7,8}`;
 const LABELED_NEW_ZEALAND_IRD_NUMBER_PATTERN = new RegExp(
@@ -1341,6 +1348,11 @@ const LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	`(${AADHAAR_NUMBER_VALUE_PATTERN})`,
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}\s-]*\p{Nd}){11})`,
 );
+const LABELED_INDIAN_PAN_BOUNDARY_PATTERN = makeBoundaryPattern(
+	LABELED_INDIAN_PAN_PATTERN,
+	`(${INDIAN_PAN_VALUE_PATTERN})`,
+	String.raw`([A-Z](?:[\p{Cc}\p{Cf}]*[A-Z]){2}[\p{Cc}\p{Cf}]*[ABCFGHJLPT][\p{Cc}\p{Cf}]*[A-Z](?:[\p{Cc}\p{Cf}]*\p{Nd}){4}[\p{Cc}\p{Cf}]*[A-Z])`,
+);
 const LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN = makeBoundaryPattern(
 	LABELED_NEW_ZEALAND_IRD_NUMBER_PATTERN,
 	`(${NEW_ZEALAND_IRD_NUMBER_VALUE_PATTERN})`,
@@ -2417,6 +2429,24 @@ function hasLabeledAadhaarNumber(value: string): boolean {
 	return false;
 }
 
+function isValidIndianPanNumber(value: string): boolean {
+	const normalized = value.replace(/[\p{Cc}\p{Cf}]/gu, "");
+	if (!INDIAN_PAN_EXACT_PATTERN.test(normalized)) return false;
+	const unicodeDigits = [...normalized].filter((character) => /\p{Nd}/u.test(character)).join("");
+	return conservativelyValidateLabeledDigits(asciiDecimalDigits(unicodeDigits), (digits) => digits.length === 4);
+}
+
+function hasLabeledIndianPanNumber(value: string): boolean {
+	const pattern = new RegExp(
+		LABELED_INDIAN_PAN_PATTERN.source,
+		`${LABELED_INDIAN_PAN_PATTERN.flags}g`,
+	);
+	for (const match of value.matchAll(pattern)) {
+		if (isValidIndianPanNumber(match[1]!)) return true;
+	}
+	return false;
+}
+
 function hasLabeledNewZealandIrdNumber(value: string): boolean {
 	const pattern = new RegExp(
 		LABELED_NEW_ZEALAND_IRD_NUMBER_PATTERN.source,
@@ -2701,7 +2731,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 		|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
-		|| hasLabeledAadhaarNumber(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
+		|| hasLabeledAadhaarNumber(value) || hasLabeledIndianPanNumber(value)
+		|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2721,7 +2752,8 @@ export function hasSensitiveNamingContext(text: string): boolean {
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
-			|| hasLabeledAadhaarNumber(compacted) || LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
+			|| hasLabeledAadhaarNumber(compacted) || hasLabeledIndianPanNumber(compacted)
+			|| LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	const lowercased = compatibilityNormalized.toLowerCase();
@@ -2742,7 +2774,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || hasLabeledAustralianTfn(value)
 			|| hasLabeledAustralianMedicareNumber(value) || hasLabeledNewZealandIrdNumber(value)
-			|| hasLabeledAadhaarNumber(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
+			|| hasLabeledAadhaarNumber(value) || hasLabeledIndianPanNumber(value)
+			|| LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
 		// are identical to the value already checked by the full patterns.
@@ -2759,7 +2792,8 @@ export function hasSensitiveOutput(text: string): boolean {
 			|| hasLabeledDateOfBirth(compacted) || hasLabeledIban(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || hasLabeledAustralianTfn(compacted)
 			|| hasLabeledAustralianMedicareNumber(compacted) || hasLabeledNewZealandIrdNumber(compacted)
-			|| hasLabeledAadhaarNumber(compacted) || hasLabeledPaymentCard(compacted);
+			|| hasLabeledAadhaarNumber(compacted) || hasLabeledIndianPanNumber(compacted)
+			|| hasLabeledPaymentCard(compacted);
 	};
 	const compatibilityNormalized = text.normalize("NFKD").replace(/\p{M}/gu, "");
 	return distinctTextVariants(text, compatibilityNormalized, compatibilityNormalized.toLowerCase()).some((value) =>
@@ -2938,6 +2972,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN,
 	LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN,
+	LABELED_INDIAN_PAN_BOUNDARY_PATTERN,
 	LABELED_PHONE_BOUNDARY_PATTERN,
 	LABELED_PAYMENT_CARD_BOUNDARY_PATTERN,
 	EMAIL_ADDRESS_BOUNDARY_PATTERN,
@@ -3036,6 +3071,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN
+		&& pattern !== LABELED_INDIAN_PAN_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PHONE_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PAYMENT_CARD_BOUNDARY_PATTERN
 		&& pattern !== EMAIL_ADDRESS_BOUNDARY_PATTERN
@@ -3120,6 +3156,8 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					&& !isValidNewZealandIrdNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN
 					&& !isValidAadhaarNumber(match[1]!)) continue;
+				if (sourcePattern === LABELED_INDIAN_PAN_BOUNDARY_PATTERN
+					&& !isValidIndianPanNumber(match[1]!)) continue;
 				if (sourcePattern === US_ITIN_BOUNDARY_PATTERN
 					&& !isValidUsItinNumber(match[1]!)) continue;
 				if (sourcePattern === LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN
