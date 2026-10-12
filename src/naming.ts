@@ -162,7 +162,7 @@ const OBFUSCATED_BEARER_TOKEN_PATTERN = new RegExp(
 const OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN = new RegExp(
 	OBFUSCATED_BEARER_TOKEN_PATTERN.source, `${OBFUSCATED_BEARER_TOKEN_PATTERN.flags}g`,
 );
-const US_SSN_PATTERN = /(?<![\p{L}\p{N}])(?:ssn(?:[-_\s]?(?:number|no\.?))?|social[-_\s]+security(?:[-_\s]+(?:number|no\.?))?)\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
+const US_TAX_ID_PATTERN = /(?<![\p{L}\p{N}])(?:ssn(?:[-_\s]?(?:number|no\.?))?|social[-_\s]+security(?:[-_\s]+(?:number|no\.?))?|tin(?:[-_\s]?(?:number|no\.?))?|tax(?:payer)?[-_\s]+(?:id(?:[-_\s]?(?:number|no\.?))?|identification(?:[-_\s]+(?:number|no\.?))?))\s*#?\s*["']?\s*[:=]\s*["']?(\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4})(?![\p{L}\p{N}_])/iu;
 const US_ITIN_VALUE_PATTERN = String.raw`\p{Nd}{3}[-\s]?\p{Nd}{2}[-\s]?\p{Nd}{4}`;
 const US_ITIN_PATTERN = new RegExp(
 	String.raw`(?<![\p{L}\p{N}])(?:itin(?:[-_\s]?(?:number|no\.?))?|individual[-_\s]+taxpayer[-_\s]+identification(?:[-_\s]+(?:number|no\.?))?)\s*#?\s*["']?\s*[:=]\s*["']?(${US_ITIN_VALUE_PATTERN})(?![\p{L}\p{N}_])`,
@@ -1215,8 +1215,8 @@ const DOCKER_AUTH_BOUNDARY_PATTERN = new RegExp(
 	"iu",
 );
 
-const US_SSN_BOUNDARY_PATTERN = makeBoundaryPattern(
-	US_SSN_PATTERN,
+const US_TAX_ID_BOUNDARY_PATTERN = makeBoundaryPattern(
+	US_TAX_ID_PATTERN,
 	"(\\p{Nd}{3}[-\\s]?\\p{Nd}{2}[-\\s]?\\p{Nd}{4})",
 	String.raw`(\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){2}[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd})[\p{Cc}\p{Cf}]*[-\s]?[\p{Cc}\p{Cf}]*\p{Nd}(?:[\p{Cc}\p{Cf}]*\p{Nd}){3})`,
 );
@@ -2108,7 +2108,7 @@ const COMPACTED_CREDENTIAL_LIKE_PATTERNS = CREDENTIAL_LIKE_PATTERNS.filter(
 const SEPARATOR_TOLERANT_PATTERNS = [
 	...COMPACTED_CREDENTIAL_LIKE_PATTERNS,
 	BEARER_TOKEN_PATTERN,
-	US_SSN_PATTERN,
+	US_TAX_ID_PATTERN,
 	UK_NATIONAL_INSURANCE_NUMBER_PATTERN,
 	LABELED_PHONE_PATTERN,
 	EMAIL_ADDRESS_PATTERN,
@@ -2390,7 +2390,7 @@ function hasObfuscatedBearerToken(value: string): boolean {
 export function hasSensitiveNamingContext(text: string): boolean {
 	const hasSensitiveValue = (value: string) => CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
 		|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || EMAIL_ADDRESS_PATTERN.test(value)
-		|| US_SSN_PATTERN.test(value) || hasLabeledUsItin(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
+		|| US_TAX_ID_PATTERN.test(value) || hasLabeledUsItin(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value)
 		|| hasLabeledCpf(value) || hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value);
 	const hasSensitiveValueWithSeparatorsRemoved = (value: string) => {
 		// Without whitespace, controls, or format characters, the stripped views
@@ -2405,7 +2405,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 		return (withoutFormatCharacters !== value && hasSensitiveValue(withoutFormatCharacters))
 			|| hasWhitespaceSeparatedCredential(value)
 			|| COMPACTED_CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(compacted)) || hasBearerToken(compacted)
-			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_SSN_PATTERN.test(compacted)
+			|| EMAIL_ADDRESS_PATTERN.test(compacted) || US_TAX_ID_PATTERN.test(compacted)
 			|| hasLabeledUsItin(compacted) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(compacted) || hasLabeledCpf(compacted)
 			|| hasLabeledCanadianSin(compacted) || LABELED_PHONE_PATTERN.test(compacted) || hasLabeledPaymentCard(compacted);
 	};
@@ -2422,7 +2422,7 @@ export function hasSensitiveNamingContext(text: string): boolean {
 export function hasSensitiveOutput(text: string): boolean {
 	const hasPattern = (value: string) =>
 		CREDENTIAL_LIKE_PATTERNS.some((pattern) => pattern.test(value))
-			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_SSN_PATTERN.test(value)
+			|| hasBearerToken(value) || hasObfuscatedBearerToken(value) || US_TAX_ID_PATTERN.test(value)
 			|| hasLabeledUsItin(value) || UK_NATIONAL_INSURANCE_NUMBER_PATTERN.test(value) || hasLabeledCpf(value)
 			|| hasLabeledCanadianSin(value) || LABELED_PHONE_PATTERN.test(value) || hasLabeledPaymentCard(value) || EMAIL_ADDRESS_PATTERN.test(value);
 	const hasPatternWithSeparatorsRemoved = (value: string) => {
@@ -2605,7 +2605,7 @@ const SENSITIVE_BOUNDARY_PATTERNS = [
 	DISCORD_AUTH_TOKEN_BOUNDARY_PATTERN,
 	DISCORD_MFA_TOKEN_BOUNDARY_PATTERN,
 	MICROSOFT_TEAMS_WEBHOOK_URL_BOUNDARY_PATTERN,
-	US_SSN_BOUNDARY_PATTERN,
+	US_TAX_ID_BOUNDARY_PATTERN,
 	US_ITIN_BOUNDARY_PATTERN,
 	UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN,
 	LABELED_CPF_BOUNDARY_PATTERN,
@@ -2697,7 +2697,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== BASIC_AUTHORIZATION_BOUNDARY_PATTERN
 		&& pattern !== BASIC_AUTHORIZATION_BLOCK_BOUNDARY_PATTERN
 		&& pattern !== DOCKER_AUTH_BOUNDARY_PATTERN
-		&& pattern !== US_SSN_BOUNDARY_PATTERN
+		&& pattern !== US_TAX_ID_BOUNDARY_PATTERN
 		&& pattern !== US_ITIN_BOUNDARY_PATTERN
 		&& pattern !== UK_NATIONAL_INSURANCE_NUMBER_BOUNDARY_PATTERN
 		&& pattern !== LABELED_CPF_BOUNDARY_PATTERN
