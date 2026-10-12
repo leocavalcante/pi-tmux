@@ -2967,6 +2967,72 @@ test("screens Dropbox shared-link keys across retained-context boundaries", () =
 	}
 });
 
+test("screens Google Drive shared-link resource keys across retained-context boundaries", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const keys = [`0-${"a".repeat(28)}`, `0-${"b".repeat(28)}`];
+	const values = [
+		{
+			url: `https://drive.google.com/file/d/fileId/view?usp=sharing&resourcekey=${keys[0]}`,
+			key: keys[0]!,
+		},
+		{
+			url: `https://docs.google.com/document/d/fileId/edit?resourcekey=${keys[1]}&usp=sharing`,
+			key: keys[1]!,
+		},
+	];
+	const promptAt = (url: string, key: string, start: number) => {
+		const urlStart = start - url.indexOf(key);
+		const prefix = `${"x".repeat(urlStart - 1)} `;
+		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+	};
+
+	for (const { url, key } of values) {
+		expect(hasSensitiveNamingContext(url)).toBe(true);
+		expect(hasSensitiveOutput(url)).toBe(true);
+		const obfuscated = url.replace(key, `${key.slice(0, 16)}\u200b${key.slice(16)}`);
+		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			const context = buildNamingRequestContext([], promptAt(url, key, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(true);
+		}
+
+		const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
+		const obfuscatedContext = buildNamingRequestContext(
+			[], promptAt(obfuscated, obfuscatedKey, prefixLength - 11),
+		);
+		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+
+		const omittedKey = buildNamingRequestContext([], promptAt(url, key, prefixLength + 5));
+		expect(omittedKey.hasSensitiveBoundary()).toBe(false);
+	}
+
+	const key = keys[0]!;
+	const nearMisses = [
+		`https://drive.google.com/file/d/fileId/view?resourcekey=${"a".repeat(19)}`,
+		`https://drive.google.com/file/d/fileId/view?resourcekey=${"a".repeat(129)}`,
+		`https://drive.google.com.evil.test/file/d/fileId/view?resourcekey=${key}`,
+		`https://docs.google.com.evil.test/document/d/fileId/edit?resourcekey=${key}`,
+		`https://files.example.test/file/d/fileId/view?resourcekey=${key}`,
+		`https://drive.google.com/file/d/fileId/view?notresourcekey=${key}`,
+		"https://drive.google.com/file/d/fileId/view?usp=sharing",
+		`discussion about resourcekey=${key}`,
+	];
+	for (const url of nearMisses) {
+		expect(hasSensitiveNamingContext(url)).toBe(false);
+		expect(hasSensitiveOutput(url)).toBe(false);
+		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+			expect(buildNamingRequestContext([], promptAt(url, key, tokenStart)).hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Google Cloud CDN signed URLs across retained-context boundaries", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
