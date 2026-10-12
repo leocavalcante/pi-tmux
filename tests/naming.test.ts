@@ -5271,6 +5271,10 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 	const cases = [
 		{ label: " SSN: ", value: "000-00-0000", shortValue: "000-00-000" },
 		{ label: " SSN: ", value: "٠٠٠-٠٠-٠٠٠٠", shortValue: "٠٠٠-٠٠-٠٠٠" },
+		{ label: " SSN No.: ", value: "000-00-0000", shortValue: "000-00-000" },
+		{ label: " SSN#: ", value: "000-00-0000", shortValue: "000-00-000" },
+		{ label: " Social Security No.: ", value: "000-00-0000", shortValue: "000-00-000" },
+		{ label: " Social Security #: ", value: "000-00-0000", shortValue: "000-00-000" },
 		{ label: " Phone: ", value: "000-000-0000", shortValue: "000-000" },
 		{ label: " Phone: ", value: "٠٠٠-٠٠٠-٠٠٠٠", shortValue: "٠٠٠-٠٠" },
 	];
@@ -5323,6 +5327,8 @@ test("screens labeled SSNs and phone numbers across retained-context truncation 
 		`SSN: ${"٠".repeat(10)}`,
 		"éSSN: 000-00-0000",
 		"SSN: ٠٠٠-٠٠-٠٠٠٠٠",
+		"SSN No. 000-00-0000",
+		"Social Security #: 000-00-000",
 	]) {
 		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
 		expect(hasSensitiveOutput(nearMiss)).toBe(false);
