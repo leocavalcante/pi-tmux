@@ -3076,6 +3076,40 @@ test("Wormhole share keys stay out of naming context and model output", async ()
 	}
 });
 
+test("Webex meeting passwords stay out of naming context and model output", async () => {
+	// These deliberately synthetic hosts and passwords are not real invitations.
+	const links = [
+		{
+			url: "https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake&pwd=SYNTHETIC-ONLY-123&locale=en",
+			password: "SYNTHETIC-ONLY-123",
+		},
+		{
+			url: "https://meeting.invalid.webex.com/meet/synthetic-user?pwd=TEST+ONLY%2FKEY=",
+			password: "TEST+ONLY%2FKEY=",
+		},
+	];
+	for (const { url, password } of links) {
+		const sensitiveContext = fixture();
+		sensitiveContext.input(`Review this Webex meeting: ${url}`);
+		await settle();
+		expect(sensitiveContext.requests).toHaveLength(0);
+		expect(sensitiveContext.state.title).toBe("existing task");
+		expect(sensitiveContext.warnings).toEqual([
+			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+		]);
+		expect(sensitiveContext.warnings.join(" ")).not.toContain(password);
+
+		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+		sensitiveOutput.input("Name a task");
+		await settle();
+		expect(sensitiveOutput.requests).toHaveLength(1);
+		expect(sensitiveOutput.state.title).toBe("existing task");
+		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+		expect(sensitiveOutput.warnings.join(" ")).not.toContain(password);
+	}
+});
+
 test("Filemail transfer links stay out of naming context and model output", async () => {
 	const links = [
 		{ url: "https://www.filemail.com/d/ifyvssdfbjbnzni", id: "ifyvssdfbjbnzni" },
