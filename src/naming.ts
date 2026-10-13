@@ -17,7 +17,7 @@ const MAX_NAMING_CONTEXT_BLOCKS = 128;
 const MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH = MAX_HISTORY_TEXT_LENGTH;
 // An edge separator is ambiguous; require substantial token continuation on the
 // other side before treating it as internal obfuscation rather than prose.
-const MIN_SENSITIVE_BOUNDARY_TOKEN_CONTINUATION_LENGTH = 8;
+const MIN_SENSITIVE_BOUNDARY_TOKEN_CONTINUATION_LENGTH = 16;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 export type NamingModel = { provider: string; id: string };
