@@ -269,9 +269,22 @@ test("local verify script runs the same validation gates as CI", () => {
 	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
 		scripts?: Record<string, string>;
 	};
+	type Step = { name?: string; if?: string; run?: string };
+	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8")) as {
+		jobs?: Record<string, { steps?: Step[] }>;
+	};
+	const packageCheck = workflow.jobs?.test?.steps?.find((step) => step.name === "Validate package metadata");
+
+	expect(manifest.scripts?.["check:package"]).toBe("publint");
+	expect(packageCheck).toEqual({
+		name: "Validate package metadata",
+		if: "matrix.node == 22",
+		run: "npm run check:package",
+	});
 	expect(manifest.scripts?.verify).toBe([
 		"npm run check",
 		"npm run check:tests",
+		"npm run check:package",
 		"npm audit --audit-level=high",
 		"npm test",
 		"npm pack --dry-run --ignore-scripts",
