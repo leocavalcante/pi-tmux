@@ -2299,8 +2299,10 @@ test("whitespace-free token boundaries do not extend short near-misses with pros
 	const rep = (characters: string, length: number) =>
 		characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
 	const tokens = [
+		{ value: `NRAK-${"A".repeat(27)}` },
 		{ value: `csk_${"B".repeat(48)}` },
 		{ value: `jina_${"T".repeat(60)}` },
+		{ value: `ops_eyJ${"A".repeat(250)}` },
 		{ value: `lin_api_${"a".repeat(40)}` },
 		{ value: `pat${"A".repeat(14)}.${"a".repeat(64)}` },
 		{ value: `${"a".repeat(75)}AZDO${"a".repeat(5)}` },
