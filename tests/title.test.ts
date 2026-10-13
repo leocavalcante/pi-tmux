@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { getEventListeners } from "node:events";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index";
@@ -10080,6 +10085,85 @@ test("separate injected tmux adapters keep independent server identities across 
 	expect(secondWrites).toHaveLength(secondWritesBeforeRestart);
 	expect(reloadedSecond.warnings).toEqual([]);
 });
+
+// Pi's extension loader uses Node + Jiti with moduleCache:false; Bun's own loader caches these imports.
+test.serial.skipIf(process.platform === "win32")(
+	"the default adapter retains its server identity across Pi's uncached extension reload",
+	async () => {
+		const nodeExecutable = Bun.which("node");
+		if (!nodeExecutable) throw new Error("Node.js is required for the fake tmux executable");
+		const directory = mkdtempSync(join(tmpdir(), "pi-tmux-reload-"));
+		const fakeTmux = join(directory, "tmux");
+		const writeLog = join(directory, "writes.log");
+		const entrypoint = fileURLToPath(new URL("../index.ts", import.meta.url));
+		try {
+			writeFileSync(fakeTmux, [
+				"#!/usr/bin/env node",
+				"const args = process.argv.slice(2);",
+				"const fs = require('node:fs');",
+				"if (args[0] === 'display-message') {",
+				"  process.stdout.write('$0:1:' + process.env.PI_TMUX_TEST_SERVER_PID + ':0\\t@2\\t0\\texisting task\\n');",
+				"} else if (args[0] !== 'show-options') {",
+				"  fs.appendFileSync(process.env.PI_TMUX_TEST_WRITE_LOG, JSON.stringify(args) + '\\n');",
+				"}",
+			].join("\n"));
+			chmodSync(fakeTmux, 0o755);
+		} catch (error) {
+			rmSync(directory, { recursive: true, force: true });
+			throw error;
+		}
+		try {
+			const script = [
+				'import { createJiti } from "jiti";',
+				'import { readFileSync } from "node:fs";',
+				`const entrypoint = ${JSON.stringify(entrypoint)};`,
+				`const writeLog = ${JSON.stringify(writeLog)};`,
+				'const warnings = [];',
+				'const ctx = { mode: "tui", ui: { notify: (text, level) => { if (level === "warning") warnings.push(text); } } };',
+				'const load = async () => {',
+				'  const jiti = createJiti(import.meta.url, { moduleCache: false, tsconfigPaths: true });',
+				'  const extension = await jiti.import(entrypoint, { default: true });',
+				'  const handlers = new Map();',
+				'  extension({ on: (event, handler) => handlers.set(event, handler), registerCommand: () => {} });',
+				'  return { extension, emit: async (event, reason = "startup") => handlers.get(event)({ type: event, reason }, ctx) };',
+				'};',
+				'const first = await load();',
+				'await first.emit("session_start");',
+				'await first.emit("session_shutdown", "reload");',
+				'const before = readFileSync(writeLog, "utf8").trim().split("\\n").filter(Boolean).length;',
+				'process.env.PI_TMUX_TEST_SERVER_PID = "456";',
+				'const second = await load();',
+				'await second.emit("session_start", "reload");',
+				'const after = readFileSync(writeLog, "utf8").trim().split("\\n").filter(Boolean).length;',
+				'console.log(JSON.stringify({ reloaded: first.extension !== second.extension, before, after, warnings }));',
+			].join("\n");
+			const env: NodeJS.ProcessEnv = {
+				PATH: [directory, dirname(nodeExecutable), process.env.PATH].filter(Boolean).join(delimiter),
+				HOME: process.env.HOME,
+				USERPROFILE: process.env.HOME,
+				TMPDIR: process.env.TMPDIR,
+				TEMP: process.env.TEMP,
+				TMP: process.env.TMP,
+				TERM: "dumb",
+				TMUX: "/tmp/pi-tmux-reload-test,123,456",
+				TMUX_PANE: "%1",
+				PI_TMUX_MODEL: "off",
+				PI_TMUX_TEST_SERVER_PID: "123",
+				PI_TMUX_TEST_WRITE_LOG: writeLog,
+			};
+			const output = execFileSync(nodeExecutable, ["--input-type=module", "-e", script], {
+				cwd: process.cwd(), env, encoding: "utf8", timeout: 30_000,
+			});
+			const result = JSON.parse(output) as { reloaded: boolean; before: number; after: number; warnings: string[] };
+			expect(result.reloaded).toBe(true);
+			expect(result.before).toBeGreaterThan(0);
+			expect(result.after).toBe(result.before);
+			expect(result.warnings).toEqual(["The tmux server changed; restart Pi to resume title updates."]);
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	},
+);
 
 test.each(["sync", "set synthetic title"])("%s warns when the tmux server changes after its initial guard", async (command) => {
 	const warningKey = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
