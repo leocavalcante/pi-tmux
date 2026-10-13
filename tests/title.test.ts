@@ -10009,6 +10009,78 @@ test("a reloaded controller keeps the old server identity when tmux restarts dur
 	}
 });
 
+test("separate injected tmux adapters keep independent server identities across reloads", async () => {
+	process.env.PI_TMUX_MODEL = "off";
+	const warning = "The tmux server changed; restart Pi to resume title updates.";
+	const makeAdapter = (initialPid: string, writes: string[][]) => {
+		let serverPid = initialPid;
+		const tmux: RunTmux = async (args) => {
+			if (args[0] === "display-message") {
+				if (args[4] === STATUS_SNAPSHOT_FORMAT) return `${serverPid}\t$0\t@2\t0\t0\t0`;
+				if (args[4] === WINDOW_INFO_INTERNAL_FORMAT) return `$0:1:${serverPid}:0\t@2\t0\texisting task`;
+				if (args[4] === "#{window_name}") return "existing task";
+			}
+			if (args[0] === "show-options") return "";
+			writes.push(args);
+			return "";
+		};
+		return { tmux, setServerPid: (pid: string) => { serverPid = pid; } };
+	};
+	const makeRuntime = (tmux: RunTmux, writes: string[][]) => {
+		const handlers = new Map<string, Function>();
+		const commands = new Map<string, { handler: Function }>();
+		const warnings: string[] = [];
+		const ctx = {
+			mode: "tui",
+			ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
+		} as unknown as ExtensionContext;
+		piTmux({
+			on: (event: string, handler: Function) => handlers.set(event, handler),
+			registerCommand: (name: string, command: { handler: Function }) => commands.set(name, command),
+		} as unknown as ExtensionAPI, tmux);
+		return {
+			ctx,
+			warnings,
+			writes,
+			start: async () => handlers.get("session_start")!({ type: "session_start", reason: "startup" }, ctx),
+			sync: async () => commands.get("tmux-title")!.handler("sync", ctx),
+		};
+	};
+
+	const firstWrites: string[][] = [];
+	const secondWrites: string[][] = [];
+	const firstAdapter = makeAdapter("123", firstWrites);
+	const secondAdapter = makeAdapter("456", secondWrites);
+	const first = makeRuntime(firstAdapter.tmux, firstWrites);
+	const second = makeRuntime(secondAdapter.tmux, secondWrites);
+	await first.start();
+	await second.start();
+	expect(firstWrites.length).toBeGreaterThan(0);
+	expect(secondWrites.length).toBeGreaterThan(0);
+
+	firstAdapter.setServerPid("124");
+	const firstWriteCount = firstWrites.length;
+	await first.sync();
+	expect(firstWrites).toHaveLength(firstWriteCount);
+	expect(first.warnings).toEqual([warning]);
+
+	const secondWriteCount = secondWrites.length;
+	await second.sync();
+	expect(secondWrites.length).toBeGreaterThan(secondWriteCount);
+	expect(second.warnings).toEqual([]);
+
+	secondAdapter.setServerPid("457");
+	const secondWritesBeforeRestart = secondWrites.length;
+	await second.start();
+	expect(secondWrites).toHaveLength(secondWritesBeforeRestart);
+	expect(second.warnings).toEqual([warning]);
+
+	const reloadedSecond = makeRuntime(secondAdapter.tmux, secondWrites);
+	await reloadedSecond.start();
+	expect(secondWrites).toHaveLength(secondWritesBeforeRestart);
+	expect(reloadedSecond.warnings).toEqual([]);
+});
+
 test.each(["sync", "set synthetic title"])("%s warns when the tmux server changes after its initial guard", async (command) => {
 	const warningKey = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
 	const previousWarningDescriptor = Object.getOwnPropertyDescriptor(process, warningKey);

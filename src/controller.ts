@@ -40,6 +40,7 @@ import {
 	WINDOW_TITLE_MARKED_OPTION,
 	WINDOW_TITLE_LITERAL_PREFIX_OPTION,
 	WINDOW_REPAIR_NEEDED_FORMAT,
+	runTmux,
 	writeOnServer,
 	type RunTmux,
 	type WindowSnapshot,
@@ -50,6 +51,50 @@ const MAX_LOCATION_PASSES = 4;
 const SERVER_CHANGED_WARNING = "The tmux server changed; restart Pi to resume title updates.";
 const SERVER_CHANGE_WARNING_PROCESS_KEY = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
 const SERVER_IDENTITY_PROCESS_KEY = Symbol.for("@leocavalcante/pi-tmux/server-identity");
+type ServerIdentityScope = RunTmux | string;
+type ServerIdentityStore = {
+	adapters: WeakMap<RunTmux, string>;
+	environments: Map<string, string>;
+};
+type ServerChangeWarningStore = {
+	adapters: WeakSet<RunTmux>;
+	environments: Set<string>;
+};
+
+const defaultServerIdentityScope = (): ServerIdentityScope =>
+	process.env.TMUX ? `tmux:${process.env.TMUX}` : runTmux;
+
+const readServerIdentity = (store: ServerIdentityStore, scope: ServerIdentityScope) =>
+	typeof scope === "string" ? store.environments.get(scope) : store.adapters.get(scope);
+const writeServerIdentity = (store: ServerIdentityStore, scope: ServerIdentityScope, server: string) => {
+	if (typeof scope === "string") store.environments.set(scope, server);
+	else store.adapters.set(scope, server);
+};
+const hasServerChangeWarning = (store: ServerChangeWarningStore, scope: ServerIdentityScope) =>
+	typeof scope === "string" ? store.environments.has(scope) : store.adapters.has(scope);
+const addServerChangeWarning = (store: ServerChangeWarningStore, scope: ServerIdentityScope) => {
+	if (typeof scope === "string") store.environments.add(scope);
+	else store.adapters.add(scope);
+};
+
+function processServerIdentities(): ServerIdentityStore {
+	const existing = Reflect.get(process, SERVER_IDENTITY_PROCESS_KEY);
+	if (existing?.adapters instanceof WeakMap && existing.environments instanceof Map) return existing as ServerIdentityStore;
+	const identities: ServerIdentityStore = { adapters: new WeakMap(), environments: new Map() };
+	// Migrate the former single-server value during a hot reload of the extension.
+	if (typeof existing === "string") writeServerIdentity(identities, defaultServerIdentityScope(), existing);
+	Object.defineProperty(process, SERVER_IDENTITY_PROCESS_KEY, { configurable: true, value: identities });
+	return identities;
+}
+
+function processServerChangeWarnings(): ServerChangeWarningStore {
+	const existing = Reflect.get(process, SERVER_CHANGE_WARNING_PROCESS_KEY);
+	if (existing?.adapters instanceof WeakSet && existing.environments instanceof Set) return existing as ServerChangeWarningStore;
+	const warnings: ServerChangeWarningStore = { adapters: new WeakSet(), environments: new Set() };
+	if (existing === true) addServerChangeWarning(warnings, defaultServerIdentityScope());
+	Object.defineProperty(process, SERVER_CHANGE_WARNING_PROCESS_KEY, { configurable: true, value: warnings });
+	return warnings;
+}
 type ShapeOnlyNamingRejection = Extract<InvalidNamingTitleReason, "multiple-lines" | "too-long" | "too-many-words">;
 type NamingRejectionCategory = InvalidNamingTitleReason | "unsafe-output";
 
@@ -178,9 +223,14 @@ export function createController(tmux: RunTmux) {
 		notifySafely(ctx, message, "warning");
 	};
 
+	// Pi recreates extension modules through Jiti on reload, so use the inherited
+	// TMUX value to keep the built-in adapter stable; injected adapters stay isolated.
+	const serverIdentityScope: ServerIdentityScope = tmux === runTmux && process.env.TMUX
+		? `tmux:${process.env.TMUX}` : tmux;
 	const warnAutomaticServerChangeOnce = (ctx: ExtensionContext) => {
-		if (Reflect.get(process, SERVER_CHANGE_WARNING_PROCESS_KEY) === true) return;
-		Object.defineProperty(process, SERVER_CHANGE_WARNING_PROCESS_KEY, { configurable: true, value: true });
+		const warnings = processServerChangeWarnings();
+		if (hasServerChangeWarning(warnings, serverIdentityScope)) return;
+		addServerChangeWarning(warnings, serverIdentityScope);
 		notifySafely(ctx, SERVER_CHANGED_WARNING, "warning");
 	};
 
@@ -194,22 +244,19 @@ export function createController(tmux: RunTmux) {
 	const unsafeSessions = new Set<string>();
 	const sessionNameSafetyAvailable = new Set<string>();
 	const checkServerIdentity = (server: string | undefined, ctx: ExtensionContext, notifyOnServerChange: boolean) => {
-		const processServer = Reflect.get(process, SERVER_IDENTITY_PROCESS_KEY);
-		const expectedServer = typeof processServer === "string" ? processServer : lastLocation?.server;
-		// Preserve the first known server across extension reloads. A fresh controller
-		// must not treat a replacement server as its baseline and write through a reused pane ID.
-		if (expectedServer && typeof processServer !== "string") {
-			Object.defineProperty(process, SERVER_IDENTITY_PROCESS_KEY, { configurable: true, value: expectedServer });
-		}
+		const identities = processServerIdentities();
+		const processServer = readServerIdentity(identities, serverIdentityScope);
+		const expectedServer = processServer ?? lastLocation?.server;
+		// Preserve each tmux adapter's first known server across extension reloads.
+		// Unrelated adapters may intentionally target different servers in one process.
+		if (expectedServer && processServer === undefined) writeServerIdentity(identities, serverIdentityScope, expectedServer);
 		if (server && ((expectedServer && server !== expectedServer)
 			|| (lastLocation?.server && server !== lastLocation.server))) {
 			stopAfterServerChange();
 			if (notifyOnServerChange) warnAutomaticServerChangeOnce(ctx);
 			return true;
 		}
-		if (server && !expectedServer) {
-			Object.defineProperty(process, SERVER_IDENTITY_PROCESS_KEY, { configurable: true, value: server });
-		}
+		if (server && !expectedServer) writeServerIdentity(identities, serverIdentityScope, server);
 		return false;
 	};
 	const clearSessionBaseTracking = async (target: string, server: string | undefined, signal: AbortSignal) => {
