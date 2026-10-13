@@ -16,6 +16,8 @@ function createAbortError(reason: unknown): NodeJS.ErrnoException {
 
 export const WAITING_OPTION = "@pi-tmux-waiting";
 export const ACTIVE_OPTION = "@pi-tmux-active";
+// Internal command-list marker; NUL cannot occur in an execFile argument.
+export const TMUX_COMMAND_SEPARATOR = "\0;";
 // Normalize each pane option before aggregation; matching raw values such as 10
 // would otherwise mistake any embedded `1` for a true flag.
 const WAITING_FLAG_FORMAT = `#{?#{==:#{${WAITING_OPTION}},1},1,0}`;
@@ -102,11 +104,11 @@ export function buildWindowBaseTitleUpdateArgs(
 ): string[] {
 	return [
 		"set-option", ...(baseNameIsFormat ? ["-F"] : []), "-w", "-t", target, WINDOW_BASE_NAME_OPTION, baseName,
-		";", "set-option", "-F", "-w", "-t", target, WINDOW_TITLE_LITERAL_PREFIX_OPTION, WINDOW_BASE_NAME_HAS_LITERAL_PREFIX_FORMAT,
-		";", "set-option", "-w", "-t", target, WINDOW_TITLE_MARKED_OPTION, "transition",
-		";", "if-shell", "-F", "-t", target, `#{!=:#{window_name},${titleFormat}}`,
+		TMUX_COMMAND_SEPARATOR, "set-option", "-F", "-w", "-t", target, WINDOW_TITLE_LITERAL_PREFIX_OPTION, WINDOW_BASE_NAME_HAS_LITERAL_PREFIX_FORMAT,
+		TMUX_COMMAND_SEPARATOR, "set-option", "-w", "-t", target, WINDOW_TITLE_MARKED_OPTION, "transition",
+		TMUX_COMMAND_SEPARATOR, "if-shell", "-F", "-t", target, `#{!=:#{window_name},${titleFormat}}`,
 		`rename-window -t ${target} -- '${titleFormat}'`,
-		";", "set-option", "-F", "-w", "-t", target, WINDOW_TITLE_MARKED_OPTION, WINDOW_TITLE_MARKED_VALUE_FORMAT,
+		TMUX_COMMAND_SEPARATOR, "set-option", "-F", "-w", "-t", target, WINDOW_TITLE_MARKED_OPTION, WINDOW_TITLE_MARKED_VALUE_FORMAT,
 	];
 }
 
@@ -201,7 +203,15 @@ function quoteTmuxCommandArgument(value: string): string {
 }
 
 function tmuxCommandString(args: string[]): string {
-	return args.map((value) => value === ";" ? ";" : quoteTmuxCommandArgument(value)).join(" ");
+	return args.map((value) => value === TMUX_COMMAND_SEPARATOR ? ";" : quoteTmuxCommandArgument(value)).join(" ");
+}
+
+function tmuxCommandArguments(args: string[]): string[] {
+	return args.map((value) => {
+		if (value === TMUX_COMMAND_SEPARATOR) return ";";
+		// The tmux CLI treats an unescaped, standalone semicolon as a separator.
+		return value === ";" ? String.raw`\;` : value;
+	});
 }
 
 export type WindowSnapshot = {
@@ -242,7 +252,7 @@ export async function hasWindowLiteralPrefix(tmux: RunTmux, target: string, sign
 }
 
 export function writeOnServer(tmux: RunTmux, server: string | undefined, args: string[], signal: AbortSignal) {
-	if (!server || !tmux.supportsServerPidGuard) return tmux(args, signal);
+	if (!server || !tmux.supportsServerPidGuard) return tmux(tmuxCommandArguments(args), signal);
 	return tmux(["if-shell", "-F", `#{==:#{pid},${server}}`, tmuxCommandString(args)], signal);
 }
 

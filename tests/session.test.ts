@@ -9,6 +9,7 @@ import {
 	WINDOW_BASE_NAME_OPTION,
 	WINDOW_TITLE_LITERAL_PREFIX_OPTION,
 	WINDOW_TITLE_MARKED_OPTION,
+	TMUX_COMMAND_SEPARATOR,
 	writeOnServer,
 } from "../src/tmux.ts";
 import { cleanupTmuxFixture, supportsUnixTmux } from "./tmux-support.ts";
@@ -876,6 +877,52 @@ test.skipIf(!hasTmux)("server-guarded writes preserve literal dollar signs in co
 			await writeOnServer(run, server, ["set-option", "-g", option, syntheticValue], new AbortController().signal);
 			expect(tmux("show-options", "-gqv", option)).toBe(directValue);
 		}
+	} finally {
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
+	}
+});
+
+test.skipIf(!hasTmux)("guarded and unguarded writes distinguish literal semicolons from batch separators", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		tmux("new-session", "-d", "-s", "probe", "/bin/sleep 60");
+		const server = tmux("display-message", "-p", "#{pid}");
+		const directOption = "@pi-tmux-semicolon-direct";
+		tmux("set-option", "-g", directOption, String.raw`\;`);
+		const directValue = tmux("show-options", "-gqv", directOption);
+		expect(directValue).toBe(";");
+
+		const signal = new AbortController().signal;
+		const guardedOption = "@pi-tmux-semicolon-guarded";
+		const guarded: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
+		await writeOnServer(guarded, server, ["set-option", "-g", guardedOption, ";"], signal);
+		expect(tmux("show-options", "-gqv", guardedOption)).toBe(directValue);
+
+		const batchOption = "@pi-tmux-semicolon-batch";
+		const batchTailOption = "@pi-tmux-semicolon-batch-tail";
+		await writeOnServer(guarded, server, [
+			"set-option", "-g", batchOption, ";", TMUX_COMMAND_SEPARATOR,
+			"set-option", "-g", batchTailOption, "synthetic",
+		], signal);
+		expect(tmux("show-options", "-gqv", batchOption)).toBe(directValue);
+		expect(tmux("show-options", "-gqv", batchTailOption)).toBe("synthetic");
+
+		const unguardedOption = "@pi-tmux-semicolon-unguarded";
+		const unguardedBatchOption = "@pi-tmux-semicolon-unguarded-batch";
+		const unguardedBatchTailOption = "@pi-tmux-semicolon-unguarded-batch-tail";
+		const unguarded: RunTmux = async (args) => tmux(...args);
+		await writeOnServer(unguarded, undefined, ["set-option", "-g", unguardedOption, ";"], signal);
+		expect(tmux("show-options", "-gqv", unguardedOption)).toBe(directValue);
+		await writeOnServer(unguarded, undefined, [
+			"set-option", "-g", unguardedBatchOption, ";", TMUX_COMMAND_SEPARATOR,
+			"set-option", "-g", unguardedBatchTailOption, "synthetic",
+		], signal);
+		expect(tmux("show-options", "-gqv", unguardedBatchOption)).toBe(directValue);
+		expect(tmux("show-options", "-gqv", unguardedBatchTailOption)).toBe("synthetic");
 	} finally {
 		cleanupTmuxFixture(() => tmux("kill-server"), directory);
 	}
