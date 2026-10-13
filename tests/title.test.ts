@@ -10088,7 +10088,7 @@ test("separate injected tmux adapters keep independent server identities across 
 
 // Pi's extension loader uses Node + Jiti with moduleCache:false; Bun's own loader caches these imports.
 test.serial.skipIf(process.platform === "win32")(
-	"the default adapter retains its server identity across Pi's uncached extension reload",
+	"the default adapter retains and migrates server identity across Pi's uncached extension reload",
 	async () => {
 		const nodeExecutable = Bun.which("node");
 		if (!nodeExecutable) throw new Error("Node.js is required for the fake tmux executable");
@@ -10135,7 +10135,16 @@ test.serial.skipIf(process.platform === "win32")(
 				'const second = await load();',
 				'await second.emit("session_start", "reload");',
 				'const after = readFileSync(writeLog, "utf8").trim().split("\\n").filter(Boolean).length;',
-				'console.log(JSON.stringify({ reloaded: first.extension !== second.extension, before, after, warnings }));',
+				'const modernWarnings = [...warnings];',
+				'warnings.length = 0;',
+				'// Simulate scalar process state left by a pre-migration extension version.',
+				'Object.defineProperty(process, Symbol.for("@leocavalcante/pi-tmux/server-identity"), { configurable: true, value: "456" });',
+				'Object.defineProperty(process, Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown"), { configurable: true, value: true });',
+				'process.env.PI_TMUX_TEST_SERVER_PID = "789";',
+				'const legacy = await load();',
+				'await legacy.emit("session_start", "reload");',
+				'const afterLegacy = readFileSync(writeLog, "utf8").trim().split("\\n").filter(Boolean).length;',
+				'console.log(JSON.stringify({ reloaded: first.extension !== second.extension, before, after, modernWarnings, legacyReloaded: legacy.extension !== second.extension, afterLegacy, warnings }));',
 			].join("\n");
 			const env: NodeJS.ProcessEnv = {
 				PATH: [directory, dirname(nodeExecutable), process.env.PATH].filter(Boolean).join(delimiter),
@@ -10154,11 +10163,17 @@ test.serial.skipIf(process.platform === "win32")(
 			const output = execFileSync(nodeExecutable, ["--input-type=module", "-e", script], {
 				cwd: process.cwd(), env, encoding: "utf8", timeout: 30_000,
 			});
-			const result = JSON.parse(output) as { reloaded: boolean; before: number; after: number; warnings: string[] };
+			const result = JSON.parse(output) as {
+				reloaded: boolean; before: number; after: number; modernWarnings: string[];
+				legacyReloaded: boolean; afterLegacy: number; warnings: string[];
+			};
 			expect(result.reloaded).toBe(true);
 			expect(result.before).toBeGreaterThan(0);
 			expect(result.after).toBe(result.before);
-			expect(result.warnings).toEqual(["The tmux server changed; restart Pi to resume title updates."]);
+			expect(result.modernWarnings).toEqual(["The tmux server changed; restart Pi to resume title updates."]);
+			expect(result.legacyReloaded).toBe(true);
+			expect(result.afterLegacy).toBe(result.after);
+			expect(result.warnings).toEqual([]);
 		} finally {
 			rmSync(directory, { recursive: true, force: true });
 		}
