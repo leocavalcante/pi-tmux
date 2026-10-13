@@ -103,6 +103,21 @@ test("CI tests the minimum supported Pi peer SDK without changing the lockfile",
 	expect(readme).toContain(`CI also checks the minimum supported Pi ${minimumVersion} peer version.`);
 });
 
+test("Windows CI uses the declared minimum Node.js version", () => {
+	type WorkflowStep = { uses?: string; with?: Record<string, unknown> };
+	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8")) as {
+		jobs?: Record<string, { steps?: WorkflowStep[] }>;
+	};
+	const setupNode = workflow.jobs?.windows?.steps?.find((step) => step.uses?.startsWith("actions/setup-node@"));
+	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
+		engines: { node: string };
+	};
+	const minimumVersion = /^>=(\d+\.\d+\.\d+)$/u.exec(manifest.engines.node)?.[1];
+	if (!minimumVersion) throw new Error(`Expected a minimum Node.js engine version, got ${manifest.engines.node}`);
+
+	expect(setupNode?.with?.["node-version"]).toBe(minimumVersion);
+});
+
 test("README documents the bounded manual and idle-title input limit", () => {
 	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
 	expect(readme).toContain("values longer than 64 Ki UTF-16 code units");
