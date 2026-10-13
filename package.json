@@ -27,6 +27,7 @@
     "@earendil-works/pi-coding-agent": "1.2.0",
     "@types/bun": "^1.4.3",
     "@types/node": "22.20.5",
+    "jiti": "2.7.0",
     "publint": "0.3.25",
     "typescript": "7.0.2",
     "yaml": "2.9.1"
