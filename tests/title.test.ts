@@ -9947,6 +9947,87 @@ test("status detects a changed server, cancels obsolete naming work, and leaves 
 	expect(f.requests).toHaveLength(1);
 });
 
+test.each(["sync", "set synthetic title"])("%s warns when the tmux server changes after its initial guard", async (command) => {
+	const warningKey = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
+	const previousWarningDescriptor = Object.getOwnPropertyDescriptor(process, warningKey);
+	Reflect.deleteProperty(process, warningKey);
+	let serverPid = "123";
+	const handlers = new Map<string, Function>();
+	const commands = new Map<string, { handler: Function }>();
+	const warnings: string[] = [];
+	const ctx = {
+		mode: "tui",
+		ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
+	} as unknown as ExtensionContext;
+	const tmux: RunTmux = async (args) => args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT
+		? `$0:1:${serverPid}:0\t@2\t0\texisting task`
+		: "";
+	tmux.supportsServerPidGuard = true;
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		piTmux({
+			on: (event: string, handler: Function) => handlers.set(event, handler),
+			registerCommand: (name: string, command: { handler: Function }) => commands.set(name, command),
+		} as unknown as ExtensionAPI, tmux);
+		await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, ctx);
+
+		serverPid = "124";
+		await commands.get("tmux-title")!.handler(command, ctx);
+
+		expect(warnings).toContain("The tmux server changed; restart Pi to resume title updates.");
+	} finally {
+		if (previousWarningDescriptor) Object.defineProperty(process, warningKey, previousWarningDescriptor);
+		else Reflect.deleteProperty(process, warningKey);
+	}
+});
+
+test("explicit title refresh warns when tmux restarts while naming is pending", async () => {
+	const warningKey = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
+	const previousWarningDescriptor = Object.getOwnPropertyDescriptor(process, warningKey);
+	Reflect.deleteProperty(process, warningKey);
+	let serverPid = "123";
+	let messages: unknown[] = [];
+	const pending = deferred();
+	let requests = 0;
+	const handlers = new Map<string, Function>();
+	const commands = new Map<string, { handler: Function }>();
+	const warnings: string[] = [];
+	const ctx = {
+		mode: "tui",
+		sessionManager: { buildSessionProjection: () => ({ messages }) },
+		modelRegistry: {
+			find: (provider: string, id: string) => ({ provider, id }),
+			hasConfiguredAuth: () => true,
+			streamSimple: () => ({ result: () => { requests++; return pending.promise; } }),
+		},
+		ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
+	} as unknown as ExtensionContext;
+	const tmux: RunTmux = async (args) => args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT
+		? `$0:1:${serverPid}:0\t@2\t0\texisting task`
+		: "";
+	tmux.supportsServerPidGuard = true;
+	try {
+		process.env.PI_TMUX_MODEL = "test/model";
+		piTmux({
+			on: (event: string, handler: Function) => handlers.set(event, handler),
+			registerCommand: (name: string, command: { handler: Function }) => commands.set(name, command),
+		} as unknown as ExtensionAPI, tmux);
+		await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, ctx);
+		messages = [{ role: "user", content: "synthetic task" }];
+		await commands.get("tmux-title")!.handler("", ctx);
+		expect(requests).toBe(1);
+
+		serverPid = "124";
+		pending.resolve(response("completed task"));
+		await settle();
+
+		expect(warnings).toContain("The tmux server changed; restart Pi to resume title updates.");
+	} finally {
+		if (previousWarningDescriptor) Object.defineProperty(process, warningKey, previousWarningDescriptor);
+		else Reflect.deleteProperty(process, warningKey);
+	}
+});
+
 test("status reports completed model output waiting to be applied without changing it", async () => {
 	let release!: () => void;
 	const gate = new Promise<void>((resolve) => { release = resolve; });
