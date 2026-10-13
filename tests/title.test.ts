@@ -3975,6 +3975,73 @@ test("rejects additional GitLab credentials and session cookies without flagging
 	expect(safeTitle.warnings).toEqual([]);
 });
 
+test("GitLab boundary scans preserve token minima beside prompt-edge prose", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixBoundary = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixBoundary = promptLength - Math.floor(retainedLength / 2);
+	const repeated = (characters: string, length: number) => characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
+	const tokens = [
+		`glrt-${repeated("A1b2_-", 20)}`,
+		`gldt-${repeated("A1b2_-", 20)}`,
+		`glffct-${repeated("A1b2_-", 20)}`,
+		`glft-${repeated("A1b2_-", 20)}`,
+		`glimt-${repeated("A1b2_-", 25)}`,
+		`glagent-${repeated("A1b2_-", 50)}`,
+		`gloas-${repeated("A1b2_-", 64)}`,
+		`glptt-${"a1b2".repeat(10)}`,
+		`GR1348941${repeated("A1b2_", 20)}`,
+		`glsoat-${repeated("A1b2_-", 20)}`,
+		`glrtr-${repeated("A1b2_-", 20)}`,
+		`glcbt-abcde_${repeated("A1b2_-", 20)}`,
+		`_gitlab_session=${"a1b2".repeat(8)}`,
+		`glpat-${repeated("A1b2_-", 20)}`,
+	];
+	const makePrompt = (token: string, tokenStart: number) => {
+		const prefix = `${"x".repeat(tokenStart - 1)} `;
+		const prompt = `${prefix}${token} a ${"z".repeat(promptLength - prefix.length - token.length - 3)}`;
+		expect(prompt).toHaveLength(promptLength);
+		return prompt;
+	};
+
+	for (const token of tokens) {
+		const nearMiss = token.slice(0, -1);
+		const nearMissStarts = [
+			prefixBoundary - nearMiss.length - 1,
+			suffixBoundary - 10,
+			suffixBoundary - nearMiss.length,
+		];
+		for (let edge = 0; edge < nearMissStarts.length; edge++) {
+			const nearMissContext = buildNamingRequestContext([], makePrompt(nearMiss, nearMissStarts[edge]!));
+			expect(hasSensitiveNamingContext(nearMissContext.text)).toBe(false);
+			expect(nearMissContext.hasSensitiveBoundary()).toBe(false);
+
+			const validStart = edge === 0
+				? prefixBoundary - (token.startsWith("_gitlab_session=") ? 25 : 10)
+				: suffixBoundary - 10;
+			expect(buildNamingRequestContext([], makePrompt(token, validStart)).hasSensitiveBoundary()).toBe(true);
+		}
+	}
+
+	for (const token of tokens) {
+		const splitAt = Math.floor(token.length / 2);
+		const whitespaceSplitToken = `${token.slice(0, splitAt)} ${token.slice(splitAt)}`;
+		expect(hasSensitiveNamingContext(whitespaceSplitToken)).toBe(true);
+		expect(hasSensitiveOutput(whitespaceSplitToken)).toBe(true);
+	}
+
+	const nearMissPrompt = makePrompt(tokens[0]!.slice(0, -1), prefixBoundary - tokens[0]!.length);
+	const allowed = fixture([Promise.resolve(response("review GitLab setup"))]);
+	const allowedFind = spyOn(allowed.ctx.modelRegistry, "find");
+	allowed.input(nearMissPrompt);
+	await settle();
+	expect(allowedFind).toHaveBeenCalled();
+	expect(allowed.requests).toHaveLength(1);
+	expect(allowed.state.title).toBe("review gitlab setup");
+	expect(allowed.warnings).toEqual([]);
+});
+
 test("rejects Docker Hub personal and organization tokens without mistaking near-misses for tokens", async () => {
 	const patBody = "A1b2_-".repeat(5).slice(0, 27);
 	const oatBody = "Q7w8_-".repeat(6).slice(0, 32);

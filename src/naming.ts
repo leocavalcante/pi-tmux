@@ -3655,7 +3655,13 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== HTTP_INTEGRATED_AUTH_HEADER_BOUNDARY_PATTERN
 		&& pattern !== SET_COOKIE_SESSION_CREDENTIAL_BOUNDARY_PATTERN
 		&& pattern !== GOOGLE_DRIVE_RESOURCE_KEYS_HEADER_BOUNDARY_PATTERN
-		// A URL-safe Resend body cannot contain whitespace; its spaced variant can merge a short near-miss with prose.
+		// URL-safe GitLab and Resend tokens cannot contain whitespace; spaced variants can
+		// merge an underlength token with adjacent prompt text at a truncation edge.
+		&& pattern !== GITLAB_RUNNER_AUTH_TOKEN_BOUNDARY_PATTERN
+		&& !GITLAB_FIXED_TOKEN_BOUNDARY_PATTERNS.includes(pattern)
+		&& pattern !== GITLAB_CICD_JOB_TOKEN_BOUNDARY_PATTERN
+		&& pattern !== GITLAB_SESSION_COOKIE_BOUNDARY_PATTERN
+		&& pattern !== GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN
 		&& pattern !== RESEND_API_KEY_BOUNDARY_PATTERN)
 	.flatMap((pattern) => {
 		const source = pattern.source.replaceAll(
@@ -3918,8 +3924,10 @@ function boundedPrompt(
 	}
 	const prefix = boundedText(prompt.slice(0, prefixLength), prefixLength);
 	if (boundaries && prefix) {
+		// Keep raw edge whitespace here: boundedText trims it for the model, but
+		// trimming the scan slice can join a short near-miss to adjacent prose.
 		boundaries.push({
-			left: prefix.slice(-MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH),
+			left: prompt.slice(Math.max(0, prefixLength - MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH), prefixLength),
 			right: prompt.slice(prefixLength, prefixLength + MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH),
 			retainedSide: "left",
 		});
@@ -3935,7 +3943,7 @@ function boundedPrompt(
 	if (boundaries && suffix) {
 		boundaries.push({
 			left: prompt.slice(Math.max(0, suffixStart - MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH), suffixStart),
-			right: suffix.slice(0, MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH),
+			right: prompt.slice(suffixStart, suffixStart + MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH),
 			retainedSide: "right",
 		});
 	}
