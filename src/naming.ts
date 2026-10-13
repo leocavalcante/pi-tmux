@@ -3608,6 +3608,32 @@ const OBFUSCATED_BEARER_TOKEN_BOUNDARY_SCAN_PATTERN = new RegExp(
 	`${OBFUSCATED_BEARER_TOKEN_PATTERN.flags}dg`,
 );
 
+// These token formats cannot contain whitespace. Their whitespace-tolerant boundary
+// variants can merge a short near-miss with adjacent prose at a prompt edge; the
+// original patterns still handle boundary-spanning tokens and formatting controls.
+const WHITESPACE_FREE_TOKEN_BOUNDARY_PATTERNS: RegExp[] = [
+	AIRTABLE_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
+	AZURE_DEVOPS_PAT_BOUNDARY_PATTERN,
+	CEREBRAS_API_TOKEN_BOUNDARY_PATTERN,
+	DATABRICKS_API_TOKEN_BOUNDARY_PATTERN,
+	DIGITALOCEAN_API_TOKEN_BOUNDARY_PATTERN,
+	DOCKER_HUB_PAT_BOUNDARY_PATTERN,
+	DOCKER_HUB_OAT_BOUNDARY_PATTERN,
+	GITLAB_RUNNER_AUTH_TOKEN_BOUNDARY_PATTERN,
+	...GITLAB_FIXED_TOKEN_BOUNDARY_PATTERNS,
+	GITLAB_CICD_JOB_TOKEN_BOUNDARY_PATTERN,
+	GITLAB_SESSION_COOKIE_BOUNDARY_PATTERN,
+	GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
+	JINA_API_TOKEN_BOUNDARY_PATTERN,
+	LINEAR_API_TOKEN_BOUNDARY_PATTERN,
+	PULUMI_API_TOKEN_BOUNDARY_PATTERN,
+	RESEND_API_KEY_BOUNDARY_PATTERN,
+	SQUARE_ACCESS_TOKEN_BOUNDARY_PATTERN,
+	SOURCEGRAPH_API_TOKEN_BOUNDARY_PATTERN,
+	TAILSCALE_KEY_BOUNDARY_PATTERN,
+	TERRAFORM_CLOUD_API_TOKEN_BOUNDARY_PATTERN,
+];
+
 // Also recognize up to two control/whitespace separators between characters in
 // distinctive token formats. Exclude generic labels and prose-sensitive patterns;
 // scan original text so surrounding prose remains available to boundary checks.
@@ -3655,14 +3681,7 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== HTTP_INTEGRATED_AUTH_HEADER_BOUNDARY_PATTERN
 		&& pattern !== SET_COOKIE_SESSION_CREDENTIAL_BOUNDARY_PATTERN
 		&& pattern !== GOOGLE_DRIVE_RESOURCE_KEYS_HEADER_BOUNDARY_PATTERN
-		// URL-safe GitLab and Resend tokens cannot contain whitespace; spaced variants can
-		// merge an underlength token with adjacent prompt text at a truncation edge.
-		&& pattern !== GITLAB_RUNNER_AUTH_TOKEN_BOUNDARY_PATTERN
-		&& !GITLAB_FIXED_TOKEN_BOUNDARY_PATTERNS.includes(pattern)
-		&& pattern !== GITLAB_CICD_JOB_TOKEN_BOUNDARY_PATTERN
-		&& pattern !== GITLAB_SESSION_COOKIE_BOUNDARY_PATTERN
-		&& pattern !== GITLAB_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN
-		&& pattern !== RESEND_API_KEY_BOUNDARY_PATTERN)
+		&& !WHITESPACE_FREE_TOKEN_BOUNDARY_PATTERNS.includes(pattern))
 	.flatMap((pattern) => {
 		const source = pattern.source.replaceAll(
 			String.raw`[\p{Cc}\p{Cf}]*`, String.raw`[\p{Cc}\p{Cf}\s]{0,2}`,
