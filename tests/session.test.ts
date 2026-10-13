@@ -869,9 +869,12 @@ test.skipIf(!hasTmux)("server-guarded writes preserve literal dollar signs in co
 			"synthetic 'quoted' $pi_tmux_literal",
 		];
 		for (const [index, syntheticValue] of syntheticValues.entries()) {
-			const option = `@pi-tmux-test-dollar-${index}`;
+			const option = `@pi-tmux-test-dollar-guarded-${index}`;
+			const directOption = `@pi-tmux-test-dollar-direct-${index}`;
+			tmux("set-option", "-g", directOption, syntheticValue);
+			const directValue = tmux("show-options", "-gqv", directOption);
 			await writeOnServer(run, server, ["set-option", "-g", option, syntheticValue], new AbortController().signal);
-			expect(tmux("show-options", "-gqv", option)).toBe(syntheticValue);
+			expect(tmux("show-options", "-gqv", option)).toBe(directValue);
 		}
 	} finally {
 		cleanupTmuxFixture(() => tmux("kill-server"), directory);
