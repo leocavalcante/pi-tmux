@@ -274,6 +274,15 @@ test("retained-edge whitespace inside a recognized obfuscated token does not byp
 	const nearMissPrompt = `${"x".repeat(prefixLength - nearMissEdge.length - 1)} ${nearMissEdge}a prose after the boundary ${"y".repeat(1_200)}`;
 	expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
 	expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
+
+	// Variable-length token patterns must not absorb an ordinary word as the
+	// continuation that makes an underlength prefix look valid.
+	const variableNearMiss = `re_${"A".repeat(31)}`;
+	const variableNearMissEdge = `${variableNearMiss}\t`;
+	const variableNearMissPrompt = `${"x".repeat(prefixLength - variableNearMissEdge.length - 1)} `
+		+ `${variableNearMissEdge}abcdefgh prose after the boundary ${"y".repeat(1_200)}`;
+	expect(hasSensitiveNamingContext(variableNearMiss)).toBe(false);
+	expect(buildNamingRequestContext([], variableNearMissPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
 test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", () => {
