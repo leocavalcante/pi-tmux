@@ -304,22 +304,39 @@ test("variable-length edge matches reject prose words but retain token-like cont
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
 	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptAtEdge = (value: string) => {
+	const promptAtPrefixEdge = (value: string) => {
 		const tokenStart = prefixLength - value.indexOf("\t") - 1;
 		return `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
 	};
+	const promptAtSuffixEdge = (value: string) => {
+		const promptLength = MAX_PROMPT_LENGTH + 100;
+		const suffixStart = promptLength - Math.floor(retainedLength / 2);
+		const tokenStart = suffixStart - value.indexOf("\t");
+		const prefix = `${"x".repeat(tokenStart - 1)} `;
+		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+	};
 
-	const proseNearMiss = `re_${"A".repeat(31)}\tmisunderstanding`;
-	const proseContext = buildNamingRequestContext([], promptAtEdge(proseNearMiss));
-	expect(hasSensitiveNamingContext(proseContext.text)).toBe(false);
-	expect(proseContext.hasSensitiveBoundary()).toBe(false);
+	const proseNearMisses = [
+		`re_${"A".repeat(31)}\tmisunderstanding`,
+		`re_${"A".repeat(31)}\tCharacteristically`,
+		`re_${"A".repeat(31)}\tAuthenticationAuthentication`,
+	];
+	for (const proseNearMiss of proseNearMisses) {
+		for (const prompt of [promptAtPrefixEdge(proseNearMiss), promptAtSuffixEdge(proseNearMiss)]) {
+			const proseContext = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(proseContext.text)).toBe(false);
+			expect(proseContext.hasSensitiveBoundary()).toBe(false);
+		}
+	}
 
 	const variableToken = `re_${"A1_b-".repeat(10)}`;
 	const separatorOffset = 3 + 31;
 	const obfuscatedToken = `${variableToken.slice(0, separatorOffset)}\t${variableToken.slice(separatorOffset)}`;
-	const tokenContext = buildNamingRequestContext([], promptAtEdge(obfuscatedToken));
-	expect(hasSensitiveNamingContext(tokenContext.text)).toBe(false);
-	expect(tokenContext.hasSensitiveBoundary()).toBe(true);
+	for (const prompt of [promptAtPrefixEdge(obfuscatedToken), promptAtSuffixEdge(obfuscatedToken)]) {
+		const tokenContext = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(tokenContext.text)).toBe(false);
+		expect(tokenContext.hasSensitiveBoundary()).toBe(true);
+	}
 });
 
 test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", () => {

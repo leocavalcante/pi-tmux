@@ -3836,11 +3836,14 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 			const minimumLength = variableLength
 				? MIN_VARIABLE_LENGTH_BOUNDARY_TOKEN_CONTINUATION_LENGTH
 				: MIN_FIXED_LENGTH_BOUNDARY_TOKEN_CONTINUATION_LENGTH;
-			const hasTokenLikeContinuationEvidence = !/^\p{Ll}+$/u.test(contiguousContinuation ?? "");
-			// A flexible pattern can absorb any next word; lowercase prose alone
-			// should not provide the extra evidence to join it across an edge.
-			return (contiguousContinuation?.length ?? 0) >= minimumLength
-				&& (!variableLength || hasTokenLikeContinuationEvidence);
+			const continuationText = contiguousContinuation ?? "";
+			const isProseContinuation = /^\p{Ll}+$/u.test(continuationText)
+				|| /^(?:\p{Lu}\p{Ll}+)+$/u.test(continuationText)
+				|| /^\p{Ll}+(?:\p{Lu}\p{Ll}+)+$/u.test(continuationText);
+			// Flexible patterns can absorb whole prose words; casing transitions
+			// alone should not make a continuation look token-like.
+			return continuationText.length >= minimumLength
+				&& (!variableLength || !isProseContinuation);
 		};
 		const hasNonEdgeSeparatorInRetainedContext = (
 			sourcePattern: RegExp,
