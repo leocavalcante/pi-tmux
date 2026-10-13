@@ -2430,6 +2430,30 @@ test("whitespace-free token boundaries do not extend short near-misses with pros
 	expect(allowed.warnings).toEqual([]);
 });
 
+test("tab and newline prompt-edge whitespace do not extend short synthetic Datadog values", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixLength = Math.floor(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - suffixLength;
+	const nearMiss = `Datadog: ${"A".repeat(39)}`;
+	const nearMissStarts = [prefixLength - nearMiss.length - 1, suffixStart - nearMiss.length];
+
+	for (const separator of ["\t", "\n"]) {
+		for (const tokenStart of nearMissStarts) {
+			const prefix = `${"x".repeat(tokenStart - 1)} `;
+			const prompt = `${prefix}${nearMiss}${separator}a ${"z".repeat(
+				promptLength - prefix.length - nearMiss.length - separator.length - 2,
+			)}`;
+			expect(prompt).toHaveLength(promptLength);
+			const context = buildNamingRequestContext([], prompt);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("Azure SAS signatures crossing either retained prompt boundary skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

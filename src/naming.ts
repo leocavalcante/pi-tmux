@@ -3801,10 +3801,12 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 		};
 		const hasSeparatorInRetainedContext = (tokenStart: number, tokenEnd: number) =>
 			OBFUSCATION_SEPARATOR_PATTERN.test(retainedTokenText(tokenStart, tokenEnd));
+		const hasWhitespaceAtRetainedEdge = (tokenStart: number, tokenEnd: number) =>
+			/^[\p{White_Space}]|[\p{White_Space}]$/u.test(retainedTokenText(tokenStart, tokenEnd));
 		const hasNonEdgeSeparatorInRetainedContext = (tokenStart: number, tokenEnd: number) => {
 			const retainedText = retainedTokenText(tokenStart, tokenEnd);
 			return OBFUSCATION_SEPARATOR_PATTERN.test(retainedText)
-				&& !/^[\s\p{Cc}\p{Cf}]|[\s\p{Cc}\p{Cf}]$/u.test(retainedText);
+				&& !hasWhitespaceAtRetainedEdge(tokenStart, tokenEnd);
 		};
 		for (const { sourcePattern, pattern } of SENSITIVE_BOUNDARY_SCAN_PATTERNS) {
 			for (const match of joined.matchAll(pattern)) {
@@ -3879,6 +3881,10 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					const password = decodeNpmPassword(encoded);
 					if (password === undefined || PASSWORD_PLACEHOLDER_PATTERN.test(password)) continue;
 				}
+				// Direct boundary patterns also allow Cc/Cf controls; tabs and newlines
+				// are Cc, but edge whitespace must not complete an underlength token.
+				if (WHITESPACE_FREE_TOKEN_PROMPT_EDGE_PROSE_PATTERNS.includes(sourcePattern)
+					&& hasWhitespaceAtRetainedEdge(tokenStart, tokenEnd)) continue;
 				return true;
 			}
 		}
