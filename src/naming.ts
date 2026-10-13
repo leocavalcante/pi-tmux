@@ -3608,9 +3608,7 @@ const OBFUSCATED_BEARER_TOKEN_BOUNDARY_SCAN_PATTERN = new RegExp(
 	`${OBFUSCATED_BEARER_TOKEN_PATTERN.flags}dg`,
 );
 
-// These token formats cannot contain whitespace. Their whitespace-tolerant boundary
-// variants can merge a short near-miss with adjacent prose at a prompt edge; the
-// original patterns still handle boundary-spanning tokens and formatting controls.
+// Preserve the existing boundary exceptions for formats that cannot contain whitespace.
 const WHITESPACE_FREE_TOKEN_BOUNDARY_PATTERNS: RegExp[] = [
 	ADOBE_CLIENT_SECRET_BOUNDARY_PATTERN,
 	AIRTABLE_PERSONAL_ACCESS_TOKEN_BOUNDARY_PATTERN,
@@ -3663,10 +3661,45 @@ const WHITESPACE_FREE_TOKEN_BOUNDARY_PATTERNS: RegExp[] = [
 	VAULT_TOKEN_BOUNDARY_PATTERN,
 ];
 
+// These reproduced prompt-edge false positives stay in full-text whitespace scans, but
+// do not treat a separator at the retained fragment's outer edge as part of the token.
+const WHITESPACE_FREE_TOKEN_PROMPT_EDGE_PROSE_PATTERNS: RegExp[] = [
+	ALIBABA_ACCESS_KEY_ID_BOUNDARY_PATTERN,
+	ARTIFACTORY_API_KEY_BOUNDARY_PATTERN,
+	ARTIFACTORY_REFERENCE_TOKEN_BOUNDARY_PATTERN,
+	AWS_ADDITIONAL_ACCESS_KEY_ID_BOUNDARY_PATTERN,
+	AZURE_AD_CLIENT_SECRET_BOUNDARY_PATTERN,
+	CLICKHOUSE_CLOUD_API_KEY_BOUNDARY_PATTERN,
+	CLOUDFLARE_API_KEY_BOUNDARY_PATTERN,
+	CLOUDFLARE_GLOBAL_API_KEY_BOUNDARY_PATTERN,
+	DATADOG_API_KEY_BOUNDARY_PATTERN,
+	DISCORD_WEBHOOK_URL_BOUNDARY_PATTERN,
+	DYNATRACE_API_TOKEN_BOUNDARY_PATTERN,
+	FLY_IO_ORG_TOKEN_BOUNDARY_PATTERN,
+	GRAFANA_CLOUD_TOKEN_BOUNDARY_PATTERN,
+	GOOGLE_API_KEY_BOUNDARY_PATTERN,
+	GOOGLE_OAUTH_ACCESS_TOKEN_BOUNDARY_PATTERN,
+	GOOGLE_OAUTH_CLIENT_SECRET_BOUNDARY_PATTERN,
+	GOOGLE_OAUTH_REFRESH_TOKEN_BOUNDARY_PATTERN,
+	HEROKU_API_TOKEN_BOUNDARY_PATTERN,
+	LANGSMITH_API_TOKEN_BOUNDARY_PATTERN,
+	MAILGUN_PRIVATE_API_TOKEN_BOUNDARY_PATTERN,
+	NEON_API_KEY_BOUNDARY_PATTERN,
+	OCTOPUS_API_KEY_BOUNDARY_PATTERN,
+	PINECONE_API_KEY_BOUNDARY_PATTERN,
+	RAILWAY_API_TOKEN_BOUNDARY_PATTERN,
+	REPLICATE_API_TOKEN_BOUNDARY_PATTERN,
+	SENTRY_ORG_TOKEN_BOUNDARY_PATTERN,
+	SLACK_LEGACY_WEBHOOK_URL_BOUNDARY_PATTERN,
+	SLACK_WEBHOOK_URL_BOUNDARY_PATTERN,
+	TENCENT_CLOUD_SECRET_ID_BOUNDARY_PATTERN,
+	VERCEL_API_TOKEN_BOUNDARY_PATTERN,
+];
+
 // Also recognize up to two control/whitespace separators between characters in
 // distinctive token formats. Exclude generic labels and prose-sensitive patterns;
-// scan original text so surrounding prose remains available to boundary checks.
-const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
+// full-text and prompt-edge scans apply separate boundary safeguards.
+const WHITESPACE_TOLERANT_BOUNDARY_SOURCE_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 	.filter((pattern) => pattern !== LABELED_CREDENTIAL_BOUNDARY_PATTERN
 		&& pattern !== LABELED_PASSWORD_BOUNDARY_PATTERN
 		&& pattern !== NPM_AUTH_BOUNDARY_PATTERN
@@ -3710,18 +3743,26 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== HTTP_INTEGRATED_AUTH_HEADER_BOUNDARY_PATTERN
 		&& pattern !== SET_COOKIE_SESSION_CREDENTIAL_BOUNDARY_PATTERN
 		&& pattern !== GOOGLE_DRIVE_RESOURCE_KEYS_HEADER_BOUNDARY_PATTERN
-		&& !WHITESPACE_FREE_TOKEN_BOUNDARY_PATTERNS.includes(pattern))
-	.flatMap((pattern) => {
-		const source = pattern.source.replaceAll(
-			String.raw`[\p{Cc}\p{Cf}]*`, String.raw`[\p{Cc}\p{Cf}\s]{0,2}`,
-		);
-		return source === pattern.source ? [] : [new RegExp(source, pattern.flags)];
+		&& !WHITESPACE_FREE_TOKEN_BOUNDARY_PATTERNS.includes(pattern));
+const makeWhitespaceTolerantBoundaryPattern = (pattern: RegExp): RegExp | undefined => {
+	const source = pattern.source.replaceAll(
+		String.raw`[\p{Cc}\p{Cf}]*`, String.raw`[\p{Cc}\p{Cf}\s]{0,2}`,
+	);
+	return source === pattern.source ? undefined : new RegExp(source, pattern.flags);
+};
+const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = WHITESPACE_TOLERANT_BOUNDARY_SOURCE_PATTERNS
+	.flatMap((sourcePattern) => {
+		const pattern = makeWhitespaceTolerantBoundaryPattern(sourcePattern);
+		return pattern ? [pattern] : [];
 	});
-const WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS = WHITESPACE_TOLERANT_BOUNDARY_PATTERNS
-	// Cross truncation only when the candidate enforces a token-ending boundary;
-	// broad formats can otherwise absorb adjacent prose after a short near-miss.
-	.filter((pattern) => /\(\?![^()]*\)$/u.test(pattern.source))
-	.map((pattern) => new RegExp(pattern.source, `${pattern.flags}dg`));
+const WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS = WHITESPACE_TOLERANT_BOUNDARY_SOURCE_PATTERNS
+	.flatMap((sourcePattern) => {
+		const pattern = makeWhitespaceTolerantBoundaryPattern(sourcePattern);
+		// Cross truncation only when the candidate enforces a token-ending boundary;
+		// broad formats can otherwise absorb adjacent prose after a short near-miss.
+		if (!pattern || !/\(\?![^()]*\)$/u.test(pattern.source)) return [];
+		return [{ sourcePattern, pattern: new RegExp(pattern.source, `${pattern.flags}dg`) }];
+	});
 const WHITESPACE_TOLERANT_LABELED_PASSWORD_PATTERN = new RegExp(
 	LABELED_PASSWORD_BOUNDARY_PATTERN.source.replaceAll(
 		String.raw`[\p{Cc}\p{Cf}]*`, String.raw`[\p{Cc}\p{Cf}\s]{0,2}`,
@@ -3753,10 +3794,17 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 		const npmPasswordPlaceholderStarts = npmPasswordPlaceholderValueStarts(joined);
 		const overlapsRetainedContext = (tokenStart: number, tokenEnd: number) =>
 			retainedSide === "left" ? tokenStart < boundary : tokenEnd > boundary;
-		const hasSeparatorInRetainedContext = (tokenStart: number, tokenEnd: number) => {
+		const retainedTokenText = (tokenStart: number, tokenEnd: number) => {
 			const start = retainedSide === "left" ? tokenStart : Math.max(tokenStart, boundary);
 			const end = retainedSide === "left" ? Math.min(tokenEnd, boundary) : tokenEnd;
-			return OBFUSCATION_SEPARATOR_PATTERN.test(joined.slice(start, end));
+			return joined.slice(start, end);
+		};
+		const hasSeparatorInRetainedContext = (tokenStart: number, tokenEnd: number) =>
+			OBFUSCATION_SEPARATOR_PATTERN.test(retainedTokenText(tokenStart, tokenEnd));
+		const hasNonEdgeSeparatorInRetainedContext = (tokenStart: number, tokenEnd: number) => {
+			const retainedText = retainedTokenText(tokenStart, tokenEnd);
+			return OBFUSCATION_SEPARATOR_PATTERN.test(retainedText)
+				&& !/^[\s\p{Cc}\p{Cf}]|[\s\p{Cc}\p{Cf}]$/u.test(retainedText);
 		};
 		for (const { sourcePattern, pattern } of SENSITIVE_BOUNDARY_SCAN_PATTERNS) {
 			for (const match of joined.matchAll(pattern)) {
@@ -3860,11 +3908,14 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 			if (!overlapsRetainedContext(encodedRange[0], encodedRange[1]) || !hasObfuscatedLabel) continue;
 			if (isBase64UserPasswordPair(match[3]!)) return true;
 		}
-		for (const pattern of WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS) {
+		for (const { sourcePattern, pattern } of WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS) {
 			for (const match of joined.matchAll(pattern)) {
 				const tokenRange = match.indices![1];
-				if (tokenRange && overlapsRetainedContext(tokenRange[0], tokenRange[1])
-					&& hasSeparatorInRetainedContext(tokenRange[0], tokenRange[1])) return true;
+				if (!tokenRange || !overlapsRetainedContext(tokenRange[0], tokenRange[1])) continue;
+				const hasSeparator = WHITESPACE_FREE_TOKEN_PROMPT_EDGE_PROSE_PATTERNS.includes(sourcePattern)
+					? hasNonEdgeSeparatorInRetainedContext(tokenRange[0], tokenRange[1])
+					: hasSeparatorInRetainedContext(tokenRange[0], tokenRange[1]);
+				if (hasSeparator) return true;
 			}
 		}
 		for (const { pattern, captureIndex } of LABELED_PASSWORD_PHRASE_BOUNDARY_SCAN_PATTERNS) {

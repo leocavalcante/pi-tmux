@@ -2298,8 +2298,52 @@ test("whitespace-free token boundaries do not extend short near-misses with pros
 	const five = "C".repeat(5);
 	const rep = (characters: string, length: number) =>
 		characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
-	const tokens = [
+	const labeledCredential = (label: string, token: string) => {
+		const prefix = `${label}: `;
+		return { value: `${prefix}${token}`, captureOffset: prefix.length, controlOffset: prefix.length + 5 };
+	};
+	const slackWebhookPrefix = "https://hooks.slack.com/services/";
+	const slackLegacyWebhookPrefix = "https://hooks.slack.com/services/T12345678/B12345678/";
+	const discordWebhookPrefix = `https://discord.com/api/webhooks/${"1".repeat(18)}/`;
+	type BoundaryToken = {
+		value: string;
+		captureOffset?: number;
+		controlOffset?: number;
+		nearMissProseCharacter?: string;
+	};
+	const tokens: BoundaryToken[] = [
 		{ value: `NRAK-${"A".repeat(27)}` },
+		labeledCredential("Cloudflare", "a".repeat(40)),
+		labeledCredential("Cloudflare global", "a".repeat(37)),
+		labeledCredential("Datadog", "A".repeat(40)),
+		labeledCredential("Mailgun", `key-${"a".repeat(32)}`),
+		labeledCredential("Vercel", "A".repeat(24)),
+		labeledCredential("Railway", "12345678-1234-1234-1234-123456789012"),
+		{ value: `AKCp${"A".repeat(69)}` },
+		{ value: `cmVmd${"A".repeat(59)}` },
+		{ value: `fo1_${"A".repeat(43)}` },
+		{ value: `ABIA${"A".repeat(16)}`, nearMissProseCharacter: "A" },
+		{ value: `AIza${"A".repeat(35)}` },
+		{ value: `GOCSPX-${"A".repeat(20)}` },
+		{ value: `1//${"A".repeat(20)}` },
+		{ value: `ya29.${"A".repeat(20)}` },
+		{ value: `r8_${"A".repeat(37)}` },
+		{ value: `pcsk_${"A".repeat(5)}_${"A".repeat(63)}` },
+		{ value: `neon_api_key_${"A".repeat(32)}` },
+		{ value: `dt0c01.${"A".repeat(24)}.${"A".repeat(64)}` },
+		{ value: `glc_${"a".repeat(32)}` },
+		{ value: `sntrys_eyJpYXQiO${"A".repeat(10)}LCJyZWdpb25fdXJs${"A".repeat(10)}_${"A".repeat(43)}` },
+		{ value: `4b1d${"A1b2".repeat(9)}A1` },
+		{ value: `AbC7Q~${"A".repeat(31)}` },
+		{ value: `LTAI${"A1b2".repeat(5)}` },
+		{ value: `AKID${"A1b2".repeat(8)}` },
+		{ value: `HRKU-AA${"A1_b".repeat(14)}AB` },
+		{ value: `lsv2_pt_${"a1b2".repeat(8)}_c3d4a1b2c3` },
+		{ value: `LSV2_SK_${"a1b2".repeat(8)}_c3d4a1b2c3` },
+		{ value: `${slackWebhookPrefix}${"A".repeat(43)}`, captureOffset: slackWebhookPrefix.length, controlOffset: slackWebhookPrefix.length + 5 },
+		{ value: `${slackLegacyWebhookPrefix}${"A".repeat(24)}`, captureOffset: slackLegacyWebhookPrefix.length, controlOffset: slackLegacyWebhookPrefix.length + 5 },
+		{ value: `${discordWebhookPrefix}${"A".repeat(68)}`, captureOffset: discordWebhookPrefix.length, controlOffset: discordWebhookPrefix.length + 5 },
+		{ value: `API-${"A".repeat(26)}`, nearMissProseCharacter: "A" },
 		{ value: `csk_${"B".repeat(48)}` },
 		{ value: `jina_${"T".repeat(60)}` },
 		{ value: `ops_eyJ${"A".repeat(250)}` },
@@ -2344,18 +2388,18 @@ test("whitespace-free token boundaries do not extend short near-misses with pros
 		{ value: `dp.pt.${"A".repeat(43)}` },
 		{ value: `sntryu_${"a".repeat(64)}` },
 	];
-	const makePrompt = (token: string, tokenStart: number) => {
+	const makePrompt = (token: string, tokenStart: number, proseCharacter = "a") => {
 		const prefix = `${"x".repeat(tokenStart - 1)} `;
-		const prompt = `${prefix}${token} a ${"z".repeat(promptLength - prefix.length - token.length - 3)}`;
+		const prompt = `${prefix}${token} ${proseCharacter} ${"z".repeat(promptLength - prefix.length - token.length - 3)}`;
 		expect(prompt).toHaveLength(promptLength);
 		return prompt;
 	};
 
-	for (const { value, captureOffset = 0, controlOffset = 5 } of tokens) {
+	for (const { value, captureOffset = 0, controlOffset = 5, nearMissProseCharacter = "a" } of tokens) {
 		const nearMiss = value.slice(0, -1);
 		const nearMissStarts = [prefixBoundary - nearMiss.length - 1, suffixBoundary - nearMiss.length];
 		for (const tokenStart of nearMissStarts) {
-			const context = buildNamingRequestContext([], makePrompt(nearMiss, tokenStart));
+			const context = buildNamingRequestContext([], makePrompt(nearMiss, tokenStart, nearMissProseCharacter));
 			expect(hasSensitiveNamingContext(context.text)).toBe(false);
 			expect(context.hasSensitiveBoundary()).toBe(false);
 		}
