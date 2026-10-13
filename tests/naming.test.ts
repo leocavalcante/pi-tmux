@@ -170,6 +170,72 @@ test("trimmed Resend near-misses are not completed by prompt or history edge whi
 	}
 });
 
+test("edge whitespace does not complete underlength whitespace-free token formats", () => {
+	const values = [
+		`EZAK${"D".repeat(54)}`,
+		`fm1a_${"A1b+/".repeat(20)}`,
+		`csk_${"B".repeat(48)}`,
+		`jina_${"T".repeat(60)}`,
+		`lin_api_${"a".repeat(40)}`,
+		`dapi${"a".repeat(32)}`,
+		`dckr_pat_${"A".repeat(27)}`,
+		`dckr_oat_${"B".repeat(32)}`,
+		`rubygems_${"a".repeat(48)}`,
+		`CLOJARS_${"A".repeat(60)}`,
+		`tfp_${"A".repeat(59)}`,
+		`pul-${"a".repeat(40)}`,
+		`SG.${"a".repeat(66)}`,
+		`eyJrIjoi${"A".repeat(70)}`,
+		`dp.pt.${"a".repeat(43)}`,
+		`sntryu_${"a".repeat(64)}`,
+		`shpat_${"a".repeat(32)}`,
+		`shippo_live_${"a".repeat(40)}`,
+		`pnu_${"A1b2".repeat(9)}`,
+		`hvs.${"V".repeat(24)}`,
+		["A3", "A".repeat(6), "B".repeat(11), "C".repeat(5), "D".repeat(5), "E".repeat(5)].join("-"),
+	];
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixLength = Math.floor(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 100;
+	const suffixStart = promptLength - suffixLength;
+	const retainedHistoryLength = 1_000;
+	const prose = "a prose after the boundary";
+
+	for (const value of values) {
+		expect(hasSensitiveNamingContext(value)).toBe(true);
+		const nearMiss = value.slice(0, -1);
+		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+		for (const separator of ["\t", "\n"]) {
+			const prefixEdgeValue = `${nearMiss}${separator}`;
+			const prefixPrompt = `${"x".repeat(prefixLength - prefixEdgeValue.length - 1)} `
+				+ `${prefixEdgeValue}${prose} ${"x".repeat(1_200)}`;
+			const suffixLeft = `${"x".repeat(suffixStart - nearMiss.length - 1)} ${nearMiss}`;
+			const suffixRight = `${separator}${prose}`;
+			const suffixPrompt = suffixLeft + suffixRight
+				+ "x".repeat(promptLength - suffixLeft.length - suffixRight.length);
+			const history = `${"x".repeat(retainedHistoryLength - nearMiss.length - separator.length - 1)} `
+				+ `${nearMiss}${separator}${prose} ${"x".repeat(1_200)}`;
+			const contexts = [
+				{ context: buildNamingRequestContext([], prefixPrompt), includesNearMiss: true },
+				{ context: buildNamingRequestContext([], suffixPrompt), includesNearMiss: false },
+				{ context: buildNamingRequestContext([{ role: "user", content: history }] as any), includesNearMiss: true },
+				{
+					context: buildNamingRequestContext([{ role: "compactionSummary", summary: history }] as any),
+					includesNearMiss: true,
+				},
+			];
+
+			for (const { context, includesNearMiss } of contexts) {
+				expect(context.text.includes(nearMiss)).toBe(includesNearMiss);
+				expect(hasSensitiveNamingContext(context.text)).toBe(false);
+				expect(context.hasSensitiveBoundary()).toBe(false);
+			}
+		}
+	}
+});
+
 test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
