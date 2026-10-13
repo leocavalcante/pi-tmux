@@ -49,6 +49,7 @@ const MAX_FORMER_TARGETS = 8;
 const MAX_LOCATION_PASSES = 4;
 const SERVER_CHANGED_WARNING = "The tmux server changed; restart Pi to resume title updates.";
 const SERVER_CHANGE_WARNING_PROCESS_KEY = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
+const SERVER_IDENTITY_PROCESS_KEY = Symbol.for("@leocavalcante/pi-tmux/server-identity");
 type ShapeOnlyNamingRejection = Extract<InvalidNamingTitleReason, "multiple-lines" | "too-long" | "too-many-words">;
 type NamingRejectionCategory = InvalidNamingTitleReason | "unsafe-output";
 
@@ -192,6 +193,25 @@ export function createController(tmux: RunTmux) {
 	const trackedSessions = new Set<string>();
 	const unsafeSessions = new Set<string>();
 	const sessionNameSafetyAvailable = new Set<string>();
+	const checkServerIdentity = (server: string | undefined, ctx: ExtensionContext, notifyOnServerChange: boolean) => {
+		const processServer = Reflect.get(process, SERVER_IDENTITY_PROCESS_KEY);
+		const expectedServer = typeof processServer === "string" ? processServer : lastLocation?.server;
+		// Preserve the first known server across extension reloads. A fresh controller
+		// must not treat a replacement server as its baseline and write through a reused pane ID.
+		if (expectedServer && typeof processServer !== "string") {
+			Object.defineProperty(process, SERVER_IDENTITY_PROCESS_KEY, { configurable: true, value: expectedServer });
+		}
+		if (server && ((expectedServer && server !== expectedServer)
+			|| (lastLocation?.server && server !== lastLocation.server))) {
+			stopAfterServerChange();
+			if (notifyOnServerChange) warnAutomaticServerChangeOnce(ctx);
+			return true;
+		}
+		if (server && !expectedServer) {
+			Object.defineProperty(process, SERVER_IDENTITY_PROCESS_KEY, { configurable: true, value: server });
+		}
+		return false;
+	};
 	const clearSessionBaseTracking = async (target: string, server: string | undefined, signal: AbortSignal) => {
 		await writeOnServer(tmux, server, [
 			"set-option", "-q", "-u", "-t", target, SESSION_BASE_NAME_OPTION,
@@ -209,11 +229,7 @@ export function createController(tmux: RunTmux) {
 	const rememberLocation = (location: WindowSnapshot, ctx: ExtensionContext, notifyOnServerChange: boolean) => {
 		// Once the server changes, the inherited TMUX_PANE could name an unrelated
 		// reused pane. Discard cached IDs and stop writes rather than claim ownership.
-		if (lastLocation?.server && location.server && lastLocation.server !== location.server) {
-			stopAfterServerChange();
-			if (notifyOnServerChange) warnAutomaticServerChangeOnce(ctx);
-			return;
-		}
+		if (checkServerIdentity(location.server, ctx, notifyOnServerChange)) return;
 		if (location.sessionMetadataAvailable) trackedSessions.add(location.session);
 		if (location.sessionNameMayNotRoundTrip !== undefined) {
 			sessionNameSafetyAvailable.add(location.session);
@@ -655,7 +671,9 @@ export function createController(tmux: RunTmux) {
 				|| fields.slice(hasServerIdentity ? 3 : 2).some((value) => !/^[01]$/.test(value))) {
 				throw new Error("Invalid tmux status");
 			}
-			if (server && lastLocation?.server && server !== lastLocation.server) stopAfterServerChange();
+			// Status stays read-only but also records the server identity transition
+			// and reports the fail-closed state in the snapshot below.
+			checkServerIdentity(server, ctx, false);
 			const yesNo = (value: string) => value === "1" ? "yes" : "no";
 			notifySafely(ctx, [
 				"tmux title status",
