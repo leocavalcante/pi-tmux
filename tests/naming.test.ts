@@ -236,6 +236,46 @@ test("edge whitespace does not complete underlength whitespace-free token format
 	}
 });
 
+test("retained-edge whitespace inside a recognized obfuscated token does not bypass the boundary scan", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixLength = Math.floor(retainedLength / 2);
+	const promptLength = MAX_PROMPT_LENGTH + 100;
+	const suffixStart = promptLength - suffixLength;
+	const historyLimit = 1_000;
+	const token = `neon_api_key_${"N".repeat(32)}`;
+	const separatorOffset = 13 + 8;
+	const obfuscated = `${token.slice(0, separatorOffset)}\t${token.slice(separatorOffset)}`;
+	const promptAt = (value: string, start: number) => {
+		const prefix = `${"x".repeat(start - 1)} `;
+		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+	};
+
+	expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+	const contexts = [
+		buildNamingRequestContext([], promptAt(obfuscated, prefixLength - separatorOffset - 1)),
+		buildNamingRequestContext([], promptAt(obfuscated, suffixStart - separatorOffset)),
+	];
+	const historyStart = historyLimit - separatorOffset - 1;
+	const history = `${"x".repeat(historyStart - 1)} ${obfuscated} ${"y".repeat(1_100)}`;
+	contexts.push(
+		buildNamingRequestContext([{ role: "user", content: history }] as any),
+		buildNamingRequestContext([{ role: "compactionSummary", summary: history }] as any),
+	);
+	for (const context of contexts) {
+		expect(hasSensitiveNamingContext(context.text)).toBe(false);
+		expect(context.hasSensitiveBoundary()).toBe(true);
+	}
+
+	// Keep rejecting a one-character prose completion at the same prompt edge.
+	const nearMiss = token.slice(0, -1);
+	const nearMissEdge = `${nearMiss}\t`;
+	const nearMissPrompt = `${"x".repeat(prefixLength - nearMissEdge.length - 1)} ${nearMissEdge}a prose after the boundary ${"y".repeat(1_200)}`;
+	expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+	expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
+});
+
 test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

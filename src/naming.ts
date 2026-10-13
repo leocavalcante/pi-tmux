@@ -15,6 +15,9 @@ const MAX_HISTORY_TEXT_LENGTH = 1_000;
 const MAX_NAMING_CONTEXT_BLOCKS = 128;
 // Cover the full retained side of a truncated history item and prompt half.
 const MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH = MAX_HISTORY_TEXT_LENGTH;
+// An edge separator is ambiguous; require substantial token continuation on the
+// other side before treating it as internal obfuscation rather than prose.
+const MIN_SENSITIVE_BOUNDARY_TOKEN_CONTINUATION_LENGTH = 8;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 export type NamingModel = { provider: string; id: string };
@@ -3803,12 +3806,22 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 		};
 		const hasSeparatorInRetainedContext = (tokenStart: number, tokenEnd: number) =>
 			OBFUSCATION_SEPARATOR_PATTERN.test(retainedTokenText(tokenStart, tokenEnd));
-		const hasWhitespaceAtRetainedEdge = (tokenStart: number, tokenEnd: number) =>
-			/^[\p{White_Space}]|[\p{White_Space}]$/u.test(retainedTokenText(tokenStart, tokenEnd));
+		const hasWhitespaceAtRetainedEdge = (tokenStart: number, tokenEnd: number) => {
+			const retainedText = retainedTokenText(tokenStart, tokenEnd);
+			return retainedSide === "left"
+				? /[\p{White_Space}]$/u.test(retainedText)
+				: /^[\p{White_Space}]/u.test(retainedText);
+		};
+		const hasSubstantialContinuationAcrossBoundary = (tokenEnd: number) => {
+			const continuation = joined.slice(boundary, tokenEnd).replace(/^[\s\p{Cc}\p{Cf}]+/u, "");
+			const contiguousContinuation = /^[^\s\p{Cc}\p{Cf}]*/u.exec(continuation)?.[0];
+			return (contiguousContinuation?.length ?? 0) >= MIN_SENSITIVE_BOUNDARY_TOKEN_CONTINUATION_LENGTH;
+		};
 		const hasNonEdgeSeparatorInRetainedContext = (tokenStart: number, tokenEnd: number) => {
 			const retainedText = retainedTokenText(tokenStart, tokenEnd);
 			return OBFUSCATION_SEPARATOR_PATTERN.test(retainedText)
-				&& !hasWhitespaceAtRetainedEdge(tokenStart, tokenEnd);
+				&& (!hasWhitespaceAtRetainedEdge(tokenStart, tokenEnd)
+					|| hasSubstantialContinuationAcrossBoundary(tokenEnd));
 		};
 		for (const { sourcePattern, pattern } of SENSITIVE_BOUNDARY_SCAN_PATTERNS) {
 			for (const match of joined.matchAll(pattern)) {
@@ -3884,11 +3897,12 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					if (password === undefined || PASSWORD_PLACEHOLDER_PATTERN.test(password)) continue;
 				}
 				// Direct boundary patterns allow Cc/Cf controls; tabs and newlines are Cc.
-				// Neither whitespace-free formats nor reproduced edge-sensitive patterns
-				// can use outer-edge whitespace to complete an underlength token.
+				// Edge whitespace alone cannot complete a near-miss; allow it only when a
+				// substantial contiguous token run continues across the truncation cut.
 				if ((WHITESPACE_FREE_TOKEN_BOUNDARY_PATTERNS.includes(sourcePattern)
 					|| WHITESPACE_FREE_TOKEN_PROMPT_EDGE_PROSE_PATTERNS.includes(sourcePattern))
-					&& hasWhitespaceAtRetainedEdge(tokenStart, tokenEnd)) continue;
+					&& hasWhitespaceAtRetainedEdge(tokenStart, tokenEnd)
+					&& !hasSubstantialContinuationAcrossBoundary(tokenEnd)) continue;
 				return true;
 			}
 		}
