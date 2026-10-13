@@ -85,16 +85,22 @@ test("CI tests the minimum supported Pi peer SDK without changing the lockfile",
 	const steps = workflow.jobs?.["pi-1-1"]?.steps;
 	const install = steps?.find((step) => step.name === "Install minimum supported Pi SDK")?.run ?? "";
 	const verify = steps?.find((step) => step.name === "Verify minimum supported Pi SDK")?.run ?? "";
+	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
+		peerDependencies: Record<string, string>;
+	};
+	const peerRange = manifest.peerDependencies["@earendil-works/pi-coding-agent"];
+	const minimumVersion = /^\^(\d+\.\d+\.\d+)$/u.exec(peerRange)?.[1];
+	if (!minimumVersion) throw new Error(`Expected a caret peer range, got ${peerRange}`);
 	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
 
 	expect(install).toContain("npm install --no-save --package-lock=false --force --ignore-scripts");
-	expect(install).toContain("@earendil-works/pi-coding-agent@1.1.0");
-	expect(install).toContain("@earendil-works/pi-ai@1.1.0");
-	expect(verify).toContain('= "1.1.0"');
+	expect(install).toContain(`@earendil-works/pi-coding-agent@${minimumVersion}`);
+	expect(install).toContain(`@earendil-works/pi-ai@${minimumVersion}`);
+	expect(verify).toContain(`= "${minimumVersion}"`);
 	expect(steps?.some((step) => step.run === "npm run check")).toBe(true);
 	expect(steps?.some((step) => step.run === "npm run check:tests")).toBe(true);
 	expect(steps?.some((step) => step.run === "npm test")).toBe(true);
-	expect(readme).toContain("CI also checks the minimum supported Pi 1.1.0 peer version.");
+	expect(readme).toContain(`CI also checks the minimum supported Pi ${minimumVersion} peer version.`);
 });
 
 test("README documents the bounded manual and idle-title input limit", () => {
