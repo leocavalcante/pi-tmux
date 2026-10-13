@@ -682,7 +682,9 @@ export function createController(tmux: RunTmux) {
 		warned = false;
 		const update = refreshTitle(ctx, pane, undefined, true);
 		const revision = titleRevision;
-		if (await update && !signal.aborted && revision === titleRevision) {
+		const updated = await update;
+		if (warnIfServerChanged(ctx)) return;
+		if (updated && !signal.aborted && revision === titleRevision) {
 			notifySafely(ctx, formerWindows.size || formerSessions.size
 				? "Current tmux status synchronized; some former-location repairs remain queued."
 				: "tmux title and waiting markers synchronized.", "info");
@@ -702,7 +704,9 @@ export function createController(tmux: RunTmux) {
 		const commandGeneration = generation;
 		const update = refreshTitle(ctx, pane, undefined, true);
 		const revision = titleRevision;
-		if (await update && !signal.aborted && revision === titleRevision && manualTitle
+		const updated = await update;
+		if (warnIfServerChanged(ctx)) return;
+		if (updated && !signal.aborted && revision === titleRevision && manualTitle
 			&& baseTitle === title && generation === commandGeneration) {
 			notifySafely(ctx, "Manual title pinned. Use /tmux-title auto to resume automatic naming.", "info");
 		}
@@ -721,7 +725,7 @@ export function createController(tmux: RunTmux) {
 			else notifySafely(ctx, "AI naming is disabled by PI_TMUX_MODEL=off; waiting markers still work.", "info");
 			return;
 		}
-		const requested = requestTitle(ctx, "", true);
+		const requested = requestTitle(ctx, "", true, true);
 		if (requested !== undefined) {
 			notifySafely(ctx, requested
 				? "Requested a tmux title refresh."

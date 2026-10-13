@@ -250,7 +250,7 @@ test.skipIf(!hasTmux)("a guarded title rename skipped by a server restart is not
 		expect(restarted).toBe(true);
 		expect(f.tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe("untouched");
 		expect(f.notices).toEqual([]);
-		expect(f.warnings).toEqual([]);
+		expect(f.warnings).toEqual(["The tmux server changed; restart Pi to resume title updates."]);
 
 		const afterDetection = f.rawCalls.length;
 		await f.emit("agent_settled");
