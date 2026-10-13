@@ -74,7 +74,27 @@ test("README's tested Pi version matches the development SDK", () => {
 	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
 		devDependencies: Record<string, string>;
 	};
-	expect(readme).toContain(`Tested with Pi ${manifest.devDependencies["@earendil-works/pi-coding-agent"]}.`);
+	expect(readme).toContain(`Tested with Pi ${manifest.devDependencies["@earendil-works/pi-coding-agent"]}`);
+});
+
+test("CI tests the minimum supported Pi peer SDK without changing the lockfile", () => {
+	type Step = { name?: string; run?: string };
+	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8")) as {
+		jobs?: Record<string, { steps?: Step[] }>;
+	};
+	const steps = workflow.jobs?.["pi-1-1"]?.steps;
+	const install = steps?.find((step) => step.name === "Install minimum supported Pi SDK")?.run ?? "";
+	const verify = steps?.find((step) => step.name === "Verify minimum supported Pi SDK")?.run ?? "";
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
+
+	expect(install).toContain("npm install --no-save --package-lock=false --force --ignore-scripts");
+	expect(install).toContain("@earendil-works/pi-coding-agent@1.1.0");
+	expect(install).toContain("@earendil-works/pi-ai@1.1.0");
+	expect(verify).toContain('= "1.1.0"');
+	expect(steps?.some((step) => step.run === "npm run check")).toBe(true);
+	expect(steps?.some((step) => step.run === "npm run check:tests")).toBe(true);
+	expect(steps?.some((step) => step.run === "npm test")).toBe(true);
+	expect(readme).toContain("CI also checks the minimum supported Pi 1.1.0 peer version.");
 });
 
 test("README documents the bounded manual and idle-title input limit", () => {
