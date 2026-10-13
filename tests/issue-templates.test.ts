@@ -108,6 +108,15 @@ test("both issue forms give clear privacy reminders without promising comprehens
 	expect(privacyNotice(validateForm("bug_report.yml"))).toContain("best-effort");
 });
 
+test("security policy directs vulnerability and credential reports to GitHub's private channel", () => {
+	const policy = readFileSync(fileURLToPath(new URL("../SECURITY.md", import.meta.url)), "utf8").toLowerCase();
+
+	expect(policy).toContain("security/advisories/new");
+	expect(policy).toContain("report suspected vulnerabilities or accidental credential exposure privately");
+	expect(policy).toContain("do not include credentials, api keys, access tokens");
+	expect(policy).toContain("revoke or rotate it with its provider");
+});
+
 test("blank issues remain enabled", () => {
 	const config = requireRecord(readYaml("config.yml"), "issue template config");
 	expect(config.blank_issues_enabled).toBe(true);
