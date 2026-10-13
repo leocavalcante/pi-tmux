@@ -899,6 +899,13 @@ test.skipIf(!hasTmux)("guarded and unguarded writes distinguish literal semicolo
 			{ value: "synthetic;", directArgument: String.raw`synthetic\;` },
 			{ value: "synthetic;;", directArgument: String.raw`synthetic;\;` },
 			{ value: String.raw`synthetic\;`, directArgument: String.raw`synthetic\\;` },
+			...Array.from({ length: 7 }, (_, index) => {
+				const backslashes = index + 2;
+				return {
+					value: `synthetic${"\\".repeat(backslashes)};`,
+					directArgument: `synthetic${"\\".repeat(backslashes + 1)};`,
+				};
+			}),
 		];
 		for (const [index, { value, directArgument }] of values.entries()) {
 			const directOption = `@pi-tmux-semicolon-direct-${index}`;
