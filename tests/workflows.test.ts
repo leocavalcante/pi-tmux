@@ -207,6 +207,15 @@ test("CI history secret scanning verifies its pinned binary and redacts findings
 	expect(execution).toBeGreaterThan(extraction);
 });
 
+test("README offers npm installation and marks its bootstrap as completed", () => {
+	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
+	expect(readme).toContain("The npm package is available:");
+	expect(readme).toContain("pi install npm:@leocavalcante/pi-tmux");
+	expect(readme).not.toContain("npm package has not been published yet");
+	expect(readme).toContain("Bootstrap version `0.1.0` was published manually once");
+	expect(readme).toContain("Do not repeat this bootstrap publish");
+});
+
 test("manual npm bootstrap verifies clean origin/main and version before logging in", () => {
 	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
 	const commands = /Bootstrap version `0\.1\.0`[\s\S]*?```sh\n([\s\S]*?)\n```/u.exec(readme)?.[1];
