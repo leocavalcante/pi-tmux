@@ -891,16 +891,29 @@ test.skipIf(!hasTmux)("guarded and unguarded writes distinguish literal semicolo
 	try {
 		tmux("new-session", "-d", "-s", "probe", "/bin/sleep 60");
 		const server = tmux("display-message", "-p", "#{pid}");
-		const directOption = "@pi-tmux-semicolon-direct";
-		tmux("set-option", "-g", directOption, String.raw`\;`);
-		const directValue = tmux("show-options", "-gqv", directOption);
-		expect(directValue).toBe(";");
-
 		const signal = new AbortController().signal;
-		const guardedOption = "@pi-tmux-semicolon-guarded";
 		const guarded: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
-		await writeOnServer(guarded, server, ["set-option", "-g", guardedOption, ";"], signal);
-		expect(tmux("show-options", "-gqv", guardedOption)).toBe(directValue);
+		const unguarded: RunTmux = async (args) => tmux(...args);
+		const values = [
+			{ value: ";", directArgument: String.raw`\;` },
+			{ value: "synthetic;", directArgument: String.raw`synthetic\;` },
+			{ value: "synthetic;;", directArgument: String.raw`synthetic;\;` },
+			{ value: String.raw`synthetic\;`, directArgument: String.raw`synthetic\\;` },
+		];
+		for (const [index, { value, directArgument }] of values.entries()) {
+			const directOption = `@pi-tmux-semicolon-direct-${index}`;
+			tmux("set-option", "-g", directOption, directArgument);
+			const directValue = tmux("show-options", "-gqv", directOption);
+			expect(directValue).toBe(value);
+
+			const guardedOption = `@pi-tmux-semicolon-guarded-${index}`;
+			await writeOnServer(guarded, server, ["set-option", "-g", guardedOption, value], signal);
+			expect(tmux("show-options", "-gqv", guardedOption)).toBe(directValue);
+
+			const unguardedOption = `@pi-tmux-semicolon-unguarded-${index}`;
+			await writeOnServer(unguarded, undefined, ["set-option", "-g", unguardedOption, value], signal);
+			expect(tmux("show-options", "-gqv", unguardedOption)).toBe(directValue);
+		}
 
 		const batchOption = "@pi-tmux-semicolon-batch";
 		const batchTailOption = "@pi-tmux-semicolon-batch-tail";
@@ -908,20 +921,16 @@ test.skipIf(!hasTmux)("guarded and unguarded writes distinguish literal semicolo
 			"set-option", "-g", batchOption, ";", TMUX_COMMAND_SEPARATOR,
 			"set-option", "-g", batchTailOption, "synthetic",
 		], signal);
-		expect(tmux("show-options", "-gqv", batchOption)).toBe(directValue);
+		expect(tmux("show-options", "-gqv", batchOption)).toBe(";");
 		expect(tmux("show-options", "-gqv", batchTailOption)).toBe("synthetic");
 
-		const unguardedOption = "@pi-tmux-semicolon-unguarded";
 		const unguardedBatchOption = "@pi-tmux-semicolon-unguarded-batch";
 		const unguardedBatchTailOption = "@pi-tmux-semicolon-unguarded-batch-tail";
-		const unguarded: RunTmux = async (args) => tmux(...args);
-		await writeOnServer(unguarded, undefined, ["set-option", "-g", unguardedOption, ";"], signal);
-		expect(tmux("show-options", "-gqv", unguardedOption)).toBe(directValue);
 		await writeOnServer(unguarded, undefined, [
 			"set-option", "-g", unguardedBatchOption, ";", TMUX_COMMAND_SEPARATOR,
 			"set-option", "-g", unguardedBatchTailOption, "synthetic",
 		], signal);
-		expect(tmux("show-options", "-gqv", unguardedBatchOption)).toBe(directValue);
+		expect(tmux("show-options", "-gqv", unguardedBatchOption)).toBe(";");
 		expect(tmux("show-options", "-gqv", unguardedBatchTailOption)).toBe("synthetic");
 	} finally {
 		cleanupTmuxFixture(() => tmux("kill-server"), directory);

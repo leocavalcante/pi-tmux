@@ -209,8 +209,8 @@ function tmuxCommandString(args: string[]): string {
 function tmuxCommandArguments(args: string[]): string[] {
 	return args.map((value) => {
 		if (value === TMUX_COMMAND_SEPARATOR) return ";";
-		// The tmux CLI treats an unescaped, standalone semicolon as a separator.
-		return value === ";" ? String.raw`\;` : value;
+		// The tmux CLI treats a terminal unescaped semicolon as a command separator.
+		return value.endsWith(";") ? `${value.slice(0, -1)}\\;` : value;
 	});
 }
 
