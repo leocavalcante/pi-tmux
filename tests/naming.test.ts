@@ -100,6 +100,36 @@ test("trimmed trailing whitespace does not extend short tokens across history bo
 	}
 });
 
+test("trimmed New Relic near-misses are not completed by prompt or history edge whitespace", () => {
+	const nearMiss = `NRAK-${"A1b2".repeat(6)}ab`;
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const suffixLength = Math.floor(retainedLength / 2);
+	const suffixStart = MAX_PROMPT_LENGTH + 100 - suffixLength;
+	const retainedHistoryLength = 1_000;
+	for (const separator of ["\t", "\n"]) {
+		const prefixPrompt = `${"x".repeat(prefixLength - nearMiss.length - 2)} ${nearMiss}${separator}a ${"x".repeat(1_200)}`;
+		const suffixPrompt = `${"x".repeat(suffixStart - nearMiss.length - 1)} ${nearMiss}${separator}a ${"x".repeat(suffixLength - 3)}`;
+		const history = `${"x".repeat(retainedHistoryLength - nearMiss.length - 2)} ${nearMiss}${separator}a ${"x".repeat(1_200)}`;
+		const contexts = [
+			{ context: buildNamingRequestContext([], prefixPrompt), includesNearMiss: true },
+			{ context: buildNamingRequestContext([], suffixPrompt), includesNearMiss: false },
+			{ context: buildNamingRequestContext([{ role: "user", content: history }] as any), includesNearMiss: true },
+			{
+				context: buildNamingRequestContext([{ role: "compactionSummary", summary: history }] as any),
+				includesNearMiss: true,
+			},
+		];
+
+		for (const { context, includesNearMiss } of contexts) {
+			expect(context.text.includes(nearMiss)).toBe(includesNearMiss);
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
