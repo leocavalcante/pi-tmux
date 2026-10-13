@@ -4002,8 +4002,15 @@ function boundedTextWithBoundary(
 	if (!boundaries || !text) return text;
 	const extended = boundedText(content, maxLength + MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH);
 	if (extended.length <= maxLength) return text;
-	const left = text.slice(-MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH);
-	const right = extended.slice(text.length, text.length + MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH);
+	let retainedLength = maxLength;
+	// Match boundedText's surrogate-safe cap while keeping raw trailing whitespace
+	// in the boundary snippet; `text.length` is shorter after its trailing trim.
+	if (extended.charCodeAt(retainedLength - 1) >= 0xd800 && extended.charCodeAt(retainedLength - 1) <= 0xdbff
+		&& extended.charCodeAt(retainedLength) >= 0xdc00 && extended.charCodeAt(retainedLength) <= 0xdfff) {
+		retainedLength--;
+	}
+	const left = extended.slice(Math.max(0, retainedLength - MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH), retainedLength);
+	const right = extended.slice(retainedLength, retainedLength + MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH);
 	if (left && right) boundaries.push({ left, right, retainedSide: "left" });
 	return text;
 }

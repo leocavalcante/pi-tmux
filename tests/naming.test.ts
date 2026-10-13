@@ -84,6 +84,22 @@ test("screens webhook and Discord auth credentials across retained-context bound
 	}
 });
 
+test("trimmed trailing whitespace does not extend short tokens across history boundaries", () => {
+	const nearMiss = `Datadog: ${"A".repeat(39)}`;
+	const retainedPrefixLength = 1_000 - nearMiss.length - 1;
+	for (const separator of ["\t", "\n"]) {
+		const content = `${"x".repeat(retainedPrefixLength - 1)} ${nearMiss}${separator}a ${"z".repeat(1_200)}`;
+		const contexts = [
+			buildNamingRequestContext([{ role: "user", content }] as any),
+			buildNamingRequestContext([{ role: "compactionSummary", summary: content }] as any),
+		];
+		for (const context of contexts) {
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+	}
+});
+
 test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
