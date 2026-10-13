@@ -9,6 +9,7 @@ import {
 	WINDOW_BASE_NAME_OPTION,
 	WINDOW_TITLE_LITERAL_PREFIX_OPTION,
 	WINDOW_TITLE_MARKED_OPTION,
+	writeOnServer,
 } from "../src/tmux.ts";
 import { cleanupTmuxFixture, supportsUnixTmux } from "./tmux-support.ts";
 
@@ -850,6 +851,35 @@ const tmuxEscapedSessionNames = [
 	{ name: `Repo; "quoted" \\ path #{session_id}`, expectedText: `Repo; "quoted"`, hasDollar: false, hasSessionFormat: true },
 	{ name: "A$B", expectedText: "A", hasDollar: true, hasSessionFormat: false },
 ];
+
+test.skipIf(!hasTmux)("server-guarded writes preserve literal dollar signs in command arguments", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+	const socket = join(directory, "socket");
+	const tmux = (...args: string[]) => execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+		encoding: "utf8", timeout: 2_000, stdio: ["ignore", "pipe", "pipe"],
+	}).replace(/\r?\n$/, "");
+	try {
+		tmux("new-session", "-d", "-s", "probe", "/bin/sleep 60");
+		const server = tmux("display-message", "-p", "#{pid}");
+		const run: RunTmux = Object.assign(async (args: string[]) => tmux(...args), { supportsServerPidGuard: true });
+		const syntheticValues = [
+			"synthetic $pi_tmux_literal",
+			String.raw`synthetic \$pi_tmux_literal`,
+			'synthetic "$pi_tmux_literal"',
+			"synthetic 'quoted' $pi_tmux_literal",
+		];
+		for (const [index, syntheticValue] of syntheticValues.entries()) {
+			const option = `@pi-tmux-test-dollar-guarded-${index}`;
+			const directOption = `@pi-tmux-test-dollar-direct-${index}`;
+			tmux("set-option", "-g", directOption, syntheticValue);
+			const directValue = tmux("show-options", "-gqv", directOption);
+			await writeOnServer(run, server, ["set-option", "-g", option, syntheticValue], new AbortController().signal);
+			expect(tmux("show-options", "-gqv", option)).toBe(directValue);
+		}
+	} finally {
+		cleanupTmuxFixture(() => tmux("kill-server"), directory);
+	}
+});
 
 test.skipIf(!hasTmux).each(tmuxEscapedSessionNames)(
 	"server-guarded waiting updates preserve tmux-escaped session punctuation: %j",
