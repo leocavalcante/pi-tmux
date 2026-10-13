@@ -15,9 +15,10 @@ const MAX_HISTORY_TEXT_LENGTH = 1_000;
 const MAX_NAMING_CONTEXT_BLOCKS = 128;
 // Cover the full retained side of a truncated history item and prompt half.
 const MAX_SENSITIVE_BOUNDARY_SCAN_LENGTH = MAX_HISTORY_TEXT_LENGTH;
-// An edge separator is ambiguous; require substantial token continuation on the
-// other side before treating it as internal obfuscation rather than prose.
-const MIN_SENSITIVE_BOUNDARY_TOKEN_CONTINUATION_LENGTH = 16;
+// Edge whitespace is ambiguous: exact-length formats need less continuation
+// than variable-length formats, which can otherwise absorb adjacent prose.
+const MIN_FIXED_LENGTH_BOUNDARY_TOKEN_CONTINUATION_LENGTH = 8;
+const MIN_VARIABLE_LENGTH_BOUNDARY_TOKEN_CONTINUATION_LENGTH = 16;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
 export type NamingModel = { provider: string; id: string };
@@ -3787,6 +3788,18 @@ function hasWhitespaceSeparatedCredential(value: string): boolean {
 	return false;
 }
 
+const BOUNDARY_TOKEN_EXTENSION_CHARACTERS = ["A", "a", "0", "_", "-"];
+const EXTENDED_BOUNDARY_PATTERN_PROBES = new WeakMap<RegExp, RegExp>();
+function hasVariableLengthBoundaryToken(sourcePattern: RegExp, token: string): boolean {
+	let probe = EXTENDED_BOUNDARY_PATTERN_PROBES.get(sourcePattern);
+	if (!probe) {
+		const flags = [...sourcePattern.flags].filter((flag) => !["d", "g", "y"].includes(flag)).join("");
+		probe = new RegExp(`^(?:${sourcePattern.source})$`, flags);
+		EXTENDED_BOUNDARY_PATTERN_PROBES.set(sourcePattern, probe);
+	}
+	return BOUNDARY_TOKEN_EXTENSION_CHARACTERS.some((character) => probe!.test(`${token}${character}`));
+}
+
 function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingContextBoundary): boolean {
 	const stripFormatting = (value: string) => value.normalize("NFKD").replace(/[\p{M}\p{Cf}]/gu, "");
 	const variants: Array<[string, string]> = [
@@ -3812,16 +3825,28 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 				? /[\p{White_Space}]$/u.test(retainedText)
 				: /^[\p{White_Space}]/u.test(retainedText);
 		};
-		const hasSubstantialContinuationAcrossBoundary = (tokenEnd: number) => {
+		const hasSubstantialContinuationAcrossBoundary = (
+			sourcePattern: RegExp,
+			token: string,
+			tokenEnd: number,
+		) => {
 			const continuation = joined.slice(boundary, tokenEnd).replace(/^[\s\p{Cc}\p{Cf}]+/u, "");
 			const contiguousContinuation = /^[^\s\p{Cc}\p{Cf}]*/u.exec(continuation)?.[0];
-			return (contiguousContinuation?.length ?? 0) >= MIN_SENSITIVE_BOUNDARY_TOKEN_CONTINUATION_LENGTH;
+			const minimumLength = hasVariableLengthBoundaryToken(sourcePattern, token)
+				? MIN_VARIABLE_LENGTH_BOUNDARY_TOKEN_CONTINUATION_LENGTH
+				: MIN_FIXED_LENGTH_BOUNDARY_TOKEN_CONTINUATION_LENGTH;
+			return (contiguousContinuation?.length ?? 0) >= minimumLength;
 		};
-		const hasNonEdgeSeparatorInRetainedContext = (tokenStart: number, tokenEnd: number) => {
+		const hasNonEdgeSeparatorInRetainedContext = (
+			sourcePattern: RegExp,
+			token: string,
+			tokenStart: number,
+			tokenEnd: number,
+		) => {
 			const retainedText = retainedTokenText(tokenStart, tokenEnd);
 			return OBFUSCATION_SEPARATOR_PATTERN.test(retainedText)
 				&& (!hasWhitespaceAtRetainedEdge(tokenStart, tokenEnd)
-					|| hasSubstantialContinuationAcrossBoundary(tokenEnd));
+					|| hasSubstantialContinuationAcrossBoundary(sourcePattern, token, tokenEnd));
 		};
 		for (const { sourcePattern, pattern } of SENSITIVE_BOUNDARY_SCAN_PATTERNS) {
 			for (const match of joined.matchAll(pattern)) {
@@ -3902,7 +3927,7 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 				if ((WHITESPACE_FREE_TOKEN_BOUNDARY_PATTERNS.includes(sourcePattern)
 					|| WHITESPACE_FREE_TOKEN_PROMPT_EDGE_PROSE_PATTERNS.includes(sourcePattern))
 					&& hasWhitespaceAtRetainedEdge(tokenStart, tokenEnd)
-					&& !hasSubstantialContinuationAcrossBoundary(tokenEnd)) continue;
+					&& !hasSubstantialContinuationAcrossBoundary(sourcePattern, match[1]!, tokenEnd)) continue;
 				return true;
 			}
 		}
@@ -3937,7 +3962,7 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 				const tokenRange = match.indices![1];
 				if (!tokenRange || !overlapsRetainedContext(tokenRange[0], tokenRange[1])) continue;
 				const hasSeparator = WHITESPACE_FREE_TOKEN_PROMPT_EDGE_PROSE_PATTERNS.includes(sourcePattern)
-					? hasNonEdgeSeparatorInRetainedContext(tokenRange[0], tokenRange[1])
+					? hasNonEdgeSeparatorInRetainedContext(sourcePattern, match[1]!, tokenRange[0], tokenRange[1])
 					: hasSeparatorInRetainedContext(tokenRange[0], tokenRange[1]);
 				if (hasSeparator) return true;
 			}

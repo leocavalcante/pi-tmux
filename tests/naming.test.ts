@@ -285,6 +285,21 @@ test("retained-edge whitespace inside a recognized obfuscated token does not byp
 	expect(buildNamingRequestContext([], variableNearMissPrompt).hasSensitiveBoundary()).toBe(false);
 });
 
+test("preserves exact-length tokens with short continuation at a prompt edge", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const token = `neon_api_key_${"N".repeat(32)}`;
+	const separatorOffset = 13 + 24;
+	const obfuscated = `${token.slice(0, separatorOffset)}\t${token.slice(separatorOffset)}`;
+	const tokenStart = prefixLength - separatorOffset - 1;
+	const prompt = `${"x".repeat(tokenStart - 1)} ${obfuscated} ${"y".repeat(1_200)}`;
+	const context = buildNamingRequestContext([], prompt);
+
+	expect(hasSensitiveNamingContext(context.text)).toBe(false);
+	expect(context.hasSensitiveBoundary()).toBe(true);
+});
+
 test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
