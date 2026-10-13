@@ -2295,21 +2295,52 @@ test("whitespace-free token boundaries do not extend short near-misses with pros
 	const prefixBoundary = Math.ceil(retainedLength / 2);
 	const promptLength = 3_000;
 	const suffixBoundary = promptLength - Math.floor(retainedLength / 2);
+	const five = "C".repeat(5);
+	const rep = (characters: string, length: number) =>
+		characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
 	const tokens = [
-		`csk_${"B".repeat(48)}`,
-		`jina_${"T".repeat(60)}`,
-		`lin_api_${"a".repeat(40)}`,
-		`pat${"A".repeat(14)}.${"a".repeat(64)}`,
-		`${"a".repeat(75)}AZDO${"a".repeat(5)}`,
-		`dop_v1_${"a".repeat(64)}`,
-		`pul-${"a".repeat(40)}`,
-		`tskey-${"A".repeat(16)}`,
-		`sq0atp-${"A".repeat(22)}`,
-		`${"T".repeat(14)}.atlasv1.${"a".repeat(60)}`,
-		`sgp_${"a".repeat(40)}`,
-		`dapi${"a".repeat(32)}`,
-		`dckr_pat_${"A".repeat(27)}`,
-		`dckr_oat_${"B".repeat(32)}`,
+		{ value: `csk_${"B".repeat(48)}` },
+		{ value: `jina_${"T".repeat(60)}` },
+		{ value: `lin_api_${"a".repeat(40)}` },
+		{ value: `pat${"A".repeat(14)}.${"a".repeat(64)}` },
+		{ value: `${"a".repeat(75)}AZDO${"a".repeat(5)}` },
+		{ value: `dop_v1_${"a".repeat(64)}` },
+		{ value: `pul-${"a".repeat(40)}` },
+		{ value: `tskey-${"A".repeat(16)}` },
+		{ value: `sq0atp-${"A".repeat(22)}` },
+		{ value: `${"T".repeat(14)}.atlasv1.${"a".repeat(60)}` },
+		{ value: `sgp_${"a".repeat(40)}` },
+		{ value: `dapi${"a".repeat(32)}` },
+		{ value: `dckr_pat_${"A".repeat(27)}` },
+		{ value: `dckr_oat_${"B".repeat(32)}` },
+		{ value: ["A3", "A".repeat(6), "B".repeat(11), five, five, five].join("-") },
+		{ value: `v1.0-${"a".repeat(24)}-${"b".repeat(146)}` },
+		{ value: `p8e-${"A1b2".repeat(8)}` },
+		{ value: `SG.${"a".repeat(66)}` },
+		{ value: `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}` },
+		{ value: `SK${"a1".repeat(16)}` },
+		{ value: `rubygems_${"a".repeat(48)}` },
+		{ value: `CLOJARS_${"A".repeat(60)}` },
+		{ value: `tfp_${"A".repeat(59)}` },
+		{ value: `EZAK${"D".repeat(54)}` },
+		{ value: `fm1a_${"A1b+/".repeat(20)}` },
+		{ value: `whsec_${"F7g8".repeat(6)}` },
+		{ value: `${"A1b_".repeat(6)}.cD9_-Z.${"QwErTy9_-".repeat(3)}` },
+		{ value: `mfa.${"a1B_".repeat(21)}` },
+		{ value: `123456789:A${"a".repeat(34)}`, captureOffset: 10, controlOffset: 11 },
+		{ value: `hvs.${"V".repeat(24)}` },
+		{ value: `hvb.${"B".repeat(24)}` },
+		{ value: `ntn_${"1".repeat(11)}${"a".repeat(35)}` },
+		{ value: `sb_secret_${"S".repeat(32)}` },
+		{ value: `ATATT3${"a".repeat(183)}_-=` },
+		{ value: `shpat_${"a".repeat(32)}` },
+		{ value: `shippo_live_${"a".repeat(40)}` },
+		{ value: `PMAK-${"a".repeat(24)}-${"b".repeat(34)}` },
+		{ value: `pnu_${"A1b2".repeat(9)}` },
+		{ value: `eyJrIjoi${"A".repeat(70)}` },
+		{ value: `glsa_${rep("aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x", 32)}_A1B2C3D4` },
+		{ value: `dp.pt.${"A".repeat(43)}` },
+		{ value: `sntryu_${"a".repeat(64)}` },
 	];
 	const makePrompt = (token: string, tokenStart: number) => {
 		const prefix = `${"x".repeat(tokenStart - 1)} `;
@@ -2318,8 +2349,8 @@ test("whitespace-free token boundaries do not extend short near-misses with pros
 		return prompt;
 	};
 
-	for (const token of tokens) {
-		const nearMiss = token.slice(0, -1);
+	for (const { value, captureOffset = 0, controlOffset = 5 } of tokens) {
+		const nearMiss = value.slice(0, -1);
 		const nearMissStarts = [prefixBoundary - nearMiss.length - 1, suffixBoundary - nearMiss.length];
 		for (const tokenStart of nearMissStarts) {
 			const context = buildNamingRequestContext([], makePrompt(nearMiss, tokenStart));
@@ -2327,19 +2358,23 @@ test("whitespace-free token boundaries do not extend short near-misses with pros
 			expect(context.hasSensitiveBoundary()).toBe(false);
 		}
 
-		const controlObfuscated = `${token.slice(0, 5)}\u200b${token.slice(5)}`;
-		for (const tokenStart of [prefixBoundary - 10, suffixBoundary - 10]) {
-			expect(buildNamingRequestContext([], makePrompt(token, tokenStart)).hasSensitiveBoundary()).toBe(true);
+		const controlObfuscated = `${value.slice(0, controlOffset)}\u200b${value.slice(controlOffset)}`;
+		const validStarts = [
+			prefixBoundary - 10 - captureOffset,
+			suffixBoundary - 10 - captureOffset,
+		];
+		for (const tokenStart of validStarts) {
+			expect(buildNamingRequestContext([], makePrompt(value, tokenStart)).hasSensitiveBoundary()).toBe(true);
 			expect(buildNamingRequestContext([], makePrompt(controlObfuscated, tokenStart)).hasSensitiveBoundary()).toBe(true);
 		}
 
-		const splitAt = Math.floor(token.length / 2);
-		const whitespaceSplit = `${token.slice(0, splitAt)} ${token.slice(splitAt)}`;
+		const splitAt = Math.floor(value.length / 2);
+		const whitespaceSplit = `${value.slice(0, splitAt)} ${value.slice(splitAt)}`;
 		expect(hasSensitiveNamingContext(whitespaceSplit)).toBe(true);
 		expect(hasSensitiveOutput(whitespaceSplit)).toBe(true);
 	}
 
-	const nearMiss = tokens[0]!.slice(0, -1);
+	const nearMiss = tokens[0]!.value.slice(0, -1);
 	const allowed = fixture([Promise.resolve(response("inspect build failures"))]);
 	const allowedFind = spyOn(allowed.ctx.modelRegistry, "find");
 	allowed.input(makePrompt(nearMiss, prefixBoundary - nearMiss.length - 1));
