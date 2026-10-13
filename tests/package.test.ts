@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { execFile, execFileSync } from "node:child_process";
+import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -44,22 +44,119 @@ function needsCommandShell(file: string, platform = process.platform): boolean {
 	return platform === "win32" && file === "npm";
 }
 
+function createAbortError(reason: unknown): NodeJS.ErrnoException {
+	const error = new Error("The operation was aborted", { cause: reason }) as NodeJS.ErrnoException;
+	error.name = "AbortError";
+	error.code = "ABORT_ERR";
+	return error;
+}
+
+function killCommandTree(child: ChildProcess): void {
+	if (!child.pid) return;
+	if (process.platform === "win32") {
+		// npm is a .cmd shim on Windows; killing cmd.exe alone can leave npm's Node process behind.
+		try {
+			execFile("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true }, (error) => {
+				if (error) {
+					try { child.kill("SIGKILL"); } catch { /* The wrapper may already have exited. */ }
+				}
+			});
+		} catch {
+			try { child.kill("SIGKILL"); } catch { /* The wrapper may already have exited. */ }
+		}
+		return;
+	}
+	try {
+		// detached:true gives the shell and its descendants a process group we can terminate together.
+		process.kill(-child.pid, "SIGKILL");
+	} catch {
+		try { child.kill("SIGKILL"); } catch { /* The wrapper may already have exited. */ }
+	}
+}
+
 function runCommand(file: string, args: string[], options: CommandOptions = {}): Promise<string> {
+	const timeoutMs = options.timeoutMs ?? COMMAND_TIMEOUT_MS;
+	if (options.shell !== true) {
+		return new Promise((resolve, reject) => {
+			execFile(file, args, {
+				cwd: options.cwd,
+				env: options.env,
+				encoding: "utf8",
+				maxBuffer: options.maxBuffer ?? 4 * 1024 * 1024,
+				timeout: timeoutMs,
+				// These are disposable test subprocesses; don't leave a child alive when it handles SIGTERM.
+				killSignal: "SIGKILL",
+				signal: options.signal,
+			}, (error, stdout) => {
+				if (error) reject(error);
+				else resolve(stdout);
+			});
+		});
+	}
+
 	return new Promise((resolve, reject) => {
-		execFile(file, args, {
+		const signal = options.signal;
+		if (signal?.aborted) {
+			reject(createAbortError(signal.reason));
+			return;
+		}
+		const maxBuffer = options.maxBuffer ?? 4 * 1024 * 1024;
+		let child: ChildProcess;
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+		let stopReason: "timeout" | "abort" | "maxBuffer" | undefined;
+		let spawnError: Error | undefined;
+		let stdoutLength = 0;
+		let stderrLength = 0;
+		const stdout: Buffer[] = [];
+		const stopProcessTree = (reason: "timeout" | "abort" | "maxBuffer") => {
+			if (stopReason) return;
+			stopReason = reason;
+			killCommandTree(child);
+		};
+		const abort = () => stopProcessTree("abort");
+		const collect = (stream: "stdout" | "stderr", chunk: Buffer) => {
+			if (stopReason) return;
+			if (stream === "stdout") {
+				stdoutLength += chunk.length;
+				if (stdoutLength > maxBuffer) return stopProcessTree("maxBuffer");
+				stdout.push(chunk);
+			} else {
+				stderrLength += chunk.length;
+				if (stderrLength > maxBuffer) return stopProcessTree("maxBuffer");
+			}
+		};
+		child = spawn(file, args, {
 			cwd: options.cwd,
 			env: options.env,
-			encoding: "utf8",
-			maxBuffer: options.maxBuffer ?? 4 * 1024 * 1024,
-			shell: options.shell,
-			timeout: options.timeoutMs ?? COMMAND_TIMEOUT_MS,
-			// These are disposable test subprocesses; don't leave a child alive when it handles SIGTERM.
-			killSignal: "SIGKILL",
-			signal: options.signal,
-		}, (error, stdout) => {
-			if (error) reject(error);
-			else resolve(stdout);
+			shell: true,
+			detached: process.platform !== "win32",
+			windowsHide: true,
+			stdio: ["ignore", "pipe", "pipe"],
 		});
+		child.stdout?.on("data", (chunk: Buffer) => collect("stdout", chunk));
+		child.stderr?.on("data", (chunk: Buffer) => collect("stderr", chunk));
+		child.once("error", (error) => { spawnError = error; });
+		child.once("close", (code, exitSignal) => {
+			if (timeout) clearTimeout(timeout);
+			signal?.removeEventListener("abort", abort);
+			if (stopReason === "abort") reject(createAbortError(signal?.reason));
+			else if (stopReason === "timeout") reject(new Error(`Command timed out after ${timeoutMs} ms`));
+			else if (stopReason === "maxBuffer") {
+				const error = new Error("Command output exceeded the configured buffer limit") as NodeJS.ErrnoException;
+				error.code = "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+				reject(error);
+			} else if (spawnError) reject(spawnError);
+			else if (code !== 0 || exitSignal) {
+				reject(Object.assign(new Error(`Command failed: ${file} ${args.join(" ")}`), {
+					code,
+					signal: exitSignal,
+				}));
+			} else resolve(Buffer.concat(stdout).toString("utf8"));
+		});
+		if (timeoutMs > 0) timeout = setTimeout(() => stopProcessTree("timeout"), timeoutMs);
+		signal?.addEventListener("abort", abort, { once: true });
+		// An abort between the initial check and listener registration is not replayed.
+		if (signal?.aborted) abort();
 	});
 }
 
@@ -143,6 +240,56 @@ test("package subprocesses are force-killed on timeout and cancellation", async 
 	const controller = new AbortController();
 	await runStubbornChild({ timeoutMs: 2_500 }, undefined, "Error");
 	await runStubbornChild({ signal: controller.signal }, () => controller.abort(), "AbortError");
+}, 15_000);
+
+test("shell-backed package subprocesses kill descendants on timeout and cancellation", async () => {
+	const runStubbornShellChild = async (options: CommandOptions, abort?: () => void, errorName?: string) => {
+		const directory = mkdtempSync(join(tmpdir(), "pi-tmux-package-shell-child-"));
+		const pidFile = join(directory, "pid");
+		const script = join(directory, "stubborn-child.cjs");
+		writeFileSync(script, [
+			"process.on('SIGTERM', () => {});",
+			`require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));`,
+			"setInterval(() => {}, 1000);",
+		].join(" "));
+		let pid: number | undefined;
+		let watchdog: ReturnType<typeof setTimeout> | undefined;
+		try {
+			const commandOutcome = runCommand("node", [script], { ...options, shell: true }).then(
+				() => ({ settled: true as const, error: undefined }),
+				(error: unknown) => ({ settled: true as const, error }),
+			);
+			pid = await waitForChild(pidFile);
+			abort?.();
+			const result = await Promise.race([
+				commandOutcome,
+				new Promise<{ settled: false }>((resolve) => {
+					watchdog = setTimeout(() => resolve({ settled: false }), 4_000);
+				}),
+			]);
+			if (watchdog) clearTimeout(watchdog);
+			if (!result.settled) {
+				try { process.kill(pid, "SIGKILL"); } catch { /* The child may exit as the watchdog fires. */ }
+				await commandOutcome;
+			}
+			expect(result.settled).toBe(true);
+			if (result.settled) {
+				expect(result.error).toBeDefined();
+				if (errorName) expect(result.error).toMatchObject({ name: errorName });
+			}
+			expect(await childHasExited(pid)).toBe(true);
+		} finally {
+			if (watchdog) clearTimeout(watchdog);
+			if (pid) {
+				try { process.kill(pid, "SIGKILL"); } catch { /* The child may already be gone. */ }
+			}
+			cleanupPackageDirectory(directory);
+		}
+	};
+
+	const controller = new AbortController();
+	await runStubbornShellChild({ timeoutMs: 2_500 }, undefined, "Error");
+	await runStubbornShellChild({ signal: controller.signal }, () => controller.abort(), "AbortError");
 }, 15_000);
 
 // Packing, installing in Pi, and importing the entrypoint can exceed Bun's default timeout on slower CI runners.
