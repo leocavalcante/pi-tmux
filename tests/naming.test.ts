@@ -339,6 +339,40 @@ test("variable-length edge matches reject prose words but retain token-like cont
 	}
 });
 
+test("letters-only PascalCase continuations past a prompt edge are not token evidence (accepted boundary)", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptAtPrefixEdge = (value: string) => {
+		const tokenStart = prefixLength - value.indexOf("\t") - 1;
+		return `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
+	};
+	const promptAtSuffixEdge = (value: string) => {
+		const promptLength = MAX_PROMPT_LENGTH + 100;
+		const suffixStart = promptLength - Math.floor(retainedLength / 2);
+		const tokenStart = suffixStart - value.indexOf("\t");
+		const prefix = `${"x".repeat(tokenStart - 1)} `;
+		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+	};
+
+	// Accepted boundary of the prose rule: a letters-only continuation in PascalCase form is prose,
+	// so it does not complete a variable-length token. Real provider keys carry digits, underscores,
+	// or hyphens, so they stay screened (see the control below).
+	const letterOnlyContinuation = `re_${"A".repeat(31)}\tAbCdEfGhIjKlMnOpQrStUvWx`;
+	for (const prompt of [promptAtPrefixEdge(letterOnlyContinuation), promptAtSuffixEdge(letterOnlyContinuation)]) {
+		const letterContext = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(letterContext.text)).toBe(false);
+		expect(letterContext.hasSensitiveBoundary()).toBe(false);
+	}
+
+	const digitContinuation = `re_${"A".repeat(31)}\tAbCdEfGhIjKlMnOpQrStUvWx9`;
+	for (const prompt of [promptAtPrefixEdge(digitContinuation), promptAtSuffixEdge(digitContinuation)]) {
+		const digitContext = buildNamingRequestContext([], prompt);
+		expect(hasSensitiveNamingContext(digitContext.text)).toBe(false);
+		expect(digitContext.hasSensitiveBoundary()).toBe(true);
+	}
+});
+
 test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
