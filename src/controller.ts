@@ -31,6 +31,7 @@ import {
 	SESSION_TITLE_MARKED_OPTION,
 	SESSION_TITLE_MARKED_VALUE_FORMAT,
 	SHARED_WINDOW_TITLE_FORMAT,
+	TMUX_COMMAND_SEPARATOR,
 	STATUS_SNAPSHOT_FORMAT,
 	targetDisappeared,
 	WAITING_OPTION,
@@ -262,14 +263,14 @@ export function createController(tmux: RunTmux) {
 	const clearSessionBaseTracking = async (target: string, server: string | undefined, signal: AbortSignal) => {
 		await writeOnServer(tmux, server, [
 			"set-option", "-q", "-u", "-t", target, SESSION_BASE_NAME_OPTION,
-			";", "set-option", "-q", "-u", "-t", target, SESSION_TITLE_MARKED_OPTION,
+			TMUX_COMMAND_SEPARATOR, "set-option", "-q", "-u", "-t", target, SESSION_TITLE_MARKED_OPTION,
 		], signal);
 	};
 	const clearWindowBaseTracking = async (target: string, server: string | undefined, signal: AbortSignal) => {
 		await writeOnServer(tmux, server, [
 			"set-option", "-q", "-u", "-w", "-t", target, WINDOW_BASE_NAME_OPTION,
-			";", "set-option", "-q", "-u", "-w", "-t", target, WINDOW_TITLE_MARKED_OPTION,
-			";", "set-option", "-q", "-u", "-w", "-t", target, WINDOW_TITLE_LITERAL_PREFIX_OPTION,
+			TMUX_COMMAND_SEPARATOR, "set-option", "-q", "-u", "-w", "-t", target, WINDOW_TITLE_MARKED_OPTION,
+			TMUX_COMMAND_SEPARATOR, "set-option", "-q", "-u", "-w", "-t", target, WINDOW_TITLE_LITERAL_PREFIX_OPTION,
 		], signal);
 	};
 
@@ -361,7 +362,7 @@ export function createController(tmux: RunTmux) {
 				} else if (trackedSessions.has(session)) {
 					await writeOnServer(tmux, server, [
 						"set-option", "-F", "-t", session, SESSION_BASE_NAME_OPTION, SESSION_BASE_NAME_UPDATE_FORMAT,
-						";", "set-option", "-t", session, SESSION_TITLE_MARKED_OPTION, "transition",
+						TMUX_COMMAND_SEPARATOR, "set-option", "-t", session, SESSION_TITLE_MARKED_OPTION, "transition",
 					], signal);
 					// Keep rename-session as its own command for existing RunTmux wrappers
 					// that identify former-location repairs by the top-level command.
@@ -417,26 +418,26 @@ export function createController(tmux: RunTmux) {
 				if (current.sessionNameMayNotRoundTrip) {
 					await writeOnServer(tmux, current.server ?? lastLocation?.server, [
 						"set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
-						";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
-						";", "set-option", "-q", "-u", "-t", pane, SESSION_BASE_NAME_OPTION,
-						";", "set-option", "-q", "-u", "-t", pane, SESSION_TITLE_MARKED_OPTION,
+						TMUX_COMMAND_SEPARATOR, "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
+						TMUX_COMMAND_SEPARATOR, "set-option", "-q", "-u", "-t", pane, SESSION_BASE_NAME_OPTION,
+						TMUX_COMMAND_SEPARATOR, "set-option", "-q", "-u", "-t", pane, SESSION_TITLE_MARKED_OPTION,
 					], signal);
 					warnOnce(ctx, "A custom tmux name contains characters tmux may not round-trip safely; one or more waiting markers were skipped.");
 				} else if (current.sessionMetadataAvailable || trackedSessions.has(current.session)) {
 					trackedSessions.add(current.session);
 					await writeOnServer(tmux, current.server ?? lastLocation?.server, [
 						"set-option", "-F", "-t", pane, SESSION_BASE_NAME_OPTION, SESSION_BASE_NAME_UPDATE_FORMAT,
-						";", "set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
-						";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
-						";", "set-option", "-t", pane, SESSION_TITLE_MARKED_OPTION, "transition",
-						";", "rename-session", "-t", pane, SESSION_BASE_NAME_TITLE_FORMAT,
-						";", "set-option", "-F", "-t", pane, SESSION_TITLE_MARKED_OPTION, SESSION_TITLE_MARKED_VALUE_FORMAT,
+						TMUX_COMMAND_SEPARATOR, "set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
+						TMUX_COMMAND_SEPARATOR, "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
+						TMUX_COMMAND_SEPARATOR, "set-option", "-t", pane, SESSION_TITLE_MARKED_OPTION, "transition",
+						TMUX_COMMAND_SEPARATOR, "rename-session", "-t", pane, SESSION_BASE_NAME_TITLE_FORMAT,
+						TMUX_COMMAND_SEPARATOR, "set-option", "-F", "-t", pane, SESSION_TITLE_MARKED_OPTION, SESSION_TITLE_MARKED_VALUE_FORMAT,
 					], signal);
 				} else {
 					await writeOnServer(tmux, current.server ?? lastLocation?.server, [
 						"set-option", "-p", "-t", pane, WAITING_OPTION, waiting ? "1" : "0",
-						";", "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
-						";", "rename-session", "-t", pane, SESSION_TITLE_FORMAT,
+						TMUX_COMMAND_SEPARATOR, "set-option", "-p", "-t", pane, ACTIVE_OPTION, active ? "1" : "0",
+						TMUX_COMMAND_SEPARATOR, "rename-session", "-t", pane, SESSION_TITLE_FORMAT,
 					], signal);
 				}
 				if (!isCurrent()) return;
@@ -562,7 +563,7 @@ export function createController(tmux: RunTmux) {
 			if (active && (windowWaiting || currentTitle.startsWith(READY_PREFIX))) {
 				await writeOnServer(tmux, current.server ?? lastLocation?.server, [
 					"set-option", "-w", "-t", pane, WINDOW_BASE_NAME_OPTION, taskTitle,
-					";", "set-option", "-w", "-t", pane, WINDOW_TITLE_MARKED_OPTION, "transition",
+					TMUX_COMMAND_SEPARATOR, "set-option", "-w", "-t", pane, WINDOW_TITLE_MARKED_OPTION, "transition",
 				], signal);
 				if (!isCurrent()) return;
 			}
