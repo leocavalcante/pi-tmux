@@ -2289,6 +2289,66 @@ test("boundary scans preserve minimum lengths for other supported token formats"
 	}
 });
 
+test("whitespace-free token boundaries do not extend short near-misses with prose", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixBoundary = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixBoundary = promptLength - Math.floor(retainedLength / 2);
+	const tokens = [
+		`csk_${"B".repeat(48)}`,
+		`jina_${"T".repeat(60)}`,
+		`lin_api_${"a".repeat(40)}`,
+		`pat${"A".repeat(14)}.${"a".repeat(64)}`,
+		`${"a".repeat(75)}AZDO${"a".repeat(5)}`,
+		`dop_v1_${"a".repeat(64)}`,
+		`pul-${"a".repeat(40)}`,
+		`tskey-${"A".repeat(16)}`,
+		`sq0atp-${"A".repeat(22)}`,
+		`${"T".repeat(14)}.atlasv1.${"a".repeat(60)}`,
+		`sgp_${"a".repeat(40)}`,
+		`dapi${"a".repeat(32)}`,
+		`dckr_pat_${"A".repeat(27)}`,
+		`dckr_oat_${"B".repeat(32)}`,
+	];
+	const makePrompt = (token: string, tokenStart: number) => {
+		const prefix = `${"x".repeat(tokenStart - 1)} `;
+		const prompt = `${prefix}${token} a ${"z".repeat(promptLength - prefix.length - token.length - 3)}`;
+		expect(prompt).toHaveLength(promptLength);
+		return prompt;
+	};
+
+	for (const token of tokens) {
+		const nearMiss = token.slice(0, -1);
+		const nearMissStarts = [prefixBoundary - nearMiss.length - 1, suffixBoundary - nearMiss.length];
+		for (const tokenStart of nearMissStarts) {
+			const context = buildNamingRequestContext([], makePrompt(nearMiss, tokenStart));
+			expect(hasSensitiveNamingContext(context.text)).toBe(false);
+			expect(context.hasSensitiveBoundary()).toBe(false);
+		}
+
+		const controlObfuscated = `${token.slice(0, 5)}\u200b${token.slice(5)}`;
+		for (const tokenStart of [prefixBoundary - 10, suffixBoundary - 10]) {
+			expect(buildNamingRequestContext([], makePrompt(token, tokenStart)).hasSensitiveBoundary()).toBe(true);
+			expect(buildNamingRequestContext([], makePrompt(controlObfuscated, tokenStart)).hasSensitiveBoundary()).toBe(true);
+		}
+
+		const splitAt = Math.floor(token.length / 2);
+		const whitespaceSplit = `${token.slice(0, splitAt)} ${token.slice(splitAt)}`;
+		expect(hasSensitiveNamingContext(whitespaceSplit)).toBe(true);
+		expect(hasSensitiveOutput(whitespaceSplit)).toBe(true);
+	}
+
+	const nearMiss = tokens[0]!.slice(0, -1);
+	const allowed = fixture([Promise.resolve(response("inspect build failures"))]);
+	const allowedFind = spyOn(allowed.ctx.modelRegistry, "find");
+	allowed.input(makePrompt(nearMiss, prefixBoundary - nearMiss.length - 1));
+	await settle();
+	expect(allowedFind).toHaveBeenCalled();
+	expect(allowed.requests).toHaveLength(1);
+	expect(allowed.warnings).toEqual([]);
+});
+
 test("Azure SAS signatures crossing either retained prompt boundary skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
