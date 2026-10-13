@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { childHasExited, waitForChild } from "./tmux-test-utils.ts";
 
 const COMMAND_TIMEOUT_MS = 30_000;
 const PUBLIC_RUNTIME_EXPORTS = [
@@ -52,7 +53,8 @@ function runCommand(file: string, args: string[], options: CommandOptions = {}):
 			maxBuffer: options.maxBuffer ?? 4 * 1024 * 1024,
 			shell: options.shell,
 			timeout: options.timeoutMs ?? COMMAND_TIMEOUT_MS,
-			killSignal: "SIGTERM",
+			// These are disposable test subprocesses; don't leave a child alive when it handles SIGTERM.
+			killSignal: "SIGKILL",
 			signal: options.signal,
 		}, (error, stdout) => {
 			if (error) reject(error);
@@ -92,27 +94,56 @@ test("package fixture cleanup does not mask the original failure", () => {
 	expect(observed).toBe(failure);
 });
 
-test("package subprocesses are terminated on timeout and cancellation", async () => {
-	const args = ["-e", "setInterval(() => {}, 1000)"];
-	let timedOut: unknown;
-	try {
-		await runCommand(process.execPath, args, { timeoutMs: 50 });
-	} catch (error) {
-		timedOut = error;
-	}
-	expect(timedOut).toBeDefined();
+test("package subprocesses are force-killed on timeout and cancellation", async () => {
+	const nodeExecutable = Bun.which("node");
+	if (!nodeExecutable) throw new Error("Node.js is required for subprocess cancellation coverage");
+	const runStubbornChild = async (options: CommandOptions, abort?: () => void, errorName?: string) => {
+		const directory = mkdtempSync(join(tmpdir(), "pi-tmux-package-child-"));
+		const pidFile = join(directory, "pid");
+		const args = ["-e", [
+			"process.on('SIGTERM', () => {});",
+			`require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));`,
+			"setInterval(() => {}, 1000);",
+		].join(" ")];
+		let pid: number | undefined;
+		let watchdog: ReturnType<typeof setTimeout> | undefined;
+		try {
+			const commandOutcome = runCommand(nodeExecutable, args, options).then(
+				() => ({ settled: true as const, error: undefined }),
+				(error: unknown) => ({ settled: true as const, error }),
+			);
+			pid = await waitForChild(pidFile);
+			abort?.();
+			const result = await Promise.race([
+				commandOutcome,
+				new Promise<{ settled: false }>((resolve) => {
+					watchdog = setTimeout(() => resolve({ settled: false }), 4_000);
+				}),
+			]);
+			if (watchdog) clearTimeout(watchdog);
+			if (!result.settled) {
+				try { process.kill(pid, "SIGKILL"); } catch { /* The child may exit as the watchdog fires. */ }
+				await commandOutcome;
+			}
+			expect(result.settled).toBe(true);
+			if (result.settled) {
+				expect(result.error).toBeDefined();
+				if (errorName) expect(result.error).toMatchObject({ name: errorName });
+			}
+			expect(await childHasExited(pid)).toBe(true);
+		} finally {
+			if (watchdog) clearTimeout(watchdog);
+			if (pid) {
+				try { process.kill(pid, "SIGKILL"); } catch { /* The child may already be gone. */ }
+			}
+			cleanupPackageDirectory(directory);
+		}
+	};
 
 	const controller = new AbortController();
-	const cancelled = runCommand(process.execPath, args, { signal: controller.signal });
-	controller.abort();
-	let cancellation: unknown;
-	try {
-		await cancelled;
-	} catch (error) {
-		cancellation = error;
-	}
-	expect((cancellation as { name?: unknown } | undefined)?.name).toBe("AbortError");
-});
+	await runStubbornChild({ timeoutMs: 2_500 }, undefined, "Error");
+	await runStubbornChild({ signal: controller.signal }, () => controller.abort(), "AbortError");
+}, 15_000);
 
 // Packing, installing in Pi, and importing the entrypoint can exceed Bun's default timeout on slower CI runners.
 test("the packed Pi extension installs through the CLI and runs its status-only lifecycle", async () => {
