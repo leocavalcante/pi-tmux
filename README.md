@@ -49,17 +49,16 @@ the minimum supported Pi 1.1.0 peer version. The package
 declares Node.js 22.19 or newer; the Pi extension API peer range is `^1.1.0`.
 Pi supplies the runtime dependencies, with no build step.
 
-The npm package has not been published yet, so install from GitHub for now:
-
-```sh
-pi install git:github.com/leocavalcante/pi-tmux
-```
-
-After the npm bootstrap publish is complete, npm installation will also be
-available:
+The npm package is available:
 
 ```sh
 pi install npm:@leocavalcante/pi-tmux
+```
+
+To install the current GitHub source instead:
+
+```sh
+pi install git:github.com/leocavalcante/pi-tmux
 ```
 
 Run `/reload` in Pi after installation. If you previously used the local
@@ -599,21 +598,21 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, checks, tests, and
 
 ## Publishing
 
-GitHub Actions tests pushes to `main` and pull requests. Publishing a stable GitHub
-release tagged `v<package.json version>`, such as `v0.1.0`, runs the same test
-matrix before publishing `@leocavalcante/pi-tmux` to npm with provenance.
-Prereleases are not published. Bump `package.json` and `package-lock.json`
-together before each new release. npm versions cannot be overwritten.
+GitHub Actions tests pushes to `main` and pull requests. Publishing a stable
+GitHub release tagged `v<package.json version>`, such as `v0.1.1`, runs the same
+test matrix before publishing `@leocavalcante/pi-tmux` to npm with provenance.
+Prereleases are not published, and npm versions cannot be overwritten.
 
 The publishing workflow uses npm Trusted Publishing with GitHub OIDC. It does
 not use an npm token or an Actions publishing secret.
 
 npm requires the package to exist before configuring a trusted publisher.
-Bootstrap version `0.1.0` once from a clean checkout exactly at `origin/main`;
-this manual publish bypasses the workflow's main-branch check. Verify the
-checkout and version before logging in, then use interactive npm login and 2FA
-without
-creating a CI token:
+Bootstrap version `0.1.0` was published manually once, without provenance.
+Do not repeat this bootstrap publish; the commands below
+are retained as historical setup reference. The original manual publish
+bypassed the workflow's main-branch check. Verify the checkout and version
+before logging in, then use interactive npm login and 2FA without creating a CI
+token:
 
 ```sh
 git fetch origin
@@ -635,10 +634,11 @@ workflow filename `publish.yml`. Leave the environment name blank and allow
 `npm publish`. The workflow must already exist on GitHub.
 
 After configuring trust, select "Require two-factor authentication and disallow
-tokens" in npm's publishing access settings. Bump to a new version, such as
-`0.1.1`, before publishing a GitHub release. Do not run the workflow for the
-already-published bootstrap version. Later releases publish through OIDC with
-provenance. See [npm's trusted publishing guide](https://docs.npmjs.com/trusted-publishers/)
+tokens" in npm's publishing access settings. Before each stable release, bump
+`package.json` and `package-lock.json` to a new, unpublished version, then
+publish a matching GitHub release tag. Do not run the workflow for the
+previously published bootstrap version. Later releases publish through OIDC
+with provenance. See [npm's trusted publishing guide](https://docs.npmjs.com/trusted-publishers/)
 and the [package-existence prerequisite](https://docs.npmjs.com/cli/v11/commands/npm-trust/#prerequisites).
 
 ## License
