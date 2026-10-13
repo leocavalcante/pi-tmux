@@ -3883,9 +3883,11 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 					const password = decodeNpmPassword(encoded);
 					if (password === undefined || PASSWORD_PLACEHOLDER_PATTERN.test(password)) continue;
 				}
-				// Direct boundary patterns also allow Cc/Cf controls; tabs and newlines
-				// are Cc, but edge whitespace must not complete an underlength token.
-				if (WHITESPACE_FREE_TOKEN_PROMPT_EDGE_PROSE_PATTERNS.includes(sourcePattern)
+				// Direct boundary patterns allow Cc/Cf controls; tabs and newlines are Cc.
+				// Neither whitespace-free formats nor reproduced edge-sensitive patterns
+				// can use outer-edge whitespace to complete an underlength token.
+				if ((WHITESPACE_FREE_TOKEN_BOUNDARY_PATTERNS.includes(sourcePattern)
+					|| WHITESPACE_FREE_TOKEN_PROMPT_EDGE_PROSE_PATTERNS.includes(sourcePattern))
 					&& hasWhitespaceAtRetainedEdge(tokenStart, tokenEnd)) continue;
 				return true;
 			}
