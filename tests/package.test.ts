@@ -147,6 +147,10 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 		expect(manifest.keywords).toContain("pi-extension");
 		expect(manifest.keywords).toContain("coding-agent");
 		expect(manifest.peerDependencies?.["@earendil-works/pi-coding-agent"]).toBe("^1.1.0");
+		const packedReadme = await readPackedMember(archive, "package/README.md");
+		expect(packedReadme).toContain("The npm package is available:");
+		expect(packedReadme).toContain("pi install npm:@leocavalcante/pi-tmux");
+		expect(packedReadme).not.toContain("The npm package has not been published yet");
 
 		// Extract only expected, fixed module paths rather than allowing archive
 		// members or manifest paths to escape this temporary directory.
