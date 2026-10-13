@@ -114,8 +114,8 @@ test("package subprocesses are terminated on timeout and cancellation", async ()
 	expect((cancellation as { name?: unknown } | undefined)?.name).toBe("AbortError");
 });
 
-// Packing, loading in Pi, and importing the entrypoint can exceed Bun's default timeout on slower CI runners.
-test("the packed Pi extension loads in the CLI and runs its status-only lifecycle", async () => {
+// Packing, installing in Pi, and importing the entrypoint can exceed Bun's default timeout on slower CI runners.
+test("the packed Pi extension installs through the CLI and runs its status-only lifecycle", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-package-"));
 	const originalPane = process.env.TMUX_PANE;
 	const originalModel = process.env.PI_TMUX_MODEL;
@@ -201,19 +201,30 @@ test("the packed Pi extension loads in the CLI and runs its status-only lifecycl
 			piEnvironment.APPDATA = join(homeDirectory, "AppData", "Roaming");
 			piEnvironment.LOCALAPPDATA = join(homeDirectory, "AppData", "Local");
 		}
+		execFileSync(process.execPath, [
+			join(piSdkDirectory, piBin),
+			"install",
+			packageDirectory,
+			"--local",
+			"--approve",
+		], {
+			cwd: projectDirectory,
+			env: piEnvironment,
+			encoding: "utf8",
+			timeout: COMMAND_TIMEOUT_MS,
+		});
 		const piOutput = execFileSync(process.execPath, [
 			join(piSdkDirectory, piBin),
+			"--approve",
 			"--mode", "rpc",
 			"--no-session",
 			"--no-mcp",
-			"--no-extensions",
 			"--no-context-files",
 			"--no-skills",
 			"--no-prompt-templates",
 			"--no-themes",
 			"--no-tools",
 			"--offline",
-			"--extension", packedEntrypoint,
 		], {
 			cwd: projectDirectory,
 			env: piEnvironment,
