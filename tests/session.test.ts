@@ -866,6 +866,7 @@ test.skipIf(!hasTmux)("server-guarded writes preserve literal dollar signs in co
 			"synthetic $pi_tmux_literal",
 			String.raw`synthetic \$pi_tmux_literal`,
 			'synthetic "$pi_tmux_literal"',
+			"synthetic 'quoted' $pi_tmux_literal",
 		];
 		for (const [index, syntheticValue] of syntheticValues.entries()) {
 			const option = `@pi-tmux-test-dollar-${index}`;

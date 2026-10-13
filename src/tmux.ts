@@ -194,8 +194,10 @@ runTmux.supportsServerPidGuard = true;
 // on the server that supplied the preceding lookup. A client-side check alone
 // cannot protect reused numeric targets if tmux restarts before the next call.
 function quoteTmuxCommandArgument(value: string): string {
-	// tmux expands dollar variables inside quoted command strings as well.
-	return `"${value.replace(/\\/g, "\\\\").replace(/(["$])/g, "\\$1")}"`;
+	// tmux expands dollar variables inside double-quoted command strings. Single
+	// quotes suppress expansion across supported tmux versions; splice a literal
+	// apostrophe through a double-quoted segment when one is present.
+	return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 
 function tmuxCommandString(args: string[]): string {

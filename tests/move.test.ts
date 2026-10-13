@@ -30,16 +30,37 @@ function parseTmuxCommand(command: string): string[] {
 		while (/\s/.test(command[index] ?? "")) index++;
 		if (index >= command.length) break;
 		if (command[index] === ";") { args.push(";"); index++; continue; }
-		expect(command[index]).toBe('"');
-		index++;
+
 		let value = "";
-		while (index < command.length && command[index] !== '"') {
-			if (command[index] === "\\") index++;
-			value += command[index++];
+		let quote: "'" | '"' | undefined;
+		let started = false;
+		while (index < command.length) {
+			const character = command[index];
+			if (!quote && (/\s/.test(character) || character === ";")) break;
+			if (character === "\\" && quote !== "'") {
+				index++;
+				if (index < command.length) value += command[index++];
+				started = true;
+				continue;
+			}
+			if (character === "'" && quote !== '"') {
+				quote = quote === "'" ? undefined : "'";
+				started = true;
+				index++;
+				continue;
+			}
+			if (character === '"' && quote !== "'") {
+				quote = quote === '"' ? undefined : '"';
+				started = true;
+				index++;
+				continue;
+			}
+			value += character;
+			started = true;
+			index++;
 		}
-		expect(command[index]).toBe('"');
-		index++;
-		args.push(value);
+		if (started) args.push(value);
+		if (command[index] === ";") { args.push(";"); index++; }
 	}
 	return args;
 }
