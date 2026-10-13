@@ -62,6 +62,36 @@ jobs:
       - run: npm test
       - run: npm pack --dry-run --ignore-scripts
 
+  pi-1-1:
+    name: Pi 1.1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.19.0
+          cache: npm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - name: Ensure tmux 3.4 integration tests run
+        run: |
+          command -v tmux || { sudo apt-get update && sudo apt-get install -y tmux; }
+          tmux -V | grep -Fx "tmux 3.4"
+      - run: npm ci --ignore-scripts
+      - name: Install minimum supported Pi SDK
+        run: npm install --no-save --package-lock=false --force --ignore-scripts @earendil-works/pi-coding-agent@1.1.0 @earendil-works/pi-ai@1.1.0
+      - name: Verify minimum supported Pi SDK
+        run: |
+          test "$(node -p 'require("./node_modules/@earendil-works/pi-coding-agent/package.json").version')" = "1.1.0"
+          test "$(node -p 'require("./node_modules/@earendil-works/pi-ai/package.json").version')" = "1.1.0"
+      - run: npm run check
+      - run: npm run check:tests
+      - run: npm test
+
   tmux-3-7:
     name: tmux 3.7c
     runs-on: ubuntu-24.04
