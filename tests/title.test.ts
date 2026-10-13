@@ -2394,6 +2394,46 @@ test("provider API tokens crossing prompt truncation skip model lookup", async (
 	}
 });
 
+test("Resend boundary checks preserve minimum token lengths at either prompt edge", async () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptLength = 3_000;
+	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+	const apiKey = `re_${"A1b2".repeat(7)}_C3d4`;
+	const nearMiss = `re_${"A1b2".repeat(7)}_C3`;
+	const tokenStarts = [prefixLength - 10, suffixStart - 10];
+	expect(hasSensitiveNamingContext(`${apiKey.slice(0, 16)} ${apiKey.slice(16)}`)).toBe(true);
+	const makePrompt = (token: string, tokenStart: number) => {
+		const prefix = `${"x".repeat(tokenStart - 1)} `;
+		const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+		expect(prompt).toHaveLength(promptLength);
+		return prompt;
+	};
+
+	for (const tokenStart of tokenStarts) {
+		const blocked = fixture();
+		const find = spyOn(blocked.ctx.modelRegistry, "find");
+		blocked.input(makePrompt(apiKey, tokenStart));
+		await settle();
+		expect(find).not.toHaveBeenCalled();
+		expect(blocked.requests).toHaveLength(0);
+		expect(blocked.warnings).toEqual([
+			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+		]);
+		expect(blocked.warnings.join(" ")).not.toContain(apiKey);
+
+		const allowed = fixture([Promise.resolve(response("review email delivery"))]);
+		const allowedFind = spyOn(allowed.ctx.modelRegistry, "find");
+		allowed.input(makePrompt(nearMiss, tokenStart));
+		await settle();
+		expect(allowedFind).toHaveBeenCalled();
+		expect(allowed.requests).toHaveLength(1);
+		expect(allowed.state.title).toBe("review email delivery");
+		expect(allowed.warnings).toEqual([]);
+	}
+});
+
 test("webhook and Discord auth credentials crossing prompt truncation skip model lookup", async () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;

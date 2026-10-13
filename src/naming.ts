@@ -3654,7 +3654,9 @@ const WHITESPACE_TOLERANT_BOUNDARY_PATTERNS = SENSITIVE_BOUNDARY_PATTERNS
 		&& pattern !== HTTP_SIGNATURE_AUTHORIZATION_BOUNDARY_PATTERN
 		&& pattern !== HTTP_INTEGRATED_AUTH_HEADER_BOUNDARY_PATTERN
 		&& pattern !== SET_COOKIE_SESSION_CREDENTIAL_BOUNDARY_PATTERN
-		&& pattern !== GOOGLE_DRIVE_RESOURCE_KEYS_HEADER_BOUNDARY_PATTERN)
+		&& pattern !== GOOGLE_DRIVE_RESOURCE_KEYS_HEADER_BOUNDARY_PATTERN
+		// A URL-safe Resend body cannot contain whitespace; its spaced variant can merge a short near-miss with prose.
+		&& pattern !== RESEND_API_KEY_BOUNDARY_PATTERN)
 	.flatMap((pattern) => {
 		const source = pattern.source.replaceAll(
 			String.raw`[\p{Cc}\p{Cf}]*`, String.raw`[\p{Cc}\p{Cf}\s]{0,2}`,
