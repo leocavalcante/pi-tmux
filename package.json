@@ -1,6 +1,6 @@
 {
   "name": "@leocavalcante/pi-tmux",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Name your tmux window from your current Pi task and active session history with a short, lowercase AI summary.",
   "type": "module",
   "license": "MIT",
