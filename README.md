@@ -610,7 +610,8 @@ not use an npm token or an Actions publishing secret.
 npm requires the package to exist before configuring a trusted publisher.
 Bootstrap version `0.1.0` once from a clean checkout exactly at `origin/main`;
 this manual publish bypasses the workflow's main-branch check. Verify the
-checkout before logging in, then use interactive npm login and 2FA without
+checkout and version before logging in, then use interactive npm login and 2FA
+without
 creating a CI token:
 
 ```sh
@@ -618,6 +619,7 @@ git fetch origin
 test "$(git branch --show-current)" = "main"
 test -z "$(git status --porcelain)"
 test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+test "$(npm pkg get version)" = '"0.1.0"'
 npm login
 npm ci --ignore-scripts
 npm audit --audit-level=high
