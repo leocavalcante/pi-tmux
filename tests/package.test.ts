@@ -141,6 +141,7 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 		const entrypoint: unknown = Array.isArray(entrypoints) ? entrypoints[0] : undefined;
 		expect(entrypoint).toBe("./index.ts");
 		if (entrypoint !== "./index.ts") throw new Error("Unexpected packed Pi entrypoint");
+		expect(manifest.repository).toEqual({ type: "git", url: "git+https://github.com/leocavalcante/pi-tmux.git" });
 		expect(manifest.files).toContain(entrypoint.replace(/^\.\//, ""));
 		expect(manifest.files).toContain("src/");
 		expect(manifest.keywords).toContain("pi-extension");
