@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -114,8 +114,8 @@ test("package subprocesses are terminated on timeout and cancellation", async ()
 	expect((cancellation as { name?: unknown } | undefined)?.name).toBe("AbortError");
 });
 
-// Packing and importing the entrypoint can exceed Bun's default timeout on slower CI runners.
-test("the packed Pi entrypoint imports without runtime SDK dependencies and runs its status-only lifecycle", async () => {
+// Packing, loading in Pi, and importing the entrypoint can exceed Bun's default timeout on slower CI runners.
+test("the packed Pi extension loads in the CLI and runs its status-only lifecycle", async () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-tmux-package-"));
 	const originalPane = process.env.TMUX_PANE;
 	const originalModel = process.env.PI_TMUX_MODEL;
@@ -170,6 +170,70 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 			writeFileSync(packedPath, await readPackedMember(archive, `package/${member}`));
 		}
 		const packedEntrypoint = join(packageDirectory, "index.ts");
+		const piSdkDirectory = join(repository, "node_modules", "@earendil-works", "pi-coding-agent");
+		const piManifest = JSON.parse(readFileSync(join(piSdkDirectory, "package.json"), "utf8")) as {
+			bin?: string | Record<string, string>;
+		};
+		const piBin = typeof piManifest.bin === "string" ? piManifest.bin : piManifest.bin?.pi;
+		if (!piBin) throw new Error("The Pi SDK package does not expose its CLI entrypoint");
+		const homeDirectory = join(directory, "home");
+		const projectDirectory = join(directory, "project");
+		mkdirSync(homeDirectory);
+		mkdirSync(projectDirectory);
+		const piEnvironment: NodeJS.ProcessEnv = {
+			PATH: process.env.PATH,
+			HOME: homeDirectory,
+			USERPROFILE: homeDirectory,
+			TMPDIR: directory,
+			TEMP: directory,
+			TMP: directory,
+			TERM: "dumb",
+			PI_OFFLINE: "1",
+			XDG_CONFIG_HOME: join(homeDirectory, ".config"),
+			XDG_CACHE_HOME: join(homeDirectory, ".cache"),
+			XDG_DATA_HOME: join(homeDirectory, ".local", "share"),
+		};
+		if (process.platform === "win32") {
+			for (const key of ["SystemRoot", "WINDIR", "ComSpec", "SystemDrive"] as const) {
+				const value = process.env[key];
+				if (value) piEnvironment[key] = value;
+			}
+			piEnvironment.APPDATA = join(homeDirectory, "AppData", "Roaming");
+			piEnvironment.LOCALAPPDATA = join(homeDirectory, "AppData", "Local");
+		}
+		const piOutput = execFileSync(process.execPath, [
+			join(piSdkDirectory, piBin),
+			"--mode", "rpc",
+			"--no-session",
+			"--no-mcp",
+			"--no-extensions",
+			"--no-context-files",
+			"--no-skills",
+			"--no-prompt-templates",
+			"--no-themes",
+			"--no-tools",
+			"--offline",
+			"--extension", packedEntrypoint,
+		], {
+			cwd: projectDirectory,
+			env: piEnvironment,
+			encoding: "utf8",
+			input: '{"id":"package-smoke","type":"get_commands"}\n',
+			timeout: COMMAND_TIMEOUT_MS,
+		});
+		type RpcRecord = {
+			type?: unknown;
+			id?: unknown;
+			command?: unknown;
+			success?: unknown;
+			data?: { commands?: Array<{ name?: unknown }> };
+		};
+		const rpcRecords = piOutput.split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line) as RpcRecord);
+		const commandResponse = rpcRecords.find((record) =>
+			record.type === "response" && record.command === "get_commands" && record.id === "package-smoke");
+		expect(commandResponse?.success).toBe(true);
+		expect(commandResponse?.data?.commands?.map((command) => command.name)).toContain("tmux-title");
+
 		const source = readFileSync(packedEntrypoint, "utf8");
 		const javascript = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
 		const modulePath = join(packageDirectory, "index.mjs");
@@ -216,4 +280,4 @@ test("the packed Pi entrypoint imports without runtime SDK dependencies and runs
 		else process.env.PI_TMUX_MODEL = originalModel;
 		cleanupPackageDirectory(directory);
 	}
-}, 15_000);
+}, 30_000);
