@@ -3832,10 +3832,15 @@ function hasSensitiveTokenAcrossBoundary({ left, right, retainedSide }: NamingCo
 		) => {
 			const continuation = joined.slice(boundary, tokenEnd).replace(/^[\s\p{Cc}\p{Cf}]+/u, "");
 			const contiguousContinuation = /^[^\s\p{Cc}\p{Cf}]*/u.exec(continuation)?.[0];
-			const minimumLength = hasVariableLengthBoundaryToken(sourcePattern, token)
+			const variableLength = hasVariableLengthBoundaryToken(sourcePattern, token);
+			const minimumLength = variableLength
 				? MIN_VARIABLE_LENGTH_BOUNDARY_TOKEN_CONTINUATION_LENGTH
 				: MIN_FIXED_LENGTH_BOUNDARY_TOKEN_CONTINUATION_LENGTH;
-			return (contiguousContinuation?.length ?? 0) >= minimumLength;
+			const hasTokenLikeContinuationEvidence = !/^\p{Ll}+$/u.test(contiguousContinuation ?? "");
+			// A flexible pattern can absorb any next word; lowercase prose alone
+			// should not provide the extra evidence to join it across an edge.
+			return (contiguousContinuation?.length ?? 0) >= minimumLength
+				&& (!variableLength || hasTokenLikeContinuationEvidence);
 		};
 		const hasNonEdgeSeparatorInRetainedContext = (
 			sourcePattern: RegExp,

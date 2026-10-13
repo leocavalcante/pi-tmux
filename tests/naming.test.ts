@@ -300,6 +300,28 @@ test("preserves exact-length tokens with short continuation at a prompt edge", (
 	expect(context.hasSensitiveBoundary()).toBe(true);
 });
 
+test("variable-length edge matches reject prose words but retain token-like continuation", () => {
+	const marker = "[... middle of prompt omitted ...]";
+	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+	const prefixLength = Math.ceil(retainedLength / 2);
+	const promptAtEdge = (value: string) => {
+		const tokenStart = prefixLength - value.indexOf("\t") - 1;
+		return `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
+	};
+
+	const proseNearMiss = `re_${"A".repeat(31)}\tmisunderstanding`;
+	const proseContext = buildNamingRequestContext([], promptAtEdge(proseNearMiss));
+	expect(hasSensitiveNamingContext(proseContext.text)).toBe(false);
+	expect(proseContext.hasSensitiveBoundary()).toBe(false);
+
+	const variableToken = `re_${"A1_b-".repeat(10)}`;
+	const separatorOffset = 3 + 31;
+	const obfuscatedToken = `${variableToken.slice(0, separatorOffset)}\t${variableToken.slice(separatorOffset)}`;
+	const tokenContext = buildNamingRequestContext([], promptAtEdge(obfuscatedToken));
+	expect(hasSensitiveNamingContext(tokenContext.text)).toBe(false);
+	expect(tokenContext.hasSensitiveBoundary()).toBe(true);
+});
+
 test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", () => {
 	const marker = "[... middle of prompt omitted ...]";
 	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
