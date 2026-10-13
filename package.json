@@ -17,15 +17,17 @@
   "scripts": {
     "check": "tsc -p tsconfig.json",
     "check:tests": "tsc -p tsconfig.test.json",
+    "check:package": "publint",
     "test": "bun test tests/ && npm run test:node",
     "test:node": "node --test tests/tmux-node.mjs",
-    "verify": "npm run check && npm run check:tests && npm audit --audit-level=high && npm test && npm pack --dry-run --ignore-scripts"
+    "verify": "npm run check && npm run check:tests && npm run check:package && npm audit --audit-level=high && npm test && npm pack --dry-run --ignore-scripts"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "1.2.0",
     "@earendil-works/pi-coding-agent": "1.2.0",
     "@types/bun": "^1.4.3",
     "@types/node": "22.20.5",
+    "publint": "0.3.25",
     "typescript": "7.0.2",
     "yaml": "2.9.1"
   },

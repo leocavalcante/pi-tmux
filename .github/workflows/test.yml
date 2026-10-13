@@ -59,6 +59,9 @@ jobs:
         run: npm audit --audit-level=high
       - run: npm run check
       - run: npm run check:tests
+      - name: Validate package metadata
+        if: matrix.node == 22
+        run: npm run check:package
       - run: npm test
       - run: npm pack --dry-run --ignore-scripts
 
