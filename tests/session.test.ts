@@ -34,13 +34,19 @@ const hasRoundTripUnsafeWindowNames = supportsControlCharacterNames("window");
 const hasRoundTripUnsafeSessionNames = supportsControlCharacterNames("session");
 let originalModel: string | undefined;
 let originalIdleTitle: string | undefined;
+const serverIdentityKey = Symbol.for("@leocavalcante/pi-tmux/server-identity");
+let originalServerIdentityDescriptor: PropertyDescriptor | undefined;
 beforeEach(() => {
+	originalServerIdentityDescriptor = Object.getOwnPropertyDescriptor(process, serverIdentityKey);
+	Reflect.deleteProperty(process, serverIdentityKey);
 	originalModel = process.env.PI_TMUX_MODEL;
 	originalIdleTitle = process.env.PI_TMUX_IDLE_TITLE;
 	delete process.env.PI_TMUX_MODEL;
 	delete process.env.PI_TMUX_IDLE_TITLE;
 });
 afterEach(() => {
+	if (originalServerIdentityDescriptor) Object.defineProperty(process, serverIdentityKey, originalServerIdentityDescriptor);
+	else Reflect.deleteProperty(process, serverIdentityKey);
 	if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
 	else process.env.PI_TMUX_MODEL = originalModel;
 	if (originalIdleTitle === undefined) delete process.env.PI_TMUX_IDLE_TITLE;

@@ -20,7 +20,11 @@ import {
 let originalPane: string | undefined;
 let originalModel: string | undefined;
 let originalIdleTitle: string | undefined;
+const serverIdentityKey = Symbol.for("@leocavalcante/pi-tmux/server-identity");
+let originalServerIdentityDescriptor: PropertyDescriptor | undefined;
 beforeEach(() => {
+	originalServerIdentityDescriptor = Object.getOwnPropertyDescriptor(process, serverIdentityKey);
+	Reflect.deleteProperty(process, serverIdentityKey);
 	originalPane = process.env.TMUX_PANE;
 	originalModel = process.env.PI_TMUX_MODEL;
 	originalIdleTitle = process.env.PI_TMUX_IDLE_TITLE;
@@ -29,6 +33,8 @@ beforeEach(() => {
 	delete process.env.PI_TMUX_IDLE_TITLE;
 });
 afterEach(() => {
+	if (originalServerIdentityDescriptor) Object.defineProperty(process, serverIdentityKey, originalServerIdentityDescriptor);
+	else Reflect.deleteProperty(process, serverIdentityKey);
 	if (originalPane === undefined) delete process.env.TMUX_PANE;
 	else process.env.TMUX_PANE = originalPane;
 	if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
@@ -207,9 +213,12 @@ test("automatic server-change warnings stay deduplicated across extension reload
 			ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
 		} as unknown as ExtensionContext;
 		let serverPid = "123";
-		const tmux: RunTmux = async (args) => args[0] === "display-message"
-			? `$0:1:${serverPid}:0\t@2\t0\texisting task`
-			: "";
+		const writes: string[][] = [];
+		const tmux: RunTmux = async (args) => {
+			if (args[0] === "display-message") return `$0:1:${serverPid}:0\t@2\t0\texisting task`;
+			writes.push(args);
+			return "";
+		};
 		const load = () => {
 			const handlers = new Map<string, Function>();
 			piTmux({
@@ -224,16 +233,21 @@ test("automatic server-change warnings stay deduplicated across extension reload
 
 		const firstRuntime = load();
 		await firstRuntime("session_start");
+		const initialWrites = writes.length;
+		expect(initialWrites).toBeGreaterThan(0);
 		serverPid = "124";
 		await firstRuntime("agent_start");
 		const warning = "The tmux server changed; restart Pi to resume title updates.";
 		expect(warnings).toEqual([warning]);
+		expect(writes).toHaveLength(initialWrites);
 
 		await firstRuntime("session_shutdown", "reload");
 		const secondRuntime = load();
 		await secondRuntime("session_start", "reload");
+		expect(writes).toHaveLength(initialWrites);
 		serverPid = "125";
 		await secondRuntime("agent_start");
+		expect(writes).toHaveLength(initialWrites);
 		expect(warnings).toEqual([warning]);
 	} finally {
 		if (previousWarningDescriptor) Object.defineProperty(process, warningKey, previousWarningDescriptor);
@@ -9945,6 +9959,54 @@ test("status detects a changed server, cancels obsolete naming work, and leaves 
 	await settle();
 	expect(f.state.title).toBe("existing task");
 	expect(f.requests).toHaveLength(1);
+});
+
+test("a reloaded controller keeps the old server identity when tmux restarts during reload", async () => {
+	const warningKey = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
+	const previousWarningDescriptor = Object.getOwnPropertyDescriptor(process, warningKey);
+	Reflect.deleteProperty(process, warningKey);
+	try {
+		process.env.PI_TMUX_MODEL = "off";
+		let serverPid = "123";
+		const warnings: string[] = [];
+		const writes: string[][] = [];
+		const ctx = {
+			mode: "tui",
+			ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
+		} as unknown as ExtensionContext;
+		const tmux: RunTmux = async (args) => {
+			if (args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT) {
+				return `$0:1:${serverPid}:0\t@2\t0\texisting task`;
+			}
+			writes.push(args);
+			return "";
+		};
+		const load = () => {
+			const runtimeHandlers = new Map<string, Function>();
+			piTmux({
+				on: (event: string, handler: Function) => runtimeHandlers.set(event, handler),
+				registerCommand: () => {},
+			} as unknown as ExtensionAPI, tmux);
+			return async (event: string, reason = "startup") => {
+				await runtimeHandlers.get(event)!({ type: event, reason }, ctx);
+				await settle();
+			};
+		};
+
+		const firstRuntime = load();
+		await firstRuntime("session_start");
+		await firstRuntime("session_shutdown", "reload");
+		const writesBeforeRestart = writes.length;
+		serverPid = "124";
+		const secondRuntime = load();
+		await secondRuntime("session_start", "reload");
+
+		expect(writes).toHaveLength(writesBeforeRestart);
+		expect(warnings).toEqual(["The tmux server changed; restart Pi to resume title updates."]);
+	} finally {
+		if (previousWarningDescriptor) Object.defineProperty(process, warningKey, previousWarningDescriptor);
+		else Reflect.deleteProperty(process, warningKey);
+	}
 });
 
 test.each(["sync", "set synthetic title"])("%s warns when the tmux server changes after its initial guard", async (command) => {

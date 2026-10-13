@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,6 +9,16 @@ import { STATUS_SNAPSHOT_FORMAT, WINDOW_INFO_INTERNAL_FORMAT } from "../src/tmux
 import { cleanupTmuxFixture, supportsUnixTmux } from "./tmux-support.ts";
 
 const hasTmux = supportsUnixTmux(process.platform, Bun.which("tmux"));
+const serverIdentityKey = Symbol.for("@leocavalcante/pi-tmux/server-identity");
+let originalServerIdentityDescriptor: PropertyDescriptor | undefined;
+beforeEach(() => {
+	originalServerIdentityDescriptor = Object.getOwnPropertyDescriptor(process, serverIdentityKey);
+	Reflect.deleteProperty(process, serverIdentityKey);
+});
+afterEach(() => {
+	if (originalServerIdentityDescriptor) Object.defineProperty(process, serverIdentityKey, originalServerIdentityDescriptor);
+	else Reflect.deleteProperty(process, serverIdentityKey);
+});
 const sessionRenameTarget = (args: string[]) => {
 	const command = args.indexOf("rename-session");
 	return command < 0 ? undefined : args[command + 2];
