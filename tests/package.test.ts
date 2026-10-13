@@ -44,6 +44,15 @@ function needsCommandShell(file: string, platform = process.platform): boolean {
 	return platform === "win32" && file === "npm";
 }
 
+// Publish a complete PID record before waitForChild can observe the path.
+function pidHandoffScript(pidFile: string): string[] {
+	const temporaryFile = `${pidFile}.tmp`;
+	return [
+		`require('node:fs').writeFileSync(${JSON.stringify(temporaryFile)}, String(process.pid));`,
+		`require('node:fs').renameSync(${JSON.stringify(temporaryFile)}, ${JSON.stringify(pidFile)});`,
+	];
+}
+
 function createAbortError(reason: unknown): NodeJS.ErrnoException {
 	const error = new Error("The operation was aborted", { cause: reason }) as NodeJS.ErrnoException;
 	error.name = "AbortError";
@@ -199,7 +208,7 @@ test("package subprocesses are force-killed on timeout and cancellation", async 
 		const pidFile = join(directory, "pid");
 		const args = ["-e", [
 			"process.on('SIGTERM', () => {});",
-			`require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));`,
+			...pidHandoffScript(pidFile),
 			"setInterval(() => {}, 1000);",
 		].join(" ")];
 		let pid: number | undefined;
@@ -249,7 +258,7 @@ test("shell-backed package subprocesses kill descendants on timeout and cancella
 		const script = join(directory, "stubborn-child.cjs");
 		writeFileSync(script, [
 			"process.on('SIGTERM', () => {});",
-			`require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));`,
+			...pidHandoffScript(pidFile),
 			"setInterval(() => {}, 1000);",
 		].join(" "));
 		let pid: number | undefined;
