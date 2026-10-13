@@ -2365,6 +2365,7 @@ test("provider API tokens crossing prompt truncation skip model lookup", async (
 		`sk-svcacct-${"h".repeat(32)}`,
 		`sk-or-v1-${"i".repeat(32)}`,
 		`sk_live_${"j".repeat(24)}`,
+		`re_${"A1b2".repeat(7)}_C3d4`,
 		`rk_test_${"K".repeat(24)}`,
 		`tvly-${"q".repeat(32)}`,
 		`tvly-dev-${"r".repeat(32)}`,
