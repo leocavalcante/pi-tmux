@@ -477,7 +477,8 @@ test("the packed Pi extension installs through the CLI and runs its status-only 
 			registerCommand: () => {},
 		}, tmux);
 		expect([...handlers.keys()]).toEqual([
-			"input", "agent_start", "agent_settled", "session_start", "session_tree", "session_compact", "session_shutdown",
+			"input", "agent_start", "agent_settled", "session_start", "session_tree", "session_before_compact",
+			"session_compact", "session_compact_failed", "session_shutdown",
 		]);
 
 		const context = {
@@ -488,9 +489,13 @@ test("the packed Pi extension installs through the CLI and runs its status-only 
 		};
 		await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, context);
 		await handlers.get("agent_settled")!({ type: "agent_settled" }, context);
+		await handlers.get("session_before_compact")!({ type: "session_before_compact", reason: "manual", willRetry: false }, context);
+		await handlers.get("session_compact")!({ type: "session_compact", reason: "manual" }, context);
+		await handlers.get("session_before_compact")!({ type: "session_before_compact", reason: "manual", willRetry: false }, context);
+		await handlers.get("session_compact_failed")!({ type: "session_compact_failed", reason: "manual", aborted: false }, context);
 		await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "quit" }, context);
 		expect(calls.filter((args) => args[0] === "set-option" && args.includes("@pi-tmux-waiting")).map((args) => args[12]))
-			.toEqual(["0", "1", "0"]);
+			.toEqual(["0", "1", "0", "1", "0", "1", "0"]);
 		expect(calls.some((args) => args[0] === "rename-window" && args[4].includes("zsh"))).toBe(true);
 		expect(warnings).toEqual([]);
 	} finally {

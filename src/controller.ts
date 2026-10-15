@@ -140,6 +140,7 @@ export function createController(tmux: RunTmux) {
 	let candidateTitle: string | undefined;
 	let lastNamingContext: string | undefined;
 	let waiting = false;
+	let waitingBeforeCompaction: boolean | undefined;
 	let active = true;
 	let titleRevision = 0;
 	let titleLifetime = new AbortController();
@@ -593,6 +594,16 @@ export function createController(tmux: RunTmux) {
 		return refreshTitle(ctx, pane, undefined, false, notifyOnServerChange).then(() => {});
 	};
 
+	const setCompacting = (ctx: ExtensionContext, value: boolean) => {
+		if (value) {
+			waitingBeforeCompaction = waiting;
+			return setWaiting(ctx, false);
+		}
+		const restoreWaiting = waitingBeforeCompaction;
+		waitingBeforeCompaction = undefined;
+		if (restoreWaiting !== undefined) return setWaiting(ctx, restoreWaiting);
+	};
+
 	const reset = (
 		ctx: ExtensionContext,
 		title?: string,
@@ -600,6 +611,7 @@ export function createController(tmux: RunTmux) {
 		waitingValue = false,
 		notifyOnServerChange = false,
 	) => {
+		waitingBeforeCompaction = undefined;
 		cancel();
 		titleLifetime.abort();
 		titleLifetime = new AbortController();
@@ -804,6 +816,7 @@ export function createController(tmux: RunTmux) {
 	return {
 		getPane,
 		setWaiting,
+		setCompacting,
 		reset,
 		restoreTitle,
 		requestTitle,

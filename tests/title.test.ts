@@ -8993,6 +8993,43 @@ test("Unicode NEL whitespace is ignored at input and trimmed from naming context
 	expect(context).toBe("user: task\n\nuser: continue");
 });
 
+test.each(["session_compact", "session_compact_failed"])("compaction clears and restores the idle mark after %s", async (finishEvent) => {
+	process.env.PI_TMUX_MODEL = "off";
+	const f = fixture();
+	await f.emit("agent_settled");
+	await settle();
+	expect(f.state.title).toBe("* existing task");
+	expect(f.state.waitingPanes.get("%1")).toBe("1");
+
+	await f.emit("session_before_compact");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.state.waitingPanes.get("%1")).toBe("0");
+
+	await f.emit(finishEvent);
+	await settle();
+	expect(f.state.title).toBe("* existing task");
+	expect(f.state.waitingPanes.get("%1")).toBe("1");
+	expect(f.warnings).toEqual([]);
+});
+
+test("compaction preserves the active status when it started without an idle mark", async () => {
+	process.env.PI_TMUX_MODEL = "off";
+	const f = fixture();
+	await f.emit("agent_start");
+	await settle();
+	await f.emit("session_before_compact");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.state.waitingPanes.get("%1")).toBe("0");
+
+	await f.emit("session_compact");
+	await settle();
+	expect(f.state.title).toBe("existing task");
+	expect(f.state.waitingPanes.get("%1")).toBe("0");
+	expect(f.warnings).toEqual([]);
+});
+
 test("empty projected context cancels stale naming without preventing a later request", async () => {
 	for (const event of ["session_compact", "agent_settled"]) {
 		for (const staleResult of [response("Removed task"), response("Synthetic error", "error")]) {
