@@ -6,6 +6,10 @@ import { delimiter, join } from "node:path";
 
 export type FakeTmuxFiles = { pid: string; cleanExit: string };
 
+function quotePosixShellArgument(value: string): string {
+	return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 export async function withFakeTmux(
 	nodeExecutable: string,
 	script: (files: FakeTmuxFiles) => string[],
@@ -19,28 +23,41 @@ export async function withFakeTmux(
 	const originalNodeOptions = process.env.NODE_OPTIONS;
 	let completed = false;
 	try {
-		// Avoid copying a large Node binary into the temp directory before each fake launch.
-		// Hard links may be unavailable across volumes or on some filesystems, so retain a fallback.
-		try {
-			linkSync(nodeExecutable, executable);
-		} catch {
-			copyFileSync(nodeExecutable, executable);
-			if (process.platform !== "win32") chmodSync(executable, 0o755);
-		}
-		writeFileSync(loader, [
-			`if (require("node:path").basename(process.execPath).toLowerCase() === ${JSON.stringify(process.platform === "win32" ? "tmux.exe" : "tmux")}) {`,
-			"process.argv.splice(1);",
+		const fakeProgram = [
 			`require("node:fs").writeFileSync(${JSON.stringify(files.pid + ".tmp")}, String(process.pid));`,
 			`require("node:fs").renameSync(${JSON.stringify(files.pid + ".tmp")}, ${JSON.stringify(files.pid)});`,
 			...script(files),
-			"}",
 			"",
-		].join("\n"));
+		].join("\n");
+		if (process.platform === "win32") {
+			// Windows needs an executable named tmux.exe; preload the fake program into Node.
+			try {
+				linkSync(nodeExecutable, executable);
+			} catch {
+				copyFileSync(nodeExecutable, executable);
+			}
+			writeFileSync(loader, [
+				`if (require("node:path").basename(process.execPath).toLowerCase() === "tmux.exe") {`,
+				"process.argv.splice(1);",
+				...fakeProgram.split("\n").filter(Boolean),
+				"}",
+				"",
+			].join("\n"));
+			process.env.NODE_OPTIONS = [
+				originalNodeOptions,
+				`--require=${JSON.stringify(loader.replaceAll("\\", "/"))}`,
+			].filter(Boolean).join(" ");
+		} else {
+			// A shell shim keeps Node's executable beside its platform libraries.
+			writeFileSync(loader, fakeProgram);
+			writeFileSync(executable, [
+				"#!/bin/sh",
+				`exec ${quotePosixShellArgument(nodeExecutable)} ${quotePosixShellArgument(loader)} "$@"`,
+				"",
+			].join("\n"));
+			chmodSync(executable, 0o755);
+		}
 		process.env.PATH = `${directory}${delimiter}${originalPath ?? ""}`;
-		process.env.NODE_OPTIONS = [
-			originalNodeOptions,
-			`--require=${JSON.stringify(loader.replaceAll("\\", "/"))}`,
-		].filter(Boolean).join(" ");
 		await action(files);
 		completed = true;
 	} finally {
