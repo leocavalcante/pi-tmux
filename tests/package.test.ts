@@ -44,6 +44,28 @@ function needsCommandShell(file: string, platform = process.platform): boolean {
 	return platform === "win32" && file === "npm";
 }
 
+function npmPackRecord(output: unknown): { filename?: unknown } | undefined {
+	const records = Array.isArray(output)
+		? output
+		: output !== null && typeof output === "object"
+			? Object.values(output)
+			: [];
+	if (records.length !== 1) return undefined;
+	const record = records[0];
+	return record !== null && typeof record === "object" && !Array.isArray(record)
+		? record as { filename?: unknown }
+		: undefined;
+}
+
+test("accepts the npm pack JSON result formats used by npm 11 and 12", () => {
+	const filename = "leocavalcante-pi-tmux-0.1.5.tgz";
+	expect(npmPackRecord([{ filename }])?.filename).toBe(filename);
+	expect(npmPackRecord({ "@leocavalcante/pi-tmux": { filename } })?.filename).toBe(filename);
+	expect(npmPackRecord([])).toBeUndefined();
+	expect(npmPackRecord({})).toBeUndefined();
+	expect(npmPackRecord([{ filename }, { filename }])).toBeUndefined();
+});
+
 // Publish a complete PID record before waitForChild can observe the path.
 function pidHandoffScript(pidFile: string): string[] {
 	const temporaryFile = `${pidFile}.tmp`;
@@ -308,12 +330,12 @@ test("the packed Pi extension installs through the CLI and runs its status-only 
 	const originalModel = process.env.PI_TMUX_MODEL;
 	try {
 		const repository = fileURLToPath(new URL("..", import.meta.url));
-		const packedResults = JSON.parse(await runCommand("npm", ["pack", "--ignore-scripts", "--json"], {
+		const packOutput = JSON.parse(await runCommand("npm", ["pack", "--ignore-scripts", "--json"], {
 			cwd: repository,
 			env: { ...process.env, npm_config_pack_destination: directory },
 			shell: needsCommandShell("npm"),
-		})) as Array<{ filename?: unknown }>;
-		const filename = packedResults[0]?.filename;
+		})) as unknown;
+		const filename = npmPackRecord(packOutput)?.filename;
 		if (typeof filename !== "string" || basename(filename) !== filename || !filename.endsWith(".tgz")) {
 			throw new Error("npm pack returned an invalid archive filename");
 		}
