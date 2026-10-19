@@ -8,6 +8,24 @@ import { runTmux, type RunTmux } from "./tmux.ts";
 const HAS_NON_WHITESPACE = /[^\s\p{White_Space}]/u;
 // Bound trimming and regex captures, leaving room for the command and whitespace.
 const MAX_TITLE_COMMAND_ARGUMENT_LENGTH = MAX_TITLE_INPUT_LENGTH * 2;
+const QUIT_PANE_WAIT_ATTEMPTS = 300;
+
+export function buildQuitPaneWatcherCommand(pane: string, processId: number, serverPid: string): string {
+	if (!/^%\d+$/.test(pane) || !Number.isSafeInteger(processId) || processId <= 0 || !/^\d+$/.test(serverPid)) {
+		throw new Error("Invalid tmux pane identity");
+	}
+	// run-shell expands formats once; double # so its shell passes #{pid} to display-message.
+	return [
+		`pi_pid=${processId}`,
+		`pane='${pane}'`,
+		`server_pid='${serverPid}'`,
+		"attempt=0",
+		`while kill -0 "$pi_pid" 2>/dev/null; do if [ "$attempt" -ge ${QUIT_PANE_WAIT_ATTEMPTS} ]; then exit 0; fi; attempt=$((attempt + 1)); sleep 0.1; done`,
+		`current_server=$(tmux display-message -p -t "$pane" '##{pid}' 2>/dev/null) || exit 0`,
+		`[ "$current_server" = "$server_pid" ] || exit 0`,
+		`tmux kill-pane -t "$pane"`,
+	].join("; ");
+}
 
 export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	const controller = createController(tmux);
@@ -78,6 +96,27 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			}
 			if (command === "auto") controller.resumeAutomaticNaming();
 			controller.refresh(ctx);
+		},
+	});
+
+	pi.registerCommand("quit-pane", {
+		description: "Quit Pi and close the current tmux pane",
+		handler: async (_args, ctx) => {
+			const pane = controller.getPane(ctx);
+			if (!pane) {
+				notifySafely(ctx, "This command requires interactive Pi inside tmux.", "warning");
+				return;
+			}
+			try {
+				const signal = new AbortController().signal;
+				const serverPid = await tmux(["display-message", "-p", "-t", pane, "#{pid}"], signal);
+				if (!/^\d+$/.test(serverPid)) throw new Error("Invalid tmux server identity");
+				await tmux(["run-shell", "-b", buildQuitPaneWatcherCommand(pane, process.pid, serverPid)], signal);
+			} catch {
+				notifySafely(ctx, "Could not prepare to close the current tmux pane; Pi is still running.", "warning");
+				return;
+			}
+			ctx.shutdown();
 		},
 	});
 
