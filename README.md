@@ -15,6 +15,7 @@ prompt. Naming runs in the background and does not delay Pi's answer.
   - [Naming model](#naming-model)
   - [Retry a title](#retry-a-title)
   - [Pin a manual title](#pin-a-manual-title)
+  - [Mark a waiting title as read](#mark-a-waiting-title-as-read)
   - [Inspect title status](#inspect-title-status)
   - [Synchronize without AI](#synchronize-without-ai)
 - [Behavior](#behavior)
@@ -130,8 +131,8 @@ status. The bare command returns without waiting for the model. An empty
 session makes no request. AI naming must be enabled, with no manual pin active.
 
 Type `/tmux-title ` to see argument suggestions in Pi's editor. Completion
-filters `status`, `sync`, `set <name>`, and `auto` as you type. Choosing `set`
-inserts `set ` so you can enter the name, not a literal `<name>` placeholder.
+filters `read`, `status`, `sync`, `set <name>`, and `auto` as you type. Choosing
+`set` inserts `set ` so you can enter the name, not a literal `<name>` placeholder.
 Completion does not read dialogue or task names, make AI or tmux requests,
 or replace text after `set `. Arguments longer than 128 Ki UTF-16 code units are
 rejected with a generic warning; autocomplete returns no suggestions for prefixes
@@ -163,6 +164,12 @@ title stays until a new name succeeds. Pins are in-memory, not saved to Pi
 history. Session replacement, tree navigation, reload, and quit release them.
 A bare `/tmux-title` leaves an active pin alone.
 
+### Mark a waiting title as read
+
+Run `/tmux-title read` to clear this Pi pane's waiting marker without closing
+Pi or requesting a new title. The window loses `* ` when no other Pi pane in it
+is waiting; the session loses `* ` when no Pi pane in any window is waiting.
+
 ### Inspect title status
 
 Run `/tmux-title status` for a read-only snapshot of the title mode, naming
@@ -179,9 +186,9 @@ credentials are available. Status checks the tmux server identity in its
 snapshot. If it detects a restart, it fails closed locally, cancelling naming
 and discarding state tied to the old server; restart Pi to reconnect safely
 because the inherited pane ID may have been reused. Until then,
-`/tmux-title`, `/tmux-title auto`, `/tmux-title sync`, and `/tmux-title set <name>`
-warn that Pi must restart. Snapshot values may change while Pi is working; run
-the command again for a fresh reading.
+`/tmux-title`, `/tmux-title auto`, `/tmux-title read`, `/tmux-title sync`,
+and `/tmux-title set <name>` warn that Pi must restart. Snapshot values may
+change while Pi is working; run the command again for a fresh reading.
 
 ### Synchronize without AI
 
