@@ -17,6 +17,7 @@ prompt. Naming runs in the background and does not delay Pi's answer.
   - [Pin a manual title](#pin-a-manual-title)
   - [Inspect title status](#inspect-title-status)
   - [Synchronize without AI](#synchronize-without-ai)
+  - [Quit and close the pane](#quit-and-close-the-pane)
 - [Behavior](#behavior)
   - [Shared panes and cleanup](#shared-panes-and-cleanup)
 - [Privacy and security](#privacy-and-security)
@@ -201,6 +202,13 @@ Success messages only confirm current, successful updates. Failed updates warn;
 superseded, disposed, or continuously moving updates do not announce success.
 If some former-location repairs remain queued, sync reports that separately.
 Repeat the command to retry them.
+
+### Quit and close the pane
+
+Run `/quit-pane` inside interactive Pi in tmux to exit Pi cleanly and close the
+pane Pi is running in. The pane closes after Pi has completed its shutdown. If
+tmux is unavailable or Pi is not running interactively inside tmux, the command
+warns and leaves Pi running.
 
 ## Behavior
 

@@ -77,8 +77,10 @@ function fixture(
 	const requests: { model: unknown; context: any; options: any }[] = [];
 	const warnings: string[] = [];
 	const messages: any[] = [];
+	let shutdownCalls = 0;
 	const ctx = {
 		mode: "tui",
+		shutdown: () => { shutdownCalls++; },
 		sessionManager: { buildSessionProjection: () => ({ messages }) },
 		ui: { notify: (text: string, level: string) => (level === "warning" ? warnings : notices).push(text) },
 		modelRegistry: {
@@ -121,6 +123,7 @@ function fixture(
 	const tmux: RunTmux = async (args, signal) => {
 		calls.push(args);
 		if (beforeCommand) await beforeCommand(args, signal, args[0] === "rename-window" ? renderTitle(args[4]) : undefined);
+		if (args[0] === "display-message" && args[4] === "#{pid}") return "123";
 		if (args[0] === "display-message" && args[4] === STATUS_SNAPSHOT_FORMAT) {
 			return state.statusInfo ?? `123\t${state.session}\t${state.window}\t${state.waitingPanes.get("%1") === "1" ? "1" : "0"}\t${windowWaiting() ? "1" : "0"}\t${[...state.waitingPanes.values()].includes("1") ? "1" : "0"}`;
 		}
@@ -198,6 +201,8 @@ function fixture(
 		handlers.get(event)?.({ type: event, reason }, ctx);
 	return { handlers, calls, writes, requests, warnings, notices, messages, ctx, input, emit, state, load,
 		refresh: (args = "") => commands.get("tmux-title")!.handler(args, ctx),
+		quitPane: (args = "", commandCtx = ctx) => commands.get("quit-pane")!.handler(args, commandCtx),
+		get shutdownCalls() { return shutdownCalls; },
 		complete: (prefix = "") => commands.get("tmux-title")!.getArgumentCompletions!(prefix),
 	};
 }
@@ -10158,6 +10163,49 @@ test("manual title commands cannot write to tmux outside interactive mode", asyn
 	await f.refresh("set manual title");
 	expect(f.calls).toHaveLength(0);
 	expect(f.requests).toHaveLength(0);
+});
+
+test("/quit-pane requests graceful Pi shutdown and defers closing its pane until Pi exits", async () => {
+	const f = fixture();
+	await f.quitPane();
+
+	expect(f.calls[0]).toEqual(["display-message", "-p", "-t", "%1", "#{pid}"]);
+	expect(f.calls[1]?.slice(0, 2)).toEqual(["run-shell", "-b"]);
+	const watcher = f.calls[1]?.[2] ?? "";
+	expect(watcher).toContain(`pi_pid=${process.pid}`);
+	expect(watcher).toContain("pane='%1'");
+	expect(watcher).toContain("server_pid='123'");
+	expect(watcher).toContain('while kill -0 "$pi_pid"');
+	expect(watcher).toContain("sleep 0.1");
+	expect(watcher).toContain("'##{pid}'");
+	expect(watcher).toEndWith('tmux kill-pane -t "$pane"');
+	expect(f.shutdownCalls).toBe(1);
+	expect(f.warnings).toEqual([]);
+});
+
+test("/quit-pane leaves Pi running outside interactive tmux", async () => {
+	const f = fixture();
+	(f.ctx as any).mode = "json";
+	await f.quitPane();
+	(f.ctx as any).mode = "tui";
+	process.env.TMUX_PANE = "%1; unsafe";
+	await f.quitPane();
+
+	expect(f.calls).toEqual([]);
+	expect(f.shutdownCalls).toBe(0);
+	expect(f.warnings).toHaveLength(2);
+	expect(f.warnings.every((warning) => warning.includes("interactive Pi inside tmux"))).toBe(true);
+});
+
+test("/quit-pane leaves Pi running if tmux cannot schedule pane closure", async () => {
+	const f = fixture([], async (args) => {
+		if (args[0] === "run-shell") throw new Error("Synthetic tmux failure");
+	});
+	await f.quitPane();
+
+	expect(f.calls.map((args) => args[0])).toEqual(["display-message", "run-shell"]);
+	expect(f.shutdownCalls).toBe(0);
+	expect(f.warnings).toEqual(["Could not prepare to close the current tmux pane; Pi is still running."]);
 });
 
 test.each([
