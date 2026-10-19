@@ -594,6 +594,13 @@ export function createController(tmux: RunTmux) {
 		return refreshTitle(ctx, pane, undefined, false, notifyOnServerChange).then(() => {});
 	};
 
+	const markRead = (ctx: ExtensionContext, pane: string) => {
+		if (warnIfServerChanged(ctx)) return;
+		warned = false;
+		waiting = false;
+		return refreshTitle(ctx, pane, undefined, false, true).then(() => {});
+	};
+
 	const setCompacting = (ctx: ExtensionContext, value: boolean) => {
 		if (value) {
 			waitingBeforeCompaction = waiting;
@@ -816,6 +823,7 @@ export function createController(tmux: RunTmux) {
 	return {
 		getPane,
 		setWaiting,
+		markRead,
 		setCompacting,
 		reset,
 		restoreTitle,

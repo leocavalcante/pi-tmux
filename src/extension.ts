@@ -13,13 +13,14 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 	const controller = createController(tmux);
 
 	pi.registerCommand("tmux-title", {
-		description: "Refresh, pin with set <name>, resume with auto, inspect status, or sync without AI",
+		description: "Refresh, pin with set <name>, mark as read, resume with auto, inspect status, or sync without AI",
 		getArgumentCompletions: (prefix) => {
 			if (prefix.length > MAX_TITLE_COMMAND_ARGUMENT_LENGTH) return null;
 			const token = prefix.trimStart();
 			// Complete only the subcommand, never free-form title text or extra args.
 			if (/\s/.test(token)) return null;
 			const items = [
+				{ value: "read", label: "read", description: "Clear this pane's waiting marker" },
 				{ value: "status", label: "status", description: "Show read-only title diagnostics" },
 				{ value: "sync", label: "sync", description: "Reapply titles and markers without AI" },
 				{ value: "set ", label: "set <name>", description: "Pin a manual title" },
@@ -36,8 +37,8 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			}
 			const command = args.trim();
 			const set = /^set(?:\s+([\s\S]*))?$/.exec(command);
-			if (command && !["auto", "status", "sync"].includes(command) && !set) {
-				notifySafely(ctx, "Usage: /tmux-title [set <name> | auto | status | sync]", "warning");
+			if (command && !["auto", "read", "status", "sync"].includes(command) && !set) {
+				notifySafely(ctx, "Usage: /tmux-title [set <name> | auto | read | status | sync]", "warning");
 				return;
 			}
 			const pane = controller.getPane(ctx);
@@ -51,6 +52,10 @@ export default function piTmux(pi: ExtensionAPI, tmux: RunTmux = runTmux) {
 			}
 			if (command === "sync") {
 				await controller.sync(ctx, pane);
+				return;
+			}
+			if (command === "read") {
+				await controller.markRead(ctx, pane);
 				return;
 			}
 			if (set) {
