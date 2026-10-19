@@ -8252,6 +8252,52 @@ test("late model output preserves another pane's waiting marker", async () => {
 	expect(f.requests).toHaveLength(1);
 });
 
+test("read clears this pane's waiting marker from its window and session without naming", async () => {
+	const f = fixture([]);
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* existing task");
+	expect(f.state.sessionTitle).toBe("* My Session");
+
+	await f.refresh("read");
+
+	expect(f.state.waitingPanes.get("%1")).toBe("0");
+	expect(f.state.activePanes.get("%1")).toBe("1");
+	expect(f.state.title).toBe("existing task");
+	expect(f.state.sessionTitle).toBe("My Session");
+	expect(f.requests).toEqual([]);
+	expect(f.warnings).toEqual([]);
+});
+
+test("read clears this window marker but keeps the session marker for another waiting window", async () => {
+	const f = fixture([]);
+	f.state.waitingPanes.set("%2", "1");
+	f.state.otherWindowPanes.add("%2");
+	await f.emit("agent_settled");
+	expect(f.state.title).toBe("* existing task");
+	expect(f.state.sessionTitle).toBe("* My Session");
+
+	await f.refresh("read");
+
+	expect(f.state.waitingPanes.get("%1")).toBe("0");
+	expect(f.state.waitingPanes.get("%2")).toBe("1");
+	expect(f.state.title).toBe("existing task");
+	expect(f.state.sessionTitle).toBe("* My Session");
+	expect(f.requests).toEqual([]);
+});
+
+test("read preserves window and session markers while another pane in this window is waiting", async () => {
+	const f = fixture([]);
+	f.state.waitingPanes.set("%2", "1");
+	await f.emit("agent_settled");
+
+	await f.refresh("read");
+
+	expect(f.state.waitingPanes.get("%1")).toBe("0");
+	expect(f.state.waitingPanes.get("%2")).toBe("1");
+	expect(f.state.title).toBe("* existing task");
+	expect(f.state.sessionTitle).toBe("* My Session");
+});
+
 test("waiting panes in another window mark the session but not this window", async () => {
 	const f = fixture([]);
 	f.state.waitingPanes.set("%2", "1");
@@ -9456,7 +9502,8 @@ test("invalid configuration disables naming, warns once, and never echoes its va
 });
 
 test.each([
-	{ prefix: "", values: ["status", "sync", "set ", "auto"] },
+	{ prefix: "", values: ["read", "status", "sync", "set ", "auto"] },
+	{ prefix: "r", values: ["read"] },
 	{ prefix: "s", values: ["status", "sync", "set "] },
 	{ prefix: "st", values: ["status"] },
 	{ prefix: "sy", values: ["sync"] },
@@ -9464,7 +9511,7 @@ test.each([
 	{ prefix: "a", values: ["auto"] },
 	{ prefix: "set", values: ["set "] },
 	{ prefix: " \ts", values: ["status", "sync", "set "] },
-	{ prefix: " \t", values: ["status", "sync", "set ", "auto"] },
+	{ prefix: " \t", values: ["read", "status", "sync", "set ", "auto"] },
 ])("argument completion matches only supported subcommands: %j", ({ prefix, values }) => {
 	const f = fixture();
 	const items = f.complete(prefix);
@@ -9474,7 +9521,7 @@ test.each([
 	expect(f.requests).toEqual([]);
 });
 
-test.each(["status", "sync", "auto", " \tstatus"])("argument completion leaves exact subcommands runnable: %j", (prefix) => {
+test.each(["read", "status", "sync", "auto", " \tstatus"])("argument completion leaves exact subcommands runnable: %j", (prefix) => {
 	const f = fixture();
 	expect(f.complete(prefix)).toBeNull();
 	expect(f.calls).toEqual([]);
@@ -9488,7 +9535,7 @@ test("argument completion rejects oversized prefixes before trimming", () => {
 	expect(f.requests).toEqual([]);
 });
 
-test.each(["unknown", "S", "set ", "set private title", "set\n", "set\tname", "status ", "status extra", "sync extra", "auto extra", "set café", "\u001b"])("argument completion leaves free-form titles and invalid prefixes alone: %j", (prefix) => {
+test.each(["unknown", "S", "set ", "set private title", "set\n", "set\tname", "read extra", "status ", "status extra", "sync extra", "auto extra", "set café", "\u001b"])("argument completion leaves free-form titles and invalid prefixes alone: %j", (prefix) => {
 	const f = fixture();
 	expect(f.complete(prefix)).toBeNull();
 	expect(f.calls).toEqual([]);
@@ -9533,8 +9580,8 @@ test("argument completion preserves pins and returns independent suggestion obje
 	items[0].value = "corrupted";
 	items[0].description = "corrupted";
 	items.push({ value: "extra", label: "extra" });
-	expect(f.complete().map((item: any) => item.value)).toEqual(["status", "sync", "set ", "auto"]);
-	expect(f.complete()[0].description).toBe("Show read-only title diagnostics");
+	expect(f.complete().map((item: any) => item.value)).toEqual(["read", "status", "sync", "set ", "auto"]);
+	expect(f.complete().find((item: any) => item.value === "status").description).toBe("Show read-only title diagnostics");
 	expect(f.calls).toHaveLength(before);
 	expect(f.state.title).toBe("synthetic private pin");
 	f.input("another task");
@@ -9544,6 +9591,7 @@ test("argument completion preserves pins and returns independent suggestion obje
 });
 
 test.each([
+	{ prefix: "r", value: "read", expected: "/tmux-title read" },
 	{ prefix: "st", value: "status", expected: "/tmux-title status" },
 	{ prefix: "sy", value: "sync", expected: "/tmux-title sync" },
 	{ prefix: "se", value: "set ", expected: "/tmux-title set " },
@@ -10711,7 +10759,7 @@ test("status does not accept trailing arguments or reserve set status as a comma
 	const f = fixture();
 	await f.refresh("status extra");
 	expect(f.calls).toEqual([]);
-	expect(f.warnings[0]).toContain("auto | status");
+	expect(f.warnings[0]).toContain("auto | read | status");
 	await f.refresh("set status");
 	expect(f.state.title).toBe("status");
 });
