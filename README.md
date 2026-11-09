@@ -297,8 +297,10 @@ warns and leaves Pi running.
   Later status updates keep the previously applied title rather than reusing a
   discarded model result. Session changes, tree navigation, reload, and shutdown
   cancel outstanding work too.
-- Naming requests use SSE, with reasoning, retries, and cache retention
-  disabled. Requests have a 15-second timeout and a 96-token output cap.
+- Naming requests use SSE, with retries and cache retention disabled.
+  Reasoning-capable models use minimal reasoning because some workspaces reject
+  disabled reasoning. Non-reasoning models receive no reasoning override.
+  Requests have a 15-second timeout and a 96-token output cap.
   The extension stops waiting at the deadline even if a provider ignores
   cancellation. It clears its pending state, timer, and abort listener, and
   ignores late results or failures. A provider that ignores aborts may still

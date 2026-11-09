@@ -450,7 +450,19 @@ test.each(["-fix auth", "-t", "-a"])("model title %s is passed as a literal tmux
 	expect(f.warnings).toEqual([]);
 });
 
-test("balances oversized prompt context and disables reasoning and provider retries", async () => {
+test.each([true, false])("selects naming reasoning for a model with reasoning=%s", async (reasoning) => {
+	const f = fixture();
+	const model = f.ctx.modelRegistry.find("openai-codex", "gpt-6-luna")!;
+	spyOn(f.ctx.modelRegistry, "find").mockReturnValue({ ...model, reasoning });
+	f.input("Fix the failing authentication tests");
+	await settle();
+	expect(f.requests).toHaveLength(1);
+	expect(f.requests[0].options.reasoning).toBe(reasoning ? "minimal" : undefined);
+	expect(f.state.title).toBe("fix auth tests");
+	expect(f.warnings).toEqual([]);
+});
+
+test("balances oversized prompt context and disables provider retries", async () => {
 	const f = fixture();
 	f.input("x".repeat(10_000));
 	await settle();

@@ -4282,7 +4282,8 @@ export async function requestNamingTitle(
 			{
 				signal,
 				maxTokens: 96,
-				reasoning: undefined,
+				// Some workspaces reject disabled reasoning even when the catalog allows it.
+				reasoning: model.reasoning ? "minimal" : undefined,
 				cacheRetention: "none",
 				transport: "sse",
 				timeoutMs: NAMING_REQUEST_TIMEOUT_MS,
