@@ -63,17 +63,34 @@ const SERVER_IDENTITY_PROCESS_KEY = Symbol.for(
   "@leocavalcante/pi-tmux/server-identity",
 );
 type ServerIdentityScope = RunTmux | string;
-type ServerIdentityStore = {
+interface ServerIdentityStore {
   adapters: WeakMap<RunTmux, string>;
   environments: Map<string, string>;
-};
-type ServerChangeWarningStore = {
+}
+interface ServerChangeWarningStore {
   adapters: WeakSet<RunTmux>;
   environments: Set<string>;
-};
+}
 
 const defaultServerIdentityScope = (): ServerIdentityScope =>
   process.env.TMUX ? `tmux:${process.env.TMUX}` : runTmux;
+
+function hasStoreProperties(
+  value: unknown,
+): value is { adapters: unknown; environments: unknown } {
+  if (
+    (typeof value !== "object" || value === null) &&
+    typeof value !== "function"
+  )
+    return false;
+  return "adapters" in value && "environments" in value;
+}
+
+function requiredStatusField(fields: string[], index: number): string {
+  const field = fields[index];
+  if (field === undefined) throw new Error("Invalid tmux status");
+  return field;
+}
 
 const readServerIdentity = (
   store: ServerIdentityStore,
@@ -106,9 +123,10 @@ const addServerChangeWarning = (
 };
 
 function processServerIdentities(): ServerIdentityStore {
-  const existing = Reflect.get(process, SERVER_IDENTITY_PROCESS_KEY);
+  const existing: unknown = Reflect.get(process, SERVER_IDENTITY_PROCESS_KEY);
   if (
-    existing?.adapters instanceof WeakMap &&
+    hasStoreProperties(existing) &&
+    existing.adapters instanceof WeakMap &&
     existing.environments instanceof Map
   )
     return existing as ServerIdentityStore;
@@ -127,9 +145,13 @@ function processServerIdentities(): ServerIdentityStore {
 }
 
 function processServerChangeWarnings(): ServerChangeWarningStore {
-  const existing = Reflect.get(process, SERVER_CHANGE_WARNING_PROCESS_KEY);
+  const existing: unknown = Reflect.get(
+    process,
+    SERVER_CHANGE_WARNING_PROCESS_KEY,
+  );
   if (
-    existing?.adapters instanceof WeakSet &&
+    hasStoreProperties(existing) &&
+    existing.adapters instanceof WeakSet &&
     existing.environments instanceof Set
   )
     return existing as ServerChangeWarningStore;
@@ -428,19 +450,23 @@ export function createController(tmux: RunTmux) {
     }
     const queue = (targets: Set<string>, target: string) => {
       targets.add(target);
-      if (targets.size > MAX_FORMER_TARGETS)
-        targets.delete(targets.values().next().value!);
+      if (targets.size > MAX_FORMER_TARGETS) {
+        const oldest = targets.values().next().value;
+        if (oldest !== undefined) targets.delete(oldest);
+      }
     };
     const queueFormerSession = (target: string) => {
       formerSessions.add(target);
       if (formerSessions.size > MAX_FORMER_TARGETS) {
-        const evicted = formerSessions.values().next().value!;
-        formerSessions.delete(evicted);
-        // Keep metadata for a session that has become current again.
-        if (evicted !== location.session) {
-          trackedSessions.delete(evicted);
-          unsafeSessions.delete(evicted);
-          sessionNameSafetyAvailable.delete(evicted);
+        const evicted = formerSessions.values().next().value;
+        if (evicted !== undefined) {
+          formerSessions.delete(evicted);
+          // Keep metadata for a session that has become current again.
+          if (evicted !== location.session) {
+            trackedSessions.delete(evicted);
+            unsafeSessions.delete(evicted);
+            sessionNameSafetyAvailable.delete(evicted);
+          }
         }
       }
     };
@@ -997,7 +1023,7 @@ export function createController(tmux: RunTmux) {
     waiting = value;
     // Lifecycle notifications keep their Promise<void> contract.
     return refreshTitle(ctx, pane, undefined, false, notifyOnServerChange).then(
-      () => {},
+      () => undefined,
     );
   };
 
@@ -1005,7 +1031,9 @@ export function createController(tmux: RunTmux) {
     if (warnIfServerChanged(ctx)) return;
     warned = false;
     waiting = false;
-    return refreshTitle(ctx, pane, undefined, false, true).then(() => {});
+    return refreshTitle(ctx, pane, undefined, false, true).then(
+      () => undefined,
+    );
   };
 
   const setCompacting = (ctx: ExtensionContext, value: boolean) => {
@@ -1047,10 +1075,9 @@ export function createController(tmux: RunTmux) {
     requestGeneration: number,
     notifyOnServerChange: boolean,
   ) => {
-    const timeout = setTimeout(
-      () => controller.abort(),
-      NAMING_REQUEST_TIMEOUT_MS,
-    );
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, NAMING_REQUEST_TIMEOUT_MS);
     timeout.unref();
     const isCurrent = () => requestGeneration === generation;
     try {
@@ -1115,7 +1142,7 @@ export function createController(tmux: RunTmux) {
     }
     if (!namingModel) return false;
     let text: string;
-    let hasSensitiveBoundary = () => false;
+    let hasSensitiveBoundary: () => boolean;
     try {
       const namingContext = buildNamingRequestContext(
         ctx.sessionManager.buildSessionProjection(),
@@ -1189,12 +1216,14 @@ export function createController(tmux: RunTmux) {
       if (!hasServerIdentity && fields.length !== 5)
         throw new Error("Invalid tmux status");
       const offset = hasServerIdentity ? 1 : 0;
-      const server = hasServerIdentity ? fields[0]! : undefined;
-      const session = fields[offset]!;
-      const window = fields[offset + 1]!;
-      const paneWaiting = fields[offset + 2]!;
-      const windowWaiting = fields[offset + 3]!;
-      const sessionWaiting = fields[offset + 4]!;
+      const server = hasServerIdentity
+        ? requiredStatusField(fields, 0)
+        : undefined;
+      const session = requiredStatusField(fields, offset);
+      const window = requiredStatusField(fields, offset + 1);
+      const paneWaiting = requiredStatusField(fields, offset + 2);
+      const windowWaiting = requiredStatusField(fields, offset + 3);
+      const sessionWaiting = requiredStatusField(fields, offset + 4);
       if (
         (server !== undefined && server !== "" && !/^\d+$/.test(server)) ||
         !/^\$\d+$/.test(session) ||
@@ -1225,7 +1254,7 @@ export function createController(tmux: RunTmux) {
           `Targets: pane ${pane}, window ${window}, session ${session}`,
           `tmux writes: ${serverIdentityChanged ? "stopped (server changed; restart Pi to resume)" : "enabled"}`,
           `Waiting flags: pane ${yesNo(paneWaiting)}, window ${yesNo(windowWaiting)}, session ${yesNo(sessionWaiting)}`,
-          `Pending move repairs: windows ${formerWindows.size}, sessions ${formerSessions.size}`,
+          `Pending move repairs: windows ${String(formerWindows.size)}, sessions ${String(formerSessions.size)}`,
         ].join("\n"),
         "info",
       );
@@ -1277,10 +1306,12 @@ export function createController(tmux: RunTmux) {
     const revision = titleRevision;
     const updated = await update;
     if (warnIfServerChanged(ctx)) return;
+    // Another command can unpin this title while the update is in flight.
     if (
       updated &&
       !signal.aborted &&
       revision === titleRevision &&
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Another command can unpin the title during the await.
       manualTitle &&
       baseTitle === title &&
       generation === commandGeneration

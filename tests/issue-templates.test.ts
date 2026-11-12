@@ -48,8 +48,11 @@ function validateForm(path: string): { name: string; fields: RecordValue[] } {
 
   const ids = new Set<string>();
   const fields = form.body.map((value, index) => {
-    const field = requireRecord(value, `${path} body[${index}]`);
-    const type = requireString(field.type, `${path} body[${index}] type`);
+    const field = requireRecord(value, `${path} body[${String(index)}]`);
+    const type = requireString(
+      field.type,
+      `${path} body[${String(index)}] type`,
+    );
     if (
       ![
         "markdown",
@@ -61,21 +64,24 @@ function validateForm(path: string): { name: string; fields: RecordValue[] } {
       ].includes(type)
     ) {
       throw new Error(
-        `${path} body[${index}] uses an unsupported form field type`,
+        `${path} body[${String(index)}] uses an unsupported form field type`,
       );
     }
     const attributes = requireRecord(
       field.attributes,
-      `${path} body[${index}] attributes`,
+      `${path} body[${String(index)}] attributes`,
     );
     if (type === "markdown") {
-      requireString(attributes.value, `${path} body[${index}] markdown value`);
+      requireString(
+        attributes.value,
+        `${path} body[${String(index)}] markdown value`,
+      );
     } else {
-      const id = requireString(field.id, `${path} body[${index}] id`);
+      const id = requireString(field.id, `${path} body[${String(index)}] id`);
       if (!/^[a-z0-9-]+$/.test(id) || ids.has(id))
         throw new Error(`${path} has an invalid or duplicate field id`);
       ids.add(id);
-      requireString(attributes.label, `${path} body[${index}] label`);
+      requireString(attributes.label, `${path} body[${String(index)}] label`);
     }
     if (type === "dropdown" || type === "checkboxes") {
       if (
@@ -85,19 +91,23 @@ function validateForm(path: string): { name: string; fields: RecordValue[] } {
           (option) => typeof option !== "string" || !option.trim(),
         )
       ) {
-        throw new Error(`${path} body[${index}] must have non-empty options`);
+        throw new Error(
+          `${path} body[${String(index)}] must have non-empty options`,
+        );
       }
     }
     if (field.validations !== undefined) {
       const validations = requireRecord(
         field.validations,
-        `${path} body[${index}] validations`,
+        `${path} body[${String(index)}] validations`,
       );
       if (
         validations.required !== undefined &&
         typeof validations.required !== "boolean"
       ) {
-        throw new Error(`${path} body[${index}] required must be boolean`);
+        throw new Error(
+          `${path} body[${String(index)}] required must be boolean`,
+        );
       }
     }
     return field;

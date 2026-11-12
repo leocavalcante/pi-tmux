@@ -1,3 +1,4 @@
+import { assertDefined } from "./assert-defined.ts";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -163,7 +164,7 @@ test.skipIf(!hasTmux).each([
       };
       piTmux(
         {
-          on: () => {},
+          on: () => undefined,
           registerCommand: (name: string, command: { handler: Function }) =>
             commands.set(name, command.handler),
         } as unknown as ExtensionAPI,
@@ -176,7 +177,7 @@ test.skipIf(!hasTmux).each([
             (level === "warning" ? warnings : notices).push(text),
         },
       } as unknown as ExtensionContext;
-      await commands.get("tmux-title")!("status", ctx);
+      await assertDefined(commands.get("tmux-title"))("status", ctx);
       expect(notices[0]).toContain("Waiting flags: " + flags);
       expect(notices[0]).toContain(
         `Targets: pane ${pane}, window ${window}, session ${session}`,

@@ -11,7 +11,10 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 
-export type FakeTmuxFiles = { pid: string; cleanExit: string };
+export interface FakeTmuxFiles {
+  pid: string;
+  cleanExit: string;
+}
 
 function quotePosixShellArgument(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;

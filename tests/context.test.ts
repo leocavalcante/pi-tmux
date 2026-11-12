@@ -1,3 +1,4 @@
+import { assertDefined } from "./assert-defined.ts";
 import { expect, test } from "bun:test";
 import { buildNamingContext } from "../src/naming.ts";
 
@@ -7,9 +8,9 @@ test("large session projections only inspect the bounded recent-history window",
   const oldestScannedIndex = messageCount - scanLimit;
   const messages = Array.from({ length: messageCount }, (_, index) => ({
     role: "user",
-    content: `message ${index}`,
+    content: `message ${String(index)}`,
   }));
-  Object.defineProperty(messages[0]!, "content", {
+  Object.defineProperty(assertDefined(messages[0]), "content", {
     get() {
       throw new Error("The oldest message content should not be read");
     },
@@ -21,7 +22,7 @@ test("large session projections only inspect the bounded recent-history window",
         const index = Number(property);
         if (index < oldestScannedIndex) {
           throw new Error(
-            `Read history outside the recent scan window at index ${index}`,
+            `Read history outside the recent scan window at index ${String(index)}`,
           );
         }
       }
@@ -31,7 +32,7 @@ test("large session projections only inspect the bounded recent-history window",
 
   const context = buildNamingContext(guardedMessages as any);
   for (let index = messageCount - 8; index < messageCount; index++) {
-    expect(context).toContain(`user: message ${index}`);
+    expect(context).toContain(`user: message ${String(index)}`);
   }
   expect(context).not.toContain("message 0");
 });

@@ -15,12 +15,14 @@ const UNICODE_DECIMAL_DIGIT_ZEROES = [
 ];
 
 function decimalDigitValue(character: string): number | undefined {
-  const codePoint = character.codePointAt(0)!;
+  const codePoint = character.codePointAt(0);
+  if (codePoint === undefined) return undefined;
   let low = 0;
   let high = UNICODE_DECIMAL_DIGIT_ZEROES.length - 1;
   while (low <= high) {
     const middle = Math.floor((low + high) / 2);
-    const zero = UNICODE_DECIMAL_DIGIT_ZEROES[middle]!;
+    const zero = UNICODE_DECIMAL_DIGIT_ZEROES[middle];
+    if (zero === undefined) return undefined;
     if (codePoint < zero) high = middle - 1;
     else if (codePoint >= zero + 10) low = middle + 1;
     else return codePoint - zero;
@@ -39,7 +41,7 @@ export function asciiDecimalDigits(
     // The caller can conservatively reject the candidate if a newer runtime
     // recognizes a decimal digit missing from this table.
     if (digit === undefined) return undefined;
-    digits += digit;
+    digits += String(digit);
   }
   return digits;
 }

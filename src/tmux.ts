@@ -166,10 +166,9 @@ export const runTmux: RunTmux = async (args, signal) => {
   // The abort signal rejects even if a child handles SIGTERM and exits 0. Force-kill
   // after a grace period so an unresponsive tmux client is not left running.
   const timeoutController = new AbortController();
-  const timeout = setTimeout(
-    () => timeoutController.abort(),
-    TMUX_COMMAND_TIMEOUT_MS,
-  );
+  const timeout = setTimeout(() => {
+    timeoutController.abort();
+  }, TMUX_COMMAND_TIMEOUT_MS);
   timeout.unref();
   const commandSignal = AbortSignal.any([signal, timeoutController.signal]);
   let child: ChildProcess | undefined;
@@ -209,6 +208,8 @@ export const runTmux: RunTmux = async (args, signal) => {
           (error, stdout) => {
             if (error) {
               escalateTermination();
+              // Preserve the child-process error object and its metadata.
+              // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- Preserve child error identity.
               reject(error);
             } else resolve({ stdout });
           },
@@ -256,7 +257,7 @@ function tmuxCommandArguments(args: string[]): string[] {
   });
 }
 
-export type WindowSnapshot = {
+export interface WindowSnapshot {
   session: string;
   window: string;
   title: string;
@@ -264,7 +265,7 @@ export type WindowSnapshot = {
   sessionMetadataAvailable: boolean;
   sessionNameMayNotRoundTrip?: boolean;
   server?: string;
-};
+}
 
 export async function readWindowTitle(
   tmux: RunTmux,
@@ -276,6 +277,13 @@ export async function readWindowTitle(
     signal,
   );
   const [sessionField, window, windowWaiting, ...titleParts] = info.split("\t");
+  if (
+    sessionField === undefined ||
+    window === undefined ||
+    windowWaiting === undefined
+  ) {
+    throw new Error("Invalid tmux target");
+  }
   // Keep an empty PID valid for older tmux servers and injected adapters.
   const sessionMetadata = /^(\$\d+):1(?::(\d*))?(?::([01]))?$/.exec(
     sessionField,
@@ -300,6 +308,8 @@ export async function readWindowTitle(
       sessionMetadata?.[3] === undefined
         ? undefined
         : sessionMetadata[3] === "1",
+    // An empty server PID intentionally means unavailable.
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- Preserve the empty-string fallback.
     server: sessionMetadata?.[2] || undefined,
   };
 }

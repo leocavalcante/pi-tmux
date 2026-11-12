@@ -29,8 +29,11 @@ bun run verify
 ```
 
 The individual scripts remain available when you only need a targeted check.
-Prettier formats every file with its default settings: `bun run lint` checks the
-formatting and `bun run format` applies it. `bun run verify` stops at the first
+`bun run lint` runs Prettier and ESLint (typescript-eslint `strictTypeChecked`),
+and `bun run format` applies their fixes. Disable a rule only on the line that
+needs it, with a reason. Tests may also relax the unsafe-any, explicit-`any`,
+non-null-assertion, and `require-await` rules, because they drive dynamic
+package, subprocess, and protocol payloads. `bun run verify` stops at the first
 failure. It does not include Gitleaks; install
 it separately to run the secret scans under [Before submitting](#before-submitting).
 
@@ -44,7 +47,7 @@ Run both test lanes:
 bun run test
 ```
 
-- `bun run check` type-checks `index.ts` and `src/`, then every file under `tests/` with Bun and Node.js types; CI runs this check.
+- `bun run check` type-checks `index.ts` and `src/` with `noUncheckedIndexedAccess`, then every file under `tests/` with Bun and Node.js types, and the CI scripts; CI runs this check.
 - `tests/load.node-test.ts` loads the extension under Node.js through jiti, as Pi does, and checks the commands and lifecycle hooks it registers.
 - `tests/title.test.ts` covers formatting, context bounds and exclusions, naming cancellation, model configuration, empty window-name fields, status-only mode, explicit retries, manual pins, read-only diagnostics, model-free sync, truthful confirmations, lifecycle events, waiting markers, and failures with mock model responses and tmux commands.
 - `tests/session.test.ts` checks window and session aggregation, shared-window ownership, concurrent status and ownership changes at rename time, and pane moves against a separate temporary tmux server with no user configuration. Its command wrapper strips only the final line ending so trailing spaces in literal tmux names remain observable in assertions. It skips if tmux is unavailable.
