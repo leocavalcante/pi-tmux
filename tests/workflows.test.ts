@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { JSONC } from "bun";
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -62,9 +63,10 @@ test("README table of contents links resolve to section headings", () => {
 });
 
 test("README tmux compatibility versions stay aligned with version-checked CI", () => {
-	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8");
+	const setup = readFileSync(fileURLToPath(new URL("../.github/scripts/setup-test-tools.sh", import.meta.url)), "utf8");
+	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/ci.yaml", import.meta.url)), "utf8");
 	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
-	expect(workflow).toContain('tmux -V | grep -Fx "tmux 3.4"');
+	expect(setup).toContain('tmux -V | grep -Fx "tmux 3.4"');
 	expect(workflow).toContain('test "$(tmux -V)" = "tmux 3.7c"');
 	expect(readme).toMatch(/Linux CI exercises tmux 3\.4 and a pinned tmux 3\.7c\nbuild/u);
 });
@@ -77,45 +79,36 @@ test("README's tested Pi version matches the development SDK", () => {
 	expect(readme).toContain(`Tested with Pi ${manifest.devDependencies["@earendil-works/pi-coding-agent"]}`);
 });
 
-test("CI tests the minimum supported Pi peer SDK without changing the lockfile", () => {
-	type Step = { name?: string; run?: string };
-	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8")) as {
+test("CI tests the minimum supported Pi from engines.pi without changing the lockfile", () => {
+	type Step = { run?: string };
+	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/ci.yaml", import.meta.url)), "utf8")) as {
 		jobs?: Record<string, { steps?: Step[] }>;
 	};
-	const steps = workflow.jobs?.["pi-1-1"]?.steps;
-	const install = steps?.find((step) => step.name === "Install minimum supported Pi SDK")?.run ?? "";
-	const verify = steps?.find((step) => step.name === "Verify minimum supported Pi SDK")?.run ?? "";
+	const runs = (workflow.jobs?.["pi-min"]?.steps ?? []).map((step) => step.run ?? "");
 	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
-		peerDependencies: Record<string, string>;
+		engines: { pi?: string };
 	};
-	const peerRange = manifest.peerDependencies["@earendil-works/pi-coding-agent"];
-	const minimumVersion = /^\^(\d+\.\d+\.\d+)$/u.exec(peerRange)?.[1];
-	if (!minimumVersion) throw new Error(`Expected a caret peer range, got ${peerRange}`);
+	const minimumVersion = /^>=(\d+\.\d+\.\d+)$/u.exec(manifest.engines.pi ?? "")?.[1];
+	if (!minimumVersion) throw new Error(`Expected engines.pi to be ">=x.y.z", got ${manifest.engines.pi}`);
 	const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8").replace(/\s+/gu, " ");
 
-	expect(install).toContain("npm install --no-save --package-lock=false --force --ignore-scripts");
-	expect(install).toContain(`@earendil-works/pi-coding-agent@${minimumVersion}`);
-	expect(install).toContain(`@earendil-works/pi-ai@${minimumVersion}`);
-	expect(verify).toContain(`= "${minimumVersion}"`);
-	expect(steps?.some((step) => step.run === "npm run check")).toBe(true);
-	expect(steps?.some((step) => step.run === "npm run check:tests")).toBe(true);
-	expect(steps?.some((step) => step.run === "npm test")).toBe(true);
+	expect(runs).toContain("bun .github/scripts/install-pi.ts min");
+	expect(runs.indexOf("bun run test")).toBeGreaterThan(runs.indexOf("bun .github/scripts/install-pi.ts min"));
+	expect(runs).toContain("git diff --exit-code -- package.json bun.lock");
 	expect(readme).toContain(`CI also checks the minimum supported Pi ${minimumVersion} peer version.`);
 });
 
-test("Windows CI uses the declared minimum Node.js version", () => {
-	type WorkflowStep = { uses?: string; with?: Record<string, unknown> };
-	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8")) as {
-		jobs?: Record<string, { steps?: WorkflowStep[] }>;
+test("CI tests the declared minimum Node.js version", () => {
+	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/ci.yaml", import.meta.url)), "utf8")) as {
+		jobs?: Record<string, { strategy?: { matrix?: { node?: (string | number)[] } } }>;
 	};
-	const setupNode = workflow.jobs?.windows?.steps?.find((step) => step.uses?.startsWith("actions/setup-node@"));
 	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
 		engines: { node: string };
 	};
 	const minimumVersion = /^>=(\d+\.\d+\.\d+)$/u.exec(manifest.engines.node)?.[1];
 	if (!minimumVersion) throw new Error(`Expected a minimum Node.js engine version, got ${manifest.engines.node}`);
 
-	expect(setupNode?.with?.["node-version"]).toBe(minimumVersion);
+	expect(workflow.jobs?.node?.strategy?.matrix?.node?.map(String)).toContain(minimumVersion);
 });
 
 test("README documents the bounded manual and idle-title input limit", () => {
@@ -199,24 +192,21 @@ test("README specifies UTF-16 code-unit limits for naming context sent to the mo
 });
 
 test("CI history secret scanning verifies its pinned binary and redacts findings", () => {
-	type WorkflowStep = { name?: string; if?: string; env?: Record<string, string>; run?: string };
-	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8")) as {
-		jobs?: Record<string, { steps?: WorkflowStep[] }>;
+	type Step = { run?: string; with?: Record<string, unknown> };
+	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/ci.yaml", import.meta.url)), "utf8")) as {
+		jobs?: Record<string, { steps?: Step[] }>;
 	};
-	const scan = workflow.jobs?.test?.steps?.find((step) => step.name === "Scan Git history for secrets");
-	if (!scan) throw new Error("The Tests workflow must scan Git history for secrets");
+	const steps = workflow.jobs?.static?.steps ?? [];
+	const checkout = steps.find((step) => step.with?.["fetch-depth"] !== undefined);
+	const script = readFileSync(fileURLToPath(new URL("../.github/scripts/check-workflows.sh", import.meta.url)), "utf8");
 
-	expect(scan.if).toBe("matrix.node == 22");
-	expect(scan.env?.GITLEAKS_VERSION).toMatch(/^\d+\.\d+\.\d+$/u);
-	expect(scan.env?.GITLEAKS_SHA256).toMatch(/^[a-f0-9]{64}$/u);
-	const run = scan.run ?? "";
-	expect(run).toContain('archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"');
-	expect(run).toContain('url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"');
-	expect(run).toContain("curl --fail --location --silent --show-error");
-	expect(run).toContain('"$GITLEAKS_SHA256" "$RUNNER_TEMP/$archive" | sha256sum --check --status');
-	const checksum = run.indexOf("sha256sum --check --status");
-	const extraction = run.indexOf("tar -xzf");
-	const execution = run.indexOf('"$RUNNER_TEMP/gitleaks" git --redact --no-banner .');
+	expect(checkout?.with?.["fetch-depth"]).toBe(0);
+	expect(steps.some((step) => step.run === "bash .github/scripts/check-workflows.sh")).toBe(true);
+	expect(script).toMatch(/gitleaks_\d+\.\d+\.\d+_linux_x64\.tar\.gz/u);
+	expect(script).toMatch(/printf '%s  %s\\n' [a-f0-9]{64} "\$directory\/gitleaks\.tar\.gz" \| sha256sum --check --status/u);
+	const checksum = script.indexOf("gitleaks.tar.gz\" | sha256sum --check --status");
+	const extraction = script.indexOf("tar -xzf \"$directory/gitleaks.tar.gz\"");
+	const execution = script.indexOf('"$directory/gitleaks" git --redact --no-banner .');
 	expect(checksum).toBeGreaterThanOrEqual(0);
 	expect(extraction).toBeGreaterThan(checksum);
 	expect(execution).toBeGreaterThan(extraction);
@@ -247,85 +237,51 @@ test("manual npm bootstrap verifies clean origin/main and version before logging
 		&& (index === 0 || position > preflight[index - 1]!))).toBe(true);
 });
 
-test("npm publishing requires all release safety gates", () => {
-	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/publish.yml", import.meta.url)), "utf8").replace(/\r\n/g, "\n");
-	const topLevelPermissions = /^permissions:\n((?:  [^\n]*\n)+)/m.exec(workflow)?.[1] ?? "";
-	const publishJob = workflow.indexOf("  publish:\n");
-	const testDependency = workflow.indexOf("    needs: test", publishJob);
-	const stableReleaseOnly = workflow.indexOf("    if: github.event.release.prerelease == false", publishJob);
-	const publishPermissions = workflow.indexOf("    permissions:\n", publishJob);
-	const publishTokenPermission = workflow.indexOf("      id-token: write", publishPermissions);
-	const checkout = workflow.indexOf("fetch-depth: 0", publishJob);
-	const ancestryCheck = workflow.indexOf('git merge-base --is-ancestor "$GITHUB_SHA" origin/main', publishJob);
-	const versionCheck = workflow.indexOf("- name: Check release tag matches package version", publishJob);
-	const releaseTagInput = workflow.indexOf("RELEASE_TAG: ${{ github.event.release.tag_name }}", versionCheck);
-	const semanticVersionValidation = workflow.indexOf(String.raw`!/^\d+\.\d+\.\d+$/.test(version)`, versionCheck);
-	const tagValidation = workflow.indexOf("process.env.RELEASE_TAG !== `v${version}`", versionCheck);
-	const publish = workflow.indexOf("npm publish --access public", publishJob);
-
-	expect(publishJob).toBeGreaterThanOrEqual(0);
-	expect(topLevelPermissions).toContain("contents: read");
-	expect(topLevelPermissions).not.toContain("id-token:");
-	expect(testDependency).toBeGreaterThan(publishJob);
-	expect(stableReleaseOnly).toBeGreaterThan(testDependency);
-	expect(publishPermissions).toBeGreaterThan(stableReleaseOnly);
-	expect(publishTokenPermission).toBeGreaterThan(publishPermissions);
-	expect(publishTokenPermission).toBeLessThan(checkout);
-	expect(checkout).toBeGreaterThan(publishTokenPermission);
-	expect(ancestryCheck).toBeGreaterThan(checkout);
-	expect(versionCheck).toBeGreaterThan(ancestryCheck);
-	expect(releaseTagInput).toBeGreaterThan(versionCheck);
-	expect(semanticVersionValidation).toBeGreaterThan(releaseTagInput);
-	expect(tagValidation).toBeGreaterThan(semanticVersionValidation);
-	expect(publish).toBeGreaterThan(tagValidation);
-});
-
 test("local verify script runs the same validation gates as CI", () => {
 	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
 		scripts?: Record<string, string>;
 	};
-	type Step = { name?: string; if?: string; run?: string };
-	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/test.yml", import.meta.url)), "utf8")) as {
+	type Step = { run?: string };
+	const workflow = parseYaml(readFileSync(fileURLToPath(new URL("../.github/workflows/ci.yaml", import.meta.url)), "utf8")) as {
 		jobs?: Record<string, { steps?: Step[] }>;
 	};
-	const packageCheck = workflow.jobs?.test?.steps?.find((step) => step.name === "Validate package metadata");
+	const runs = (job: string) => (workflow.jobs?.[job]?.steps ?? []).map((step) => step.run);
 
-	expect(manifest.scripts?.["check:package"]).toBe("publint");
-	expect(packageCheck).toEqual({
-		name: "Validate package metadata",
-		if: "matrix.node == 22",
-		run: "npm run check:package",
-	});
+	expect(manifest.scripts?.["check:package"]).toBe("publint && node .github/scripts/check-package.mjs");
 	expect(manifest.scripts?.verify).toBe([
-		"npm run check",
-		"npm run check:tests",
-		"npm run check:package",
-		"npm audit --audit-level=high",
-		"npm test",
-		"npm pack --dry-run --ignore-scripts",
+		"bun run check",
+		"bun run test",
+		"bun run check:package",
+		"bun audit --audit-level=high",
 	].join(" && "));
+	expect(runs("static")).toEqual(expect.arrayContaining(["bun run check", "bun audit --audit-level=high"]));
+	expect(runs("test")).toContain("bun run test");
+	expect(runs("package")).toContain("bun run check:package");
 });
 
 test("the package test command runs native Node subprocess coverage", () => {
 	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
 		scripts?: Record<string, string>;
 	};
-	expect(manifest.scripts?.test).toBe("bun test tests/ && npm run test:node");
-	expect(manifest.scripts?.["test:node"]).toBe("node --test tests/tmux-node.mjs");
+	expect(manifest.scripts?.test).toBe("bun run test:bun && bun run test:node");
+	expect(manifest.scripts?.["test:node"]).toBe(
+		"node --import jiti/register --test --test-concurrency=1 tests/*.node-test.ts",
+	);
 });
 
 test("@types/node stays pinned to 22.20.5 in the manifest and lockfile", () => {
 	const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as {
 		devDependencies?: Record<string, string>;
 	};
-	const lockfile = JSON.parse(readFileSync(fileURLToPath(new URL("../package-lock.json", import.meta.url)), "utf8")) as {
-		packages?: Record<string, { devDependencies?: Record<string, string>; version?: string }>;
+	const lockfile = JSONC.parse(readFileSync(fileURLToPath(new URL("../bun.lock", import.meta.url)), "utf8")) as {
+		workspaces?: Record<string, { devDependencies?: Record<string, string> }>;
+		packages?: Record<string, [string, ...unknown[]]>;
 	};
 	const pinnedVersion = "22.20.5";
 
 	expect(manifest.devDependencies?.["@types/node"]).toBe(pinnedVersion);
-	expect(lockfile.packages?.[""]?.devDependencies?.["@types/node"]).toBe(pinnedVersion);
-	expect(lockfile.packages?.["node_modules/@types/node"]?.version).toBe(pinnedVersion);
+	expect(lockfile.workspaces?.[""]?.devDependencies?.["@types/node"]).toBe(pinnedVersion);
+	expect(lockfile.packages?.["@types/node"]?.[0]).toBe(`@types/node@${pinnedVersion}`);
 });
 
 test("external GitHub Actions use full commit SHAs with version comments", () => {
@@ -338,7 +294,7 @@ test("external GitHub Actions use full commit SHAs with version comments", () =>
 		const contents = readFileSync(fileURLToPath(new URL(`../.github/workflows/${file}`, import.meta.url)), "utf8");
 		const lines = contents.split(/\r?\n/);
 		for (const [index, line] of lines.entries()) {
-			const match = /^\s*uses:\s*([^\s#]+)(?:\s+#\s*(.*))?\s*$/.exec(line);
+			const match = /^\s*(?:-\s+)?uses:\s*([^\s#]+)(?:\s+#\s*(.*))?\s*$/.exec(line);
 			if (!match) continue;
 			const [, reference, versionComment] = match;
 			if (reference.startsWith("./")) continue;

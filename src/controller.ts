@@ -609,6 +609,7 @@ export function createController(tmux: RunTmux) {
 		const restoreWaiting = waitingBeforeCompaction;
 		waitingBeforeCompaction = undefined;
 		if (restoreWaiting !== undefined) return setWaiting(ctx, restoreWaiting);
+		return undefined;
 	};
 
 	const reset = (

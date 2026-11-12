@@ -2,10 +2,26 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { runTmux } from "../src/tmux.ts";
-import { childHasExited, observeRejection, waitForChild, withFakeTmux } from "./tmux-test-utils.ts";
+import {
+	childHasExited,
+	type FakeTmuxFiles,
+	observeRejection,
+	waitForChild,
+	withFakeTmux,
+} from "./tmux-test-utils.ts";
 
-function withNativeFakeTmux(script, action) {
+// Pi runs the extension on Node.js, so these subprocess cases run on Node's
+// native child_process implementation, not Bun's.
+function withNativeFakeTmux(
+	script: (files: FakeTmuxFiles) => string[],
+	action: (files: FakeTmuxFiles) => Promise<void>,
+): Promise<void> {
 	return withFakeTmux(process.execPath, script, action);
+}
+
+interface NodeError extends Error {
+	code?: string;
+	cause?: unknown;
 }
 
 test("Node-native tmux subprocess behavior", async (suite) => {
@@ -15,7 +31,7 @@ test("Node-native tmux subprocess behavior", async (suite) => {
 			const controller = new AbortController();
 			const reason = new Error("cancelled");
 			controller.abort(reason);
-			await assert.rejects(runTmux([], controller.signal), (error) => {
+			await assert.rejects(runTmux([], controller.signal), (error: NodeError) => {
 				assert.equal(error.name, "AbortError");
 				assert.equal(error.code, "ABORT_ERR");
 				assert.equal(error.cause, reason);
@@ -40,7 +56,7 @@ test("Node-native tmux subprocess behavior", async (suite) => {
 		], async ({ pid }) => {
 			const command = runTmux([], new AbortController().signal).then(
 				() => undefined,
-				(error) => error,
+				(error: unknown) => error as NodeError,
 			);
 			const childPid = await waitForChild(pid);
 			const error = await command;

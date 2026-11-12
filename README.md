@@ -615,13 +615,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, checks, tests, and
 
 ## Publishing
 
-GitHub Actions tests pushes to `main` and pull requests. Publishing a stable
-GitHub release tagged `v<package.json version>`, such as `v0.1.1`, runs the same
-test matrix before publishing `@leocavalcante/pi-tmux` to npm with provenance.
-Prereleases are not published, and npm versions cannot be overwritten.
-
-The publishing workflow uses npm Trusted Publishing with GitHub OIDC. It does
-not use an npm token or an Actions publishing secret.
+Versions 0.1.1 through 0.1.7 were published from GitHub releases by a workflow
+using npm Trusted Publishing, with provenance. That workflow is retired:
+releases are moving to automated publishing from `main`, and nothing publishes
+until it lands.
 
 npm requires the package to exist before configuring a trusted publisher.
 Bootstrap version `0.1.0` was published manually once, without provenance.
@@ -645,18 +642,7 @@ npm test
 npm publish --access public --provenance=false --ignore-scripts
 ```
 
-The initial local publish has no provenance. Configure the package's trusted
-publisher on npm using GitHub owner `leocavalcante`, repository `pi-tmux`, and
-workflow filename `publish.yml`. Leave the environment name blank and allow
-`npm publish`. The workflow must already exist on GitHub.
-
-After configuring trust, select "Require two-factor authentication and disallow
-tokens" in npm's publishing access settings. Before each stable release, bump
-`package.json` and `package-lock.json` to a new, unpublished version, then
-publish a matching GitHub release tag. Do not run the workflow for the
-previously published bootstrap version. Later releases publish through OIDC
-with provenance. See [npm's trusted publishing guide](https://docs.npmjs.com/trusted-publishers/)
-and the [package-existence prerequisite](https://docs.npmjs.com/cli/v11/commands/npm-trust/#prerequisites).
+The initial local publish has no provenance.
 
 ## License
 

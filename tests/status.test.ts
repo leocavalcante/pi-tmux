@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { WAITING_OPTION, type RunTmux } from "../index";
+import piTmux, { WAITING_OPTION, type RunTmux } from "../index.ts";
 import { STATUS_SNAPSHOT_FORMAT } from "../src/tmux.ts";
 import { cleanupTmuxFixture, supportsUnixTmux } from "./tmux-support.ts";
 
