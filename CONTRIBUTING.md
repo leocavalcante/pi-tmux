@@ -55,9 +55,61 @@ bun run test
 - `tests/title.test.ts` checks that sensitive-looking context is not sent to the model and sensitive-looking output is neither applied nor disclosed; identifier examples are synthetic.
 - `tests/unicode-digits.test.ts` verifies runtime-supported decimal digit mappings and conservative handling of unmappable digits.
 - `tests/issue-templates.test.ts` parses the issue-form YAML, checks supported field structures and privacy reminders, and keeps blank issues enabled.
-- `tests/workflows.test.ts` checks the CI wiring (tested tmux versions, minimum Pi and Node.js versions, secret scanning, and `verify` parity with CI) and keeps third-party GitHub Actions pinned to full commit SHAs with version comments.
+- `tests/repository.test.ts` checks README links and limits against the code, and the CI wiring: tested tmux versions, minimum Pi and Node.js versions, secret scanning, `verify` parity with CI, and third-party actions pinned to full commit SHAs with version comments.
+- `tests/workflows.test.ts` checks every workflow's permissions and checkout credentials, that the `required` check covers every CI job, and that `src/` uses no Bun APIs.
+- `tests/release.test.ts` checks which commit types release, and that git-cliff writes notes Pi can read, with breaking changes and absolute pull request links.
 
 Tmux integration tests use separate temporary servers and skip automatically when `tmux` is unavailable or on native Windows. To run them, install tmux on a Unix-like host: the fixtures use Unix paths (`/dev/null` and `/bin/sleep`), so use Linux, macOS, or WSL. Mock-only tests, including empty window-name parsing and both fake-subprocess suites, do not need tmux. GitHub Actions runs the full tmux suite with Node.js 24 on Ubuntu 24.04 (tmux 3.4) and macOS 15 (Homebrew tmux), and on Ubuntu against a pinned tmux 3.7c source build with Node.js 22.19.0. Windows Server 2025 runs the type checks and mock-capable tests; tmux integration tests are skipped on native Windows. The Node.js lane also runs on 22.19.0 (the declared minimum), 22, 24, and 26, and a separate job runs both lanes against the minimum supported Pi from `engines.pi`. Maintainers can run CI on demand from GitHub Actions or with `gh workflow run CI --ref main`. Tests make no model API calls and do not rename your windows or sessions.
+
+## Commits and pull requests
+
+Use Conventional Commits and sign off commits with `git commit -s`. Never add a `Co-Authored-By` trailer. PR titles become squash commit subjects and release notes. Keep them user-facing, at most 72 characters, without a final period.
+
+## Automatic releases
+
+Do not edit the development version, create release tags, or publish from your machine. `.github/workflows/cd.yaml` runs CI on pushes to `main`, then semantic-release publishes releasable changes through npm Trusted Publishing with provenance.
+
+- `feat` releases a minor version; `fix`, `perf`, and `revert` release a patch.
+- `docs(readme)` releases a patch so npm and the Pi gallery receive README changes.
+- Breaking changes release a minor while the package is below 1.0. Remove that override when releasing 1.0.
+- CI, toolchain, and maintainer-documentation changes do not release.
+
+The version in `package.json` stays `0.0.0-development`. semantic-release updates only its temporary workspace; it never commits back to `main`. git-cliff generates both the GitHub release notes and the `CHANGELOG.md` shipped in the package. Run `bun run changelog` to preview the history locally.
+
+The release job uses Node.js 24 and the OIDC-capable npm CLI installed with `@semantic-release/npm`. Lifecycle scripts are disabled during publishing.
+
+### One-time publisher setup
+
+The package already exists on npm. Do not bootstrap or republish any existing version.
+
+1. Ensure the workflow is named `cd.yaml`, with a release job in the GitHub environment `npm`.
+2. Log into npm interactively and move the trusted publisher from the retired `publish.yml` workflow to `cd.yaml` (npm 12 shown because older global CLIs may not support `trust`):
+
+   ```sh
+   npm login
+   npx --yes npm@12 trust list @leocavalcante/pi-tmux
+   npx --yes npm@12 trust revoke @leocavalcante/pi-tmux --id <publish.yml entry id>
+   npx --yes npm@12 trust github @leocavalcante/pi-tmux \
+     --file cd.yaml --repo leocavalcante/pi-tmux --env npm --allow-publish
+   ```
+
+3. Keep npm publishing access set to require 2FA and disallow tokens. Do not create an `NPM_TOKEN` secret.
+4. The GitHub `npm` environment permits deployment from `main` only.
+5. After the first automated release, verify the package version, provenance, and update notes:
+
+   ```sh
+   npm view @leocavalcante/pi-tmux version dist.attestations
+   ```
+
+### Recovering a partial release
+
+Check npm before retrying a failed release. semantic-release pushes the tag before publishing, so a normal re-run may consider that version released already.
+
+- **The version is absent from npm:** investigate the failure. An administrator may delete only the failed release tag and re-run CD on `main` once publishing is fixed.
+- **The version exists on npm:** do not delete its tag or try to republish it. npm versions are immutable. Verify provenance, restore any missing GitHub release from that tag, and release a new version for package fixes.
+- **Publication succeeded but provenance is missing:** treat this as a release failure. Investigate OIDC and publish a new attested version; existing npm versions cannot be repaired by republishing.
+
+Version 0.1.0 was published once from a maintainer machine, without provenance. Versions 0.1.1 through 0.1.7 were published with provenance by a workflow triggered by GitHub releases, which `cd.yaml` replaces.
 
 ## Before submitting
 
