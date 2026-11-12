@@ -95,7 +95,7 @@ test("CI tests the minimum supported Pi from engines.pi without changing the loc
 	expect(runs).toContain("bun .github/scripts/install-pi.ts min");
 	expect(runs.indexOf("bun run test")).toBeGreaterThan(runs.indexOf("bun .github/scripts/install-pi.ts min"));
 	expect(runs).toContain("git diff --exit-code -- package.json bun.lock");
-	expect(readme).toContain(`CI also checks the minimum supported Pi ${minimumVersion} peer version.`);
+	expect(readme).toContain(`CI also checks the minimum supported Pi ${minimumVersion}.`);
 });
 
 test("CI tests the declared minimum Node.js version", () => {
