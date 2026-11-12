@@ -1,44 +1,68 @@
 {
   "name": "@leocavalcante/pi-tmux",
   "version": "0.1.7",
-  "description": "Name your tmux window from your current Pi task and active session history with a short, lowercase AI summary.",
-  "type": "module",
-  "license": "MIT",
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
+  "description": "Name tmux windows after your current Pi task and mark the ones waiting for your input.",
+  "keywords": [
+    "pi-extension",
+    "pi-package",
+    "pi-coding-agent",
+    "tmux",
+    "terminal",
+    "terminal-multiplexer",
+    "notifications",
+    "productivity"
+  ],
+  "homepage": "https://github.com/leocavalcante/pi-tmux#readme",
+  "bugs": {
+    "url": "https://github.com/leocavalcante/pi-tmux/issues"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/leocavalcante/pi-tmux.git"
   },
-  "keywords": ["pi-package", "pi", "tmux", "pi-extension", "coding-agent"],
-  "files": ["index.ts", "src/", "README.md", "LICENSE"],
+  "license": "MIT",
+  "author": "Leo Cavalcante (https://github.com/leocavalcante)",
+  "type": "module",
+  "files": [
+    "index.ts",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "check": "tsc -p tsconfig.json",
-    "check:tests": "tsc -p tsconfig.test.json",
-    "check:package": "publint",
-    "test": "bun test tests/ && npm run test:node",
-    "test:node": "node --test tests/tmux-node.mjs",
-    "verify": "npm run check && npm run check:tests && npm run check:package && npm audit --audit-level=high && npm test && npm pack --dry-run --ignore-scripts"
-  },
-  "devDependencies": {
-    "@earendil-works/pi-ai": "1.5.0",
-    "@earendil-works/pi-coding-agent": "1.5.0",
-    "@types/bun": "^1.4.3",
-    "@types/node": "22.20.5",
-    "jiti": "2.7.0",
-    "publint": "0.3.25",
-    "typescript": "7.0.2",
-    "yaml": "2.9.1"
-  },
-  "engines": {
-    "node": ">=22.19.0"
+    "check": "tsc -p tsconfig.json && tsc -p tests",
+    "test": "bun run test:bun && bun run test:node",
+    "test:bun": "bun test --timeout 30000",
+    "test:node": "node --import jiti/register --test --test-concurrency=1 tests/*.node-test.ts",
+    "check:package": "publint && node .github/scripts/check-package.mjs",
+    "verify": "bun run check && bun run test && bun run check:package && bun audit --audit-level=high"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "^1.1.0"
   },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "1.5.0",
+    "@earendil-works/pi-coding-agent": "1.5.0",
+    "@types/bun": "1.4.4",
+    "@types/node": "22.20.5",
+    "jiti": "2.7.0",
+    "publint": "0.3.25",
+    "typescript": "6.0.3",
+    "yaml": "2.9.1"
+  },
+  "engines": {
+    "node": ">=22.19.0",
+    "pi": ">=1.1.0"
+  },
+  "packageManager": "bun@1.4.4",
+  "trustedDependencies": [],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "pi": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
   }
 }

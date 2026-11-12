@@ -354,7 +354,7 @@ test("the packed Pi extension installs through the CLI and runs its status-only 
 		expect(manifest.files).toContain(entrypoint.replace(/^\.\//, ""));
 		expect(manifest.files).toContain("src/");
 		expect(manifest.keywords).toContain("pi-extension");
-		expect(manifest.keywords).toContain("coding-agent");
+		expect(manifest.keywords).toContain("pi-coding-agent");
 		expect(manifest.peerDependencies?.["@earendil-works/pi-coding-agent"]).toBe("^1.1.0");
 		const packedReadme = await readPackedMember(archive, "package/README.md");
 		expect(packedReadme).toContain("The npm package is available:");
