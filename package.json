@@ -1,6 +1,6 @@
 {
   "name": "@leocavalcante/pi-tmux",
-  "version": "0.1.7",
+  "version": "0.0.0-development",
   "description": "Name tmux windows after your current Pi task and mark the ones waiting for your input.",
   "keywords": [
     "pi-extension",
@@ -27,14 +27,16 @@
     "index.ts",
     "src/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "check": "tsc -p tsconfig.json && tsc -p tests",
     "test": "bun run test:bun && bun run test:node",
     "test:bun": "bun test --timeout 30000",
     "test:node": "node --import jiti/register --test --test-concurrency=1 tests/*.node-test.ts",
-    "check:package": "publint && node .github/scripts/check-package.mjs",
+    "changelog": "git-cliff --output CHANGELOG.md",
+    "check:package": "bun run changelog && publint && node .github/scripts/check-package.mjs",
     "verify": "bun run check && bun run test && bun run check:package && bun audit --audit-level=high"
   },
   "peerDependencies": {
@@ -43,10 +45,17 @@
   "devDependencies": {
     "@earendil-works/pi-ai": "1.5.0",
     "@earendil-works/pi-coding-agent": "1.5.0",
+    "@semantic-release/commit-analyzer": "13.0.1",
+    "@semantic-release/exec": "7.1.0",
+    "@semantic-release/github": "12.0.10",
+    "@semantic-release/npm": "13.2.0",
     "@types/bun": "1.4.4",
     "@types/node": "22.20.5",
+    "conventional-changelog-conventionalcommits": "10.4.1",
+    "git-cliff": "2.14.2",
     "jiti": "2.7.0",
     "publint": "0.3.25",
+    "semantic-release": "25.0.9",
     "typescript": "6.0.3",
     "yaml": "2.9.1"
   },

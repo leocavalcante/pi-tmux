@@ -23,7 +23,6 @@ prompt. Naming runs in the background and does not delay Pi's answer.
   - [Shared panes and cleanup](#shared-panes-and-cleanup)
 - [Privacy and security](#privacy-and-security)
 - [Development](#development)
-- [Publishing](#publishing)
 - [License](#license)
 
 | State | Window name | tmux session name |
@@ -611,38 +610,7 @@ repository contains source and synthetic tests only.
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, checks, tests, and guidance before contributing.
-
-## Publishing
-
-Versions 0.1.1 through 0.1.7 were published from GitHub releases by a workflow
-using npm Trusted Publishing, with provenance. That workflow is retired:
-releases are moving to automated publishing from `main`, and nothing publishes
-until it lands.
-
-npm requires the package to exist before configuring a trusted publisher.
-Bootstrap version `0.1.0` was published manually once, without provenance.
-Do not repeat this bootstrap publish; the commands below
-are retained as historical setup reference. The original manual publish
-bypassed the workflow's main-branch check. Verify the checkout and version
-before logging in, then use interactive npm login and 2FA without creating a CI
-token:
-
-```sh
-git fetch origin
-test "$(git branch --show-current)" = "main"
-test -z "$(git status --porcelain)"
-test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
-test "$(npm pkg get version)" = '"0.1.0"'
-npm login
-npm ci --ignore-scripts
-npm audit --audit-level=high
-npm run check
-npm test
-npm publish --access public --provenance=false --ignore-scripts
-```
-
-The initial local publish has no provenance.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, checks, tests, how releases work, and guidance before contributing.
 
 ## License
 

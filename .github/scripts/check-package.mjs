@@ -15,7 +15,7 @@ try {
   assert.equal(packages.length, 1);
   const packed = packages[0];
   const paths = packed.files.map(file => file.path);
-  for (const required of ["index.ts", "src/extension.ts", "src/tmux.ts", "README.md", "LICENSE"]) {
+  for (const required of ["index.ts", "src/extension.ts", "src/tmux.ts", "README.md", "LICENSE", "CHANGELOG.md"]) {
     assert(paths.includes(required), `Missing published file: ${required}`);
   }
   assert(!paths.some(path => /^(?:tests|node_modules|\.github|docs)\//.test(path)));
