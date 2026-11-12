@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -22,10 +23,13 @@ const manifest = JSON.parse(
 // so the shared CI workflow needs no repository-specific version.
 let requested = process.argv[2];
 if (requested === "min") {
-  requested = /^>=\s*(\d+\.\d+\.\d+)$/.exec(manifest.engines?.pi ?? "")?.[1];
-  if (!requested) {
+  const minimum = /^>=\s*(\d+\.\d+\.\d+)$/.exec(
+    manifest.engines?.pi ?? "",
+  )?.[1];
+  if (!minimum) {
     throw new Error('Declare the minimum Pi as engines.pi ">=x.y.z".');
   }
+  requested = minimum;
 }
 if (!requested || !/^(?:latest|\d+\.\d+\.\d+)$/.test(requested)) {
   throw new Error("Expected min, latest, or a stable Pi version.");
@@ -50,6 +54,17 @@ if (requested === "latest") {
 for (const [name] of Object.entries(manifest.devDependencies)) {
   if (name.startsWith("@earendil-works/"))
     manifest.devDependencies[name] = version;
+}
+// An older Pi can resolve dependencies it no longer works with. A repository
+// pins what each Pi release needs in .github/scripts/pi-pins.json, for example
+// { "1.0.4": { "@earendil-works/pi-codemode": "1.1.0" } }.
+const pinsFile = new URL("pi-pins.json", import.meta.url);
+if (existsSync(pinsFile)) {
+  const pins = JSON.parse(readFileSync(pinsFile, "utf8")) as Record<
+    string,
+    Record<string, string> | undefined
+  >;
+  Object.assign(manifest.devDependencies, pins[version] ?? {});
 }
 // Keep runtime dependencies pinned: test the Pi version consumers use with the
 // runtime dependencies this package ships.
