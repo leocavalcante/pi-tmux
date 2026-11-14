@@ -1,6 +1,6 @@
 # AGENTS.md
 
-pi-tmux: name tmux windows after the current Pi task and mark the ones waiting for input.
+pi-tmux: name tmux windows after your current Pi task and mark the ones waiting for your input.
 
 ## Commands
 
