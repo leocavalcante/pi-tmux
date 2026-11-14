@@ -1,33 +1,36 @@
 name: Bug report
-description: Report a reproducible problem with pi-tmux.
+description: Report a problem you can reproduce with pi-tmux.
 title: "bug: "
+labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        **Privacy reminder:** Do not include credentials, prompts, conversation history, private window/session titles, or screenshots containing them. Sensitive-text screening is best-effort; scrub any logs before sharing. Use generated or redacted examples instead.
+        **Privacy:** Do not include credentials, tokens, prompts, conversation history or content, private window/session titles, attachments, project files, raw logs, or screenshots that show them. Sensitive-text screening is best-effort, not comprehensive; scrub logs before sharing. Use generated or redacted examples, and keep them synthetic. To report a vulnerability, use the private form in [SECURITY.md](https://github.com/leocavalcante/pi-tmux/security/advisories/new) instead.
+  - type: input
+    id: extension-version
+    attributes:
+      label: pi-tmux version
+      description: Shown by `pi list`, with where it came from (npm, GitHub, or a local checkout). Enter `unknown` if unavailable.
+      placeholder: 0.1.8 from npm
+    validations:
+      required: true
   - type: input
     id: pi-version
     attributes:
       label: Pi version
-      description: Run `pi --version`; enter `unknown` if unavailable.
-      placeholder: 1.1.0
-    validations:
-      required: true
-  - type: input
-    id: tmux-version
-    attributes:
-      label: tmux version
-      description: Run `tmux -V`; enter `unknown` if unavailable.
-      placeholder: tmux 3.7c
+      description: Run `pi --version`. Enter `unknown` if unavailable.
+      placeholder: 1.5.2
     validations:
       required: true
   - type: input
     id: node-version
     attributes:
       label: Node.js version
-      description: Run `node --version`, if available; enter `unknown` if unavailable.
+      description: Run `node --version`; enter `unknown` if unavailable.
       placeholder: v22.19.0
+    validations:
+      required: true
   - type: dropdown
     id: operating-system
     attributes:
@@ -38,6 +41,14 @@ body:
         - Windows
         - WSL
         - Other
+    validations:
+      required: true
+  - type: input
+    id: tmux-version
+    attributes:
+      label: tmux version
+      description: Run `tmux -V`; enter `unknown` if unavailable.
+      placeholder: tmux 3.7c
     validations:
       required: true
   - type: dropdown

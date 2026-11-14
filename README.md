@@ -1,29 +1,13 @@
 # pi-tmux
 
-A [Pi](https://pi.dev) extension that names your tmux window from the current
-task and active conversation history. It also marks windows and tmux sessions
-when Pi is waiting for input.
+Name tmux windows after your current Pi task and mark the ones waiting for your input.
+
+[![npm](https://img.shields.io/npm/v/@leocavalcante/pi-tmux)](https://www.npmjs.com/package/@leocavalcante/pi-tmux) [![CD](https://github.com/leocavalcante/pi-tmux/actions/workflows/cd.yaml/badge.svg)](https://github.com/leocavalcante/pi-tmux/actions/workflows/cd.yaml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/leocavalcante/pi-tmux/blob/main/LICENSE)
 
 A prompt about fixing authentication tests might produce `fix auth tests`.
 Follow-ups such as `continue` or `yes, do it` use recent dialogue to keep the
 task recognizable. Resuming a Pi session restores a task title without a new
 prompt. Naming runs in the background and does not delay Pi's answer.
-
-## Contents
-
-- [Installation](#installation)
-  - [Naming model](#naming-model)
-  - [Retry a title](#retry-a-title)
-  - [Pin a manual title](#pin-a-manual-title)
-  - [Mark a waiting title as read](#mark-a-waiting-title-as-read)
-  - [Inspect title status](#inspect-title-status)
-  - [Synchronize without AI](#synchronize-without-ai)
-  - [Quit and close the pane](#quit-and-close-the-pane)
-- [Behavior](#behavior)
-  - [Shared panes and cleanup](#shared-panes-and-cleanup)
-- [Privacy and security](#privacy-and-security)
-- [Development](#development)
-- [License](#license)
 
 | State                                      | Window name                                               | tmux session name                                                       |
 | ------------------------------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -40,15 +24,22 @@ A session stays marked while any Pi pane across its windows waits. Reloading
 clears the pane's waiting marker but preserves its task title, so immediately
 after `/reload` the title is unmarked until a later Pi event updates it.
 
+## Contents
+
+- [Installation](#installation)
+- [Usage](#usage)
+- [How it works](#how-it-works)
+- [Configuration](#configuration)
+- [Compatibility](#compatibility)
+- [Privacy and security](#privacy-and-security)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Installation
 
 Run interactive Pi inside tmux, with `tmux` available on `PATH` and
-`TMUX_PANE` set by tmux. Linux CI exercises tmux 3.4 and a pinned tmux 3.7c
-build; macOS CI uses the runner's installed version. These are tested versions,
-not a stated minimum-version requirement. Tested with Pi 1.5.2; CI also checks
-the minimum supported Pi 1.1.0. The package declares Node.js 22.19 or newer. It
-accepts any Pi version as its extension API peer (`*`), so it always uses the Pi
-that loads it. Pi supplies the runtime dependencies, with no build step.
+`TMUX_PANE` set by tmux.
 
 The npm package is available:
 
@@ -62,9 +53,18 @@ To install the current GitHub source instead:
 pi install git:github.com/leocavalcante/pi-tmux
 ```
 
-Run `/reload` in Pi after installation. If you previously used the local
-`tmux-title` extension, remove that copy before loading this package to avoid
-running two naming requests for each prompt.
+After installation, run `/reload` in Pi or start a new session. To try the npm
+package once without adding it to your settings, run:
+
+```sh
+pi -e npm:@leocavalcante/pi-tmux
+```
+
+Remove either installation with `pi remove` and the same source.
+
+If you previously used the local `tmux-title` extension, remove that copy
+before loading this package to avoid running two naming requests for each
+prompt.
 
 To update a GitHub installation:
 
@@ -78,49 +78,17 @@ Run `/reload` in each running Pi instance afterward so busy panes register
 window ownership. Waiting panes from older runtimes are still recognized from
 their waiting flags.
 
-### Naming model
+## Usage
 
-The default naming model is `openai-codex/gpt-6-luna`, using your existing Pi
-credentials. Authenticate with `/login` and make sure that model is available.
-This does not change the model used for your main conversation.
-
-Set `PI_TMUX_MODEL` before starting Pi to use another registered model:
-
-```sh
-PI_TMUX_MODEL=anthropic/claude-sonnet-4-5 pi
-```
-
-Use `provider/model` as listed by Pi. The setting is trimmed at the edges and
-may contain at most 256 ASCII characters afterward. Provider IDs may contain
-visible punctuation other than `/`; model IDs may contain additional slashes.
-Whitespace and control characters inside either ID are rejected. The first
-slash separates provider from model, so `openrouter/vendor/model` uses
-`openrouter` as the provider and `vendor/model` as the model. An unset or blank
-setting uses the default; `off` (case-insensitive) disables naming.
-The extension reads this setting when it loads. Changes to a parent shell's
-exports require restarting Pi; `/reload` rereads Pi's own process environment.
-An invalid setting disables naming and warns without falling back to another
-provider. A missing model or missing credentials also does not trigger fallback.
-
-The last Pi pane normally resets its window to `zsh` when it quits. Set
-`PI_TMUX_IDLE_TITLE` before starting Pi to choose another idle title; the value
-uses the same lowercase ASCII cleanup and 24-character limit as generated
-names. Empty or non-alphanumeric values, values longer than 64 Ki UTF-16 code
-units, and values matching the limited sensitive-output checks fall back to
-`zsh`; these checks are best-effort, not comprehensive redaction. The value
-applies only on a future graceful quit when this is the last Pi pane in its
-window; it does not rename an open window.
-`/reload` rereads the setting from Pi's process environment.
-
-For waiting markers without any naming requests or dialogue collection:
-
-```sh
-PI_TMUX_MODEL=off pi
-```
-
-Status-only mode still formats waiting window names. The last Pi in a window
-resets its name to the configured idle title on graceful quit. You can set a
-manual title without enabling AI naming.
+| Command                  | What it does                                                 |
+| ------------------------ | ------------------------------------------------------------ |
+| `/tmux-title read`       | Clears this pane's waiting marker.                           |
+| `/tmux-title status`     | Shows a read-only title and waiting-state snapshot.          |
+| `/tmux-title sync`       | Reapplies titles and flags without using AI.                 |
+| `/tmux-title set <name>` | Pins a manual title for this pane.                           |
+| `/tmux-title auto`       | Releases a pin and requests a title from the active context. |
+| `/tmux-title`            | Retries a title request without waiting for the model.       |
+| `/quit-pane`             | Quits Pi and closes its tmux pane after shutdown.            |
 
 ### Retry a title
 
@@ -216,7 +184,7 @@ pane Pi is running in. The pane closes after Pi has completed its shutdown. If
 tmux is unavailable or Pi is not running interactively inside tmux, the command
 warns and leaves Pi running.
 
-## Behavior
+## How it works
 
 - With AI naming enabled and no manual pin, each non-empty interactive prompt
   requests a title using recent dialogue from the active session branch plus
@@ -338,16 +306,6 @@ registered, clear that pane's waiting status, then
 refresh the task name from the active history. The existing task name stays
 until a naming request succeeds.
 
-A forced kill cannot run cleanup and may leave task names, waiting flags, or
-ownership flags behind. If Pi has stopped but its pane remains, run these
-commands from the shell in that pane to clear only its stale flags before
-relying on another Pi's next status update:
-
-```sh
-tmux set-option -p -t "$TMUX_PANE" @pi-tmux-active 0
-tmux set-option -p -t "$TMUX_PANE" @pi-tmux-waiting 0
-```
-
 Pane moves do not trigger an immediate update. The moved Pi's next status
 update also refreshes its most recently observed former window and session
 markers. `/tmux-title sync` performs this update on demand without an AI
@@ -359,13 +317,67 @@ and eight sessions. If the pane keeps moving during repair, each update makes
 at most four passes; remaining repairs wait for a later update. No tmux hooks
 are installed.
 
-Closing a pane without a graceful Pi shutdown cannot run repair. A Pi remaining
-in the former location must refresh it. To restore automatic process-based
-names for a window, run this from a shell in one of its panes:
+## Configuration
+
+| Setting              | Default                   | Description                                                                     |
+| -------------------- | ------------------------- | ------------------------------------------------------------------------------- |
+| `PI_TMUX_MODEL`      | `openai-codex/gpt-6-luna` | Registered `provider/model` used to name tasks; set to `off` to disable naming. |
+| `PI_TMUX_IDLE_TITLE` | `zsh`                     | Window name after the last Pi pane quits gracefully.                            |
+
+### Naming model
+
+The default naming model is `openai-codex/gpt-6-luna`, using your existing Pi
+credentials. Authenticate with `/login` and make sure that model is available.
+This does not change the model used for your main conversation.
+
+Set `PI_TMUX_MODEL` before starting Pi to use another registered model:
 
 ```sh
-tmux set-window-option -t "$TMUX_PANE" automatic-rename on
+PI_TMUX_MODEL=anthropic/claude-sonnet-4-5 pi
 ```
+
+Use `provider/model` as listed by Pi. The setting is trimmed at the edges and
+may contain at most 256 ASCII characters afterward. Provider IDs may contain
+visible punctuation other than `/`; model IDs may contain additional slashes.
+Whitespace and control characters inside either ID are rejected. The first
+slash separates provider from model, so `openrouter/vendor/model` uses
+`openrouter` as the provider and `vendor/model` as the model. An unset or blank
+setting uses the default; `off` (case-insensitive) disables naming.
+The extension reads this setting when it loads. Changes to a parent shell's
+exports require restarting Pi; `/reload` rereads Pi's own process environment.
+An invalid setting disables naming and warns without falling back to another
+provider. A missing model or missing credentials also does not trigger fallback.
+
+The last Pi pane normally resets its window to `zsh` when it quits. Set
+`PI_TMUX_IDLE_TITLE` before starting Pi to choose another idle title; the value
+uses the same lowercase ASCII cleanup and 24-character limit as generated
+names. Empty or non-alphanumeric values, values longer than 64 Ki UTF-16 code
+units, and values matching the limited sensitive-output checks fall back to
+`zsh`; these checks are best-effort, not comprehensive redaction. The value
+applies only on a future graceful quit when this is the last Pi pane in its
+window; it does not rename an open window.
+`/reload` rereads the setting from Pi's process environment.
+
+For waiting markers without any naming requests or dialogue collection:
+
+```sh
+PI_TMUX_MODEL=off pi
+```
+
+Status-only mode still formats waiting window names. The last Pi in a window
+resets its name to the configured idle title on graceful quit. You can set a
+manual title without enabling AI naming.
+
+## Compatibility
+
+Requires Pi 1.1.0 or newer and Node.js 22.19 or newer. Tested with Pi 1.5.2; CI
+also checks the minimum supported Pi 1.1.0.
+
+Linux CI tests tmux 3.4 and a pinned tmux 3.7c build; macOS CI uses Homebrew
+tmux. These are tested versions, not a stated minimum-version requirement.
+
+It accepts any Pi version as its extension API peer (`*`), so it always uses the
+Pi that loads it. Pi supplies the runtime dependencies, with no build step.
 
 ## Privacy and security
 
@@ -605,16 +617,55 @@ Marker repair uses `if-shell -F` to evaluate a format without invoking a shell.
 Title text cannot inject shell commands, tmux options, or additional format
 expressions.
 
-Like other Pi extensions, it runs with the same OS permissions as Pi. This
+To report a vulnerability or accidental credential exposure, follow
+[SECURITY.md](https://github.com/leocavalcante/pi-tmux/blob/main/SECURITY.md).
+
+Like other Pi extensions, pi-tmux runs with the same OS permissions as Pi. This
 repository contains source and synthetic tests only.
 
-## Development
+## Troubleshooting
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, checks, tests, how releases work, and guidance before contributing.
+- **A forced kill leaves stale flags.** A forced kill cannot run cleanup and
+  may leave task names, waiting flags, or ownership flags behind. If Pi has
+  stopped but its pane remains, run these commands from the shell in that pane
+  to clear only its stale flags before relying on another Pi's next status
+  update:
+
+  ```sh
+  tmux set-option -p -t "$TMUX_PANE" @pi-tmux-active 0
+  tmux set-option -p -t "$TMUX_PANE" @pi-tmux-waiting 0
+  ```
+
+- **Restore automatic process-based names.** Closing a pane without a graceful
+  Pi shutdown cannot run repair. A Pi remaining in the former location must
+  refresh it. To restore automatic process-based names for a window, run this
+  from a shell in one of its panes:
+
+  ```sh
+  tmux set-window-option -t "$TMUX_PANE" automatic-rename on
+  ```
+
+- **The tmux server changed.** If `/tmux-title status` detects a server
+  restart, pi-tmux stops writes and cancels naming because the inherited
+  `TMUX_PANE` may now refer to an unrelated pane that reused the old ID. The
+  warning reads: “The tmux server changed; restart Pi to resume title
+  updates.” Restart Pi to reconnect safely. Until then, title commands warn
+  that Pi must restart.
+
+- **The naming model is unavailable.** Check that `PI_TMUX_MODEL` names a
+  registered model and authenticate with `/login`. Missing models or
+  credentials do not trigger fallback. An invalid setting disables naming;
+  correct it and run `/reload` to reread Pi's environment. Restart Pi if you
+  changed a parent shell's exports. Waiting markers continue to work. Use a
+  bare `/tmux-title` to retry when the model and credentials are available.
+
+## Contributing
+
+See [CONTRIBUTING.md](https://github.com/leocavalcante/pi-tmux/blob/main/CONTRIBUTING.md) for development setup, checks, tests, how releases work, and guidance before contributing.
 
 ## License
 
-[MIT](LICENSE).
+MIT. See [LICENSE](https://github.com/leocavalcante/pi-tmux/blob/main/LICENSE).
 
 [spanish-nif-guide]: https://www.interior.gob.es/opencms/en/servicios-al-ciudadano/tramites-y-gestiones/dni/calculo-del-digito-de-control-del-nif-nie/
 [nhs-number-standard]: https://www.datadictionary.nhs.uk/attributes/nhs_number.html
