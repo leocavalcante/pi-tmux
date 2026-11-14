@@ -1,8269 +1,10109 @@
 import { expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
-	buildNamingContext,
-	buildNamingRequestContext,
-	hasSensitiveNamingContext,
-	hasSensitiveOutput,
-	MAX_PROMPT_LENGTH,
-	requestNamingTitle,
-	UnsafeNamingContextError,
+  buildNamingContext,
+  buildNamingRequestContext,
+  hasSensitiveNamingContext,
+  hasSensitiveOutput,
+  MAX_PROMPT_LENGTH,
+  requestNamingTitle,
+  UnsafeNamingContextError,
 } from "../src/naming.ts";
 
 test("screens webhook and Discord auth credentials across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const teamsGuid = "01234567-89ab-cdef-0123-456789abcdef";
-	const teamsOtherGuid = "fedcba98-7654-3210-fedc-ba9876543210";
-	const slackToken = `${"A1b2".repeat(10)}A1b`;
-	const legacySlackToken = "C3d4".repeat(6);
-	const discordToken = "D5e6".repeat(17);
-	const discordAuthToken = `${"A1b_".repeat(6)}.cD9_-Z.${"QwErTy9_-".repeat(3)}`;
-	const discordMfaToken = `mfa.${"a1B_".repeat(21)}`;
-	const teamsToken = "a1b2c3d4".repeat(4);
-	const values = [
-		{ value: `whsec_${"F7g8".repeat(6)}`, secret: `whsec_${"F7g8".repeat(6)}` },
-		{ value: `https://hooks.slack.com/services/${slackToken}`, secret: slackToken },
-		{
-			value: `https://hooks.slack.com/services/T00000000/B11111111/${legacySlackToken}`,
-			secret: legacySlackToken,
-		},
-		{
-			value: `https://discord.com/api/webhooks/123456789012345678/${discordToken}`,
-			secret: discordToken,
-		},
-		{ value: discordAuthToken, secret: discordAuthToken },
-		{ value: discordMfaToken, secret: discordMfaToken },
-		{
-			value: `https://tenant.webhook.office.com/webhookb2/${teamsGuid}@${teamsOtherGuid}/IncomingWebhook/${teamsToken}/${teamsGuid}`,
-			secret: teamsToken,
-		},
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const teamsGuid = "01234567-89ab-cdef-0123-456789abcdef";
+  const teamsOtherGuid = "fedcba98-7654-3210-fedc-ba9876543210";
+  const slackToken = `${"A1b2".repeat(10)}A1b`;
+  const legacySlackToken = "C3d4".repeat(6);
+  const discordToken = "D5e6".repeat(17);
+  const discordAuthToken = `${"A1b_".repeat(6)}.cD9_-Z.${"QwErTy9_-".repeat(3)}`;
+  const discordMfaToken = `mfa.${"a1B_".repeat(21)}`;
+  const teamsToken = "a1b2c3d4".repeat(4);
+  const values = [
+    { value: `whsec_${"F7g8".repeat(6)}`, secret: `whsec_${"F7g8".repeat(6)}` },
+    {
+      value: `https://hooks.slack.com/services/${slackToken}`,
+      secret: slackToken,
+    },
+    {
+      value: `https://hooks.slack.com/services/T00000000/B11111111/${legacySlackToken}`,
+      secret: legacySlackToken,
+    },
+    {
+      value: `https://discord.com/api/webhooks/123456789012345678/${discordToken}`,
+      secret: discordToken,
+    },
+    { value: discordAuthToken, secret: discordAuthToken },
+    { value: discordMfaToken, secret: discordMfaToken },
+    {
+      value: `https://tenant.webhook.office.com/webhookb2/${teamsGuid}@${teamsOtherGuid}/IncomingWebhook/${teamsToken}/${teamsGuid}`,
+      secret: teamsToken,
+    },
+  ];
 
-	for (const { value, secret } of values) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-		const obfuscated = value.replace(secret, `${secret.slice(0, 10)}\u0000${secret.slice(10)}`);
-		for (const candidate of [value, obfuscated]) {
-			const secretPrefix = secret.slice(0, 10);
-			const valueStart = prefixLength - 10 - candidate.indexOf(secretPrefix);
-			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const { value, secret } of values) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+    const obfuscated = value.replace(
+      secret,
+      `${secret.slice(0, 10)}\u0000${secret.slice(10)}`,
+    );
+    for (const candidate of [value, obfuscated]) {
+      const secretPrefix = secret.slice(0, 10);
+      const valueStart = prefixLength - 10 - candidate.indexOf(secretPrefix);
+      const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const summaryContent = `${"x".repeat(989)} ${values[5]!.value} y`;
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: summaryContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const summaryContent = `${"x".repeat(989)} ${values[5]!.value} y`;
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: summaryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const historyValue = values[4]!;
-	const historyValueStart = 990 - historyValue.value.indexOf(historyValue.secret);
-	const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue.value} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
+  const historyValue = values[4]!;
+  const historyValueStart =
+    990 - historyValue.value.indexOf(historyValue.secret);
+  const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue.value} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
 
-	// A Teams URL can straddle the omitted region while its 32-character secret
-	// remains wholly omitted; the structural URL alone must not trigger a block.
-	const teamsValue = values[6]!.value;
-	const teamsSecretOffset = teamsValue.indexOf(teamsToken);
-	const omittedSecretPromptStart = prefixLength + 5 - teamsSecretOffset;
-	const omittedSecretPrompt = `${"x".repeat(omittedSecretPromptStart - 1)} ${teamsValue} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], omittedSecretPrompt).hasSensitiveBoundary()).toBe(false);
+  // A Teams URL can straddle the omitted region while its 32-character secret
+  // remains wholly omitted; the structural URL alone must not trigger a block.
+  const teamsValue = values[6]!.value;
+  const teamsSecretOffset = teamsValue.indexOf(teamsToken);
+  const omittedSecretPromptStart = prefixLength + 5 - teamsSecretOffset;
+  const omittedSecretPrompt = `${"x".repeat(omittedSecretPromptStart - 1)} ${teamsValue} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], omittedSecretPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 
-	for (const nearMiss of [discordAuthToken.slice(0, -1), discordMfaToken.slice(0, -1)]) {
-		const tokenStart = prefixLength - 10;
-		const nearMissPrompt = `${"x".repeat(tokenStart - 1)} ${nearMiss} ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  for (const nearMiss of [
+    discordAuthToken.slice(0, -1),
+    discordMfaToken.slice(0, -1),
+  ]) {
+    const tokenStart = prefixLength - 10;
+    const nearMissPrompt = `${"x".repeat(tokenStart - 1)} ${nearMiss} ${"y".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("trimmed trailing whitespace does not extend short tokens across history boundaries", () => {
-	const nearMiss = `Datadog: ${"A".repeat(39)}`;
-	const retainedPrefixLength = 1_000 - nearMiss.length - 1;
-	for (const separator of ["\t", "\n"]) {
-		const content = `${"x".repeat(retainedPrefixLength - 1)} ${nearMiss}${separator}a ${"z".repeat(1_200)}`;
-		const contexts = [
-			buildNamingRequestContext([{ role: "user", content }] as any),
-			buildNamingRequestContext([{ role: "compactionSummary", summary: content }] as any),
-		];
-		for (const context of contexts) {
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMiss = `Datadog: ${"A".repeat(39)}`;
+  const retainedPrefixLength = 1_000 - nearMiss.length - 1;
+  for (const separator of ["\t", "\n"]) {
+    const content = `${"x".repeat(retainedPrefixLength - 1)} ${nearMiss}${separator}a ${"z".repeat(1_200)}`;
+    const contexts = [
+      buildNamingRequestContext([{ role: "user", content }] as any),
+      buildNamingRequestContext([
+        { role: "compactionSummary", summary: content },
+      ] as any),
+    ];
+    for (const context of contexts) {
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("trimmed New Relic near-misses are not completed by prompt or history edge whitespace", () => {
-	const nearMiss = `NRAK-${"A1b2".repeat(6)}ab`;
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = MAX_PROMPT_LENGTH + 100 - suffixLength;
-	const retainedHistoryLength = 1_000;
-	for (const separator of ["\t", "\n"]) {
-		const prefixPrompt = `${"x".repeat(prefixLength - nearMiss.length - 2)} ${nearMiss}${separator}a ${"x".repeat(1_200)}`;
-		const suffixPrompt = `${"x".repeat(suffixStart - nearMiss.length - 1)} ${nearMiss}${separator}a ${"x".repeat(suffixLength - 3)}`;
-		const history = `${"x".repeat(retainedHistoryLength - nearMiss.length - 2)} ${nearMiss}${separator}a ${"x".repeat(1_200)}`;
-		const contexts = [
-			{ context: buildNamingRequestContext([], prefixPrompt), includesNearMiss: true },
-			{ context: buildNamingRequestContext([], suffixPrompt), includesNearMiss: false },
-			{ context: buildNamingRequestContext([{ role: "user", content: history }] as any), includesNearMiss: true },
-			{
-				context: buildNamingRequestContext([{ role: "compactionSummary", summary: history }] as any),
-				includesNearMiss: true,
-			},
-		];
+  const nearMiss = `NRAK-${"A1b2".repeat(6)}ab`;
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = MAX_PROMPT_LENGTH + 100 - suffixLength;
+  const retainedHistoryLength = 1_000;
+  for (const separator of ["\t", "\n"]) {
+    const prefixPrompt = `${"x".repeat(prefixLength - nearMiss.length - 2)} ${nearMiss}${separator}a ${"x".repeat(1_200)}`;
+    const suffixPrompt = `${"x".repeat(suffixStart - nearMiss.length - 1)} ${nearMiss}${separator}a ${"x".repeat(suffixLength - 3)}`;
+    const history = `${"x".repeat(retainedHistoryLength - nearMiss.length - 2)} ${nearMiss}${separator}a ${"x".repeat(1_200)}`;
+    const contexts = [
+      {
+        context: buildNamingRequestContext([], prefixPrompt),
+        includesNearMiss: true,
+      },
+      {
+        context: buildNamingRequestContext([], suffixPrompt),
+        includesNearMiss: false,
+      },
+      {
+        context: buildNamingRequestContext([
+          { role: "user", content: history },
+        ] as any),
+        includesNearMiss: true,
+      },
+      {
+        context: buildNamingRequestContext([
+          { role: "compactionSummary", summary: history },
+        ] as any),
+        includesNearMiss: true,
+      },
+    ];
 
-		for (const { context, includesNearMiss } of contexts) {
-			expect(context.text.includes(nearMiss)).toBe(includesNearMiss);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+    for (const { context, includesNearMiss } of contexts) {
+      expect(context.text.includes(nearMiss)).toBe(includesNearMiss);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("trimmed Resend near-misses are not completed by prompt or history edge whitespace", () => {
-	const nearMiss = `re_${"A".repeat(31)}`;
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 100;
-	const suffixStart = promptLength - suffixLength;
-	const retainedHistoryLength = 1_000;
-	const prose = "a prose after the boundary";
+  const nearMiss = `re_${"A".repeat(31)}`;
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 100;
+  const suffixStart = promptLength - suffixLength;
+  const retainedHistoryLength = 1_000;
+  const prose = "a prose after the boundary";
 
-	expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-	expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	for (const separator of ["\t", "\n"]) {
-		const prefixEdgeValue = `${nearMiss}${separator}`;
-		const prefixPrompt = `${"x".repeat(prefixLength - prefixEdgeValue.length - 1)} ${prefixEdgeValue}${prose} ${"x".repeat(1_200)}`;
-		const suffixLeft = `${"x".repeat(suffixStart - nearMiss.length - 1)} ${nearMiss}`;
-		const suffixRight = `${separator}${prose}`;
-		const suffixPrompt = suffixLeft + suffixRight
-			+ "x".repeat(promptLength - suffixLeft.length - suffixRight.length);
-		const history = `${"x".repeat(retainedHistoryLength - nearMiss.length - separator.length - 1)} `
-			+ `${nearMiss}${separator}${prose} ${"x".repeat(1_200)}`;
-		const contexts = [
-			{ context: buildNamingRequestContext([], prefixPrompt), includesNearMiss: true },
-			{ context: buildNamingRequestContext([], suffixPrompt), includesNearMiss: false },
-			{ context: buildNamingRequestContext([{ role: "user", content: history }] as any), includesNearMiss: true },
-			{
-				context: buildNamingRequestContext([{ role: "compactionSummary", summary: history }] as any),
-				includesNearMiss: true,
-			},
-		];
+  expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+  expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  for (const separator of ["\t", "\n"]) {
+    const prefixEdgeValue = `${nearMiss}${separator}`;
+    const prefixPrompt = `${"x".repeat(prefixLength - prefixEdgeValue.length - 1)} ${prefixEdgeValue}${prose} ${"x".repeat(1_200)}`;
+    const suffixLeft = `${"x".repeat(suffixStart - nearMiss.length - 1)} ${nearMiss}`;
+    const suffixRight = `${separator}${prose}`;
+    const suffixPrompt =
+      suffixLeft +
+      suffixRight +
+      "x".repeat(promptLength - suffixLeft.length - suffixRight.length);
+    const history =
+      `${"x".repeat(retainedHistoryLength - nearMiss.length - separator.length - 1)} ` +
+      `${nearMiss}${separator}${prose} ${"x".repeat(1_200)}`;
+    const contexts = [
+      {
+        context: buildNamingRequestContext([], prefixPrompt),
+        includesNearMiss: true,
+      },
+      {
+        context: buildNamingRequestContext([], suffixPrompt),
+        includesNearMiss: false,
+      },
+      {
+        context: buildNamingRequestContext([
+          { role: "user", content: history },
+        ] as any),
+        includesNearMiss: true,
+      },
+      {
+        context: buildNamingRequestContext([
+          { role: "compactionSummary", summary: history },
+        ] as any),
+        includesNearMiss: true,
+      },
+    ];
 
-		for (const { context, includesNearMiss } of contexts) {
-			expect(context.text.includes(nearMiss)).toBe(includesNearMiss);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+    for (const { context, includesNearMiss } of contexts) {
+      expect(context.text.includes(nearMiss)).toBe(includesNearMiss);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("edge whitespace does not complete underlength whitespace-free token formats", () => {
-	const values = [
-		`EZAK${"D".repeat(54)}`,
-		`fm1a_${"A1b+/".repeat(20)}`,
-		`csk_${"B".repeat(48)}`,
-		`jina_${"T".repeat(60)}`,
-		`lin_api_${"a".repeat(40)}`,
-		`dapi${"a".repeat(32)}`,
-		`dckr_pat_${"A".repeat(27)}`,
-		`dckr_oat_${"B".repeat(32)}`,
-		`rubygems_${"a".repeat(48)}`,
-		`CLOJARS_${"A".repeat(60)}`,
-		`tfp_${"A".repeat(59)}`,
-		`pul-${"a".repeat(40)}`,
-		`SG.${"a".repeat(66)}`,
-		`eyJrIjoi${"A".repeat(70)}`,
-		`dp.pt.${"a".repeat(43)}`,
-		`sntryu_${"a".repeat(64)}`,
-		`shpat_${"a".repeat(32)}`,
-		`shippo_live_${"a".repeat(40)}`,
-		`pnu_${"A1b2".repeat(9)}`,
-		`hvs.${"V".repeat(24)}`,
-		["A3", "A".repeat(6), "B".repeat(11), "C".repeat(5), "D".repeat(5), "E".repeat(5)].join("-"),
-	];
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 100;
-	const suffixStart = promptLength - suffixLength;
-	const retainedHistoryLength = 1_000;
-	const prose = "a prose after the boundary";
+  const values = [
+    `EZAK${"D".repeat(54)}`,
+    `fm1a_${"A1b+/".repeat(20)}`,
+    `csk_${"B".repeat(48)}`,
+    `jina_${"T".repeat(60)}`,
+    `lin_api_${"a".repeat(40)}`,
+    `dapi${"a".repeat(32)}`,
+    `dckr_pat_${"A".repeat(27)}`,
+    `dckr_oat_${"B".repeat(32)}`,
+    `rubygems_${"a".repeat(48)}`,
+    `CLOJARS_${"A".repeat(60)}`,
+    `tfp_${"A".repeat(59)}`,
+    `pul-${"a".repeat(40)}`,
+    `SG.${"a".repeat(66)}`,
+    `eyJrIjoi${"A".repeat(70)}`,
+    `dp.pt.${"a".repeat(43)}`,
+    `sntryu_${"a".repeat(64)}`,
+    `shpat_${"a".repeat(32)}`,
+    `shippo_live_${"a".repeat(40)}`,
+    `pnu_${"A1b2".repeat(9)}`,
+    `hvs.${"V".repeat(24)}`,
+    [
+      "A3",
+      "A".repeat(6),
+      "B".repeat(11),
+      "C".repeat(5),
+      "D".repeat(5),
+      "E".repeat(5),
+    ].join("-"),
+  ];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 100;
+  const suffixStart = promptLength - suffixLength;
+  const retainedHistoryLength = 1_000;
+  const prose = "a prose after the boundary";
 
-	for (const value of values) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		const nearMiss = value.slice(0, -1);
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		for (const separator of ["\t", "\n"]) {
-			const prefixEdgeValue = `${nearMiss}${separator}`;
-			const prefixPrompt = `${"x".repeat(prefixLength - prefixEdgeValue.length - 1)} `
-				+ `${prefixEdgeValue}${prose} ${"x".repeat(1_200)}`;
-			const suffixLeft = `${"x".repeat(suffixStart - nearMiss.length - 1)} ${nearMiss}`;
-			const suffixRight = `${separator}${prose}`;
-			const suffixPrompt = suffixLeft + suffixRight
-				+ "x".repeat(promptLength - suffixLeft.length - suffixRight.length);
-			const history = `${"x".repeat(retainedHistoryLength - nearMiss.length - separator.length - 1)} `
-				+ `${nearMiss}${separator}${prose} ${"x".repeat(1_200)}`;
-			const contexts = [
-				{ context: buildNamingRequestContext([], prefixPrompt), includesNearMiss: true },
-				{ context: buildNamingRequestContext([], suffixPrompt), includesNearMiss: false },
-				{ context: buildNamingRequestContext([{ role: "user", content: history }] as any), includesNearMiss: true },
-				{
-					context: buildNamingRequestContext([{ role: "compactionSummary", summary: history }] as any),
-					includesNearMiss: true,
-				},
-			];
+  for (const value of values) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    const nearMiss = value.slice(0, -1);
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    for (const separator of ["\t", "\n"]) {
+      const prefixEdgeValue = `${nearMiss}${separator}`;
+      const prefixPrompt =
+        `${"x".repeat(prefixLength - prefixEdgeValue.length - 1)} ` +
+        `${prefixEdgeValue}${prose} ${"x".repeat(1_200)}`;
+      const suffixLeft = `${"x".repeat(suffixStart - nearMiss.length - 1)} ${nearMiss}`;
+      const suffixRight = `${separator}${prose}`;
+      const suffixPrompt =
+        suffixLeft +
+        suffixRight +
+        "x".repeat(promptLength - suffixLeft.length - suffixRight.length);
+      const history =
+        `${"x".repeat(retainedHistoryLength - nearMiss.length - separator.length - 1)} ` +
+        `${nearMiss}${separator}${prose} ${"x".repeat(1_200)}`;
+      const contexts = [
+        {
+          context: buildNamingRequestContext([], prefixPrompt),
+          includesNearMiss: true,
+        },
+        {
+          context: buildNamingRequestContext([], suffixPrompt),
+          includesNearMiss: false,
+        },
+        {
+          context: buildNamingRequestContext([
+            { role: "user", content: history },
+          ] as any),
+          includesNearMiss: true,
+        },
+        {
+          context: buildNamingRequestContext([
+            { role: "compactionSummary", summary: history },
+          ] as any),
+          includesNearMiss: true,
+        },
+      ];
 
-			for (const { context, includesNearMiss } of contexts) {
-				expect(context.text.includes(nearMiss)).toBe(includesNearMiss);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(false);
-			}
-		}
-	}
+      for (const { context, includesNearMiss } of contexts) {
+        expect(context.text.includes(nearMiss)).toBe(includesNearMiss);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(false);
+      }
+    }
+  }
 });
 
 test("retained-edge whitespace inside a recognized obfuscated token does not bypass the boundary scan", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 100;
-	const suffixStart = promptLength - suffixLength;
-	const historyLimit = 1_000;
-	const token = `neon_api_key_${"N".repeat(32)}`;
-	const separatorOffset = 13 + 8;
-	const obfuscated = `${token.slice(0, separatorOffset)}\t${token.slice(separatorOffset)}`;
-	const promptAt = (value: string, start: number) => {
-		const prefix = `${"x".repeat(start - 1)} `;
-		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 100;
+  const suffixStart = promptLength - suffixLength;
+  const historyLimit = 1_000;
+  const token = `neon_api_key_${"N".repeat(32)}`;
+  const separatorOffset = 13 + 8;
+  const obfuscated = `${token.slice(0, separatorOffset)}\t${token.slice(separatorOffset)}`;
+  const promptAt = (value: string, start: number) => {
+    const prefix = `${"x".repeat(start - 1)} `;
+    return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+  };
 
-	expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-	const contexts = [
-		buildNamingRequestContext([], promptAt(obfuscated, prefixLength - separatorOffset - 1)),
-		buildNamingRequestContext([], promptAt(obfuscated, suffixStart - separatorOffset)),
-	];
-	const historyStart = historyLimit - separatorOffset - 1;
-	const history = `${"x".repeat(historyStart - 1)} ${obfuscated} ${"y".repeat(1_100)}`;
-	contexts.push(
-		buildNamingRequestContext([{ role: "user", content: history }] as any),
-		buildNamingRequestContext([{ role: "compactionSummary", summary: history }] as any),
-	);
-	for (const context of contexts) {
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+  const contexts = [
+    buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, prefixLength - separatorOffset - 1),
+    ),
+    buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, suffixStart - separatorOffset),
+    ),
+  ];
+  const historyStart = historyLimit - separatorOffset - 1;
+  const history = `${"x".repeat(historyStart - 1)} ${obfuscated} ${"y".repeat(1_100)}`;
+  contexts.push(
+    buildNamingRequestContext([{ role: "user", content: history }] as any),
+    buildNamingRequestContext([
+      { role: "compactionSummary", summary: history },
+    ] as any),
+  );
+  for (const context of contexts) {
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 
-	// Keep rejecting a one-character prose completion at the same prompt edge.
-	const nearMiss = token.slice(0, -1);
-	const nearMissEdge = `${nearMiss}\t`;
-	const nearMissPrompt = `${"x".repeat(prefixLength - nearMissEdge.length - 1)} ${nearMissEdge}a prose after the boundary ${"y".repeat(1_200)}`;
-	expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-	expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
+  // Keep rejecting a one-character prose completion at the same prompt edge.
+  const nearMiss = token.slice(0, -1);
+  const nearMissEdge = `${nearMiss}\t`;
+  const nearMissPrompt = `${"x".repeat(prefixLength - nearMissEdge.length - 1)} ${nearMissEdge}a prose after the boundary ${"y".repeat(1_200)}`;
+  expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+  expect(
+    buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 
-	// Variable-length token patterns must not absorb an ordinary word as the
-	// continuation that makes an underlength prefix look valid.
-	const variableNearMiss = `re_${"A".repeat(31)}`;
-	const variableNearMissEdge = `${variableNearMiss}\t`;
-	const variableNearMissPrompt = `${"x".repeat(prefixLength - variableNearMissEdge.length - 1)} `
-		+ `${variableNearMissEdge}abcdefgh prose after the boundary ${"y".repeat(1_200)}`;
-	expect(hasSensitiveNamingContext(variableNearMiss)).toBe(false);
-	expect(buildNamingRequestContext([], variableNearMissPrompt).hasSensitiveBoundary()).toBe(false);
+  // Variable-length token patterns must not absorb an ordinary word as the
+  // continuation that makes an underlength prefix look valid.
+  const variableNearMiss = `re_${"A".repeat(31)}`;
+  const variableNearMissEdge = `${variableNearMiss}\t`;
+  const variableNearMissPrompt =
+    `${"x".repeat(prefixLength - variableNearMissEdge.length - 1)} ` +
+    `${variableNearMissEdge}abcdefgh prose after the boundary ${"y".repeat(1_200)}`;
+  expect(hasSensitiveNamingContext(variableNearMiss)).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      variableNearMissPrompt,
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("preserves exact-length tokens with short continuation at a prompt edge", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `neon_api_key_${"N".repeat(32)}`;
-	const separatorOffset = 13 + 24;
-	const obfuscated = `${token.slice(0, separatorOffset)}\t${token.slice(separatorOffset)}`;
-	const tokenStart = prefixLength - separatorOffset - 1;
-	const prompt = `${"x".repeat(tokenStart - 1)} ${obfuscated} ${"y".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `neon_api_key_${"N".repeat(32)}`;
+  const separatorOffset = 13 + 24;
+  const obfuscated = `${token.slice(0, separatorOffset)}\t${token.slice(separatorOffset)}`;
+  const tokenStart = prefixLength - separatorOffset - 1;
+  const prompt = `${"x".repeat(tokenStart - 1)} ${obfuscated} ${"y".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
 
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
 });
 
 test("variable-length edge matches reject prose words but retain token-like continuation", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptAtPrefixEdge = (value: string) => {
-		const tokenStart = prefixLength - value.indexOf("\t") - 1;
-		return `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
-	};
-	const promptAtSuffixEdge = (value: string) => {
-		const promptLength = MAX_PROMPT_LENGTH + 100;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const tokenStart = suffixStart - value.indexOf("\t");
-		const prefix = `${"x".repeat(tokenStart - 1)} `;
-		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptAtPrefixEdge = (value: string) => {
+    const tokenStart = prefixLength - value.indexOf("\t") - 1;
+    return `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
+  };
+  const promptAtSuffixEdge = (value: string) => {
+    const promptLength = MAX_PROMPT_LENGTH + 100;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const tokenStart = suffixStart - value.indexOf("\t");
+    const prefix = `${"x".repeat(tokenStart - 1)} `;
+    return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+  };
 
-	const proseNearMisses = [
-		`re_${"A".repeat(31)}\tmisunderstanding`,
-		`re_${"A".repeat(31)}\tCharacteristically`,
-		`re_${"A".repeat(31)}\tAuthenticationAuthentication`,
-	];
-	for (const proseNearMiss of proseNearMisses) {
-		for (const prompt of [promptAtPrefixEdge(proseNearMiss), promptAtSuffixEdge(proseNearMiss)]) {
-			const proseContext = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(proseContext.text)).toBe(false);
-			expect(proseContext.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const proseNearMisses = [
+    `re_${"A".repeat(31)}\tmisunderstanding`,
+    `re_${"A".repeat(31)}\tCharacteristically`,
+    `re_${"A".repeat(31)}\tAuthenticationAuthentication`,
+  ];
+  for (const proseNearMiss of proseNearMisses) {
+    for (const prompt of [
+      promptAtPrefixEdge(proseNearMiss),
+      promptAtSuffixEdge(proseNearMiss),
+    ]) {
+      const proseContext = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(proseContext.text)).toBe(false);
+      expect(proseContext.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 
-	const variableToken = `re_${"A1_b-".repeat(10)}`;
-	const separatorOffset = 3 + 31;
-	const obfuscatedToken = `${variableToken.slice(0, separatorOffset)}\t${variableToken.slice(separatorOffset)}`;
-	for (const prompt of [promptAtPrefixEdge(obfuscatedToken), promptAtSuffixEdge(obfuscatedToken)]) {
-		const tokenContext = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(tokenContext.text)).toBe(false);
-		expect(tokenContext.hasSensitiveBoundary()).toBe(true);
-	}
+  const variableToken = `re_${"A1_b-".repeat(10)}`;
+  const separatorOffset = 3 + 31;
+  const obfuscatedToken = `${variableToken.slice(0, separatorOffset)}\t${variableToken.slice(separatorOffset)}`;
+  for (const prompt of [
+    promptAtPrefixEdge(obfuscatedToken),
+    promptAtSuffixEdge(obfuscatedToken),
+  ]) {
+    const tokenContext = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(tokenContext.text)).toBe(false);
+    expect(tokenContext.hasSensitiveBoundary()).toBe(true);
+  }
 });
 
 test("letters-only PascalCase continuations past a prompt edge are not token evidence (accepted boundary)", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptAtPrefixEdge = (value: string) => {
-		const tokenStart = prefixLength - value.indexOf("\t") - 1;
-		return `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
-	};
-	const promptAtSuffixEdge = (value: string) => {
-		const promptLength = MAX_PROMPT_LENGTH + 100;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const tokenStart = suffixStart - value.indexOf("\t");
-		const prefix = `${"x".repeat(tokenStart - 1)} `;
-		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptAtPrefixEdge = (value: string) => {
+    const tokenStart = prefixLength - value.indexOf("\t") - 1;
+    return `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
+  };
+  const promptAtSuffixEdge = (value: string) => {
+    const promptLength = MAX_PROMPT_LENGTH + 100;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const tokenStart = suffixStart - value.indexOf("\t");
+    const prefix = `${"x".repeat(tokenStart - 1)} `;
+    return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+  };
 
-	// Accepted boundary of the prose rule: a letters-only continuation in PascalCase form is prose,
-	// so it does not complete a variable-length token. Real provider keys carry digits, underscores,
-	// or hyphens, so they stay screened (see the control below).
-	const letterOnlyContinuation = `re_${"A".repeat(31)}\tAbCdEfGhIjKlMnOpQrStUvWx`;
-	for (const prompt of [promptAtPrefixEdge(letterOnlyContinuation), promptAtSuffixEdge(letterOnlyContinuation)]) {
-		const letterContext = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(letterContext.text)).toBe(false);
-		expect(letterContext.hasSensitiveBoundary()).toBe(false);
-	}
+  // Accepted boundary of the prose rule: a letters-only continuation in PascalCase form is prose,
+  // so it does not complete a variable-length token. Real provider keys carry digits, underscores,
+  // or hyphens, so they stay screened (see the control below).
+  const letterOnlyContinuation = `re_${"A".repeat(31)}\tAbCdEfGhIjKlMnOpQrStUvWx`;
+  for (const prompt of [
+    promptAtPrefixEdge(letterOnlyContinuation),
+    promptAtSuffixEdge(letterOnlyContinuation),
+  ]) {
+    const letterContext = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(letterContext.text)).toBe(false);
+    expect(letterContext.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const digitContinuation = `re_${"A".repeat(31)}\tAbCdEfGhIjKlMnOpQrStUvWx9`;
-	for (const prompt of [promptAtPrefixEdge(digitContinuation), promptAtSuffixEdge(digitContinuation)]) {
-		const digitContext = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(digitContext.text)).toBe(false);
-		expect(digitContext.hasSensitiveBoundary()).toBe(true);
-	}
+  const digitContinuation = `re_${"A".repeat(31)}\tAbCdEfGhIjKlMnOpQrStUvWx9`;
+  for (const prompt of [
+    promptAtPrefixEdge(digitContinuation),
+    promptAtSuffixEdge(digitContinuation),
+  ]) {
+    const digitContext = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(digitContext.text)).toBe(false);
+    expect(digitContext.hasSensitiveBoundary()).toBe(true);
+  }
 });
 
 test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const telegramSecret = `A${"a".repeat(34)}`;
-	const telegramToken = `123456789:${telegramSecret}`;
-	const vaultServiceToken = `hvs.${"V".repeat(24)}`;
-	const vaultBatchToken = `hvb.${"B".repeat(24)}`;
-	const notionToken = `ntn_${"1".repeat(11)}${"a".repeat(35)}`;
-	const supabaseToken = `sb_secret_${"S".repeat(32)}`;
-	const values = [
-		{ value: telegramToken, secret: telegramSecret },
-		{ value: vaultServiceToken, secret: vaultServiceToken },
-		{ value: vaultBatchToken, secret: vaultBatchToken },
-		{ value: notionToken, secret: notionToken },
-		{ value: supabaseToken, secret: supabaseToken },
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const telegramSecret = `A${"a".repeat(34)}`;
+  const telegramToken = `123456789:${telegramSecret}`;
+  const vaultServiceToken = `hvs.${"V".repeat(24)}`;
+  const vaultBatchToken = `hvb.${"B".repeat(24)}`;
+  const notionToken = `ntn_${"1".repeat(11)}${"a".repeat(35)}`;
+  const supabaseToken = `sb_secret_${"S".repeat(32)}`;
+  const values = [
+    { value: telegramToken, secret: telegramSecret },
+    { value: vaultServiceToken, secret: vaultServiceToken },
+    { value: vaultBatchToken, secret: vaultBatchToken },
+    { value: notionToken, secret: notionToken },
+    { value: supabaseToken, secret: supabaseToken },
+  ];
 
-	for (const { value, secret } of values) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-		const obfuscated = value.replace(secret, `${secret.slice(0, 10)}\u0000${secret.slice(10)}`);
-		for (const candidate of [value, obfuscated]) {
-			const valueStart = prefixLength - 10 - candidate.indexOf(secret.slice(0, 10));
-			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const { value, secret } of values) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+    const obfuscated = value.replace(
+      secret,
+      `${secret.slice(0, 10)}\u0000${secret.slice(10)}`,
+    );
+    for (const candidate of [value, obfuscated]) {
+      const valueStart =
+        prefixLength - 10 - candidate.indexOf(secret.slice(0, 10));
+      const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const historyValue = values[3]!;
-	const historyValueStart = 990 - historyValue.value.indexOf(historyValue.secret);
-	const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue.value} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
+  const historyValue = values[3]!;
+  const historyValueStart =
+    990 - historyValue.value.indexOf(historyValue.secret);
+  const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue.value} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
 
-	const summaryContent = `${"x".repeat(989)} ${supabaseToken} y`;
-	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const summaryContent = `${"x".repeat(989)} ${supabaseToken} y`;
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: summaryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	// The Telegram bot ID may straddle a boundary while the API secret remains omitted.
-	const telegramValueStart = prefixLength + 5 - telegramToken.indexOf(telegramSecret);
-	const telegramIdOnlyPrompt = `${"x".repeat(telegramValueStart - 1)} ${telegramToken} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], telegramIdOnlyPrompt).hasSensitiveBoundary()).toBe(false);
+  // The Telegram bot ID may straddle a boundary while the API secret remains omitted.
+  const telegramValueStart =
+    prefixLength + 5 - telegramToken.indexOf(telegramSecret);
+  const telegramIdOnlyPrompt = `${"x".repeat(telegramValueStart - 1)} ${telegramToken} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], telegramIdOnlyPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 
-	const nearMisses = [
-		`123456789:A${"a".repeat(33)}`,
-		`hvs.${"V".repeat(23)}`,
-		`hvb.${"B".repeat(25)}`,
-		`ntn_${"1".repeat(11)}${"a".repeat(34)}`,
-		`sb_secret_${"S".repeat(31)}`,
-	];
-	for (const nearMiss of nearMisses) {
-		const tokenStart = prefixLength - 10;
-		const prompt = `${"x".repeat(tokenStart - 1)} ${nearMiss} ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const nearMisses = [
+    `123456789:A${"a".repeat(33)}`,
+    `hvs.${"V".repeat(23)}`,
+    `hvb.${"B".repeat(25)}`,
+    `ntn_${"1".repeat(11)}${"a".repeat(34)}`,
+    `sb_secret_${"S".repeat(31)}`,
+  ];
+  for (const nearMiss of nearMisses) {
+    const tokenStart = prefixLength - 10;
+    const prompt = `${"x".repeat(tokenStart - 1)} ${nearMiss} ${"y".repeat(1_200)}`;
+    expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+      false,
+    );
+  }
 });
 
 test("screens deployment and commerce tokens across truncation", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const atlassianToken = `ATATT3${"a".repeat(183)}_-=`;
-	const shopifyTokens = ["shpat_", "shpca_", "shppa_", "shpss_"].map((prefix) => `${prefix}${"a".repeat(32)}`);
-	const shippoTokens = ["live", "test"].map((mode) => `shippo_${mode}_${"a".repeat(40)}`);
-	const postmanToken = `PMAK-${"a".repeat(24)}-${"b".repeat(34)}`;
-	const pulumiToken = `pul-${"a".repeat(40)}`;
-	const digitalOceanTokens = ["doo", "dop", "dor"].map((prefix) => `${prefix}_v1_${"a".repeat(64)}`);
-	const prefectToken = `pnu_${"A1b2".repeat(9)}`;
-	const octopusApiKey = `API-${"A1B2".repeat(6)}A1`;
-	const values = [
-		atlassianToken, ...shopifyTokens, ...shippoTokens, postmanToken,
-		pulumiToken, ...digitalOceanTokens, prefectToken, octopusApiKey,
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const atlassianToken = `ATATT3${"a".repeat(183)}_-=`;
+  const shopifyTokens = ["shpat_", "shpca_", "shppa_", "shpss_"].map(
+    (prefix) => `${prefix}${"a".repeat(32)}`,
+  );
+  const shippoTokens = ["live", "test"].map(
+    (mode) => `shippo_${mode}_${"a".repeat(40)}`,
+  );
+  const postmanToken = `PMAK-${"a".repeat(24)}-${"b".repeat(34)}`;
+  const pulumiToken = `pul-${"a".repeat(40)}`;
+  const digitalOceanTokens = ["doo", "dop", "dor"].map(
+    (prefix) => `${prefix}_v1_${"a".repeat(64)}`,
+  );
+  const prefectToken = `pnu_${"A1b2".repeat(9)}`;
+  const octopusApiKey = `API-${"A1B2".repeat(6)}A1`;
+  const values = [
+    atlassianToken,
+    ...shopifyTokens,
+    ...shippoTokens,
+    postmanToken,
+    pulumiToken,
+    ...digitalOceanTokens,
+    prefectToken,
+    octopusApiKey,
+  ];
 
-	for (const value of values) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-		const obfuscated = value.slice(0, 10) + "\u200b" + value.slice(10);
-		for (const candidate of [value, obfuscated]) {
-			const valueStart = prefixLength - 10;
-			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const value of values) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+    const obfuscated = value.slice(0, 10) + "\u200b" + value.slice(10);
+    for (const candidate of [value, obfuscated]) {
+      const valueStart = prefixLength - 10;
+      const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const historyContent = `${"x".repeat(989)} ${postmanToken} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(989)} ${postmanToken} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
 
-	const summaryContent = `${"x".repeat(989)} ${pulumiToken} y`;
-	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const summaryContent = `${"x".repeat(989)} ${pulumiToken} y`;
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: summaryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const nearMisses = [
-		`ATATT3${"a".repeat(182)}_-=`,
-		`shpat_${"a".repeat(31)}`,
-		`shippo_live_${"a".repeat(39)}`,
-		`PMAK-${"a".repeat(23)}-${"b".repeat(34)}`,
-		`pul-${"a".repeat(39)}`,
-		`doo_v1_${"a".repeat(63)}`,
-		`pnu_${"A1b2".repeat(8)}A1b`,
-		`API-${"A1B2".repeat(6)}A`,
-	];
-	for (const nearMiss of nearMisses) {
-		const tokenStart = prefixLength - 10;
-		const prompt = `${"x".repeat(tokenStart - 1)} ${nearMiss} ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const nearMisses = [
+    `ATATT3${"a".repeat(182)}_-=`,
+    `shpat_${"a".repeat(31)}`,
+    `shippo_live_${"a".repeat(39)}`,
+    `PMAK-${"a".repeat(23)}-${"b".repeat(34)}`,
+    `pul-${"a".repeat(39)}`,
+    `doo_v1_${"a".repeat(63)}`,
+    `pnu_${"A1b2".repeat(8)}A1b`,
+    `API-${"A1B2".repeat(6)}A`,
+  ];
+  for (const nearMiss of nearMisses) {
+    const tokenStart = prefixLength - 10;
+    const prompt = `${"x".repeat(tokenStart - 1)} ${nearMiss} ${"y".repeat(1_200)}`;
+    expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+      false,
+    );
+  }
 });
 
 test("screens Grafana, Doppler, and Sentry tokens across truncation", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const grafanaApiKey = `eyJrIjoi${"A".repeat(70)}`;
-	const grafanaCloudToken = `glc_${"A".repeat(400)}`;
-	const serviceBody = "aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x".repeat(2).slice(0, 32);
-	const grafanaServiceToken = `glsa_${serviceBody}_A1B2C3D4`;
-	const dopplerToken = `dp.pt.${"A".repeat(43)}`;
-	const sentryUserToken = `sntryu_${"a".repeat(64)}`;
-	const values = [grafanaApiKey, grafanaCloudToken, grafanaServiceToken, dopplerToken, sentryUserToken];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const grafanaApiKey = `eyJrIjoi${"A".repeat(70)}`;
+  const grafanaCloudToken = `glc_${"A".repeat(400)}`;
+  const serviceBody = "aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x".repeat(2).slice(0, 32);
+  const grafanaServiceToken = `glsa_${serviceBody}_A1B2C3D4`;
+  const dopplerToken = `dp.pt.${"A".repeat(43)}`;
+  const sentryUserToken = `sntryu_${"a".repeat(64)}`;
+  const values = [
+    grafanaApiKey,
+    grafanaCloudToken,
+    grafanaServiceToken,
+    dopplerToken,
+    sentryUserToken,
+  ];
 
-	for (const value of values) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-		const obfuscated = value.slice(0, 10) + "\u200b" + value.slice(10);
-		for (const candidate of [value, obfuscated]) {
-			const valueStart = prefixLength - 10;
-			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const value of values) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+    const obfuscated = value.slice(0, 10) + "\u200b" + value.slice(10);
+    for (const candidate of [value, obfuscated]) {
+      const valueStart = prefixLength - 10;
+      const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const historyValue = sentryUserToken;
-	const historyValueStart = 990;
-	const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
+  const historyValue = sentryUserToken;
+  const historyValueStart = 990;
+  const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
 
-	const summaryContent = `${"x".repeat(989)} ${dopplerToken} y`;
-	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const summaryContent = `${"x".repeat(989)} ${dopplerToken} y`;
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: summaryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const nearMisses = [
-		`eyJrIjoi${"A".repeat(69)}`,
-		`glc_${"A".repeat(31)}`,
-		`glsa_${serviceBody.slice(0, 31)}_A1B2C3D4`,
-		`dp.pt.${"A".repeat(42)}`,
-		`sntryu_${"a".repeat(63)}`,
-	];
-	for (const nearMiss of nearMisses) {
-		const tokenStart = prefixLength - 10;
-		const prompt = `${"x".repeat(tokenStart - 1)} ${nearMiss} ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const nearMisses = [
+    `eyJrIjoi${"A".repeat(69)}`,
+    `glc_${"A".repeat(31)}`,
+    `glsa_${serviceBody.slice(0, 31)}_A1B2C3D4`,
+    `dp.pt.${"A".repeat(42)}`,
+    `sntryu_${"a".repeat(63)}`,
+  ];
+  for (const nearMiss of nearMisses) {
+    const tokenStart = prefixLength - 10;
+    const prompt = `${"x".repeat(tokenStart - 1)} ${nearMiss} ${"y".repeat(1_200)}`;
+    expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+      false,
+    );
+  }
 });
 
 test("screens additional supported fixed-format tokens across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = [
-		`NRAK-${"A1b2".repeat(6)}abc`,
-		`HRKU-AA${"A1_b".repeat(14)}AB`,
-		`AKCp${"A1b2".repeat(17)}A`,
-		`cmVmd${"C1d2".repeat(14)}AbC`,
-		`dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
-		`fo1_${"A1_b".repeat(10)}ABC`,
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = [
+    `NRAK-${"A1b2".repeat(6)}abc`,
+    `HRKU-AA${"A1_b".repeat(14)}AB`,
+    `AKCp${"A1b2".repeat(17)}A`,
+    `cmVmd${"C1d2".repeat(14)}AbC`,
+    `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
+    `fo1_${"A1_b".repeat(10)}ABC`,
+  ];
 
-	for (const token of tokens) {
-		expect(hasSensitiveNamingContext(`review the integration ${token}`)).toBe(true);
-		expect(hasSensitiveOutput(token)).toBe(true);
-		for (const value of [token, `${token.slice(0, 10)}\u0000${token.slice(10)}`]) {
-			const tokenStart = prefixLength - 10;
-			const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
-			const promptContext = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(promptContext.text)).toBe(false);
-			expect(promptContext.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const token of tokens) {
+    expect(hasSensitiveNamingContext(`review the integration ${token}`)).toBe(
+      true,
+    );
+    expect(hasSensitiveOutput(token)).toBe(true);
+    for (const value of [
+      token,
+      `${token.slice(0, 10)}\u0000${token.slice(10)}`,
+    ]) {
+      const tokenStart = prefixLength - 10;
+      const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
+      const promptContext = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(promptContext.text)).toBe(false);
+      expect(promptContext.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const historyContent = `${"x".repeat(989)} ${tokens[0]} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(989)} ${tokens[0]} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
 
-	const summaryContent = `${"x".repeat(989)} ${tokens[2]} y`;
-	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const summaryContent = `${"x".repeat(989)} ${tokens[2]} y`;
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: summaryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const invalidNewRelicToken = `NRAK-${"A1b2".repeat(6)}ab`;
-	const invalidPrompt = `${"x".repeat(prefixLength - 11)} ${invalidNewRelicToken} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidNewRelicToken = `NRAK-${"A1b2".repeat(6)}ab`;
+  const invalidPrompt = `${"x".repeat(prefixLength - 11)} ${invalidNewRelicToken} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${tokens[5]} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${tokens[5]} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens supported fixed-format tokens across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = [
-		`rubygems_${"a".repeat(48)}`,
-		`CLOJARS_${"A".repeat(60)}`,
-		`tfp_${"A".repeat(59)}`,
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = [
+    `rubygems_${"a".repeat(48)}`,
+    `CLOJARS_${"A".repeat(60)}`,
+    `tfp_${"A".repeat(59)}`,
+  ];
 
-	for (const token of tokens) {
-		expect(hasSensitiveNamingContext(`review the integration ${token}`)).toBe(true);
-		expect(hasSensitiveOutput(token)).toBe(true);
-		for (const value of [token, `${token.slice(0, 10)}\u0000${token.slice(10)}`]) {
-			const tokenStart = prefixLength - 10;
-			const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
-			const promptContext = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(promptContext.text)).toBe(false);
-			expect(promptContext.hasSensitiveBoundary()).toBe(true);
-			expect(promptContext.text).toBe(buildNamingContext([], prompt));
-		}
-	}
+  for (const token of tokens) {
+    expect(hasSensitiveNamingContext(`review the integration ${token}`)).toBe(
+      true,
+    );
+    expect(hasSensitiveOutput(token)).toBe(true);
+    for (const value of [
+      token,
+      `${token.slice(0, 10)}\u0000${token.slice(10)}`,
+    ]) {
+      const tokenStart = prefixLength - 10;
+      const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
+      const promptContext = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(promptContext.text)).toBe(false);
+      expect(promptContext.hasSensitiveBoundary()).toBe(true);
+      expect(promptContext.text).toBe(buildNamingContext([], prompt));
+    }
+  }
 
-	const historyContent = `${"x".repeat(989)} ${tokens[0]} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(989)} ${tokens[0]} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
 
-	const summaryContent = `${"x".repeat(989)} ${tokens[1]} y`;
-	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const summaryContent = `${"x".repeat(989)} ${tokens[1]} y`;
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: summaryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const invalidToken = `rubygems_${"a".repeat(47)}`;
-	const invalidPrompt = `${"x".repeat(prefixLength - 11)} ${invalidToken} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidToken = `rubygems_${"a".repeat(47)}`;
+  const invalidPrompt = `${"x".repeat(prefixLength - 11)} ${invalidToken} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${tokens[2]} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${tokens[2]} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens LangSmith personal and service API keys across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = ["lsv2_pt_", "LSV2_SK_"].map((prefix) =>
-		`${prefix}${"a1b2".repeat(8)}_${"c3d4a1b2c3"}`);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = ["lsv2_pt_", "LSV2_SK_"].map(
+    (prefix) => `${prefix}${"a1b2".repeat(8)}_${"c3d4a1b2c3"}`,
+  );
 
-	for (const token of tokens) {
-		expect(hasSensitiveNamingContext(`configure LangSmith ${token}`)).toBe(true);
-		expect(hasSensitiveOutput(token)).toBe(true);
-		const obfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
-		for (const value of [token, obfuscated]) {
-			expect(hasSensitiveNamingContext(value)).toBe(true);
-			expect(hasSensitiveOutput(value)).toBe(true);
-			const tokenStart = prefixLength - 10;
-			const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const token of tokens) {
+    expect(hasSensitiveNamingContext(`configure LangSmith ${token}`)).toBe(
+      true,
+    );
+    expect(hasSensitiveOutput(token)).toBe(true);
+    const obfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+    for (const value of [token, obfuscated]) {
+      expect(hasSensitiveNamingContext(value)).toBe(true);
+      expect(hasSensitiveOutput(value)).toBe(true);
+      const tokenStart = prefixLength - 10;
+      const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const nearMisses = [
-		`lsv2_pt_${"a".repeat(31)}_${"c".repeat(10)}`,
-		`lsv2_sk_${"a".repeat(32)}_${"c".repeat(9)}`,
-		`lsv2_pt_${"g".repeat(32)}_${"c".repeat(10)}`,
-		`prefix${tokens[0]}`,
-		`${tokens[1]}x`,
-	];
-	for (const nearMiss of nearMisses) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const nearMisses = [
+    `lsv2_pt_${"a".repeat(31)}_${"c".repeat(10)}`,
+    `lsv2_sk_${"a".repeat(32)}_${"c".repeat(9)}`,
+    `lsv2_pt_${"g".repeat(32)}_${"c".repeat(10)}`,
+    `prefix${tokens[0]}`,
+    `${tokens[1]}x`,
+  ];
+  for (const nearMiss of nearMisses) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Tavily API keys across retained-context boundaries without flagging near-misses", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const prefixes = ["tvly-", "tvly-dev-", "tvly-prod-"];
-	const tokens = prefixes.map((prefix) => ({
-		prefix,
-		value: `${prefix}${"a1B2c3D4".repeat(3)}`,
-	}));
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const prefixes = ["tvly-", "tvly-dev-", "tvly-prod-"];
+  const tokens = prefixes.map((prefix) => ({
+    prefix,
+    value: `${prefix}${"a1B2c3D4".repeat(3)}`,
+  }));
 
-	for (const { prefix, value } of tokens) {
-		const obfuscated = `${value.slice(0, prefix.length)}\u200b${value.slice(prefix.length)}`;
-		for (const candidate of [value, obfuscated]) {
-			expect(hasSensitiveNamingContext(candidate)).toBe(true);
-			expect(hasSensitiveOutput(candidate)).toBe(true);
-			const tokenStart = prefixLength - 10;
-			const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const { prefix, value } of tokens) {
+    const obfuscated = `${value.slice(0, prefix.length)}\u200b${value.slice(prefix.length)}`;
+    for (const candidate of [value, obfuscated]) {
+      expect(hasSensitiveNamingContext(candidate)).toBe(true);
+      expect(hasSensitiveOutput(candidate)).toBe(true);
+      const tokenStart = prefixLength - 10;
+      const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const nearMisses = [
-		`tvly-${"a".repeat(15)}`,
-		`tvly-dev-${"a".repeat(15)}`,
-		`tvly-qa-${"a".repeat(32)}`,
-		`notvly-${"a".repeat(32)}`,
-		`${tokens[0]!.value}_suffix`,
-	];
-	for (const nearMiss of nearMisses) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const nearMisses = [
+    `tvly-${"a".repeat(15)}`,
+    `tvly-dev-${"a".repeat(15)}`,
+    `tvly-qa-${"a".repeat(32)}`,
+    `notvly-${"a".repeat(32)}`,
+    `${tokens[0]!.value}_suffix`,
+  ];
+  for (const nearMiss of nearMisses) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Jina AI API keys across retained-context boundaries without flagging near-misses", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const body = "a1B2c3D4e5F6".repeat(5);
-	const tokens = [`jina_${body}`, `JINA_${body}`];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const body = "a1B2c3D4e5F6".repeat(5);
+  const tokens = [`jina_${body}`, `JINA_${body}`];
 
-	for (const token of tokens) {
-		const obfuscated = `${token.slice(0, 2)}\u200b${token.slice(2)}`;
-		for (const candidate of [token, obfuscated]) {
-			expect(hasSensitiveNamingContext(candidate)).toBe(true);
-			expect(hasSensitiveOutput(candidate)).toBe(true);
-			const tokenStart = prefixLength - 10;
-			const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const token of tokens) {
+    const obfuscated = `${token.slice(0, 2)}\u200b${token.slice(2)}`;
+    for (const candidate of [token, obfuscated]) {
+      expect(hasSensitiveNamingContext(candidate)).toBe(true);
+      expect(hasSensitiveOutput(candidate)).toBe(true);
+      const tokenStart = prefixLength - 10;
+      const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const nearMisses = [
-		`jina_${body.slice(1)}`,
-		`jina_${body}a`,
-		`jina_${`${body.slice(0, 30)}!${body.slice(31)}`}`,
-		`x${tokens[0]}`,
-		`${tokens[0]}_suffix`,
-	];
-	for (const nearMiss of nearMisses) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const nearMisses = [
+    `jina_${body.slice(1)}`,
+    `jina_${body}a`,
+    `jina_${`${body.slice(0, 30)}!${body.slice(31)}`}`,
+    `x${tokens[0]}`,
+    `${tokens[0]}_suffix`,
+  ];
+  for (const nearMiss of nearMisses) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Browserbase live/test API keys across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffix = "a1B2_c3D4-".repeat(3);
-	const tokens = ["bb_live_", "bb_test_", "BB_LIVE_"].map((prefix) => `${prefix}${suffix}`);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffix = "a1B2_c3D4-".repeat(3);
+  const tokens = ["bb_live_", "bb_test_", "BB_LIVE_"].map(
+    (prefix) => `${prefix}${suffix}`,
+  );
 
-	for (const token of tokens) {
-		const obfuscated = `${token.slice(0, 1)}\u200b${token.slice(1)}`;
-		for (const candidate of [token, obfuscated]) {
-			expect(hasSensitiveNamingContext(candidate)).toBe(true);
-			expect(hasSensitiveOutput(candidate)).toBe(true);
-			const tokenStart = prefixLength - 10;
-			const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const token of tokens) {
+    const obfuscated = `${token.slice(0, 1)}\u200b${token.slice(1)}`;
+    for (const candidate of [token, obfuscated]) {
+      expect(hasSensitiveNamingContext(candidate)).toBe(true);
+      expect(hasSensitiveOutput(candidate)).toBe(true);
+      const tokenStart = prefixLength - 10;
+      const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const nearMisses = [
-		`bb_live_${"a".repeat(19)}`,
-		`bb_dev_${"a".repeat(24)}`,
-		`notbb_live_${"a".repeat(24)}`,
-		`bb_live_${"a".repeat(10)}.${"b".repeat(10)}`,
-	];
-	for (const nearMiss of nearMisses) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const nearMisses = [
+    `bb_live_${"a".repeat(19)}`,
+    `bb_dev_${"a".repeat(24)}`,
+    `notbb_live_${"a".repeat(24)}`,
+    `bb_live_${"a".repeat(10)}.${"b".repeat(10)}`,
+  ];
+  for (const nearMiss of nearMisses) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Firecrawl API keys across retained-context boundaries without flagging near-misses", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = [`fc-${"a1B2c3D4".repeat(3)}`, `FC-${"A1b2C3d4".repeat(3)}`];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = [`fc-${"a1B2c3D4".repeat(3)}`, `FC-${"A1b2C3d4".repeat(3)}`];
 
-	for (const token of tokens) {
-		const obfuscated = `${token.slice(0, 2)}\u200b${token.slice(2)}`;
-		for (const candidate of [token, obfuscated]) {
-			expect(hasSensitiveNamingContext(candidate)).toBe(true);
-			expect(hasSensitiveOutput(candidate)).toBe(true);
-			const tokenStart = prefixLength - 10;
-			const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const token of tokens) {
+    const obfuscated = `${token.slice(0, 2)}\u200b${token.slice(2)}`;
+    for (const candidate of [token, obfuscated]) {
+      expect(hasSensitiveNamingContext(candidate)).toBe(true);
+      expect(hasSensitiveOutput(candidate)).toBe(true);
+      const tokenStart = prefixLength - 10;
+      const prompt = `${"x".repeat(tokenStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const nearMisses = [
-		`fc-${"a".repeat(19)}`,
-		`notfc-${"a".repeat(24)}`,
-		`fc-${"a".repeat(24)}_suffix`,
-		"00000000-0000-0000-0000-fc-0123456789ab",
-	];
-	for (const nearMiss of nearMisses) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const nearMisses = [
+    `fc-${"a".repeat(19)}`,
+    `notfc-${"a".repeat(24)}`,
+    `fc-${"a".repeat(24)}_suffix`,
+    "00000000-0000-0000-0000-fc-0123456789ab",
+  ];
+  for (const nearMiss of nearMisses) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens synthetic 1Password service-account tokens without mistaking near-misses", () => {
-	const body = "Aa0+/".repeat(50);
-	const token = `ops_eyJ${body}`;
-	const obfuscatedTokens = [
-		token.replace("ops_", "op\u200bs_"),
-		token.replace("eyJ", "ey\u200bJ"),
-		token.replace(body.slice(0, 100), `${body.slice(0, 100)}\u200b`),
-	];
+  const body = "Aa0+/".repeat(50);
+  const token = `ops_eyJ${body}`;
+  const obfuscatedTokens = [
+    token.replace("ops_", "op\u200bs_"),
+    token.replace("eyJ", "ey\u200bJ"),
+    token.replace(body.slice(0, 100), `${body.slice(0, 100)}\u200b`),
+  ];
 
-	for (const value of [token, `${token}==`, ...obfuscatedTokens]) {
-		expect(hasSensitiveNamingContext(`configure the vault integration ${value}`)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [token, `${token}==`, ...obfuscatedTokens]) {
+    expect(
+      hasSensitiveNamingContext(`configure the vault integration ${value}`),
+    ).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`ops_eyJ${body.slice(0, 249)}`,
-		`ops_eyJ${body.replace("A", "!")}`,
-		`ops_eyK${body}`,
-		`prefix${token}`,
-		"1Password service account setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `ops_eyJ${body.slice(0, 249)}`,
+    `ops_eyJ${body.replace("A", "!")}`,
+    `ops_eyK${body}`,
+    `prefix${token}`,
+    "1Password service account setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens long 1Password tokens across prompt truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `ops_eyJ${"Aa0+/".repeat(50)}`;
-	const makePrompt = (value: string) => {
-		const tokenStart = prefixLength - 20;
-		return `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_300)}`;
-	};
-	const context = buildNamingRequestContext([], makePrompt(token));
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `ops_eyJ${"Aa0+/".repeat(50)}`;
+  const makePrompt = (value: string) => {
+    const tokenStart = prefixLength - 20;
+    return `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_300)}`;
+  };
+  const context = buildNamingRequestContext([], makePrompt(token));
 
-	expect(context.text).not.toContain(token);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(context.text).not.toContain(token);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
 
-	const nearMiss = `ops_eyJ${"Aa0+/".repeat(49)}Aa0+`;
-	expect(buildNamingRequestContext([], makePrompt(nearMiss)).hasSensitiveBoundary()).toBe(false);
+  const nearMiss = `ops_eyJ${"Aa0+/".repeat(49)}Aa0+`;
+  expect(
+    buildNamingRequestContext([], makePrompt(nearMiss)).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Pinecone API keys without flagging near-misses", () => {
-	const secret = "A".repeat(63);
-	const keyFor = (keyId = "id123", value = secret) => `pcsk_${keyId}_${value}`;
-	const keys = [keyFor(), keyFor("id1234")];
-	const obfuscatedKeys = [
-		keys[0]!.toUpperCase(),
-		keys[0]!.replace("pcsk_", "pc\u200bsk_"),
-		keys[0]!.replace("id123", "id\u200b123"),
-		keys[0]!.replace(secret.slice(0, 31), `${secret.slice(0, 31)}\u200b`),
-	];
+  const secret = "A".repeat(63);
+  const keyFor = (keyId = "id123", value = secret) => `pcsk_${keyId}_${value}`;
+  const keys = [keyFor(), keyFor("id1234")];
+  const obfuscatedKeys = [
+    keys[0]!.toUpperCase(),
+    keys[0]!.replace("pcsk_", "pc\u200bsk_"),
+    keys[0]!.replace("id123", "id\u200b123"),
+    keys[0]!.replace(secret.slice(0, 31), `${secret.slice(0, 31)}\u200b`),
+  ];
 
-	for (const value of [...keys, ...obfuscatedKeys]) {
-		expect(hasSensitiveNamingContext(`review Pinecone access ${value}`)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [...keys, ...obfuscatedKeys]) {
+    expect(hasSensitiveNamingContext(`review Pinecone access ${value}`)).toBe(
+      true,
+    );
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		keyFor("id12"),
-		keyFor("id12345"),
-		keyFor("id123", "A".repeat(62)),
-		keyFor("id123", "A".repeat(64)),
-		keyFor("id123", `${"A".repeat(62)}!`),
-		`prefix${keys[0]}`,
-		`_${keys[0]}`,
-		`-${keys[0]}`,
-		`${keys[0]}x`,
-		`${keys[0]}_suffix`,
-		"Pinecone index setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    keyFor("id12"),
+    keyFor("id12345"),
+    keyFor("id123", "A".repeat(62)),
+    keyFor("id123", "A".repeat(64)),
+    keyFor("id123", `${"A".repeat(62)}!`),
+    `prefix${keys[0]}`,
+    `_${keys[0]}`,
+    `-${keys[0]}`,
+    `${keys[0]}x`,
+    `${keys[0]}_suffix`,
+    "Pinecone index setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Railway UUID tokens only when Railway context is present", () => {
-	const token = ["a".repeat(8), "b".repeat(4), "c".repeat(4), "d".repeat(4), "e".repeat(12)].join("-");
-	const labeledValues = [
-		`Railway: ${token}`,
-		`Railway token: ${token}`,
-		`Railway API token: ${token}`,
-		`RAILWAY_TOKEN=${token}`,
-		`RAILWAY_API_TOKEN=${token}`,
-	];
-	const obfuscatedValues = [
-		labeledValues[0]!.replace("Railway", "Rail\u200bway"),
-		`Railway token: ${token.slice(0, 16)}\u200b${token.slice(16)}`,
-	];
+  const token = [
+    "a".repeat(8),
+    "b".repeat(4),
+    "c".repeat(4),
+    "d".repeat(4),
+    "e".repeat(12),
+  ].join("-");
+  const labeledValues = [
+    `Railway: ${token}`,
+    `Railway token: ${token}`,
+    `Railway API token: ${token}`,
+    `RAILWAY_TOKEN=${token}`,
+    `RAILWAY_API_TOKEN=${token}`,
+  ];
+  const obfuscatedValues = [
+    labeledValues[0]!.replace("Railway", "Rail\u200bway"),
+    `Railway token: ${token.slice(0, 16)}\u200b${token.slice(16)}`,
+  ];
 
-	for (const value of [...labeledValues, ...obfuscatedValues]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [...labeledValues, ...obfuscatedValues]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		token,
-		`project id: ${token}`,
-		`Railway ${token}`,
-		`Railway: ${token.slice(1)}`,
-		`Railway: ${token.replace("a", "g")}`,
-		`Railway: ${token}x`,
-		"Railway deployment setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    token,
+    `project id: ${token}`,
+    `Railway ${token}`,
+    `Railway: ${token.slice(1)}`,
+    `Railway: ${token.replace("a", "g")}`,
+    `Railway: ${token}x`,
+    "Railway deployment setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Vercel tokens only when a Vercel label is present", () => {
-	const token = "A1b2".repeat(6);
-	const labeledValues = [
-		`Vercel: ${token}`,
-		`Vercel API token: ${token}`,
-		`VERCEL_TOKEN=${token}`,
-	];
-	const obfuscatedValues = [
-		labeledValues[0]!.replace("Vercel", "Ver\u200bcel"),
-		`Vercel: ${token.slice(0, 12)}\u200b${token.slice(12)}`,
-	];
+  const token = "A1b2".repeat(6);
+  const labeledValues = [
+    `Vercel: ${token}`,
+    `Vercel API token: ${token}`,
+    `VERCEL_TOKEN=${token}`,
+  ];
+  const obfuscatedValues = [
+    labeledValues[0]!.replace("Vercel", "Ver\u200bcel"),
+    `Vercel: ${token.slice(0, 12)}\u200b${token.slice(12)}`,
+  ];
 
-	for (const value of [...labeledValues, ...obfuscatedValues]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [...labeledValues, ...obfuscatedValues]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		token,
-		`release ${token}`,
-		`Vercel ${token}`,
-		`Vercel: ${token.slice(1)}`,
-		`Vercel: ${token}x`,
-		`Vercel: ${token.replace("A", "!")}`,
-		`Vercel: ${token}_`,
-		"Vercel deployment setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    token,
+    `release ${token}`,
+    `Vercel ${token}`,
+    `Vercel: ${token.slice(1)}`,
+    `Vercel: ${token}x`,
+    `Vercel: ${token.replace("A", "!")}`,
+    `Vercel: ${token}_`,
+    "Vercel deployment setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens labeled API credentials across retained-context truncation boundaries", () => {
-	const token = "A1b2".repeat(6);
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
+  const token = "A1b2".repeat(6);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
 
-	const prefixTokenStart = prefixLength - 10;
-	const prefixPrompt = `${"x".repeat(prefixTokenStart - 9)} Vercel: ${token} ${"x".repeat(1_200)}`;
-	const prefixContext = buildNamingRequestContext([], prefixPrompt);
-	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
-	expect(prefixContext.text).toBe(buildNamingContext([], prefixPrompt));
-	const obfuscatedPrompt = prefixPrompt.replace(token.slice(0, 5), `${token.slice(0, 5)}\u200b`);
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
-	const controlObfuscatedPrompt = prefixPrompt.replace(token.slice(0, 5), `${token.slice(0, 5)}\u0000`);
-	expect(buildNamingRequestContext([], controlObfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const prefixTokenStart = prefixLength - 10;
+  const prefixPrompt = `${"x".repeat(prefixTokenStart - 9)} Vercel: ${token} ${"x".repeat(1_200)}`;
+  const prefixContext = buildNamingRequestContext([], prefixPrompt);
+  expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+  expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+  expect(prefixContext.text).toBe(buildNamingContext([], prefixPrompt));
+  const obfuscatedPrompt = prefixPrompt.replace(
+    token.slice(0, 5),
+    `${token.slice(0, 5)}\u200b`,
+  );
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
+  const controlObfuscatedPrompt = prefixPrompt.replace(
+    token.slice(0, 5),
+    `${token.slice(0, 5)}\u0000`,
+  );
+  expect(
+    buildNamingRequestContext(
+      [],
+      controlObfuscatedPrompt,
+    ).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const cloudflareApiKey = "a1b2".repeat(10);
-	const cloudflareLabel = " Cloudflare API key: ";
-	const cloudflarePrompt = `${"x".repeat(prefixTokenStart - cloudflareLabel.length)}${cloudflareLabel}${cloudflareApiKey} ${"x".repeat(1_200)}`;
-	const cloudflareContext = buildNamingRequestContext([], cloudflarePrompt);
-	expect(hasSensitiveNamingContext(cloudflareContext.text)).toBe(false);
-	expect(cloudflareContext.hasSensitiveBoundary()).toBe(true);
-	expect(cloudflareContext.text).toBe(buildNamingContext([], cloudflarePrompt));
+  const cloudflareApiKey = "a1b2".repeat(10);
+  const cloudflareLabel = " Cloudflare API key: ";
+  const cloudflarePrompt = `${"x".repeat(prefixTokenStart - cloudflareLabel.length)}${cloudflareLabel}${cloudflareApiKey} ${"x".repeat(1_200)}`;
+  const cloudflareContext = buildNamingRequestContext([], cloudflarePrompt);
+  expect(hasSensitiveNamingContext(cloudflareContext.text)).toBe(false);
+  expect(cloudflareContext.hasSensitiveBoundary()).toBe(true);
+  expect(cloudflareContext.text).toBe(buildNamingContext([], cloudflarePrompt));
 
-	const cloudflareGlobalKey = "a".repeat(37);
-	const globalLabel = " Cloudflare global key: ";
-	const globalPrompt = `${"x".repeat(prefixTokenStart - globalLabel.length)}${globalLabel}${cloudflareGlobalKey} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], globalPrompt).hasSensitiveBoundary()).toBe(true);
+  const cloudflareGlobalKey = "a".repeat(37);
+  const globalLabel = " Cloudflare global key: ";
+  const globalPrompt = `${"x".repeat(prefixTokenStart - globalLabel.length)}${globalLabel}${cloudflareGlobalKey} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], globalPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const datadogKey = "A1b2".repeat(10);
-	const datadogLabel = " Datadog: ";
-	const mailgunToken = `key-${"a1b2".repeat(8)}`;
-	const mailgunLabel = " Mailgun: ";
-	const railwayToken = "11111111-2222-4333-8444-555555555555";
-	const railwayLabel = " Railway: ";
-	const additionalLabeledCredentials = [
-		{ label: datadogLabel, token: datadogKey },
-		{ label: mailgunLabel, token: mailgunToken },
-		{ label: railwayLabel, token: railwayToken },
-	];
-	for (const { label, token: credential } of additionalLabeledCredentials) {
-		const prompt = `${"x".repeat(prefixTokenStart - label.length)}${label}${credential} ${"x".repeat(1_200)}`;
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-		expect(context.text).toBe(buildNamingContext([], prompt));
-	}
-	const obfuscatedDatadogPrompt = `${"x".repeat(prefixTokenStart - datadogLabel.length)}${datadogLabel}${datadogKey.slice(0, 4)}\u200b${datadogKey.slice(4)} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedDatadogPrompt).hasSensitiveBoundary()).toBe(true);
-	const obfuscatedRailwayPrompt = `${"x".repeat(prefixTokenStart - railwayLabel.length)}${railwayLabel}${railwayToken.slice(0, 8)}\u0000${railwayToken.slice(8)} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedRailwayPrompt).hasSensitiveBoundary()).toBe(true);
-	for (const { label, token: invalidCredential } of [
-		{ label: datadogLabel, token: datadogKey.slice(1) },
-		{ label: datadogLabel, token: `${datadogKey}A` },
-		{ label: mailgunLabel, token: mailgunToken.slice(1) },
-		{ label: mailgunLabel, token: `${mailgunToken}A` },
-		{ label: railwayLabel, token: railwayToken.replace("-", "_") },
-	]) {
-		const prompt = `${"x".repeat(prefixTokenStart - label.length)}${label}${invalidCredential} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const datadogKey = "A1b2".repeat(10);
+  const datadogLabel = " Datadog: ";
+  const mailgunToken = `key-${"a1b2".repeat(8)}`;
+  const mailgunLabel = " Mailgun: ";
+  const railwayToken = "11111111-2222-4333-8444-555555555555";
+  const railwayLabel = " Railway: ";
+  const additionalLabeledCredentials = [
+    { label: datadogLabel, token: datadogKey },
+    { label: mailgunLabel, token: mailgunToken },
+    { label: railwayLabel, token: railwayToken },
+  ];
+  for (const { label, token: credential } of additionalLabeledCredentials) {
+    const prompt = `${"x".repeat(prefixTokenStart - label.length)}${label}${credential} ${"x".repeat(1_200)}`;
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+    expect(context.text).toBe(buildNamingContext([], prompt));
+  }
+  const obfuscatedDatadogPrompt = `${"x".repeat(prefixTokenStart - datadogLabel.length)}${datadogLabel}${datadogKey.slice(0, 4)}\u200b${datadogKey.slice(4)} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext(
+      [],
+      obfuscatedDatadogPrompt,
+    ).hasSensitiveBoundary(),
+  ).toBe(true);
+  const obfuscatedRailwayPrompt = `${"x".repeat(prefixTokenStart - railwayLabel.length)}${railwayLabel}${railwayToken.slice(0, 8)}\u0000${railwayToken.slice(8)} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext(
+      [],
+      obfuscatedRailwayPrompt,
+    ).hasSensitiveBoundary(),
+  ).toBe(true);
+  for (const { label, token: invalidCredential } of [
+    { label: datadogLabel, token: datadogKey.slice(1) },
+    { label: datadogLabel, token: `${datadogKey}A` },
+    { label: mailgunLabel, token: mailgunToken.slice(1) },
+    { label: mailgunLabel, token: `${mailgunToken}A` },
+    { label: railwayLabel, token: railwayToken.replace("-", "_") },
+  ]) {
+    const prompt = `${"x".repeat(prefixTokenStart - label.length)}${label}${invalidCredential} ${"x".repeat(1_200)}`;
+    expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+      false,
+    );
+  }
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - suffixLength;
-	const suffixTokenStart = suffixStart - 10;
-	const suffixPrompt = `${"x".repeat(suffixTokenStart - 9)} Vercel: ${token} ${"y".repeat(promptLength - suffixTokenStart - 25)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
-	expect(suffixContext.text).toBe(buildNamingContext([], suffixPrompt));
-	const railwaySuffixPrompt = `${"x".repeat(suffixTokenStart - railwayLabel.length)}${railwayLabel}${railwayToken} ${"y".repeat(promptLength - suffixTokenStart - railwayToken.length - 1)}`;
-	const railwaySuffixContext = buildNamingRequestContext([], railwaySuffixPrompt);
-	expect(hasSensitiveNamingContext(railwaySuffixContext.text)).toBe(false);
-	expect(railwaySuffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - suffixLength;
+  const suffixTokenStart = suffixStart - 10;
+  const suffixPrompt = `${"x".repeat(suffixTokenStart - 9)} Vercel: ${token} ${"y".repeat(promptLength - suffixTokenStart - 25)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  expect(suffixContext.text).toBe(buildNamingContext([], suffixPrompt));
+  const railwaySuffixPrompt = `${"x".repeat(suffixTokenStart - railwayLabel.length)}${railwayLabel}${railwayToken} ${"y".repeat(promptLength - suffixTokenStart - railwayToken.length - 1)}`;
+  const railwaySuffixContext = buildNamingRequestContext(
+    [],
+    railwaySuffixPrompt,
+  );
+  expect(hasSensitiveNamingContext(railwaySuffixContext.text)).toBe(false);
+  expect(railwaySuffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const historyContent = `${"x".repeat(981)} Vercel: ${token} y`;
-	const historyContext = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
-	expect(historyContext.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(981)} Vercel: ${token} y`;
+  const historyContext = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
+  expect(historyContext.hasSensitiveBoundary()).toBe(true);
 
-	const summaryContent = `${"x".repeat(981)} Vercel: ${token} y`;
-	const summaryContext = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
-	expect(hasSensitiveNamingContext(summaryContext.text)).toBe(false);
-	expect(summaryContext.hasSensitiveBoundary()).toBe(true);
+  const summaryContent = `${"x".repeat(981)} Vercel: ${token} y`;
+  const summaryContext = buildNamingRequestContext([
+    { role: "compactionSummary", summary: summaryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summaryContext.text)).toBe(false);
+  expect(summaryContext.hasSensitiveBoundary()).toBe(true);
 
-	const cloudflareHistoryContent = `${"x".repeat(960)}${cloudflareLabel}${cloudflareApiKey} y`;
-	const cloudflareHistory = buildNamingRequestContext([{ role: "user", content: cloudflareHistoryContent }] as any);
-	expect(hasSensitiveNamingContext(cloudflareHistory.text)).toBe(false);
-	expect(cloudflareHistory.hasSensitiveBoundary()).toBe(true);
-	const cloudflareSummary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: cloudflareHistoryContent },
-	] as any);
-	expect(hasSensitiveNamingContext(cloudflareSummary.text)).toBe(false);
-	expect(cloudflareSummary.hasSensitiveBoundary()).toBe(true);
-	const datadogHistoryContent = `${"x".repeat(960)}${datadogLabel}${datadogKey} y`;
-	const datadogHistory = buildNamingRequestContext([{ role: "user", content: datadogHistoryContent }] as any);
-	expect(hasSensitiveNamingContext(datadogHistory.text)).toBe(false);
-	expect(datadogHistory.hasSensitiveBoundary()).toBe(true);
-	const mailgunSummaryContent = `${"x".repeat(960)}${mailgunLabel}${mailgunToken} y`;
-	const mailgunSummary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: mailgunSummaryContent },
-	] as any);
-	expect(hasSensitiveNamingContext(mailgunSummary.text)).toBe(false);
-	expect(mailgunSummary.hasSensitiveBoundary()).toBe(true);
+  const cloudflareHistoryContent = `${"x".repeat(960)}${cloudflareLabel}${cloudflareApiKey} y`;
+  const cloudflareHistory = buildNamingRequestContext([
+    { role: "user", content: cloudflareHistoryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(cloudflareHistory.text)).toBe(false);
+  expect(cloudflareHistory.hasSensitiveBoundary()).toBe(true);
+  const cloudflareSummary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: cloudflareHistoryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(cloudflareSummary.text)).toBe(false);
+  expect(cloudflareSummary.hasSensitiveBoundary()).toBe(true);
+  const datadogHistoryContent = `${"x".repeat(960)}${datadogLabel}${datadogKey} y`;
+  const datadogHistory = buildNamingRequestContext([
+    { role: "user", content: datadogHistoryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(datadogHistory.text)).toBe(false);
+  expect(datadogHistory.hasSensitiveBoundary()).toBe(true);
+  const mailgunSummaryContent = `${"x".repeat(960)}${mailgunLabel}${mailgunToken} y`;
+  const mailgunSummary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: mailgunSummaryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(mailgunSummary.text)).toBe(false);
+  expect(mailgunSummary.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)} Vercel: ${token} ${"y".repeat(3_000)}`;
-	const omittedContext = buildNamingRequestContext([], omittedPrompt);
-	expect(hasSensitiveNamingContext(omittedContext.text)).toBe(false);
-	expect(omittedContext.hasSensitiveBoundary()).toBe(false);
-	const omittedCloudflarePrompt = `${"x".repeat(prefixLength + 20)}${cloudflareLabel}${cloudflareApiKey} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedCloudflarePrompt).hasSensitiveBoundary()).toBe(false);
-	for (const { label, token: credential } of additionalLabeledCredentials) {
-		const omittedCredentialPrompt = `${"x".repeat(prefixLength + 20)}${label}${credential} ${"y".repeat(3_000)}`;
-		expect(buildNamingRequestContext([], omittedCredentialPrompt).hasSensitiveBoundary()).toBe(false);
-	}
-	const omittedHistoryContent = `${"x".repeat(1_010)} Vercel: ${token} y`;
-	const omittedHistory = buildNamingRequestContext([{ role: "user", content: omittedHistoryContent }] as any);
-	expect(omittedHistory.hasSensitiveBoundary()).toBe(false);
-	const omittedSummary = buildNamingRequestContext([{ role: "compactionSummary", summary: omittedHistoryContent }] as any);
-	expect(omittedSummary.hasSensitiveBoundary()).toBe(false);
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)} Vercel: ${token} ${"y".repeat(3_000)}`;
+  const omittedContext = buildNamingRequestContext([], omittedPrompt);
+  expect(hasSensitiveNamingContext(omittedContext.text)).toBe(false);
+  expect(omittedContext.hasSensitiveBoundary()).toBe(false);
+  const omittedCloudflarePrompt = `${"x".repeat(prefixLength + 20)}${cloudflareLabel}${cloudflareApiKey} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext(
+      [],
+      omittedCloudflarePrompt,
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
+  for (const { label, token: credential } of additionalLabeledCredentials) {
+    const omittedCredentialPrompt = `${"x".repeat(prefixLength + 20)}${label}${credential} ${"y".repeat(3_000)}`;
+    expect(
+      buildNamingRequestContext(
+        [],
+        omittedCredentialPrompt,
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
+  const omittedHistoryContent = `${"x".repeat(1_010)} Vercel: ${token} y`;
+  const omittedHistory = buildNamingRequestContext([
+    { role: "user", content: omittedHistoryContent },
+  ] as any);
+  expect(omittedHistory.hasSensitiveBoundary()).toBe(false);
+  const omittedSummary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: omittedHistoryContent },
+  ] as any);
+  expect(omittedSummary.hasSensitiveBoundary()).toBe(false);
 });
 
 test("screens Alibaba Cloud AccessKey IDs without flagging near-misses", () => {
-	const key = `LTAI${"A1b2".repeat(5)}`;
-	const obfuscatedKeys = [
-		key.replace("LTAI", "LT\u200bAI"),
-		`${key.slice(0, 12)}\u200b${key.slice(12)}`,
-	];
+  const key = `LTAI${"A1b2".repeat(5)}`;
+  const obfuscatedKeys = [
+    key.replace("LTAI", "LT\u200bAI"),
+    `${key.slice(0, 12)}\u200b${key.slice(12)}`,
+  ];
 
-	for (const value of [key, ...obfuscatedKeys]) {
-		expect(hasSensitiveNamingContext(`review Alibaba Cloud access ${value}`)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [key, ...obfuscatedKeys]) {
+    expect(
+      hasSensitiveNamingContext(`review Alibaba Cloud access ${value}`),
+    ).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`LTAI${"A1b2".repeat(4)}A1b`,
-		`LTAI${"A1b2".repeat(5)}A`,
-		`LTAJ${"A1b2".repeat(5)}`,
-		`prefix${key}`,
-		`${key}suffix`,
-		"Alibaba Cloud AccessKey setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `LTAI${"A1b2".repeat(4)}A1b`,
+    `LTAI${"A1b2".repeat(5)}A`,
+    `LTAJ${"A1b2".repeat(5)}`,
+    `prefix${key}`,
+    `${key}suffix`,
+    "Alibaba Cloud AccessKey setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Tencent Cloud SecretIds without flagging near-misses", () => {
-	const secretId = `AKID${"A1b2".repeat(8)}`;
-	const obfuscatedSecretIds = [
-		secretId.replace("AKID", "A\u200bKID"),
-		`${secretId.slice(0, 20)}\u200b${secretId.slice(20)}`,
-	];
+  const secretId = `AKID${"A1b2".repeat(8)}`;
+  const obfuscatedSecretIds = [
+    secretId.replace("AKID", "A\u200bKID"),
+    `${secretId.slice(0, 20)}\u200b${secretId.slice(20)}`,
+  ];
 
-	for (const value of [secretId, ...obfuscatedSecretIds]) {
-		expect(hasSensitiveNamingContext(`review Tencent Cloud access ${value}`)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [secretId, ...obfuscatedSecretIds]) {
+    expect(
+      hasSensitiveNamingContext(`review Tencent Cloud access ${value}`),
+    ).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`AKID${"A1b2".repeat(7)}A1b`,
-		`AKID${"A1b2".repeat(8)}A`,
-		`AKIE${"A1b2".repeat(8)}`,
-		`prefix${secretId}`,
-		`${secretId}suffix`,
-		"Tencent Cloud SecretId setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `AKID${"A1b2".repeat(7)}A1b`,
+    `AKID${"A1b2".repeat(8)}A`,
+    `AKIE${"A1b2".repeat(8)}`,
+    `prefix${secretId}`,
+    `${secretId}suffix`,
+    "Tencent Cloud SecretId setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens synthetic Square access tokens without flagging near-misses", () => {
-	const squareToken = `sq0atp-${"A1_-".repeat(6)}`;
-	const legacySquareToken = `EAAA${"B2_c".repeat(6)}`;
-	const obfuscatedTokens = [
-		squareToken.replace("sq0atp-", "sq0\u200batp-"),
-		`${squareToken.slice(0, 18)}\u200b${squareToken.slice(18)}`,
-		legacySquareToken.replace("EAAA", "EA\u200bAA"),
-	];
+  const squareToken = `sq0atp-${"A1_-".repeat(6)}`;
+  const legacySquareToken = `EAAA${"B2_c".repeat(6)}`;
+  const obfuscatedTokens = [
+    squareToken.replace("sq0atp-", "sq0\u200batp-"),
+    `${squareToken.slice(0, 18)}\u200b${squareToken.slice(18)}`,
+    legacySquareToken.replace("EAAA", "EA\u200bAA"),
+  ];
 
-	for (const value of [squareToken, legacySquareToken, `sq0atp-${"A".repeat(22)}`, `EAAA${"B".repeat(60)}`, ...obfuscatedTokens]) {
-		expect(hasSensitiveNamingContext(`review payment integration ${value}`)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [
+    squareToken,
+    legacySquareToken,
+    `sq0atp-${"A".repeat(22)}`,
+    `EAAA${"B".repeat(60)}`,
+    ...obfuscatedTokens,
+  ]) {
+    expect(
+      hasSensitiveNamingContext(`review payment integration ${value}`),
+    ).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`sq0atp-${"A".repeat(21)}`,
-		`sq0atp-${"A".repeat(61)}`,
-		`EAAA${"B".repeat(21)}`,
-		`EAAA${"B".repeat(61)}`,
-		`sq0atq-${"A".repeat(24)}`,
-		`sq0atp-${"A".repeat(10)}!${"A".repeat(14)}`,
-		`prefix${squareToken}`,
-		`sq0atp-${"A".repeat(60)}suffix`,
-		`EAAA${"B".repeat(60)}suffix`,
-		"Square access token integration",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `sq0atp-${"A".repeat(21)}`,
+    `sq0atp-${"A".repeat(61)}`,
+    `EAAA${"B".repeat(21)}`,
+    `EAAA${"B".repeat(61)}`,
+    `sq0atq-${"A".repeat(24)}`,
+    `sq0atp-${"A".repeat(10)}!${"A".repeat(14)}`,
+    `prefix${squareToken}`,
+    `sq0atp-${"A".repeat(60)}suffix`,
+    `EAAA${"B".repeat(60)}suffix`,
+    "Square access token integration",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens assigned access-key values without mistaking placeholders or short values for credentials", () => {
-	const credentialValues = [
-		`access_key=${"A1b2".repeat(6)}`,
-		`accessKeyId:${"C3d4".repeat(6)}`,
-		`AWS_ACCESS_KEY_ID=${"E5f6".repeat(5)}`,
-		`Access Key = ${"G7h8".repeat(6)}`,
-		`access_\u200bkey=${"J9k0".repeat(6)}`,
-	];
+  const credentialValues = [
+    `access_key=${"A1b2".repeat(6)}`,
+    `accessKeyId:${"C3d4".repeat(6)}`,
+    `AWS_ACCESS_KEY_ID=${"E5f6".repeat(5)}`,
+    `Access Key = ${"G7h8".repeat(6)}`,
+    `access_\u200bkey=${"J9k0".repeat(6)}`,
+  ];
 
-	for (const value of credentialValues) {
-		expect(hasSensitiveNamingContext(`review cloud configuration ${value}`)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of credentialValues) {
+    expect(
+      hasSensitiveNamingContext(`review cloud configuration ${value}`),
+    ).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"access_key=placeholder",
-		"access_key=example",
-		`access_key=${"A".repeat(19)}`,
-		"access_key_id: redacted",
-		"access key configuration",
-		"review key access tests",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "access_key=placeholder",
+    "access_key=example",
+    `access_key=${"A".repeat(19)}`,
+    "access_key_id: redacted",
+    "access key configuration",
+    "review key access tests",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Docker registry auth fields only when they encode user/password pairs", () => {
-	const encoded = Buffer.from("synthetic-user:synthetic-password").toString("base64");
-	const candidates = [
-		{ value: `"auth": "${encoded}"`, tokenOffset: `"auth": "`.length },
-		{
-			value: `a\u200buth: ${encoded.slice(0, 10)}\u0000${encoded.slice(10)}`,
-			tokenOffset: "a\u200buth: ".length,
-		},
-	];
-	for (const { value } of candidates) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  const encoded = Buffer.from("synthetic-user:synthetic-password").toString(
+    "base64",
+  );
+  const candidates = [
+    { value: `"auth": "${encoded}"`, tokenOffset: `"auth": "`.length },
+    {
+      value: `a\u200buth: ${encoded.slice(0, 10)}\u0000${encoded.slice(10)}`,
+      tokenOffset: "a\u200buth: ".length,
+    },
+  ];
+  for (const { value } of candidates) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	const nearMisses = [
-		`"auth": "${Buffer.from("registry login").toString("base64")}"`,
-		`auth=${Buffer.from("ordinary configuration").toString("base64")}`,
-		"auth=not-a-base64-value!",
-	];
-	for (const value of nearMisses) {
-		expect(hasSensitiveNamingContext(value)).toBe(false);
-		expect(hasSensitiveOutput(value)).toBe(false);
-	}
+  const nearMisses = [
+    `"auth": "${Buffer.from("registry login").toString("base64")}"`,
+    `auth=${Buffer.from("ordinary configuration").toString("base64")}`,
+    "auth=not-a-base64-value!",
+  ];
+  for (const value of nearMisses) {
+    expect(hasSensitiveNamingContext(value)).toBe(false);
+    expect(hasSensitiveOutput(value)).toBe(false);
+  }
 
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const tokenStarts = [prefixLength - 10, suffixStart - 10];
-	const promptWithCredentialAt = (candidate: typeof candidates[number], tokenStart: number) => {
-		const prefix = `${"x".repeat(tokenStart - candidate.tokenOffset - 1)} `;
-		const separator = "\n";
-		const prompt = `${prefix}${candidate.value}${separator}${"y".repeat(promptLength - prefix.length - candidate.value.length - separator.length)}`;
-		expect(prompt).toHaveLength(promptLength);
-		return prompt;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const tokenStarts = [prefixLength - 10, suffixStart - 10];
+  const promptWithCredentialAt = (
+    candidate: (typeof candidates)[number],
+    tokenStart: number,
+  ) => {
+    const prefix = `${"x".repeat(tokenStart - candidate.tokenOffset - 1)} `;
+    const separator = "\n";
+    const prompt = `${prefix}${candidate.value}${separator}${"y".repeat(promptLength - prefix.length - candidate.value.length - separator.length)}`;
+    expect(prompt).toHaveLength(promptLength);
+    return prompt;
+  };
 
-	for (const candidate of candidates) {
-		for (const tokenStart of tokenStarts) {
-			const context = buildNamingRequestContext([], promptWithCredentialAt(candidate, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
-	const ordinaryAuth = { value: `auth: ${Buffer.from("registry login").toString("base64")}`, tokenOffset: "auth: ".length };
-	for (const tokenStart of tokenStarts) {
-		const context = buildNamingRequestContext([], promptWithCredentialAt(ordinaryAuth, tokenStart));
-		expect(context.hasSensitiveBoundary()).toBe(false);
-	}
+  for (const candidate of candidates) {
+    for (const tokenStart of tokenStarts) {
+      const context = buildNamingRequestContext(
+        [],
+        promptWithCredentialAt(candidate, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
+  const ordinaryAuth = {
+    value: `auth: ${Buffer.from("registry login").toString("base64")}`,
+    tokenOffset: "auth: ".length,
+  };
+  for (const tokenStart of tokenStarts) {
+    const context = buildNamingRequestContext(
+      [],
+      promptWithCredentialAt(ordinaryAuth, tokenStart),
+    );
+    expect(context.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const historyContent = `${"x".repeat(981)}${candidates[0]!.value} trailing text`;
-	for (const input of [
-		[{ role: "user", content: historyContent }],
-		[{ role: "compactionSummary", summary: historyContent }],
-	] as any[]) {
-		const context = buildNamingRequestContext(input);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  const historyContent = `${"x".repeat(981)}${candidates[0]!.value} trailing text`;
+  for (const input of [
+    [{ role: "user", content: historyContent }],
+    [{ role: "compactionSummary", summary: historyContent }],
+  ] as any[]) {
+    const context = buildNamingRequestContext(input);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 });
 
 test("screens npm .npmrc _auth values across retained-context truncation boundaries", () => {
-	const encoded = Buffer.from("synthetic-user:synthetic-password").toString("base64");
-	const candidates = [
-		{
-			value: `//registry.npmjs.org/:_auth=${encoded}`,
-			tokenOffset: `//registry.npmjs.org/:_auth=`.length,
-		},
-		{
-			value: `//registry.npmjs.org/:_au\u200bth=${encoded.slice(0, 10)}\u0000${encoded.slice(10)}`,
-			tokenOffset: `//registry.npmjs.org/:_au\u200bth=`.length,
-		},
-	];
-	for (const { value } of candidates) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  const encoded = Buffer.from("synthetic-user:synthetic-password").toString(
+    "base64",
+  );
+  const candidates = [
+    {
+      value: `//registry.npmjs.org/:_auth=${encoded}`,
+      tokenOffset: `//registry.npmjs.org/:_auth=`.length,
+    },
+    {
+      value: `//registry.npmjs.org/:_au\u200bth=${encoded.slice(0, 10)}\u0000${encoded.slice(10)}`,
+      tokenOffset: `//registry.npmjs.org/:_au\u200bth=`.length,
+    },
+  ];
+  for (const { value } of candidates) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	const nearMisses = [
-		`//registry.npmjs.org/:_auth=${Buffer.from("ordinary registry config").toString("base64")}`,
-		"//registry.npmjs.org/:_auth=not-a-base64-value!",
-	];
-	for (const value of nearMisses) {
-		expect(hasSensitiveNamingContext(value)).toBe(false);
-		expect(hasSensitiveOutput(value)).toBe(false);
-	}
+  const nearMisses = [
+    `//registry.npmjs.org/:_auth=${Buffer.from("ordinary registry config").toString("base64")}`,
+    "//registry.npmjs.org/:_auth=not-a-base64-value!",
+  ];
+  for (const value of nearMisses) {
+    expect(hasSensitiveNamingContext(value)).toBe(false);
+    expect(hasSensitiveOutput(value)).toBe(false);
+  }
 
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const tokenStarts = [prefixLength - 10, suffixStart - 10];
-	const promptWithCredentialAt = (candidate: typeof candidates[number], tokenStart: number) => {
-		const prefix = `${"x".repeat(tokenStart - candidate.tokenOffset - 1)} `;
-		const separator = "\n";
-		const prompt = `${prefix}${candidate.value}${separator}${"y".repeat(promptLength - prefix.length - candidate.value.length - separator.length)}`;
-		expect(prompt).toHaveLength(promptLength);
-		return prompt;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const tokenStarts = [prefixLength - 10, suffixStart - 10];
+  const promptWithCredentialAt = (
+    candidate: (typeof candidates)[number],
+    tokenStart: number,
+  ) => {
+    const prefix = `${"x".repeat(tokenStart - candidate.tokenOffset - 1)} `;
+    const separator = "\n";
+    const prompt = `${prefix}${candidate.value}${separator}${"y".repeat(promptLength - prefix.length - candidate.value.length - separator.length)}`;
+    expect(prompt).toHaveLength(promptLength);
+    return prompt;
+  };
 
-	for (const candidate of candidates) {
-		for (const tokenStart of tokenStarts) {
-			const context = buildNamingRequestContext([], promptWithCredentialAt(candidate, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const candidate of candidates) {
+    for (const tokenStart of tokenStarts) {
+      const context = buildNamingRequestContext(
+        [],
+        promptWithCredentialAt(candidate, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const historyContent = `${"x".repeat(990 - candidates[0]!.tokenOffset)}${candidates[0]!.value} trailing text`;
-	for (const input of [
-		[{ role: "user", content: historyContent }],
-		[{ role: "compactionSummary", summary: historyContent }],
-	] as any[]) {
-		const context = buildNamingRequestContext(input);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  const historyContent = `${"x".repeat(990 - candidates[0]!.tokenOffset)}${candidates[0]!.value} trailing text`;
+  for (const input of [
+    [{ role: "user", content: historyContent }],
+    [{ role: "compactionSummary", summary: historyContent }],
+  ] as any[]) {
+    const context = buildNamingRequestContext(input);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 });
 
 test("screens short Basic Authorization and npm password values across truncation", () => {
-	const npmPassword = `//registry.npmjs.org/:_password=${Buffer.from("pw1").toString("base64")}`;
-	const basic = `Authorization: Basic ${Buffer.from("u:p").toString("base64")}`;
-	const obfuscatedNpmPassword = npmPassword.replace("_password", "_pass\u200bword").replace("cHcx", "cH\u0000cx");
-	const candidates = [
-		{ value: npmPassword, tokenOffset: npmPassword.indexOf("=") + 1 },
-		{ value: obfuscatedNpmPassword, tokenOffset: obfuscatedNpmPassword.indexOf("=") + 1 },
-		{ value: basic, tokenOffset: "Authorization: Basic ".length },
-		{
-			value: `Proxy-Authorization: Basic ${Buffer.from("u:p").toString("base64")}`,
-			tokenOffset: "Proxy-Authorization: Basic ".length,
-		},
-		{
-			value: `Authorization: B a s i c ${Buffer.from("u:p").toString("base64")}`,
-			tokenOffset: `Authorization: B a s i c `.length,
-		},
-		{
-			value: `Autho\u200brization: Ba\u200bsic dT\u0000pw`,
-			tokenOffset: `Autho\u200brization: Ba\u200bsic `.length,
-		},
-		{
-			value: `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
-			tokenOffset: `Authorization: |-\n  Basic `.length,
-		},
-		{
-			value: `Proxy-Authorization: >-\n  Basic\n  ${Buffer.from("p:w").toString("base64")}`,
-			tokenOffset: `Proxy-Authorization: >-\n  Basic\n  `.length,
-		},
-	];
-	for (const { value } of candidates) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  const npmPassword = `//registry.npmjs.org/:_password=${Buffer.from("pw1").toString("base64")}`;
+  const basic = `Authorization: Basic ${Buffer.from("u:p").toString("base64")}`;
+  const obfuscatedNpmPassword = npmPassword
+    .replace("_password", "_pass\u200bword")
+    .replace("cHcx", "cH\u0000cx");
+  const candidates = [
+    { value: npmPassword, tokenOffset: npmPassword.indexOf("=") + 1 },
+    {
+      value: obfuscatedNpmPassword,
+      tokenOffset: obfuscatedNpmPassword.indexOf("=") + 1,
+    },
+    { value: basic, tokenOffset: "Authorization: Basic ".length },
+    {
+      value: `Proxy-Authorization: Basic ${Buffer.from("u:p").toString("base64")}`,
+      tokenOffset: "Proxy-Authorization: Basic ".length,
+    },
+    {
+      value: `Authorization: B a s i c ${Buffer.from("u:p").toString("base64")}`,
+      tokenOffset: `Authorization: B a s i c `.length,
+    },
+    {
+      value: `Autho\u200brization: Ba\u200bsic dT\u0000pw`,
+      tokenOffset: `Autho\u200brization: Ba\u200bsic `.length,
+    },
+    {
+      value: `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
+      tokenOffset: `Authorization: |-\n  Basic `.length,
+    },
+    {
+      value: `Proxy-Authorization: >-\n  Basic\n  ${Buffer.from("p:w").toString("base64")}`,
+      tokenOffset: `Proxy-Authorization: >-\n  Basic\n  `.length,
+    },
+  ];
+  for (const { value } of candidates) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	const nearMisses = [
-		`//registry.npmjs.org/:_password=${Buffer.from("example").toString("base64")}`,
-		"//registry.npmjs.org/:_password=a!",
-		`Authorization: Basic ${Buffer.from("no-pair").toString("base64")}`,
-		`Authorization: B a s i c ordinary auth prose`,
-		`Authorization: |-\n  Basic ${Buffer.from("no-pair").toString("base64")}`,
-		`Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}\n\n  x`,
-	];
-	for (const value of nearMisses) {
-		expect(hasSensitiveNamingContext(value)).toBe(false);
-		expect(hasSensitiveOutput(value)).toBe(false);
-	}
+  const nearMisses = [
+    `//registry.npmjs.org/:_password=${Buffer.from("example").toString("base64")}`,
+    "//registry.npmjs.org/:_password=a!",
+    `Authorization: Basic ${Buffer.from("no-pair").toString("base64")}`,
+    `Authorization: B a s i c ordinary auth prose`,
+    `Authorization: |-\n  Basic ${Buffer.from("no-pair").toString("base64")}`,
+    `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}\n\n  x`,
+  ];
+  for (const value of nearMisses) {
+    expect(hasSensitiveNamingContext(value)).toBe(false);
+    expect(hasSensitiveOutput(value)).toBe(false);
+  }
 
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const promptWithCredentialAt = (candidate: typeof candidates[number], tokenStart: number) => {
-		const prefix = `${"x".repeat(tokenStart - candidate.tokenOffset - 1)} `;
-		const separator = candidate.value.includes("\n") ? "\n" : " ";
-		const prompt = `${prefix}${candidate.value}${separator}${"y".repeat(promptLength - prefix.length - candidate.value.length - separator.length)}`;
-		expect(prompt).toHaveLength(promptLength);
-		return prompt;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const promptWithCredentialAt = (
+    candidate: (typeof candidates)[number],
+    tokenStart: number,
+  ) => {
+    const prefix = `${"x".repeat(tokenStart - candidate.tokenOffset - 1)} `;
+    const separator = candidate.value.includes("\n") ? "\n" : " ";
+    const prompt = `${prefix}${candidate.value}${separator}${"y".repeat(promptLength - prefix.length - candidate.value.length - separator.length)}`;
+    expect(prompt).toHaveLength(promptLength);
+    return prompt;
+  };
 
-	for (const candidate of candidates) {
-		for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
-			const context = buildNamingRequestContext([], promptWithCredentialAt(candidate, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-		const separator = candidate.value.includes("\n") ? "\n" : " ";
-		const historyContent = `${"x".repeat(997 - candidate.tokenOffset)} ${candidate.value}${separator}trailing text`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const candidate of candidates) {
+    for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptWithCredentialAt(candidate, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+    const separator = candidate.value.includes("\n") ? "\n" : " ";
+    const historyContent = `${"x".repeat(997 - candidate.tokenOffset)} ${candidate.value}${separator}trailing text`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const placeholder = `//registry.npmjs.org/:_password=${Buffer.from("example").toString("base64")}`;
-	for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
-		const context = buildNamingRequestContext([], promptWithCredentialAt({
-			value: placeholder, tokenOffset: placeholder.indexOf("=") + 1,
-		}, tokenStart));
-		expect(context.hasSensitiveBoundary()).toBe(false);
-	}
-	const basicNearMisses = [
-		{
-			value: `Authorization: Basic ${Buffer.from("no-pair").toString("base64")}`,
-			tokenOffset: "Authorization: Basic ".length,
-		},
-		{
-			value: `Authorization: |-\n  Basic ${Buffer.from("no-pair").toString("base64")}`,
-			tokenOffset: `Authorization: |-\n  Basic `.length,
-		},
-		{
-			value: `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}\n\n  x`,
-			tokenOffset: `Authorization: |-\n  Basic `.length,
-		},
-	];
-	for (const candidate of basicNearMisses) {
-		for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
-			const context = buildNamingRequestContext([], promptWithCredentialAt(candidate, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const placeholder = `//registry.npmjs.org/:_password=${Buffer.from("example").toString("base64")}`;
+  for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
+    const context = buildNamingRequestContext(
+      [],
+      promptWithCredentialAt(
+        {
+          value: placeholder,
+          tokenOffset: placeholder.indexOf("=") + 1,
+        },
+        tokenStart,
+      ),
+    );
+    expect(context.hasSensitiveBoundary()).toBe(false);
+  }
+  const basicNearMisses = [
+    {
+      value: `Authorization: Basic ${Buffer.from("no-pair").toString("base64")}`,
+      tokenOffset: "Authorization: Basic ".length,
+    },
+    {
+      value: `Authorization: |-\n  Basic ${Buffer.from("no-pair").toString("base64")}`,
+      tokenOffset: `Authorization: |-\n  Basic `.length,
+    },
+    {
+      value: `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}\n\n  x`,
+      tokenOffset: `Authorization: |-\n  Basic `.length,
+    },
+  ];
+  for (const candidate of basicNearMisses) {
+    for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptWithCredentialAt(candidate, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens whitespace-obfuscated Authorization and proxy header names with valid Basic pairs", () => {
-	const encoded = Buffer.from("synthetic-user:synthetic-password").toString("base64");
-	for (const value of [
-		`Author ization: Basic ${encoded}`,
-		`Proxy-Author ization: Basic ${encoded}`,
-		`Pro xy-Authorization: Basic ${encoded}`,
-		`Prox y-Authorization: Basic ${encoded}`,
-	]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  const encoded = Buffer.from("synthetic-user:synthetic-password").toString(
+    "base64",
+  );
+  for (const value of [
+    `Author ization: Basic ${encoded}`,
+    `Proxy-Author ization: Basic ${encoded}`,
+    `Pro xy-Authorization: Basic ${encoded}`,
+    `Prox y-Authorization: Basic ${encoded}`,
+  ]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const promptAtBoundary = (value: string, headerStartOffset: number) => {
-		const headerStart = suffixStart - headerStartOffset;
-		const prefix = `${"x".repeat(headerStart - 1)} `;
-		const padding = ` ${"x".repeat(promptLength - prefix.length - value.length - 1)}`;
-		return `${prefix}${value}${padding}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const promptAtBoundary = (value: string, headerStartOffset: number) => {
+    const headerStart = suffixStart - headerStartOffset;
+    const prefix = `${"x".repeat(headerStart - 1)} `;
+    const padding = ` ${"x".repeat(promptLength - prefix.length - value.length - 1)}`;
+    return `${prefix}${value}${padding}`;
+  };
 
-	const credential = `Pro xy-Authorization: Basic ${encoded}`;
-	const context = buildNamingRequestContext([], promptAtBoundary(credential, "Pro ".length));
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
+  const credential = `Pro xy-Authorization: Basic ${encoded}`;
+  const context = buildNamingRequestContext(
+    [],
+    promptAtBoundary(credential, "Pro ".length),
+  );
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
 
-	const nearMiss = "Pro xy-Authorization: Basic ordinary auth prose";
-	expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-	expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	expect(buildNamingRequestContext([], promptAtBoundary(nearMiss, "Pro ".length)).hasSensitiveBoundary()).toBe(false);
+  const nearMiss = "Pro xy-Authorization: Basic ordinary auth prose";
+  expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+  expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAtBoundary(nearMiss, "Pro ".length),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens whitespace-split Basic authorization labels across suffix truncation", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const encoded = Buffer.from("synthetic-user:synthetic-password").toString("base64");
-	const promptAtBoundary = (value: string) => {
-		const schemeStart = suffixStart - 3;
-		const prefix = `${"x".repeat(schemeStart - "Authorization: ".length - 1)} `;
-		const padding = ` ${"x".repeat(promptLength - prefix.length - value.length - 1)}`;
-		return `${prefix}${value}${padding}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const encoded = Buffer.from("synthetic-user:synthetic-password").toString(
+    "base64",
+  );
+  const promptAtBoundary = (value: string) => {
+    const schemeStart = suffixStart - 3;
+    const prefix = `${"x".repeat(schemeStart - "Authorization: ".length - 1)} `;
+    const padding = ` ${"x".repeat(promptLength - prefix.length - value.length - 1)}`;
+    return `${prefix}${value}${padding}`;
+  };
 
-	const credential = `Authorization: B a s i c ${encoded}`;
-	const context = buildNamingRequestContext([], promptAtBoundary(credential));
-	expect(hasSensitiveNamingContext(credential)).toBe(true);
-	expect(hasSensitiveOutput(credential)).toBe(true);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
+  const credential = `Authorization: B a s i c ${encoded}`;
+  const context = buildNamingRequestContext([], promptAtBoundary(credential));
+  expect(hasSensitiveNamingContext(credential)).toBe(true);
+  expect(hasSensitiveOutput(credential)).toBe(true);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
 
-	const nearMiss = buildNamingRequestContext([], promptAtBoundary("Authorization: B a s i c ordinary auth prose"));
-	expect(nearMiss.hasSensitiveBoundary()).toBe(false);
+  const nearMiss = buildNamingRequestContext(
+    [],
+    promptAtBoundary("Authorization: B a s i c ordinary auth prose"),
+  );
+  expect(nearMiss.hasSensitiveBoundary()).toBe(false);
 });
 
 test("screens generic sk/rk API keys across prompt truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const tokens = [
-		`sk-${"A".repeat(32)}`,
-		`rk-${"B".repeat(16)}_stage-1`,
-		`sk-${"C".repeat(8)}\u200b${"C".repeat(16)}`,
-	];
-	const promptWithTokenAt = (token: string, tokenStart: number) => {
-		const prefix = `${"x".repeat(tokenStart - 1)} `;
-		return `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
-	};
-	for (const token of tokens) {
-		expect(hasSensitiveNamingContext(token)).toBe(true);
-		for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
-			const context = buildNamingRequestContext([], promptWithTokenAt(token, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const tokens = [
+    `sk-${"A".repeat(32)}`,
+    `rk-${"B".repeat(16)}_stage-1`,
+    `sk-${"C".repeat(8)}\u200b${"C".repeat(16)}`,
+  ];
+  const promptWithTokenAt = (token: string, tokenStart: number) => {
+    const prefix = `${"x".repeat(tokenStart - 1)} `;
+    return `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+  };
+  for (const token of tokens) {
+    expect(hasSensitiveNamingContext(token)).toBe(true);
+    for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptWithTokenAt(token, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const nearMisses = [`csk-${"D".repeat(24)}`, `sk-${"E".repeat(15)}`];
-	for (const token of nearMisses) {
-		expect(hasSensitiveNamingContext(token)).toBe(false);
-		for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
-			const context = buildNamingRequestContext([], promptWithTokenAt(token, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [`csk-${"D".repeat(24)}`, `sk-${"E".repeat(15)}`];
+  for (const token of nearMisses) {
+    expect(hasSensitiveNamingContext(token)).toBe(false);
+    for (const tokenStart of [prefixLength - 2, suffixStart - 2]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptWithTokenAt(token, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens whitespace-obfuscated fixed-format credentials across truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const whitespaceObfuscatedToken = `neon_api_key_${"N".repeat(16)} ${"N".repeat(16)}`;
-	const promptWithTokenAt = (candidate: string, tokenStart: number) => {
-		const prefix = `${"x".repeat(tokenStart - 1)} `;
-		return `${prefix}${candidate} ${"y".repeat(promptLength - prefix.length - candidate.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const whitespaceObfuscatedToken = `neon_api_key_${"N".repeat(16)} ${"N".repeat(16)}`;
+  const promptWithTokenAt = (candidate: string, tokenStart: number) => {
+    const prefix = `${"x".repeat(tokenStart - 1)} `;
+    return `${prefix}${candidate} ${"y".repeat(promptLength - prefix.length - candidate.length - 1)}`;
+  };
 
-	expect(hasSensitiveNamingContext(whitespaceObfuscatedToken)).toBe(true);
-	for (const tokenStart of [prefixLength - 34, suffixStart - 5]) {
-		const context = buildNamingRequestContext([], promptWithTokenAt(whitespaceObfuscatedToken, tokenStart));
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  expect(hasSensitiveNamingContext(whitespaceObfuscatedToken)).toBe(true);
+  for (const tokenStart of [prefixLength - 34, suffixStart - 5]) {
+    const context = buildNamingRequestContext(
+      [],
+      promptWithTokenAt(whitespaceObfuscatedToken, tokenStart),
+    );
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 
-	const historyContent = `${"x".repeat(968)} ${whitespaceObfuscatedToken} y`;
-	for (const context of [
-		buildNamingRequestContext([{ role: "user", content: historyContent }] as any),
-		buildNamingRequestContext([{ role: "compactionSummary", summary: historyContent }] as any),
-	]) {
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
-
+  const historyContent = `${"x".repeat(968)} ${whitespaceObfuscatedToken} y`;
+  for (const context of [
+    buildNamingRequestContext([
+      { role: "user", content: historyContent },
+    ] as any),
+    buildNamingRequestContext([
+      { role: "compactionSummary", summary: historyContent },
+    ] as any),
+  ]) {
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 });
 
 test("generic sk/rk matching does not compact task-based prose into API keys", () => {
-	for (const prompt of [
-		"task-based development",
-		"task-based development with tests",
-		"task-based\ndevelopment",
-		"work-based development",
-	]) {
-		expect(hasSensitiveNamingContext(prompt)).toBe(false);
-		expect(hasSensitiveOutput(prompt)).toBe(false);
-	}
+  for (const prompt of [
+    "task-based development",
+    "task-based development with tests",
+    "task-based\ndevelopment",
+    "work-based development",
+  ]) {
+    expect(hasSensitiveNamingContext(prompt)).toBe(false);
+    expect(hasSensitiveOutput(prompt)).toBe(false);
+  }
 
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const promptLength = 3_000;
-	const tokenStart = Math.ceil(retainedLength / 2) - 2;
-	const prefix = `${"x".repeat(tokenStart - 1)} `;
-	const prompt = `${prefix}task-based development ${"y".repeat(promptLength - prefix.length - "task-based development ".length)}`;
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(false);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const promptLength = 3_000;
+  const tokenStart = Math.ceil(retainedLength / 2) - 2;
+  const prefix = `${"x".repeat(tokenStart - 1)} `;
+  const prompt = `${prefix}task-based development ${"y".repeat(promptLength - prefix.length - "task-based development ".length)}`;
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(false);
 
-	const token = `sk-${"A".repeat(24)}`;
-	expect(hasSensitiveNamingContext(`task-based development using ${token}`)).toBe(true);
-	expect(hasSensitiveNamingContext(`prefix${token}`)).toBe(true);
+  const token = `sk-${"A".repeat(24)}`;
+  expect(
+    hasSensitiveNamingContext(`task-based development using ${token}`),
+  ).toBe(true);
+  expect(hasSensitiveNamingContext(`prefix${token}`)).toBe(true);
 
-	const whitespaceObfuscatedToken = `sk-${"W".repeat(8)} ${"W".repeat(16)}`;
-	expect(hasSensitiveNamingContext(whitespaceObfuscatedToken)).toBe(true);
-	expect(hasSensitiveOutput(whitespaceObfuscatedToken)).toBe(true);
+  const whitespaceObfuscatedToken = `sk-${"W".repeat(8)} ${"W".repeat(16)}`;
+  expect(hasSensitiveNamingContext(whitespaceObfuscatedToken)).toBe(true);
+  expect(hasSensitiveOutput(whitespaceObfuscatedToken)).toBe(true);
 });
 
 test("screens explicit credential assignments across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokenStart = prefixLength - 10;
-	const label = " access_key: ";
-	const credential = "M3n4".repeat(8);
-	const prompt = `${"x".repeat(tokenStart - label.length)}${label}${credential} ${"x".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
-	expect(context.text).toBe(buildNamingContext([], prompt));
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokenStart = prefixLength - 10;
+  const label = " access_key: ";
+  const credential = "M3n4".repeat(8);
+  const prompt = `${"x".repeat(tokenStart - label.length)}${label}${credential} ${"x".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(context.text).toBe(buildNamingContext([], prompt));
 
-	const controlObfuscated = `${credential.slice(0, 8)}\u0000${credential.slice(8)}`;
-	const obfuscatedPrompt = `${"x".repeat(tokenStart - label.length)}${label}${controlObfuscated} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const controlObfuscated = `${credential.slice(0, 8)}\u0000${credential.slice(8)}`;
+  const obfuscatedPrompt = `${"x".repeat(tokenStart - label.length)}${label}${controlObfuscated} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const nineteenCharacters = "A".repeat(19);
-	const shortPrompt = `${"x".repeat(tokenStart - label.length)}${label}${nineteenCharacters} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], shortPrompt).hasSensitiveBoundary()).toBe(false);
-	const twentyCharacterCredential = "M3n4".repeat(5);
-	const minimumLengthPrompt = `${"x".repeat(tokenStart - label.length)}${label}${twentyCharacterCredential} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], minimumLengthPrompt).hasSensitiveBoundary()).toBe(true);
-	const unlabeledPrompt = `${"x".repeat(tokenStart)}${credential} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], unlabeledPrompt).hasSensitiveBoundary()).toBe(false);
+  const nineteenCharacters = "A".repeat(19);
+  const shortPrompt = `${"x".repeat(tokenStart - label.length)}${label}${nineteenCharacters} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], shortPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const twentyCharacterCredential = "M3n4".repeat(5);
+  const minimumLengthPrompt = `${"x".repeat(tokenStart - label.length)}${label}${twentyCharacterCredential} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], minimumLengthPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
+  const unlabeledPrompt = `${"x".repeat(tokenStart)}${credential} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], unlabeledPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 
-	const historyContent = `${"x".repeat(985)}${label}${credential} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summaryContent = `${"x".repeat(970)}${label}${credential} y`;
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: summaryContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const suffixTokenStart = suffixStart - 10;
-	const suffixPrompt = `${"x".repeat(suffixTokenStart - label.length)}${label}${credential} ${"y".repeat(promptLength - suffixTokenStart - credential.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(985)}${label}${credential} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summaryContent = `${"x".repeat(970)}${label}${credential} y`;
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: summaryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const suffixTokenStart = suffixStart - 10;
+  const suffixPrompt = `${"x".repeat(suffixTokenStart - label.length)}${label}${credential} ${"y".repeat(promptLength - suffixTokenStart - credential.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${credential} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${credential} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens framework, WordPress, session/cookie, and cryptographic key assignments across both prompt truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const credential = "K3y4".repeat(8);
-	const assignments = [
-		"APP_KEY", "AES_KEY", "AES_256_KEY", "AES-256-KEY",
-		"SECRET_KEY_BASE", "ENCRYPTION_KEY", "FERNET_KEY",
-		"HMAC_KEY", "SIGNING_KEY", "JWT_SIGNING_KEY", "TOKEN_SIGNING_KEY", "MASTER_KEY",
-		"SESSION_KEY", "SESSION-KEY", "SESSION KEY", "SESSION",
-		"COOKIE_KEY", "COOKIE-KEY", "COOKIE",
-		"AUTH_KEY", "SECURE_AUTH_KEY", "LOGGED_IN_KEY", "NONCE_KEY",
-		"AUTH_SALT", "SECURE_AUTH_SALT", "LOGGED_IN_SALT", "NONCE_SALT",
-	]
-		.map((name) => ({ name, valuePrefix: "", value: credential }));
-	assignments.push({ name: "APP_KEY", valuePrefix: "base64:", value: Buffer.from(credential).toString("base64") });
-	assignments.push({ name: "FERNET_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
-	assignments.push({ name: "HMAC_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
-	assignments.push({ name: "AES_256_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
-	assignments.push({ name: "JWT_SIGNING_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
-	assignments.push({ name: "COOKIE_KEY", valuePrefix: "", value: Buffer.from(credential).toString("base64url") });
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const credential = "K3y4".repeat(8);
+  const assignments = [
+    "APP_KEY",
+    "AES_KEY",
+    "AES_256_KEY",
+    "AES-256-KEY",
+    "SECRET_KEY_BASE",
+    "ENCRYPTION_KEY",
+    "FERNET_KEY",
+    "HMAC_KEY",
+    "SIGNING_KEY",
+    "JWT_SIGNING_KEY",
+    "TOKEN_SIGNING_KEY",
+    "MASTER_KEY",
+    "SESSION_KEY",
+    "SESSION-KEY",
+    "SESSION KEY",
+    "SESSION",
+    "COOKIE_KEY",
+    "COOKIE-KEY",
+    "COOKIE",
+    "AUTH_KEY",
+    "SECURE_AUTH_KEY",
+    "LOGGED_IN_KEY",
+    "NONCE_KEY",
+    "AUTH_SALT",
+    "SECURE_AUTH_SALT",
+    "LOGGED_IN_SALT",
+    "NONCE_SALT",
+  ].map((name) => ({ name, valuePrefix: "", value: credential }));
+  assignments.push({
+    name: "APP_KEY",
+    valuePrefix: "base64:",
+    value: Buffer.from(credential).toString("base64"),
+  });
+  assignments.push({
+    name: "FERNET_KEY",
+    valuePrefix: "",
+    value: Buffer.from(credential).toString("base64url"),
+  });
+  assignments.push({
+    name: "HMAC_KEY",
+    valuePrefix: "",
+    value: Buffer.from(credential).toString("base64url"),
+  });
+  assignments.push({
+    name: "AES_256_KEY",
+    valuePrefix: "",
+    value: Buffer.from(credential).toString("base64url"),
+  });
+  assignments.push({
+    name: "JWT_SIGNING_KEY",
+    valuePrefix: "",
+    value: Buffer.from(credential).toString("base64url"),
+  });
+  assignments.push({
+    name: "COOKIE_KEY",
+    valuePrefix: "",
+    value: Buffer.from(credential).toString("base64url"),
+  });
 
-	for (const { name, valuePrefix, value } of assignments) {
-		const assignment = `${name}=${valuePrefix}${value}`;
-		expect(hasSensitiveNamingContext(assignment)).toBe(true);
-		expect(hasSensitiveOutput(assignment)).toBe(true);
+  for (const { name, valuePrefix, value } of assignments) {
+    const assignment = `${name}=${valuePrefix}${value}`;
+    expect(hasSensitiveNamingContext(assignment)).toBe(true);
+    expect(hasSensitiveOutput(assignment)).toBe(true);
 
-		const label = ` ${name}=`;
-		const prefixTokenStart = prefixLength - 10;
-		const prefixValueStart = prefixTokenStart - valuePrefix.length;
-		const prefixPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${valuePrefix}${value} ${"y".repeat(1_200)}`;
-		const prefixContext = buildNamingRequestContext([], prefixPrompt);
-		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+    const label = ` ${name}=`;
+    const prefixTokenStart = prefixLength - 10;
+    const prefixValueStart = prefixTokenStart - valuePrefix.length;
+    const prefixPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${valuePrefix}${value} ${"y".repeat(1_200)}`;
+    const prefixContext = buildNamingRequestContext([], prefixPrompt);
+    expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+    expect(prefixContext.hasSensitiveBoundary()).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixTokenStart = suffixStart - 10;
-		const suffixValueStart = suffixTokenStart - valuePrefix.length;
-		const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${valuePrefix}${value} ${"y".repeat(promptLength - suffixValueStart - valuePrefix.length - value.length - 1)}`;
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
-	}
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixTokenStart = suffixStart - 10;
+    const suffixValueStart = suffixTokenStart - valuePrefix.length;
+    const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${valuePrefix}${value} ${"y".repeat(promptLength - suffixValueStart - valuePrefix.length - value.length - 1)}`;
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  }
 
-	for (const [role, label] of [
-		["user", "SESSION"],
-		["compactionSummary", "COOKIE"],
-	] as const) {
-		const content = `${"x".repeat(982)} ${label}=${credential} y`;
-		const boundaryContext = role === "user"
-			? buildNamingRequestContext([{ role, content }] as any)
-			: buildNamingRequestContext([{ role, summary: content }] as any);
-		expect(hasSensitiveNamingContext(boundaryContext.text)).toBe(false);
-		expect(boundaryContext.hasSensitiveBoundary()).toBe(true);
-	}
+  for (const [role, label] of [
+    ["user", "SESSION"],
+    ["compactionSummary", "COOKIE"],
+  ] as const) {
+    const content = `${"x".repeat(982)} ${label}=${credential} y`;
+    const boundaryContext =
+      role === "user"
+        ? buildNamingRequestContext([{ role, content }] as any)
+        : buildNamingRequestContext([{ role, summary: content }] as any);
+    expect(hasSensitiveNamingContext(boundaryContext.text)).toBe(false);
+    expect(boundaryContext.hasSensitiveBoundary()).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"APP_KEY=placeholder",
-		"APP_KEY=base64:placeholder",
-		"SECRET_KEY_BASE=redacted",
-		"AUTH_KEY=put your unique phrase here",
-		"LOGGED_IN_SALT=example",
-		"FERNET_KEY=example",
-		"HMAC_KEY=placeholder",
-		"HMAC_KEY rotation in a synthetic project",
-		`HMAC_KEY=${"H".repeat(19)}`,
-		"AES_256_KEY=redacted",
-		"AES-256 key rotation in a synthetic project",
-		"SIGNING_KEY=placeholder",
-		"JWT_SIGNING_KEY rollover in a synthetic project",
-		`TOKEN_SIGNING_KEY=${"S".repeat(19)}`,
-		"COOKIE_KEY=example",
-		"SESSION=placeholder",
-		"COOKIE=example",
-		"SESSION cookie setup for a synthetic project",
-		`SESSION=${"Q".repeat(19)}`,
-		`COOKIE=${"Q".repeat(19)}`,
-		"SESSION_KEY rotation for a synthetic project",
-		`SESSION_KEY=${"Q".repeat(19)}`,
-		`AES_256_KEY=${"A".repeat(19)}`,
-		`ENCRYPTION_KEY=${"A".repeat(19)}`,
-		`MASTER_KEY=${"B".repeat(19)}`,
-		`NONCE_SALT=${"N".repeat(19)}`,
-		"APP_KEY rotation in a synthetic project",
-		"rotate the secret key base after deployment",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "APP_KEY=placeholder",
+    "APP_KEY=base64:placeholder",
+    "SECRET_KEY_BASE=redacted",
+    "AUTH_KEY=put your unique phrase here",
+    "LOGGED_IN_SALT=example",
+    "FERNET_KEY=example",
+    "HMAC_KEY=placeholder",
+    "HMAC_KEY rotation in a synthetic project",
+    `HMAC_KEY=${"H".repeat(19)}`,
+    "AES_256_KEY=redacted",
+    "AES-256 key rotation in a synthetic project",
+    "SIGNING_KEY=placeholder",
+    "JWT_SIGNING_KEY rollover in a synthetic project",
+    `TOKEN_SIGNING_KEY=${"S".repeat(19)}`,
+    "COOKIE_KEY=example",
+    "SESSION=placeholder",
+    "COOKIE=example",
+    "SESSION cookie setup for a synthetic project",
+    `SESSION=${"Q".repeat(19)}`,
+    `COOKIE=${"Q".repeat(19)}`,
+    "SESSION_KEY rotation for a synthetic project",
+    `SESSION_KEY=${"Q".repeat(19)}`,
+    `AES_256_KEY=${"A".repeat(19)}`,
+    `ENCRYPTION_KEY=${"A".repeat(19)}`,
+    `MASTER_KEY=${"B".repeat(19)}`,
+    `NONCE_SALT=${"N".repeat(19)}`,
+    "APP_KEY rotation in a synthetic project",
+    "rotate the secret key base after deployment",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens age secret identities across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const prefix = ["AGE", "SECRET", "KEY", "1"].join("-");
-	const identity = `${prefix}${"Q".repeat(58)}`;
-	expect(hasSensitiveNamingContext(identity)).toBe(true);
-	expect(hasSensitiveOutput(identity)).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const prefix = ["AGE", "SECRET", "KEY", "1"].join("-");
+  const identity = `${prefix}${"Q".repeat(58)}`;
+  expect(hasSensitiveNamingContext(identity)).toBe(true);
+  expect(hasSensitiveOutput(identity)).toBe(true);
 
-	const prompt = `${"x".repeat(prefixLength - 9)} ${identity} ${"x".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
+  const prompt = `${"x".repeat(prefixLength - 9)} ${identity} ${"x".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
 
-	const obfuscated = identity.replace("SECRET", "SEC\u200bRET");
-	const obfuscatedPrompt = `${"x".repeat(prefixLength - 9)} ${obfuscated} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const obfuscated = identity.replace("SECRET", "SEC\u200bRET");
+  const obfuscatedPrompt = `${"x".repeat(prefixLength - 9)} ${obfuscated} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = promptLength - suffixLength;
-	const suffixTokenStart = suffixStart - 8;
-	const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${identity} ${"y".repeat(promptLength - suffixTokenStart - identity.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = promptLength - suffixLength;
+  const suffixTokenStart = suffixStart - 8;
+  const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${identity} ${"y".repeat(promptLength - suffixTokenStart - identity.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const historyContent = `${"x".repeat(991)} ${identity} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: historyContent }] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(991)} ${identity} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${identity} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	const shortIdentity = `${prefix}${"Q".repeat(57)}`;
-	const nearMiss = `${"x".repeat(prefixLength - 9)} ${shortIdentity} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], nearMiss).hasSensitiveBoundary()).toBe(false);
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)}${identity} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const shortIdentity = `${prefix}${"Q".repeat(57)}`;
+  const nearMiss = `${"x".repeat(prefixLength - 9)} ${shortIdentity} ${"x".repeat(1_200)}`;
+  expect(buildNamingRequestContext([], nearMiss).hasSensitiveBoundary()).toBe(
+    false,
+  );
 });
 
 test("screens Docker Hub tokens across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const pat = `dckr_pat_${"A1b2_-".repeat(5).slice(0, 27)}`;
-	const oat = `dckr_oat_${"C3d4_-".repeat(6).slice(0, 32)}`;
-	const tokens = [pat, oat];
-	for (const token of tokens) {
-		expect(hasSensitiveNamingContext(token)).toBe(true);
-		expect(hasSensitiveOutput(token)).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const pat = `dckr_pat_${"A1b2_-".repeat(5).slice(0, 27)}`;
+  const oat = `dckr_oat_${"C3d4_-".repeat(6).slice(0, 32)}`;
+  const tokens = [pat, oat];
+  for (const token of tokens) {
+    expect(hasSensitiveNamingContext(token)).toBe(true);
+    expect(hasSensitiveOutput(token)).toBe(true);
 
-		const prompt = `${"x".repeat(prefixLength - 9)} ${token} ${"x".repeat(1_200)}`;
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
+    const prompt = `${"x".repeat(prefixLength - 9)} ${token} ${"x".repeat(1_200)}`;
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
 
-		const obfuscated = token.replace("dckr_", "dck\u200br_");
-		const obfuscatedPrompt = `${"x".repeat(prefixLength - 9)} ${obfuscated} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
-		const controlObfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
-		const controlPrompt = `${"x".repeat(prefixLength - 9)} ${controlObfuscated} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], controlPrompt).hasSensitiveBoundary()).toBe(true);
-	}
+    const obfuscated = token.replace("dckr_", "dck\u200br_");
+    const obfuscatedPrompt = `${"x".repeat(prefixLength - 9)} ${obfuscated} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+    ).toBe(true);
+    const controlObfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
+    const controlPrompt = `${"x".repeat(prefixLength - 9)} ${controlObfuscated} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], controlPrompt).hasSensitiveBoundary(),
+    ).toBe(true);
+  }
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = promptLength - suffixLength;
-	const suffixTokenStart = suffixStart - 8;
-	const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${pat} ${"y".repeat(promptLength - suffixTokenStart - pat.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = promptLength - suffixLength;
+  const suffixTokenStart = suffixStart - 8;
+  const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${pat} ${"y".repeat(promptLength - suffixTokenStart - pat.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const historyContent = `${"x".repeat(991)} ${pat} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summaryContent = `${"x".repeat(991)} ${oat} y`;
-	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(991)} ${pat} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summaryContent = `${"x".repeat(991)} ${oat} y`;
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: summaryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${pat} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	const nearMisses = [
-		pat.slice(0, -1), `${pat}Z`, pat.replace("dckr_pat", "dckr_pot"),
-		oat.slice(0, -1), `${oat}Z`, oat.replace("dckr_oat", "dckr_pat"),
-	];
-	for (const nearMiss of nearMisses) {
-		const prompt = `${"x".repeat(prefixLength - 9)} ${nearMiss} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${pat} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const nearMisses = [
+    pat.slice(0, -1),
+    `${pat}Z`,
+    pat.replace("dckr_pat", "dckr_pot"),
+    oat.slice(0, -1),
+    `${oat}Z`,
+    oat.replace("dckr_oat", "dckr_pat"),
+  ];
+  for (const nearMiss of nearMisses) {
+    const prompt = `${"x".repeat(prefixLength - 9)} ${nearMiss} ${"x".repeat(1_200)}`;
+    expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+      false,
+    );
+  }
 });
 
 test("screens Azure DevOps and GitLab tokens across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const azureToken = `${"a".repeat(75)}AZDO${"B".repeat(5)}`;
-	const runnerToken = `glrt-${"A1b2_-".repeat(3)}Z9`;
-	const token = (prefix: string, body: string) => `${prefix}${body}`;
-	const repeated = (characters: string, length: number) => characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
-	const gitlabTokens = [
-		{ token: token("glcbt-abcde_", "A1b2_-".repeat(3) + "Z9"), prefix: "glcbt" },
-		{ token: token("gldt-", "A1b2_-".repeat(3) + "Z9"), prefix: "gldt-" },
-		{ token: token("glffct-", "A1b2_-".repeat(3) + "Z9"), prefix: "glffct-" },
-		{ token: token("glft-", "A1b2_-".repeat(3) + "Z9"), prefix: "glft-" },
-		{ token: token("glimt-", repeated("A1b2_-", 25)), prefix: "glimt-" },
-		{ token: token("glagent-", repeated("A1b2_-", 50)), prefix: "glagent-" },
-		{ token: token("gloas-", repeated("A1b2_-", 64)), prefix: "gloas-" },
-		{ token: token("glptt-", "a1b2".repeat(10)), prefix: "glptt-" },
-		{ token: token("GR1348941", "A1b2_".repeat(4)), prefix: "GR1348941" },
-		{ token: token("glsoat-", "A1b2_-".repeat(3) + "Z9"), prefix: "glsoat-" },
-		{ token: token("glrtr-", "A1b2_-".repeat(3) + "Z9"), prefix: "glrtr-" },
-		{ token: `_gitlab_session=${"a1b2".repeat(8)}`, prefix: "_gitlab_session" },
-	].map(({ token: value, prefix }) => ({
-		token: value,
-		obfuscated: value.replace(prefix, `${prefix.slice(0, Math.floor(prefix.length / 2))}\u200b${prefix.slice(Math.floor(prefix.length / 2))}`),
-		controlObfuscated: `${value.slice(0, Math.floor(value.length / 2))}\u0000${value.slice(Math.floor(value.length / 2))}`,
-		nearMisses: prefix === "glrtr-"
-			? [value.slice(0, -1), value.replace(prefix, `${prefix.slice(0, -1)}x`), `x${value}`, `_${value}`, `${prefix}${"a".repeat(301)}`]
-			: [value.slice(0, -1), `${value}x`, value.replace(prefix, `${prefix.slice(0, -1)}x`), `x${value}`, `_${value}`],
-	}));
-	const cases = [
-		{
-			token: azureToken,
-			obfuscated: azureToken.replace("AZDO", "AZ\u200bDO"),
-			controlObfuscated: `${azureToken.slice(0, 42)}\u0000${azureToken.slice(42)}`,
-			nearMisses: [
-				azureToken.slice(0, -1), azureToken.replace("AZDO", "AZDX"), `${azureToken}Z`, `x${azureToken}`, `_${azureToken}`,
-			],
-		},
-		{
-			token: runnerToken,
-			obfuscated: runnerToken.replace("glrt", "gl\u200brt"),
-			controlObfuscated: `${runnerToken.slice(0, 12)}\u0000${runnerToken.slice(12)}`,
-			nearMisses: [
-				runnerToken.slice(0, -1), `${runnerToken}Z`, runnerToken.replace("glrt", "glrx"), `x${runnerToken}`, `_${runnerToken}`,
-			],
-		},
-		...gitlabTokens,
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const azureToken = `${"a".repeat(75)}AZDO${"B".repeat(5)}`;
+  const runnerToken = `glrt-${"A1b2_-".repeat(3)}Z9`;
+  const token = (prefix: string, body: string) => `${prefix}${body}`;
+  const repeated = (characters: string, length: number) =>
+    characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
+  const gitlabTokens = [
+    {
+      token: token("glcbt-abcde_", "A1b2_-".repeat(3) + "Z9"),
+      prefix: "glcbt",
+    },
+    { token: token("gldt-", "A1b2_-".repeat(3) + "Z9"), prefix: "gldt-" },
+    { token: token("glffct-", "A1b2_-".repeat(3) + "Z9"), prefix: "glffct-" },
+    { token: token("glft-", "A1b2_-".repeat(3) + "Z9"), prefix: "glft-" },
+    { token: token("glimt-", repeated("A1b2_-", 25)), prefix: "glimt-" },
+    { token: token("glagent-", repeated("A1b2_-", 50)), prefix: "glagent-" },
+    { token: token("gloas-", repeated("A1b2_-", 64)), prefix: "gloas-" },
+    { token: token("glptt-", "a1b2".repeat(10)), prefix: "glptt-" },
+    { token: token("GR1348941", "A1b2_".repeat(4)), prefix: "GR1348941" },
+    { token: token("glsoat-", "A1b2_-".repeat(3) + "Z9"), prefix: "glsoat-" },
+    { token: token("glrtr-", "A1b2_-".repeat(3) + "Z9"), prefix: "glrtr-" },
+    { token: `_gitlab_session=${"a1b2".repeat(8)}`, prefix: "_gitlab_session" },
+  ].map(({ token: value, prefix }) => ({
+    token: value,
+    obfuscated: value.replace(
+      prefix,
+      `${prefix.slice(0, Math.floor(prefix.length / 2))}\u200b${prefix.slice(Math.floor(prefix.length / 2))}`,
+    ),
+    controlObfuscated: `${value.slice(0, Math.floor(value.length / 2))}\u0000${value.slice(Math.floor(value.length / 2))}`,
+    nearMisses:
+      prefix === "glrtr-"
+        ? [
+            value.slice(0, -1),
+            value.replace(prefix, `${prefix.slice(0, -1)}x`),
+            `x${value}`,
+            `_${value}`,
+            `${prefix}${"a".repeat(301)}`,
+          ]
+        : [
+            value.slice(0, -1),
+            `${value}x`,
+            value.replace(prefix, `${prefix.slice(0, -1)}x`),
+            `x${value}`,
+            `_${value}`,
+          ],
+  }));
+  const cases = [
+    {
+      token: azureToken,
+      obfuscated: azureToken.replace("AZDO", "AZ\u200bDO"),
+      controlObfuscated: `${azureToken.slice(0, 42)}\u0000${azureToken.slice(42)}`,
+      nearMisses: [
+        azureToken.slice(0, -1),
+        azureToken.replace("AZDO", "AZDX"),
+        `${azureToken}Z`,
+        `x${azureToken}`,
+        `_${azureToken}`,
+      ],
+    },
+    {
+      token: runnerToken,
+      obfuscated: runnerToken.replace("glrt", "gl\u200brt"),
+      controlObfuscated: `${runnerToken.slice(0, 12)}\u0000${runnerToken.slice(12)}`,
+      nearMisses: [
+        runnerToken.slice(0, -1),
+        `${runnerToken}Z`,
+        runnerToken.replace("glrt", "glrx"),
+        `x${runnerToken}`,
+        `_${runnerToken}`,
+      ],
+    },
+    ...gitlabTokens,
+  ];
 
-	for (const { token, obfuscated, controlObfuscated, nearMisses } of cases) {
-		expect(hasSensitiveNamingContext(token)).toBe(true);
-		expect(hasSensitiveOutput(token)).toBe(true);
+  for (const { token, obfuscated, controlObfuscated, nearMisses } of cases) {
+    expect(hasSensitiveNamingContext(token)).toBe(true);
+    expect(hasSensitiveOutput(token)).toBe(true);
 
-		const promptAtPrefixBoundary = (value: string) => {
-			const tokenStart = prefixLength - Math.floor(value.length / 2);
-			return `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-		};
-		const prefixPrompt = promptAtPrefixBoundary(token);
-		const prefixContext = buildNamingRequestContext([], prefixPrompt);
-		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
-		expect(buildNamingRequestContext([], promptAtPrefixBoundary(obfuscated)).hasSensitiveBoundary()).toBe(true);
-		expect(buildNamingRequestContext([], promptAtPrefixBoundary(controlObfuscated)).hasSensitiveBoundary()).toBe(true);
+    const promptAtPrefixBoundary = (value: string) => {
+      const tokenStart = prefixLength - Math.floor(value.length / 2);
+      return `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+    };
+    const prefixPrompt = promptAtPrefixBoundary(token);
+    const prefixContext = buildNamingRequestContext([], prefixPrompt);
+    expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+    expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAtPrefixBoundary(obfuscated),
+      ).hasSensitiveBoundary(),
+    ).toBe(true);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAtPrefixBoundary(controlObfuscated),
+      ).hasSensitiveBoundary(),
+    ).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
-		const leading = `${"x".repeat(suffixTokenStart - 1)} `;
-		const tokenAndSpace = `${token} `;
-		const suffixPrompt = leading + tokenAndSpace
-			+ "y".repeat(promptLength - leading.length - tokenAndSpace.length);
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
+    const leading = `${"x".repeat(suffixTokenStart - 1)} `;
+    const tokenAndSpace = `${token} `;
+    const suffixPrompt =
+      leading +
+      tokenAndSpace +
+      "y".repeat(promptLength - leading.length - tokenAndSpace.length);
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-		const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
-		const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-		expect(hasSensitiveNamingContext(history.text)).toBe(false);
-		expect(history.hasSensitiveBoundary()).toBe(true);
-		const summary = buildNamingRequestContext([
-			{ role: "compactionSummary", summary: historyContent },
-		] as any);
-		expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-		expect(summary.hasSensitiveBoundary()).toBe(true);
+    const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
+    const history = buildNamingRequestContext([
+      { role: "user", content: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(history.text)).toBe(false);
+    expect(history.hasSensitiveBoundary()).toBe(true);
+    const summary = buildNamingRequestContext([
+      { role: "compactionSummary", summary: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+    expect(summary.hasSensitiveBoundary()).toBe(true);
 
-		const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
-		expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-		for (const nearMiss of nearMisses) {
-			expect(buildNamingRequestContext([], promptAtPrefixBoundary(nearMiss)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+    const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
+    expect(
+      buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+    for (const nearMiss of nearMisses) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAtPrefixBoundary(nearMiss),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens Azure AD, Alibaba, and Tencent credentials across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const azureSecret = (bodyLength: number) => `AbC7Q~${"Aa0_-.".repeat(6).slice(0, bodyLength)}`;
-	const alibabaKey = `LTAI${"A1b2".repeat(5)}`;
-	const tencentSecretId = `AKID${"C3d4".repeat(8)}`;
-	const cases = [
-		{
-			token: azureSecret(31),
-			obfuscated: azureSecret(31).replace("Q~", "Q\u200b~"),
-			controlObfuscated: `${azureSecret(31).slice(0, 18)}\u0000${azureSecret(31).slice(18)}`,
-			nearMisses: [azureSecret(30), azureSecret(35), azureSecret(31).replace("Q~", "R~"), `_${azureSecret(31)}`],
-		},
-		{
-			token: azureSecret(34),
-			obfuscated: azureSecret(34).replace("AbC7", "Ab\u200bC7"),
-			controlObfuscated: `${azureSecret(34).slice(0, 18)}\u0000${azureSecret(34).slice(18)}`,
-			nearMisses: [azureSecret(35), azureSecret(34).replace("Q~", "Q!"), `_${azureSecret(34)}`],
-		},
-		{
-			token: alibabaKey,
-			obfuscated: alibabaKey.replace("LTAI", "LT\u200bAI"),
-			controlObfuscated: `${alibabaKey.slice(0, 12)}\u0000${alibabaKey.slice(12)}`,
-			nearMisses: [alibabaKey.slice(0, -1), `${alibabaKey}A`, alibabaKey.replace("LTAI", "LTAJ"), `_${alibabaKey}`],
-		},
-		{
-			token: tencentSecretId,
-			obfuscated: tencentSecretId.replace("AKID", "A\u200bKID"),
-			controlObfuscated: `${tencentSecretId.slice(0, 18)}\u0000${tencentSecretId.slice(18)}`,
-			nearMisses: [tencentSecretId.slice(0, -1), `${tencentSecretId}A`, tencentSecretId.replace("AKID", "AKIE"), `_${tencentSecretId}`],
-		},
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const azureSecret = (bodyLength: number) =>
+    `AbC7Q~${"Aa0_-.".repeat(6).slice(0, bodyLength)}`;
+  const alibabaKey = `LTAI${"A1b2".repeat(5)}`;
+  const tencentSecretId = `AKID${"C3d4".repeat(8)}`;
+  const cases = [
+    {
+      token: azureSecret(31),
+      obfuscated: azureSecret(31).replace("Q~", "Q\u200b~"),
+      controlObfuscated: `${azureSecret(31).slice(0, 18)}\u0000${azureSecret(31).slice(18)}`,
+      nearMisses: [
+        azureSecret(30),
+        azureSecret(35),
+        azureSecret(31).replace("Q~", "R~"),
+        `_${azureSecret(31)}`,
+      ],
+    },
+    {
+      token: azureSecret(34),
+      obfuscated: azureSecret(34).replace("AbC7", "Ab\u200bC7"),
+      controlObfuscated: `${azureSecret(34).slice(0, 18)}\u0000${azureSecret(34).slice(18)}`,
+      nearMisses: [
+        azureSecret(35),
+        azureSecret(34).replace("Q~", "Q!"),
+        `_${azureSecret(34)}`,
+      ],
+    },
+    {
+      token: alibabaKey,
+      obfuscated: alibabaKey.replace("LTAI", "LT\u200bAI"),
+      controlObfuscated: `${alibabaKey.slice(0, 12)}\u0000${alibabaKey.slice(12)}`,
+      nearMisses: [
+        alibabaKey.slice(0, -1),
+        `${alibabaKey}A`,
+        alibabaKey.replace("LTAI", "LTAJ"),
+        `_${alibabaKey}`,
+      ],
+    },
+    {
+      token: tencentSecretId,
+      obfuscated: tencentSecretId.replace("AKID", "A\u200bKID"),
+      controlObfuscated: `${tencentSecretId.slice(0, 18)}\u0000${tencentSecretId.slice(18)}`,
+      nearMisses: [
+        tencentSecretId.slice(0, -1),
+        `${tencentSecretId}A`,
+        tencentSecretId.replace("AKID", "AKIE"),
+        `_${tencentSecretId}`,
+      ],
+    },
+  ];
 
-	for (const { token, obfuscated, controlObfuscated, nearMisses } of cases) {
-		expect(hasSensitiveNamingContext(token)).toBe(true);
-		expect(hasSensitiveOutput(token)).toBe(true);
+  for (const { token, obfuscated, controlObfuscated, nearMisses } of cases) {
+    expect(hasSensitiveNamingContext(token)).toBe(true);
+    expect(hasSensitiveOutput(token)).toBe(true);
 
-		const promptAtPrefixBoundary = (value: string) => {
-			const tokenStart = prefixLength - Math.floor(value.length / 2);
-			return `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-		};
-		const prefixPrompt = promptAtPrefixBoundary(token);
-		const prefixContext = buildNamingRequestContext([], prefixPrompt);
-		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
-		expect(buildNamingRequestContext([], promptAtPrefixBoundary(obfuscated)).hasSensitiveBoundary()).toBe(true);
-		expect(buildNamingRequestContext([], promptAtPrefixBoundary(controlObfuscated)).hasSensitiveBoundary()).toBe(true);
+    const promptAtPrefixBoundary = (value: string) => {
+      const tokenStart = prefixLength - Math.floor(value.length / 2);
+      return `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+    };
+    const prefixPrompt = promptAtPrefixBoundary(token);
+    const prefixContext = buildNamingRequestContext([], prefixPrompt);
+    expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+    expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAtPrefixBoundary(obfuscated),
+      ).hasSensitiveBoundary(),
+    ).toBe(true);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAtPrefixBoundary(controlObfuscated),
+      ).hasSensitiveBoundary(),
+    ).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
-		const leading = `${"x".repeat(suffixTokenStart - 1)} `;
-		const tokenAndSpace = `${token} `;
-		const suffixPrompt = leading + tokenAndSpace
-			+ "y".repeat(promptLength - leading.length - tokenAndSpace.length);
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
+    const leading = `${"x".repeat(suffixTokenStart - 1)} `;
+    const tokenAndSpace = `${token} `;
+    const suffixPrompt =
+      leading +
+      tokenAndSpace +
+      "y".repeat(promptLength - leading.length - tokenAndSpace.length);
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-		const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
-		const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-		expect(hasSensitiveNamingContext(history.text)).toBe(false);
-		expect(history.hasSensitiveBoundary()).toBe(true);
-		const summary = buildNamingRequestContext([
-			{ role: "compactionSummary", summary: historyContent },
-		] as any);
-		expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-		expect(summary.hasSensitiveBoundary()).toBe(true);
+    const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
+    const history = buildNamingRequestContext([
+      { role: "user", content: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(history.text)).toBe(false);
+    expect(history.hasSensitiveBoundary()).toBe(true);
+    const summary = buildNamingRequestContext([
+      { role: "compactionSummary", summary: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+    expect(summary.hasSensitiveBoundary()).toBe(true);
 
-		const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
-		expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-		for (const nearMiss of nearMisses) {
-			expect(buildNamingRequestContext([], promptAtPrefixBoundary(nearMiss)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+    const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
+    expect(
+      buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+    for (const nearMiss of nearMisses) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAtPrefixBoundary(nearMiss),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens Airtable and ClickHouse keys across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
-	const clickhouseKey = `4b1d${"A1b2".repeat(9)}A1`;
-	const cases = [
-		{
-			token: airtableToken,
-			obfuscated: airtableToken.replace("pat", "p\u200bat"),
-			controlObfuscated: `${airtableToken.slice(0, 30)}\u0000${airtableToken.slice(30)}`,
-			nearMisses: [
-				airtableToken.slice(0, -1), `${airtableToken}A`, airtableToken.replace("pat", "pbt"), airtableToken.replace(".", "_"),
-			],
-		},
-		{
-			token: clickhouseKey,
-			obfuscated: clickhouseKey.replace("4b1d", "4b\u200b1d"),
-			controlObfuscated: `${clickhouseKey.slice(0, 20)}\u0000${clickhouseKey.slice(20)}`,
-			nearMisses: [
-				clickhouseKey.slice(0, -1), `${clickhouseKey}A`, clickhouseKey.replace("4b1d", "4b1e"), `_${clickhouseKey}`,
-			],
-		},
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
+  const clickhouseKey = `4b1d${"A1b2".repeat(9)}A1`;
+  const cases = [
+    {
+      token: airtableToken,
+      obfuscated: airtableToken.replace("pat", "p\u200bat"),
+      controlObfuscated: `${airtableToken.slice(0, 30)}\u0000${airtableToken.slice(30)}`,
+      nearMisses: [
+        airtableToken.slice(0, -1),
+        `${airtableToken}A`,
+        airtableToken.replace("pat", "pbt"),
+        airtableToken.replace(".", "_"),
+      ],
+    },
+    {
+      token: clickhouseKey,
+      obfuscated: clickhouseKey.replace("4b1d", "4b\u200b1d"),
+      controlObfuscated: `${clickhouseKey.slice(0, 20)}\u0000${clickhouseKey.slice(20)}`,
+      nearMisses: [
+        clickhouseKey.slice(0, -1),
+        `${clickhouseKey}A`,
+        clickhouseKey.replace("4b1d", "4b1e"),
+        `_${clickhouseKey}`,
+      ],
+    },
+  ];
 
-	for (const { token, obfuscated, controlObfuscated, nearMisses } of cases) {
-		expect(hasSensitiveNamingContext(token)).toBe(true);
-		expect(hasSensitiveOutput(token)).toBe(true);
+  for (const { token, obfuscated, controlObfuscated, nearMisses } of cases) {
+    expect(hasSensitiveNamingContext(token)).toBe(true);
+    expect(hasSensitiveOutput(token)).toBe(true);
 
-		const promptAtPrefixBoundary = (value: string) => {
-			const tokenStart = prefixLength - Math.floor(value.length / 2);
-			return `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-		};
-		const prefixPrompt = promptAtPrefixBoundary(token);
-		const prefixContext = buildNamingRequestContext([], prefixPrompt);
-		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
-		expect(buildNamingRequestContext([], promptAtPrefixBoundary(obfuscated)).hasSensitiveBoundary()).toBe(true);
-		expect(buildNamingRequestContext([], promptAtPrefixBoundary(controlObfuscated)).hasSensitiveBoundary()).toBe(true);
+    const promptAtPrefixBoundary = (value: string) => {
+      const tokenStart = prefixLength - Math.floor(value.length / 2);
+      return `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+    };
+    const prefixPrompt = promptAtPrefixBoundary(token);
+    const prefixContext = buildNamingRequestContext([], prefixPrompt);
+    expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+    expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAtPrefixBoundary(obfuscated),
+      ).hasSensitiveBoundary(),
+    ).toBe(true);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAtPrefixBoundary(controlObfuscated),
+      ).hasSensitiveBoundary(),
+    ).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
-		const leading = `${"x".repeat(suffixTokenStart - 1)} `;
-		const tokenAndSpace = `${token} `;
-		const suffixPrompt = leading + tokenAndSpace
-			+ "y".repeat(promptLength - leading.length - tokenAndSpace.length);
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
+    const leading = `${"x".repeat(suffixTokenStart - 1)} `;
+    const tokenAndSpace = `${token} `;
+    const suffixPrompt =
+      leading +
+      tokenAndSpace +
+      "y".repeat(promptLength - leading.length - tokenAndSpace.length);
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-		const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
-		const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-		expect(hasSensitiveNamingContext(history.text)).toBe(false);
-		expect(history.hasSensitiveBoundary()).toBe(true);
-		const summary = buildNamingRequestContext([
-			{ role: "compactionSummary", summary: historyContent },
-		] as any);
-		expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-		expect(summary.hasSensitiveBoundary()).toBe(true);
+    const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
+    const history = buildNamingRequestContext([
+      { role: "user", content: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(history.text)).toBe(false);
+    expect(history.hasSensitiveBoundary()).toBe(true);
+    const summary = buildNamingRequestContext([
+      { role: "compactionSummary", summary: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+    expect(summary.hasSensitiveBoundary()).toBe(true);
 
-		const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
-		expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-		for (const nearMiss of nearMisses) {
-			expect(buildNamingRequestContext([], promptAtPrefixBoundary(nearMiss)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+    const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
+    expect(
+      buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+    for (const nearMiss of nearMisses) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAtPrefixBoundary(nearMiss),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens Replicate API tokens across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `r8_${"A1b2".repeat(9)}A`;
-	const obfuscated = token.replace("r8_", "r\u200b8_");
-	const controlObfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
-	const tokenStart = prefixLength - Math.floor(token.length / 2);
-	const prompt = (value: string) => `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt(token));
-	expect(hasSensitiveNamingContext(token)).toBe(true);
-	expect(hasSensitiveOutput(token)).toBe(true);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
-	expect(buildNamingRequestContext([], prompt(obfuscated)).hasSensitiveBoundary()).toBe(true);
-	expect(buildNamingRequestContext([], prompt(controlObfuscated)).hasSensitiveBoundary()).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `r8_${"A1b2".repeat(9)}A`;
+  const obfuscated = token.replace("r8_", "r\u200b8_");
+  const controlObfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
+  const tokenStart = prefixLength - Math.floor(token.length / 2);
+  const prompt = (value: string) =>
+    `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt(token));
+  expect(hasSensitiveNamingContext(token)).toBe(true);
+  expect(hasSensitiveOutput(token)).toBe(true);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(
+    buildNamingRequestContext([], prompt(obfuscated)).hasSensitiveBoundary(),
+  ).toBe(true);
+  expect(
+    buildNamingRequestContext(
+      [],
+      prompt(controlObfuscated),
+    ).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
-	const leading = `${"x".repeat(suffixTokenStart - 1)} `;
-	const tokenAndSpace = `${token} `;
-	const suffixPrompt = leading + tokenAndSpace
-		+ "y".repeat(promptLength - leading.length - tokenAndSpace.length);
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
+  const leading = `${"x".repeat(suffixTokenStart - 1)} `;
+  const tokenAndSpace = `${token} `;
+  const suffixPrompt =
+    leading +
+    tokenAndSpace +
+    "y".repeat(promptLength - leading.length - tokenAndSpace.length);
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	for (const nearMiss of [
-		token.slice(0, -1), `${token}A`, token.replace("r8_", "r9_"),
-	]) {
-		expect(buildNamingRequestContext([], prompt(nearMiss)).hasSensitiveBoundary()).toBe(false);
-	}
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  for (const nearMiss of [
+    token.slice(0, -1),
+    `${token}A`,
+    token.replace("r8_", "r9_"),
+  ]) {
+    expect(
+      buildNamingRequestContext([], prompt(nearMiss)).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens Pinecone API keys across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `pcsk_test1_${"A".repeat(63)}`;
-	const obfuscated = token.replace("pcsk_", "pc\u200bsk_");
-	const controlObfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
-	const tokenStart = prefixLength - Math.floor(token.length / 2);
-	const prompt = (value: string) => `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt(token));
-	expect(hasSensitiveNamingContext(token)).toBe(true);
-	expect(hasSensitiveOutput(token)).toBe(true);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
-	expect(buildNamingRequestContext([], prompt(obfuscated)).hasSensitiveBoundary()).toBe(true);
-	expect(buildNamingRequestContext([], prompt(controlObfuscated)).hasSensitiveBoundary()).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `pcsk_test1_${"A".repeat(63)}`;
+  const obfuscated = token.replace("pcsk_", "pc\u200bsk_");
+  const controlObfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
+  const tokenStart = prefixLength - Math.floor(token.length / 2);
+  const prompt = (value: string) =>
+    `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt(token));
+  expect(hasSensitiveNamingContext(token)).toBe(true);
+  expect(hasSensitiveOutput(token)).toBe(true);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(
+    buildNamingRequestContext([], prompt(obfuscated)).hasSensitiveBoundary(),
+  ).toBe(true);
+  expect(
+    buildNamingRequestContext(
+      [],
+      prompt(controlObfuscated),
+    ).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
-	const leading = `${"x".repeat(suffixTokenStart - 1)} `;
-	const tokenAndSpace = `${token} `;
-	const suffixPrompt = leading + tokenAndSpace
-		+ "y".repeat(promptLength - leading.length - tokenAndSpace.length);
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
+  const leading = `${"x".repeat(suffixTokenStart - 1)} `;
+  const tokenAndSpace = `${token} `;
+  const suffixPrompt =
+    leading +
+    tokenAndSpace +
+    "y".repeat(promptLength - leading.length - tokenAndSpace.length);
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	for (const nearMiss of [
-		token.slice(0, -1), `${token}A`, token.replace("test1", "test"), token.replace("pcsk_", "pcst_"),
-	]) {
-		expect(buildNamingRequestContext([], prompt(nearMiss)).hasSensitiveBoundary()).toBe(false);
-	}
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  for (const nearMiss of [
+    token.slice(0, -1),
+    `${token}A`,
+    token.replace("test1", "test"),
+    token.replace("pcsk_", "pcst_"),
+  ]) {
+    expect(
+      buildNamingRequestContext([], prompt(nearMiss)).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens Linear API tokens across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `lin_api_${"A1b2".repeat(10)}`;
-	const obfuscated = token.replace("lin_api_", "lin\u200b_api_");
-	const controlObfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
-	const tokenStart = prefixLength - Math.floor(token.length / 2);
-	const prompt = (value: string) => `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt(token));
-	expect(hasSensitiveNamingContext(token)).toBe(true);
-	expect(hasSensitiveOutput(token)).toBe(true);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
-	expect(buildNamingRequestContext([], prompt(obfuscated)).hasSensitiveBoundary()).toBe(true);
-	expect(buildNamingRequestContext([], prompt(controlObfuscated)).hasSensitiveBoundary()).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `lin_api_${"A1b2".repeat(10)}`;
+  const obfuscated = token.replace("lin_api_", "lin\u200b_api_");
+  const controlObfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
+  const tokenStart = prefixLength - Math.floor(token.length / 2);
+  const prompt = (value: string) =>
+    `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt(token));
+  expect(hasSensitiveNamingContext(token)).toBe(true);
+  expect(hasSensitiveOutput(token)).toBe(true);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(
+    buildNamingRequestContext([], prompt(obfuscated)).hasSensitiveBoundary(),
+  ).toBe(true);
+  expect(
+    buildNamingRequestContext(
+      [],
+      prompt(controlObfuscated),
+    ).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
-	const leading = `${"x".repeat(suffixTokenStart - 1)} `;
-	const tokenAndSpace = `${token} `;
-	const suffixPrompt = leading + tokenAndSpace
-		+ "y".repeat(promptLength - leading.length - tokenAndSpace.length);
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
+  const leading = `${"x".repeat(suffixTokenStart - 1)} `;
+  const tokenAndSpace = `${token} `;
+  const suffixPrompt =
+    leading +
+    tokenAndSpace +
+    "y".repeat(promptLength - leading.length - tokenAndSpace.length);
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	for (const nearMiss of [
-		token.slice(0, -1), `${token}A`, token.replace("lin_api_", "lin_apy_"),
-	]) {
-		expect(buildNamingRequestContext([], prompt(nearMiss)).hasSensitiveBoundary()).toBe(false);
-	}
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  for (const nearMiss of [
+    token.slice(0, -1),
+    `${token}A`,
+    token.replace("lin_api_", "lin_apy_"),
+  ]) {
+    expect(
+      buildNamingRequestContext([], prompt(nearMiss)).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens Neon API keys without flagging near-misses", () => {
-	const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
-	const obfuscatedTokens = [
-		token.replace("neon_", "ne\u200bon_"),
-		token.replace("A1_b-", "A1_\u200bb-"),
-		`${token.slice(0, 20)}\u0000${token.slice(20)}`,
-	];
+  const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
+  const obfuscatedTokens = [
+    token.replace("neon_", "ne\u200bon_"),
+    token.replace("A1_b-", "A1_\u200bb-"),
+    `${token.slice(0, 20)}\u0000${token.slice(20)}`,
+  ];
 
-	for (const value of [token, ...obfuscatedTokens]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [token, ...obfuscatedTokens]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`neon_api_key_${"A1_b-".repeat(6)}A`,
-		`neon_api_key_${"A1_b-".repeat(6)}ABC`,
-		token.replace("neon_api_key_", "neon_api_keys_"),
-		token.replace("A1_b-", "A1_b!"),
-		`prefix${token}`,
-		`${token}suffix`,
-		"Neon database connection setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `neon_api_key_${"A1_b-".repeat(6)}A`,
+    `neon_api_key_${"A1_b-".repeat(6)}ABC`,
+    token.replace("neon_api_key_", "neon_api_keys_"),
+    token.replace("A1_b-", "A1_b!"),
+    `prefix${token}`,
+    `${token}suffix`,
+    "Neon database connection setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("strips non-whitespace controls from credentials without joining surrounding prose", () => {
-	const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
-	const values = [
-		`${token.slice(0, 20)}\u0000${token.slice(20)}`,
-		`${token.slice(0, 20)}\u0080${token.slice(20)}`,
-	];
+  const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
+  const values = [
+    `${token.slice(0, 20)}\u0000${token.slice(20)}`,
+    `${token.slice(0, 20)}\u0080${token.slice(20)}`,
+  ];
 
-	for (const value of values) {
-		const text = `Review Neon access ${value}`;
-		expect(hasSensitiveNamingContext(text)).toBe(true);
-		expect(hasSensitiveOutput(text)).toBe(true);
-	}
+  for (const value of values) {
+    const text = `Review Neon access ${value}`;
+    expect(hasSensitiveNamingContext(text)).toBe(true);
+    expect(hasSensitiveOutput(text)).toBe(true);
+  }
 });
 
 test("screens whitespace-obfuscated credentials embedded in ordinary prose", () => {
-	const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
-	const obfuscated = `${token.slice(0, 20)} ${token.slice(20)}`;
-	const text = `Review Neon access ${obfuscated} before deployment`;
+  const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
+  const obfuscated = `${token.slice(0, 20)} ${token.slice(20)}`;
+  const text = `Review Neon access ${obfuscated} before deployment`;
 
-	expect(hasSensitiveNamingContext(text)).toBe(true);
-	expect(hasSensitiveOutput(text)).toBe(true);
-	for (const nearMiss of [
-		`Review Neon access ${obfuscated.slice(0, -1)} before deployment`,
-		`Review Neon access ${obfuscated.replace("neon_api_key_", "neon_api_keys_")} before deployment`,
-		`prefix${obfuscated}`,
-		`${obfuscated}suffix`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  expect(hasSensitiveNamingContext(text)).toBe(true);
+  expect(hasSensitiveOutput(text)).toBe(true);
+  for (const nearMiss of [
+    `Review Neon access ${obfuscated.slice(0, -1)} before deployment`,
+    `Review Neon access ${obfuscated.replace("neon_api_key_", "neon_api_keys_")} before deployment`,
+    `prefix${obfuscated}`,
+    `${obfuscated}suffix`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Neon API keys across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
-	const obfuscated = token.replace("neon_api_key_", "neon_\u200bapi_key_");
-	const controlObfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
-	const promptAtPrefixBoundary = (value: string) => {
-		const tokenStart = prefixLength - Math.floor(value.length / 2);
-		return `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-	};
-	const prompt = promptAtPrefixBoundary(token);
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(token)).toBe(true);
-	expect(hasSensitiveOutput(token)).toBe(true);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
-	expect(context.text).toBe(buildNamingContext([], prompt));
-	expect(buildNamingRequestContext([], promptAtPrefixBoundary(obfuscated)).hasSensitiveBoundary()).toBe(true);
-	expect(buildNamingRequestContext([], promptAtPrefixBoundary(controlObfuscated)).hasSensitiveBoundary()).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
+  const obfuscated = token.replace("neon_api_key_", "neon_\u200bapi_key_");
+  const controlObfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
+  const promptAtPrefixBoundary = (value: string) => {
+    const tokenStart = prefixLength - Math.floor(value.length / 2);
+    return `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+  };
+  const prompt = promptAtPrefixBoundary(token);
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(token)).toBe(true);
+  expect(hasSensitiveOutput(token)).toBe(true);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(context.text).toBe(buildNamingContext([], prompt));
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAtPrefixBoundary(obfuscated),
+    ).hasSensitiveBoundary(),
+  ).toBe(true);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAtPrefixBoundary(controlObfuscated),
+    ).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
-	const leading = `${"x".repeat(suffixTokenStart - 1)} `;
-	const tokenAndSpace = `${token} `;
-	const suffixPrompt = leading + tokenAndSpace
-		+ "y".repeat(promptLength - leading.length - tokenAndSpace.length);
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const suffixTokenStart = suffixStart - Math.floor(token.length / 2);
+  const leading = `${"x".repeat(suffixTokenStart - 1)} `;
+  const tokenAndSpace = `${token} `;
+  const suffixPrompt =
+    leading +
+    tokenAndSpace +
+    "y".repeat(promptLength - leading.length - tokenAndSpace.length);
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(999 - Math.floor(token.length / 2))} ${token} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	for (const nearMiss of [
-		token.slice(0, -1), `${token}A`, token.replace("neon_api_key_", "neon_api_keys_"),
-	]) {
-		expect(buildNamingRequestContext([], promptAtPrefixBoundary(nearMiss)).hasSensitiveBoundary()).toBe(false);
-	}
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  for (const nearMiss of [
+    token.slice(0, -1),
+    `${token}A`,
+    token.replace("neon_api_key_", "neon_api_keys_"),
+  ]) {
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAtPrefixBoundary(nearMiss),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens Slack API tokens across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `xoxb-${"A1b2".repeat(8)}`;
-	const appToken = `xapp-${"C3d4".repeat(8)}`;
-	expect(hasSensitiveNamingContext(token)).toBe(true);
-	expect(hasSensitiveOutput(token)).toBe(true);
-	expect(hasSensitiveNamingContext(appToken)).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `xoxb-${"A1b2".repeat(8)}`;
+  const appToken = `xapp-${"C3d4".repeat(8)}`;
+  expect(hasSensitiveNamingContext(token)).toBe(true);
+  expect(hasSensitiveOutput(token)).toBe(true);
+  expect(hasSensitiveNamingContext(appToken)).toBe(true);
 
-	const prompt = `${"x".repeat(prefixLength - 8)}${token} ${"x".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
+  const prompt = `${"x".repeat(prefixLength - 8)}${token} ${"x".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
 
-	const obfuscatedToken = token.replace("xoxb", "xox\u200bb");
-	const obfuscatedPrompt = `${"x".repeat(prefixLength - 8)}${obfuscatedToken} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
-	const controlObfuscatedToken = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
-	const controlObfuscatedPrompt = `${"x".repeat(prefixLength - 8)}${controlObfuscatedToken} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], controlObfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const obfuscatedToken = token.replace("xoxb", "xox\u200bb");
+  const obfuscatedPrompt = `${"x".repeat(prefixLength - 8)}${obfuscatedToken} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
+  const controlObfuscatedToken = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
+  const controlObfuscatedPrompt = `${"x".repeat(prefixLength - 8)}${controlObfuscatedToken} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext(
+      [],
+      controlObfuscatedPrompt,
+    ).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = promptLength - suffixLength;
-	const suffixTokenStart = suffixStart - 8;
-	const suffixPrompt = `${"x".repeat(suffixTokenStart)}${token}${"y".repeat(promptLength - suffixTokenStart - token.length)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = promptLength - suffixLength;
+  const suffixTokenStart = suffixStart - 8;
+  const suffixPrompt = `${"x".repeat(suffixTokenStart)}${token}${"y".repeat(promptLength - suffixTokenStart - token.length)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const historyContent = `${"x".repeat(992)}${token} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summaryContent = `${"x".repeat(992)}${appToken} y`;
-	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: summaryContent }] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(992)}${token} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summaryContent = `${"x".repeat(992)}${appToken} y`;
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: summaryContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	const shortToken = `xoxb-${"A".repeat(9)}`;
-	const nearMiss = `${"x".repeat(prefixLength - 8)}${shortToken} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], nearMiss).hasSensitiveBoundary()).toBe(false);
-	const wrongPrefix = `${"x".repeat(prefixLength - 8)}xozb-${"A".repeat(24)} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], wrongPrefix).hasSensitiveBoundary()).toBe(false);
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)}${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const shortToken = `xoxb-${"A".repeat(9)}`;
+  const nearMiss = `${"x".repeat(prefixLength - 8)}${shortToken} ${"x".repeat(1_200)}`;
+  expect(buildNamingRequestContext([], nearMiss).hasSensitiveBoundary()).toBe(
+    false,
+  );
+  const wrongPrefix = `${"x".repeat(prefixLength - 8)}xozb-${"A".repeat(24)} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], wrongPrefix).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens private-key headers across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const headers = [
-		["-----BEGIN ", "PRIVATE KEY-----"].join(""),
-		["-----BEGIN RSA ", "PRIVATE KEY-----"].join(""),
-		["-----BEGIN DSA ", "PRIVATE KEY-----"].join(""),
-		["-----BEGIN EC ", "PRIVATE KEY-----"].join(""),
-		["-----BEGIN OPENSSH ", "PRIVATE KEY-----"].join(""),
-		["-----BEGIN ENCRYPTED ", "PRIVATE KEY-----"].join(""),
-		["-----BEGIN PGP ", "PRIVATE KEY BLOCK-----"].join(""),
-		"---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----",
-		"PuTTY-User-Key-File-2:",
-		"PuTTY-User-Key-File-3:",
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const headers = [
+    ["-----BEGIN ", "PRIVATE KEY-----"].join(""),
+    ["-----BEGIN RSA ", "PRIVATE KEY-----"].join(""),
+    ["-----BEGIN DSA ", "PRIVATE KEY-----"].join(""),
+    ["-----BEGIN EC ", "PRIVATE KEY-----"].join(""),
+    ["-----BEGIN OPENSSH ", "PRIVATE KEY-----"].join(""),
+    ["-----BEGIN ENCRYPTED ", "PRIVATE KEY-----"].join(""),
+    ["-----BEGIN PGP ", "PRIVATE KEY BLOCK-----"].join(""),
+    "---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----",
+    "PuTTY-User-Key-File-2:",
+    "PuTTY-User-Key-File-3:",
+  ];
 
-	for (const header of headers) {
-		const prompt = `${"x".repeat(prefixLength - 8)}${header} ${"x".repeat(1_200)}`;
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  for (const header of headers) {
+    const prompt = `${"x".repeat(prefixLength - 8)}${header} ${"x".repeat(1_200)}`;
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 
-	const header = ["-----BEGIN OPENSSH ", "PRIVATE KEY-----"].join("");
-	const controlObfuscatedHeader = header.replace("OPENSSH", "OPE\u200bNSSH");
-	const obfuscatedPrompt = `${"x".repeat(prefixLength - 8)}${controlObfuscatedHeader} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const header = ["-----BEGIN OPENSSH ", "PRIVATE KEY-----"].join("");
+  const controlObfuscatedHeader = header.replace("OPENSSH", "OPE\u200bNSSH");
+  const obfuscatedPrompt = `${"x".repeat(prefixLength - 8)}${controlObfuscatedHeader} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = promptLength - suffixLength;
-	const suffixPrompt = `${"x".repeat(suffixStart - 8)}${header}${"y".repeat(promptLength - suffixStart - header.length + 8)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = promptLength - suffixLength;
+  const suffixPrompt = `${"x".repeat(suffixStart - 8)}${header}${"y".repeat(promptLength - suffixStart - header.length + 8)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const historyContent = `${"x".repeat(992)}${header} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([{ role: "compactionSummary", summary: historyContent }] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(992)}${header} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${header} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	const nearMiss = `${"x".repeat(prefixLength - 8)}${["-----BEGIN ", "PUBLIC KEY-----"].join("")} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], nearMiss).hasSensitiveBoundary()).toBe(false);
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)}${header} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const nearMiss = `${"x".repeat(prefixLength - 8)}${["-----BEGIN ", "PUBLIC KEY-----"].join("")} ${"x".repeat(1_200)}`;
+  expect(buildNamingRequestContext([], nearMiss).hasSensitiveBoundary()).toBe(
+    false,
+  );
 });
 
 test("screens bearer credentials across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const label = "Bearer ";
-	const token = "A1b2".repeat(8);
-	const tokenStart = prefixLength - 8;
-	const prompt = `${"x".repeat(tokenStart - label.length)}${label}${token} ${"x".repeat(1_200)}`;
-	const prefixContext = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const label = "Bearer ";
+  const token = "A1b2".repeat(8);
+  const tokenStart = prefixLength - 8;
+  const prompt = `${"x".repeat(tokenStart - label.length)}${label}${token} ${"x".repeat(1_200)}`;
+  const prefixContext = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+  expect(prefixContext.hasSensitiveBoundary()).toBe(true);
 
-	const controlObfuscatedToken = `${token.slice(0, 18)}\u0000${token.slice(18)}`;
-	const obfuscatedPrompt = `${"x".repeat(tokenStart - label.length)}${label}${controlObfuscatedToken} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const controlObfuscatedToken = `${token.slice(0, 18)}\u0000${token.slice(18)}`;
+  const obfuscatedPrompt = `${"x".repeat(tokenStart - label.length)}${label}${controlObfuscatedToken} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(1_000 - label.length - 8)}${label}${token} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(1_000 - label.length - 8)}${label}${token} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = promptLength - suffixLength;
-	const suffixTokenStart = suffixStart - token.length + 8;
-	const suffixPrompt = `${"x".repeat(suffixTokenStart - label.length)}${label}${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = promptLength - suffixLength;
+  const suffixTokenStart = suffixStart - token.length + 8;
+  const suffixPrompt = `${"x".repeat(suffixTokenStart - label.length)}${label}${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const longToken = "A1b2".repeat(20);
-	const spacedToken = `${longToken.slice(0, 10)} ${longToken.slice(10)}`;
-	const spacedTokenStart = suffixStart - 5;
-	const spacedPrompt = `${"x".repeat(spacedTokenStart - label.length)}${label}${spacedToken}`
-		+ "y".repeat(promptLength - spacedTokenStart - spacedToken.length);
-	const spacedContext = buildNamingRequestContext([], spacedPrompt);
-	expect(hasSensitiveNamingContext(spacedContext.text)).toBe(false);
-	expect(spacedContext.hasSensitiveBoundary()).toBe(true);
+  const longToken = "A1b2".repeat(20);
+  const spacedToken = `${longToken.slice(0, 10)} ${longToken.slice(10)}`;
+  const spacedTokenStart = suffixStart - 5;
+  const spacedPrompt =
+    `${"x".repeat(spacedTokenStart - label.length)}${label}${spacedToken}` +
+    "y".repeat(promptLength - spacedTokenStart - spacedToken.length);
+  const spacedContext = buildNamingRequestContext([], spacedPrompt);
+  expect(hasSensitiveNamingContext(spacedContext.text)).toBe(false);
+  expect(spacedContext.hasSensitiveBoundary()).toBe(true);
 
-	const splitLabel = "Bea rer";
-	const splitLabelStart = suffixStart - 3;
-	const splitLabelPrompt = `${"x".repeat(splitLabelStart)}${splitLabel} ${token}`
-		+ "y".repeat(promptLength - splitLabelStart - splitLabel.length - 1 - token.length);
-	const splitLabelContext = buildNamingRequestContext([], splitLabelPrompt);
-	expect(hasSensitiveNamingContext(splitLabelContext.text)).toBe(false);
-	expect(splitLabelContext.hasSensitiveBoundary()).toBe(true);
+  const splitLabel = "Bea rer";
+  const splitLabelStart = suffixStart - 3;
+  const splitLabelPrompt =
+    `${"x".repeat(splitLabelStart)}${splitLabel} ${token}` +
+    "y".repeat(
+      promptLength - splitLabelStart - splitLabel.length - 1 - token.length,
+    );
+  const splitLabelContext = buildNamingRequestContext([], splitLabelPrompt);
+  expect(hasSensitiveNamingContext(splitLabelContext.text)).toBe(false);
+  expect(splitLabelContext.hasSensitiveBoundary()).toBe(true);
 
-	const splitLabelProse = "B e a r e r authentication v2";
-	const splitLabelProseStart = suffixStart - 10;
-	const splitLabelProsePrompt = `${"x".repeat(splitLabelProseStart)}${splitLabelProse} `
-		+ "y".repeat(promptLength - splitLabelProseStart - `${splitLabelProse} `.length);
-	const splitLabelProseContext = buildNamingRequestContext([], splitLabelProsePrompt);
-	expect(hasSensitiveNamingContext(splitLabelProseContext.text)).toBe(false);
-	expect(splitLabelProseContext.hasSensitiveBoundary()).toBe(false);
+  const splitLabelProse = "B e a r e r authentication v2";
+  const splitLabelProseStart = suffixStart - 10;
+  const splitLabelProsePrompt =
+    `${"x".repeat(splitLabelProseStart)}${splitLabelProse} ` +
+    "y".repeat(
+      promptLength - splitLabelProseStart - `${splitLabelProse} `.length,
+    );
+  const splitLabelProseContext = buildNamingRequestContext(
+    [],
+    splitLabelProsePrompt,
+  );
+  expect(hasSensitiveNamingContext(splitLabelProseContext.text)).toBe(false);
+  expect(splitLabelProseContext.hasSensitiveBoundary()).toBe(false);
 
-	for (const prose of ["Bearer authentication v2", "Bearer authentication\nv2"]) {
-		const proseSuffixStart = suffixStart - 10;
-		const proseSuffixPrompt = `${"x".repeat(proseSuffixStart)}${prose} `
-			+ "y".repeat(promptLength - proseSuffixStart - `${prose} `.length);
-		const proseSuffixContext = buildNamingRequestContext([], proseSuffixPrompt);
-		expect(hasSensitiveNamingContext(proseSuffixContext.text)).toBe(false);
-		expect(proseSuffixContext.hasSensitiveBoundary()).toBe(false);
-	}
+  for (const prose of [
+    "Bearer authentication v2",
+    "Bearer authentication\nv2",
+  ]) {
+    const proseSuffixStart = suffixStart - 10;
+    const proseSuffixPrompt =
+      `${"x".repeat(proseSuffixStart)}${prose} ` +
+      "y".repeat(promptLength - proseSuffixStart - `${prose} `.length);
+    const proseSuffixContext = buildNamingRequestContext([], proseSuffixPrompt);
+    expect(hasSensitiveNamingContext(proseSuffixContext.text)).toBe(false);
+    expect(proseSuffixContext.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	const omittedSpacedPrompt = `${"x".repeat(prefixLength + 20)}${label}${spacedToken} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedSpacedPrompt).hasSensitiveBoundary()).toBe(false);
-	const shortPrompt = `${"x".repeat(tokenStart - label.length)}${label}${"A".repeat(15)} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], shortPrompt).hasSensitiveBoundary()).toBe(false);
-	const omittedSpacedLabelPrompt = `${"x".repeat(prefixLength + 20)}B e a r e r ${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedSpacedLabelPrompt).hasSensitiveBoundary()).toBe(false);
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const omittedSpacedPrompt = `${"x".repeat(prefixLength + 20)}${label}${spacedToken} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedSpacedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const shortPrompt = `${"x".repeat(tokenStart - label.length)}${label}${"A".repeat(15)} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], shortPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const omittedSpacedLabelPrompt = `${"x".repeat(prefixLength + 20)}B e a r e r ${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext(
+      [],
+      omittedSpacedLabelPrompt,
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 
-	const prose = "Bearer authentication v2";
-	const proseStart = prefixLength - 10;
-	const prosePrompt = `${"x".repeat(proseStart)}${prose} ${"x".repeat(1_200)}`;
-	const proseContext = buildNamingRequestContext([], prosePrompt);
-	expect(hasSensitiveNamingContext(proseContext.text)).toBe(false);
-	expect(proseContext.hasSensitiveBoundary()).toBe(false);
+  const prose = "Bearer authentication v2";
+  const proseStart = prefixLength - 10;
+  const prosePrompt = `${"x".repeat(proseStart)}${prose} ${"x".repeat(1_200)}`;
+  const proseContext = buildNamingRequestContext([], prosePrompt);
+  expect(hasSensitiveNamingContext(proseContext.text)).toBe(false);
+  expect(proseContext.hasSensitiveBoundary()).toBe(false);
 });
 
 test("screens bearer values with whitespace-obfuscated labels without blocking prose", () => {
-	const token = "A1b2".repeat(8);
-	for (const label of ["Bea rer", "B e a r e r", "Be\u200ba rer"]) {
-		const value = `${label} ${token}`;
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
-	const prose = "B e a r e r authentication v2";
-	expect(hasSensitiveNamingContext(prose)).toBe(false);
-	expect(hasSensitiveOutput(prose)).toBe(false);
+  const token = "A1b2".repeat(8);
+  for (const label of ["Bea rer", "B e a r e r", "Be\u200ba rer"]) {
+    const value = `${label} ${token}`;
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
+  const prose = "B e a r e r authentication v2";
+  expect(hasSensitiveNamingContext(prose)).toBe(false);
+  expect(hasSensitiveOutput(prose)).toBe(false);
 });
 
 test("screens Token and ApiKey authorization credentials across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const values = [
-		{ label: "Authorization: Token ", token: "A1b2".repeat(6) },
-		{ label: "Proxy-Authorization: Token ", token: "C3d4".repeat(6) },
-		{ label: "Authorization: ApiKey ", token: "E5f6".repeat(6) },
-		{ label: "Proxy-Authorization: API-Key ", token: "G7h8".repeat(6) },
-		{ label: "Authorization: A\u200bpiKey ", token: "J9k0".repeat(6) },
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const values = [
+    { label: "Authorization: Token ", token: "A1b2".repeat(6) },
+    { label: "Proxy-Authorization: Token ", token: "C3d4".repeat(6) },
+    { label: "Authorization: ApiKey ", token: "E5f6".repeat(6) },
+    { label: "Proxy-Authorization: API-Key ", token: "G7h8".repeat(6) },
+    { label: "Authorization: A\u200bpiKey ", token: "J9k0".repeat(6) },
+  ];
 
-	for (const { label, token } of values) {
-		const obfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
-		for (const candidate of [token, obfuscated]) {
-			const value = `${label}${candidate}`;
-			expect(hasSensitiveNamingContext(value)).toBe(true);
-			expect(hasSensitiveOutput(value)).toBe(true);
+  for (const { label, token } of values) {
+    const obfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+    for (const candidate of [token, obfuscated]) {
+      const value = `${label}${candidate}`;
+      expect(hasSensitiveNamingContext(value)).toBe(true);
+      expect(hasSensitiveOutput(value)).toBe(true);
 
-			const tokenStart = prefixLength - 8;
-			const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
-			const prompt = `${prefix}${label}${candidate} ${"y".repeat(1_200)}`;
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
+      const tokenStart = prefixLength - 8;
+      const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+      const prompt = `${prefix}${label}${candidate} ${"y".repeat(1_200)}`;
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
 
-			const promptLength = MAX_PROMPT_LENGTH + 300;
-			const suffixStart = promptLength - Math.floor(retainedLength / 2);
-			const suffixTokenStart = suffixStart - 8;
-			const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
-			const suffixPrompt = `${suffixPrefix}${label}${candidate} ${"y".repeat(
-				promptLength - suffixPrefix.length - label.length - candidate.length - 1,
-			)}`;
-			const suffixContext = buildNamingRequestContext([], suffixPrompt);
-			expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-			expect(suffixContext.hasSensitiveBoundary()).toBe(true);
-		}
+      const promptLength = MAX_PROMPT_LENGTH + 300;
+      const suffixStart = promptLength - Math.floor(retainedLength / 2);
+      const suffixTokenStart = suffixStart - 8;
+      const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+      const suffixPrompt = `${suffixPrefix}${label}${candidate} ${"y".repeat(
+        promptLength -
+          suffixPrefix.length -
+          label.length -
+          candidate.length -
+          1,
+      )}`;
+      const suffixContext = buildNamingRequestContext([], suffixPrompt);
+      expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+      expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const historyContent = `${"x".repeat(990 - label.length - 1)} ${label}${token} y`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(990 - label.length - 1)} ${label}${token} y`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	for (const nearMiss of [
-		`Authorization: Token ${"A".repeat(19)}`,
-		`Authorization: Token authentication is supported`,
-		`Authorization: Tokenish ${"A".repeat(24)}`,
-		`Authorization: ApiKey ${"A".repeat(19)}`,
-		`Authorization: ApiKey authentication is supported`,
-		`Authorization: ApiKeyish ${"A".repeat(24)}`,
-		`prefixAuthorization: Token ${"A".repeat(24)}`,
-		`prefixAuthorization: ApiKey ${"A".repeat(24)}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `Authorization: Token ${"A".repeat(19)}`,
+    `Authorization: Token authentication is supported`,
+    `Authorization: Tokenish ${"A".repeat(24)}`,
+    `Authorization: ApiKey ${"A".repeat(19)}`,
+    `Authorization: ApiKey authentication is supported`,
+    `Authorization: ApiKeyish ${"A".repeat(24)}`,
+    `prefixAuthorization: Token ${"A".repeat(24)}`,
+    `prefixAuthorization: ApiKey ${"A".repeat(24)}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Negotiate, NTLM, and Kerberos auth tokens and challenges across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const headers = [
-		{
-			label: "Authorization: Negotiate ",
-			token: Buffer.from("A".repeat(32)).toString("base64"),
-		},
-		{
-			label: "Proxy-Authorization: NTLM ",
-			token: Buffer.from("B".repeat(64)).toString("base64"),
-		},
-		{
-			label: "Authorization: Kerberos ",
-			token: Buffer.from("C".repeat(32)).toString("base64"),
-		},
-		{
-			label: "WWW-Authenticate: Negotiate ",
-			token: Buffer.from("D".repeat(32)).toString("base64"),
-		},
-		{
-			label: "Proxy-Authenticate: NTLM ",
-			token: Buffer.from("E".repeat(64)).toString("base64"),
-		},
-		{
-			label: "WWW-Authenticate: Kerberos ",
-			token: Buffer.from("F".repeat(32)).toString("base64"),
-		},
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const headers = [
+    {
+      label: "Authorization: Negotiate ",
+      token: Buffer.from("A".repeat(32)).toString("base64"),
+    },
+    {
+      label: "Proxy-Authorization: NTLM ",
+      token: Buffer.from("B".repeat(64)).toString("base64"),
+    },
+    {
+      label: "Authorization: Kerberos ",
+      token: Buffer.from("C".repeat(32)).toString("base64"),
+    },
+    {
+      label: "WWW-Authenticate: Negotiate ",
+      token: Buffer.from("D".repeat(32)).toString("base64"),
+    },
+    {
+      label: "Proxy-Authenticate: NTLM ",
+      token: Buffer.from("E".repeat(64)).toString("base64"),
+    },
+    {
+      label: "WWW-Authenticate: Kerberos ",
+      token: Buffer.from("F".repeat(32)).toString("base64"),
+    },
+  ];
 
-	for (const { label, token } of headers) {
-		const value = `${label}${token}`;
-		const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}`;
-		for (const candidate of [value, obfuscated]) {
-			expect(hasSensitiveNamingContext(candidate)).toBe(true);
-			expect(hasSensitiveOutput(candidate)).toBe(true);
-		}
+  for (const { label, token } of headers) {
+    const value = `${label}${token}`;
+    const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}`;
+    for (const candidate of [value, obfuscated]) {
+      expect(hasSensitiveNamingContext(candidate)).toBe(true);
+      expect(hasSensitiveOutput(candidate)).toBe(true);
+    }
 
-		const tokenStart = prefixLength - 8;
-		const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
-		const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
+    const tokenStart = prefixLength - 8;
+    const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+    const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixTokenStart = suffixStart - 8;
-		const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
-		const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
-			promptLength - suffixPrefix.length - value.length - 1,
-		)}`;
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixTokenStart = suffixStart - 8;
+    const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+    const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
+      promptLength - suffixPrefix.length - value.length - 1,
+    )}`;
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-		const historyContent = `${"x".repeat(990 - label.length - 1)} ${value} y`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const historyContext = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
-			expect(historyContext.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(990 - label.length - 1)} ${value} y`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const historyContext = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
+      expect(historyContext.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const token = Buffer.from("G".repeat(32)).toString("base64");
-	for (const nearMiss of [
-		`Authorization: Negotiate ${"A".repeat(19)}`,
-		"Authorization: Negotiate authentication is supported",
-		"Authorization: Negotiate this ordinary exchange is enabled",
-		`Authorization: Negotiateish ${token}`,
-		`Authorization: NTLMish ${token}`,
-		`Authorization: Kerberos ${"A".repeat(19)}`,
-		`Proxy-Authorization: SPNEGO ${token}`,
-		`WWW-Authenticate: Negotiate ${"A".repeat(19)}`,
-		"WWW-Authenticate: Negotiate this ordinary exchange is enabled",
-		`WWW-Authenticate: Negotiateish ${token}`,
-		`prefixAuthorization: Negotiate ${token}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const token = Buffer.from("G".repeat(32)).toString("base64");
+  for (const nearMiss of [
+    `Authorization: Negotiate ${"A".repeat(19)}`,
+    "Authorization: Negotiate authentication is supported",
+    "Authorization: Negotiate this ordinary exchange is enabled",
+    `Authorization: Negotiateish ${token}`,
+    `Authorization: NTLMish ${token}`,
+    `Authorization: Kerberos ${"A".repeat(19)}`,
+    `Proxy-Authorization: SPNEGO ${token}`,
+    `WWW-Authenticate: Negotiate ${"A".repeat(19)}`,
+    "WWW-Authenticate: Negotiate this ordinary exchange is enabled",
+    `WWW-Authenticate: Negotiateish ${token}`,
+    `prefixAuthorization: Negotiate ${token}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens AWS and Google Cloud Storage V4 signed URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const awsSignature = "a".repeat(64);
-	const googleSignature = "b".repeat(512);
-	const values = [
-		{
-			url: `https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EXAMPLE%2F20261012%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=${awsSignature}`,
-			signature: awsSignature,
-		},
-		{
-			url: `https://s3.example.test/object?X-Amz-Signature=${awsSignature}&X-Amz-Algorithm=AWS4-HMAC-SHA256`,
-			signature: awsSignature,
-		},
-		{
-			url: `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=service%40example.test%2F20261012%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Signature=${googleSignature}`,
-			signature: googleSignature,
-		},
-		{
-			url: `https://storage.googleapis.com/object?X-Goog-Signature=${googleSignature}&X-Goog-Algorithm=GOOG4-RSA-SHA256`,
-			signature: googleSignature,
-		},
-	];
-	const promptAt = (url: string, signature: string, start: number) => {
-		const urlStart = start - url.indexOf(signature);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const awsSignature = "a".repeat(64);
+  const googleSignature = "b".repeat(512);
+  const values = [
+    {
+      url: `https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EXAMPLE%2F20261012%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=${awsSignature}`,
+      signature: awsSignature,
+    },
+    {
+      url: `https://s3.example.test/object?X-Amz-Signature=${awsSignature}&X-Amz-Algorithm=AWS4-HMAC-SHA256`,
+      signature: awsSignature,
+    },
+    {
+      url: `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=service%40example.test%2F20261012%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Signature=${googleSignature}`,
+      signature: googleSignature,
+    },
+    {
+      url: `https://storage.googleapis.com/object?X-Goog-Signature=${googleSignature}&X-Goog-Algorithm=GOOG4-RSA-SHA256`,
+      signature: googleSignature,
+    },
+  ];
+  const promptAt = (url: string, signature: string, start: number) => {
+    const urlStart = start - url.indexOf(signature);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, signature } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+  for (const { url, signature } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
-		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedSignature = buildNamingRequestContext(
+      [],
+      promptAt(url, signature, prefixLength + 5),
+    );
+    expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const nearMisses = [
-		{ url: `X-Amz-Signature=${awsSignature}`, signature: awsSignature },
-		{
-			url: `X-Amz-Algorithm=AWS4-HMAC-SHA1&X-Amz-Signature=${awsSignature}`,
-			signature: awsSignature,
-		},
-		{
-			url: `X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(63)}`,
-			signature: "a".repeat(63),
-		},
-		{
-			url: `X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(65)}`,
-			signature: "a".repeat(65),
-		},
-		{ url: `X-Goog-Signature=${googleSignature}`, signature: googleSignature },
-		{
-			url: `X-Goog-Algorithm=GOOG4-RSA-SHA1&X-Goog-Signature=${googleSignature}`,
-			signature: googleSignature,
-		},
-		{
-			url: `X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(255)}`,
-			signature: "b".repeat(255),
-		},
-		{
-			url: `X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(513)}`,
-			signature: "b".repeat(513),
-		},
-	];
-	for (const { url, signature } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    { url: `X-Amz-Signature=${awsSignature}`, signature: awsSignature },
+    {
+      url: `X-Amz-Algorithm=AWS4-HMAC-SHA1&X-Amz-Signature=${awsSignature}`,
+      signature: awsSignature,
+    },
+    {
+      url: `X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(63)}`,
+      signature: "a".repeat(63),
+    },
+    {
+      url: `X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(65)}`,
+      signature: "a".repeat(65),
+    },
+    { url: `X-Goog-Signature=${googleSignature}`, signature: googleSignature },
+    {
+      url: `X-Goog-Algorithm=GOOG4-RSA-SHA1&X-Goog-Signature=${googleSignature}`,
+      signature: googleSignature,
+    },
+    {
+      url: `X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(255)}`,
+      signature: "b".repeat(255),
+    },
+    {
+      url: `X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(513)}`,
+      signature: "b".repeat(513),
+    },
+  ];
+  for (const { url, signature } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens legacy Google Cloud Storage V2 signed URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const signature = "A".repeat(344);
-	const percentEncodedSignature = Buffer.from(Array.from({ length: 256 }, (_, index) => index))
-		.toString("base64").replaceAll("+", "%2B").replaceAll("/", "%2F").replaceAll("=", "%3D");
-	const accessId = "EXAMPLE_ACCESS_ID";
-	const values = [
-		{
-			url: `https://storage.googleapis.com/bucket/object?GoogleAccessId=${accessId}&Expires=1790000000&Signature=${signature}`,
-			signature,
-		},
-		{
-			url: `https://storage.googleapis.com/bucket/object?Signature=${percentEncodedSignature}&Expires=1790000000&GoogleAccessId=${accessId}`,
-			signature: percentEncodedSignature,
-		},
-	];
-	const promptAt = (url: string, token: string, start: number) => {
-		const urlStart = start - url.indexOf(token);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const signature = "A".repeat(344);
+  const percentEncodedSignature = Buffer.from(
+    Array.from({ length: 256 }, (_, index) => index),
+  )
+    .toString("base64")
+    .replaceAll("+", "%2B")
+    .replaceAll("/", "%2F")
+    .replaceAll("=", "%3D");
+  const accessId = "EXAMPLE_ACCESS_ID";
+  const values = [
+    {
+      url: `https://storage.googleapis.com/bucket/object?GoogleAccessId=${accessId}&Expires=1790000000&Signature=${signature}`,
+      signature,
+    },
+    {
+      url: `https://storage.googleapis.com/bucket/object?Signature=${percentEncodedSignature}&Expires=1790000000&GoogleAccessId=${accessId}`,
+      signature: percentEncodedSignature,
+    },
+  ];
+  const promptAt = (url: string, token: string, start: number) => {
+    const urlStart = start - url.indexOf(token);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, signature: token } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, token, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+  for (const { url, signature: token } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, token, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const omittedSignature = buildNamingRequestContext([], promptAt(url, token, prefixLength + 5));
-		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedSignature = buildNamingRequestContext(
+      [],
+      promptAt(url, token, prefixLength + 5),
+    );
+    expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const nearMisses = [
-		{ url: `Signature=${signature}`, signature },
-		{ url: `Signature=${signature}&GoogleAccessKey=${accessId}`, signature },
-		{ url: `GoogleAccessId=${accessId}&Signature=${"A".repeat(27)}`, signature: "A".repeat(27) },
-		{ url: `GoogleAccessId=${accessId}&Signature=${"A".repeat(901)}`, signature: "A".repeat(901) },
-		{ url: `GoogleAccessId=${accessId}&Expires=1790000000`, signature: accessId },
-		{ url: `GoogleAccessId=${accessId}&Sig=${signature}`, signature },
-	];
-	for (const { url, signature: token } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, token, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    { url: `Signature=${signature}`, signature },
+    { url: `Signature=${signature}&GoogleAccessKey=${accessId}`, signature },
+    {
+      url: `GoogleAccessId=${accessId}&Signature=${"A".repeat(27)}`,
+      signature: "A".repeat(27),
+    },
+    {
+      url: `GoogleAccessId=${accessId}&Signature=${"A".repeat(901)}`,
+      signature: "A".repeat(901),
+    },
+    {
+      url: `GoogleAccessId=${accessId}&Expires=1790000000`,
+      signature: accessId,
+    },
+    { url: `GoogleAccessId=${accessId}&Sig=${signature}`, signature },
+  ];
+  for (const { url, signature: token } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, token, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens legacy AWS S3 Signature Version 2 URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const signature = Buffer.alloc(20, 0xfb).toString("base64");
-	const encodedSignature = signature.replaceAll("+", "%2B").replaceAll("/", "%2F").replaceAll("=", "%3D");
-	const accessId = `AKIA${"A".repeat(16)}`;
-	const shortAccessId = "EXAMPLE_ACCESS_ID";
-	const values = [
-		{
-			url: `https://s3.amazonaws.com/bucket/object?AWSAccessKeyId=${accessId}&Expires=1790000000&Signature=${signature}`,
-			signature,
-		},
-		{
-			url: `https://s3.amazonaws.com/bucket/object?Signature=${encodedSignature}&Expires=1790000000&AWSAccessKeyId=${accessId}`,
-			signature: encodedSignature,
-		},
-	];
-	const promptAt = (url: string, token: string, start: number) => {
-		const urlStart = start - url.indexOf(token);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const signature = Buffer.alloc(20, 0xfb).toString("base64");
+  const encodedSignature = signature
+    .replaceAll("+", "%2B")
+    .replaceAll("/", "%2F")
+    .replaceAll("=", "%3D");
+  const accessId = `AKIA${"A".repeat(16)}`;
+  const shortAccessId = "EXAMPLE_ACCESS_ID";
+  const values = [
+    {
+      url: `https://s3.amazonaws.com/bucket/object?AWSAccessKeyId=${accessId}&Expires=1790000000&Signature=${signature}`,
+      signature,
+    },
+    {
+      url: `https://s3.amazonaws.com/bucket/object?Signature=${encodedSignature}&Expires=1790000000&AWSAccessKeyId=${accessId}`,
+      signature: encodedSignature,
+    },
+  ];
+  const promptAt = (url: string, token: string, start: number) => {
+    const urlStart = start - url.indexOf(token);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, signature: token } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, token, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(context.text.includes(accessId));
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+  for (const { url, signature: token } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, token, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(
+        context.text.includes(accessId),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const withoutRealAccessId = url.replace(accessId, shortAccessId);
-		const omittedSignature = buildNamingRequestContext([], promptAt(withoutRealAccessId, token, prefixLength + 5));
-		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
-	}
+    const withoutRealAccessId = url.replace(accessId, shortAccessId);
+    const omittedSignature = buildNamingRequestContext(
+      [],
+      promptAt(withoutRealAccessId, token, prefixLength + 5),
+    );
+    expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const nearMisses = [
-		{ url: `Signature=${signature}`, signature },
-		{ url: `Signature=${signature}&GoogleAccessKey=${shortAccessId}`, signature },
-		{ url: `AWSAccessKeyId=${shortAccessId}&Signature=${signature}`, signature },
-		{ url: `AWSAccessKeyId=${shortAccessId}&Sig=${signature}`, signature },
-		{ url: `xAWSAccessKeyId=${shortAccessId}&Signature=${signature}`, signature },
-		{ url: `AWSAccessKeyId=${shortAccessId}&NotSignature=${signature}`, signature },
-	];
-	for (const { url, signature: candidate } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, candidate, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    { url: `Signature=${signature}`, signature },
+    {
+      url: `Signature=${signature}&GoogleAccessKey=${shortAccessId}`,
+      signature,
+    },
+    {
+      url: `AWSAccessKeyId=${shortAccessId}&Signature=${signature}`,
+      signature,
+    },
+    { url: `AWSAccessKeyId=${shortAccessId}&Sig=${signature}`, signature },
+    {
+      url: `xAWSAccessKeyId=${shortAccessId}&Signature=${signature}`,
+      signature,
+    },
+    {
+      url: `AWSAccessKeyId=${shortAccessId}&NotSignature=${signature}`,
+      signature,
+    },
+  ];
+  for (const { url, signature: candidate } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, candidate, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 
-	for (const candidate of [`${"A".repeat(26)}=`, `${"A".repeat(28)}=`]) {
-		const url = `https://s3.amazonaws.com/object?Signature=${candidate}&AWSAccessKeyId=${accessId}&Expires=1790000000`;
-		const context = buildNamingRequestContext([], promptAt(url, candidate, prefixLength - 10));
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(false);
-	}
+  for (const candidate of [`${"A".repeat(26)}=`, `${"A".repeat(28)}=`]) {
+    const url = `https://s3.amazonaws.com/object?Signature=${candidate}&AWSAccessKeyId=${accessId}&Expires=1790000000`;
+    const context = buildNamingRequestContext(
+      [],
+      promptAt(url, candidate, prefixLength - 10),
+    );
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(false);
+  }
 });
 
 test("screens CloudFront signed URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const signature = "A1b_".repeat(24);
-	const values = [
-		{
-			url: `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${signature}&Key-Pair-Id=APKEXAMPLE`,
-		},
-		{
-			url: `https://d111111abcdef8.cloudfront.net/private?Key-Pair-Id=APKEXAMPLE&Signature=${signature}&Expires=1790000000`,
-		},
-		{
-			url: `https://cdn.example.test/private?Policy=eyJTdGF0ZW1lbnQiOiJleGFtcGxlIn0&Signature=${signature}&Key-Pair-Id=APKEXAMPLE`,
-		},
-	];
-	const promptAt = (url: string, token: string, start: number) => {
-		const urlStart = start - url.indexOf(token);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const signature = "A1b_".repeat(24);
+  const values = [
+    {
+      url: `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${signature}&Key-Pair-Id=APKEXAMPLE`,
+    },
+    {
+      url: `https://d111111abcdef8.cloudfront.net/private?Key-Pair-Id=APKEXAMPLE&Signature=${signature}&Expires=1790000000`,
+    },
+    {
+      url: `https://cdn.example.test/private?Policy=eyJTdGF0ZW1lbnQiOiJleGFtcGxlIn0&Signature=${signature}&Key-Pair-Id=APKEXAMPLE`,
+    },
+  ];
+  const promptAt = (url: string, token: string, start: number) => {
+    const urlStart = start - url.indexOf(token);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+  for (const { url } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
-		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedSignature = buildNamingRequestContext(
+      [],
+      promptAt(url, signature, prefixLength + 5),
+    );
+    expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const nearMisses = [
-		{ url: `Signature=${signature}`, signature },
-		{ url: `Signature=${signature}&KeyPairId=APKEXAMPLE`, signature },
-		{ url: `Signature=${"A".repeat(39)}&Key-Pair-Id=APKEXAMPLE`, signature: "A".repeat(39) },
-		{ url: `Signature=${"A".repeat(769)}&Key-Pair-Id=APKEXAMPLE`, signature: "A".repeat(769) },
-		{ url: `Key-Pair-Id=APKEXAMPLE&Expires=1790000000`, signature: "APKEXAMPLE" },
-		{ url: `NotSignature=${signature}&Key-Pair-Id=APKEXAMPLE`, signature },
-	];
-	for (const { url, signature: candidate } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, candidate, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    { url: `Signature=${signature}`, signature },
+    { url: `Signature=${signature}&KeyPairId=APKEXAMPLE`, signature },
+    {
+      url: `Signature=${"A".repeat(39)}&Key-Pair-Id=APKEXAMPLE`,
+      signature: "A".repeat(39),
+    },
+    {
+      url: `Signature=${"A".repeat(769)}&Key-Pair-Id=APKEXAMPLE`,
+      signature: "A".repeat(769),
+    },
+    {
+      url: `Key-Pair-Id=APKEXAMPLE&Expires=1790000000`,
+      signature: "APKEXAMPLE",
+    },
+    { url: `NotSignature=${signature}&Key-Pair-Id=APKEXAMPLE`, signature },
+  ];
+  for (const { url, signature: candidate } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, candidate, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens CloudFront signed-cookie signatures across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const signature = "A1b_".repeat(24);
-	const values = [
-		`Set-Cookie: CloudFront-Signature=${signature}; Path=/; Secure; HttpOnly`,
-		`CloudFront-Policy=eyJTdGF0ZW1lbnQiOiJleGFtcGxlIn0; CloudFront-Signature=${signature}; CloudFront-Key-Pair-Id=APKEXAMPLE`,
-	];
-	const promptAt = (value: string, token: string, start: number) => {
-		const valueStart = start - value.indexOf(token);
-		const prefix = `${"x".repeat(valueStart - 1)} `;
-		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const signature = "A1b_".repeat(24);
+  const values = [
+    `Set-Cookie: CloudFront-Signature=${signature}; Path=/; Secure; HttpOnly`,
+    `CloudFront-Policy=eyJTdGF0ZW1lbnQiOiJleGFtcGxlIn0; CloudFront-Signature=${signature}; CloudFront-Key-Pair-Id=APKEXAMPLE`,
+  ];
+  const promptAt = (value: string, token: string, start: number) => {
+    const valueStart = start - value.indexOf(token);
+    const prefix = `${"x".repeat(valueStart - 1)} `;
+    return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+  };
 
-	for (const value of values) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(value, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const value of values) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(value, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const omittedSignature = buildNamingRequestContext([], promptAt(values[0]!, signature, prefixLength + 5));
-	expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  const omittedSignature = buildNamingRequestContext(
+    [],
+    promptAt(values[0]!, signature, prefixLength + 5),
+  );
+  expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
 
-	const nearMisses = [
-		{ value: `CloudFront-Signature=${"A".repeat(39)}`, signature: "A".repeat(39) },
-		{ value: `CloudFront-Signature=${"A".repeat(769)}`, signature: "A".repeat(769) },
-		{ value: `NotCloudFront-Signature=${signature}`, signature },
-		{ value: `CloudFront-Signaturex=${signature}`, signature },
-	];
-	for (const { value, signature: candidate } of nearMisses) {
-		expect(hasSensitiveNamingContext(value)).toBe(false);
-		expect(hasSensitiveOutput(value)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(value, candidate, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    {
+      value: `CloudFront-Signature=${"A".repeat(39)}`,
+      signature: "A".repeat(39),
+    },
+    {
+      value: `CloudFront-Signature=${"A".repeat(769)}`,
+      signature: "A".repeat(769),
+    },
+    { value: `NotCloudFront-Signature=${signature}`, signature },
+    { value: `CloudFront-Signaturex=${signature}`, signature },
+  ];
+  for (const { value, signature: candidate } of nearMisses) {
+    expect(hasSensitiveNamingContext(value)).toBe(false);
+    expect(hasSensitiveOutput(value)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(value, candidate, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens Cloudinary signed delivery URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const values = [
-		{
-			url: "https://res.cloudinary.com/demo/image/authenticated/s--A1b_2C3d--/c_fill,w_300,h_250/e_grayscale/sample-authenticated.png",
-			signature: "A1b_2C3d",
-		},
-		{
-			url: "https://res.cloudinary.com/demo/video/authenticated/s--QwErTy_9--/v1790000000/private-video.mp4",
-			signature: "QwErTy_9",
-		},
-	];
-	const promptAt = (url: string, signature: string, start: number) => {
-		const urlStart = start - url.indexOf(signature);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const values = [
+    {
+      url: "https://res.cloudinary.com/demo/image/authenticated/s--A1b_2C3d--/c_fill,w_300,h_250/e_grayscale/sample-authenticated.png",
+      signature: "A1b_2C3d",
+    },
+    {
+      url: "https://res.cloudinary.com/demo/video/authenticated/s--QwErTy_9--/v1790000000/private-video.mp4",
+      signature: "QwErTy_9",
+    },
+  ];
+  const promptAt = (url: string, signature: string, start: number) => {
+    const urlStart = start - url.indexOf(signature);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, signature } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(signature, `${signature.slice(0, 4)}\u200b${signature.slice(4)}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, signature } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(
+      signature,
+      `${signature.slice(0, 4)}\u200b${signature.slice(4)}`,
+    );
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 4, suffixStart - 4]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+    for (const tokenStart of [prefixLength - 4, suffixStart - 4]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const obfuscatedSignature = `${signature.slice(0, 4)}\u200b${signature.slice(4)}`;
-		const obfuscatedContext = buildNamingRequestContext([], promptAt(obfuscated, obfuscatedSignature, prefixLength - 4));
-		expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    const obfuscatedSignature = `${signature.slice(0, 4)}\u200b${signature.slice(4)}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedSignature, prefixLength - 4),
+    );
+    expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
 
-		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
-		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedSignature = buildNamingRequestContext(
+      [],
+      promptAt(url, signature, prefixLength + 5),
+    );
+    expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const nearMisses = [
-		{ url: `/s--${"A".repeat(7)}--/asset.png`, signature: "A".repeat(7) },
-		{ url: `/s--${"A".repeat(9)}--/asset.png`, signature: "A".repeat(9) },
-		{ url: "/s--A1b.2C3d--/asset.png", signature: "A1b.2C3d" },
-		{ url: "/s--A1b_2C3d--asset.png", signature: "A1b_2C3d" },
-		{ url: "/sig--A1b_2C3d--/asset.png", signature: "A1b_2C3d" },
-	];
-	for (const { url, signature } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    { url: `/s--${"A".repeat(7)}--/asset.png`, signature: "A".repeat(7) },
+    { url: `/s--${"A".repeat(9)}--/asset.png`, signature: "A".repeat(9) },
+    { url: "/s--A1b.2C3d--/asset.png", signature: "A1b.2C3d" },
+    { url: "/s--A1b_2C3d--asset.png", signature: "A1b_2C3d" },
+    { url: "/sig--A1b_2C3d--/asset.png", signature: "A1b_2C3d" },
+  ];
+  for (const { url, signature } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens Imgix Secure URL signatures across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const signatures = ["a".repeat(32), "b".repeat(32)];
-	const values = [
-		{
-			url: `https://assets.imgix.net/examples/bridge.jpg?auto=format&fit=crop&w=200&s=${signatures[0]}`,
-			signature: signatures[0]!,
-		},
-		{
-			url: `https://images.example.test/private/logo.png?s=${signatures[1]}&expires=1790000000`,
-			signature: signatures[1]!,
-		},
-	];
-	const promptAt = (url: string, signature: string, start: number) => {
-		const urlStart = start - url.indexOf(signature);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const signatures = ["a".repeat(32), "b".repeat(32)];
+  const values = [
+    {
+      url: `https://assets.imgix.net/examples/bridge.jpg?auto=format&fit=crop&w=200&s=${signatures[0]}`,
+      signature: signatures[0]!,
+    },
+    {
+      url: `https://images.example.test/private/logo.png?s=${signatures[1]}&expires=1790000000`,
+      signature: signatures[1]!,
+    },
+  ];
+  const promptAt = (url: string, signature: string, start: number) => {
+    const urlStart = start - url.indexOf(signature);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, signature } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(signature, `${signature.slice(0, 16)}\u200b${signature.slice(16)}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, signature } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(
+      signature,
+      `${signature.slice(0, 16)}\u200b${signature.slice(16)}`,
+    );
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 16, suffixStart - 16]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+    for (const tokenStart of [prefixLength - 16, suffixStart - 16]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const obfuscatedSignature = `${signature.slice(0, 16)}\u200b${signature.slice(16)}`;
-		const obfuscatedContext = buildNamingRequestContext([], promptAt(obfuscated, obfuscatedSignature, prefixLength - 16));
-		expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    const obfuscatedSignature = `${signature.slice(0, 16)}\u200b${signature.slice(16)}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedSignature, prefixLength - 16),
+    );
+    expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
 
-		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
-		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedSignature = buildNamingRequestContext(
+      [],
+      promptAt(url, signature, prefixLength + 5),
+    );
+    expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const nearMisses = [
-		{ url: `?s=${"a".repeat(31)}`, signature: "a".repeat(31) },
-		{ url: `?s=${"a".repeat(33)}`, signature: "a".repeat(33) },
-		{ url: `?s=${"a".repeat(31)}g`, signature: `${"a".repeat(31)}g` },
-		{ url: `?xs=${signatures[0]}`, signature: signatures[0]! },
-		{ url: `?ss=${signatures[0]}`, signature: signatures[0]! },
-		{ url: `?s=${signatures[0]}x`, signature: `${signatures[0]}x` },
-	];
-	for (const { url, signature } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 16, suffixStart - 16]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    { url: `?s=${"a".repeat(31)}`, signature: "a".repeat(31) },
+    { url: `?s=${"a".repeat(33)}`, signature: "a".repeat(33) },
+    { url: `?s=${"a".repeat(31)}g`, signature: `${"a".repeat(31)}g` },
+    { url: `?xs=${signatures[0]}`, signature: signatures[0]! },
+    { url: `?ss=${signatures[0]}`, signature: signatures[0]! },
+    { url: `?s=${signatures[0]}x`, signature: `${signatures[0]}x` },
+  ];
+  for (const { url, signature } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 16, suffixStart - 16]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens ImageKit Secure URL signatures across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const signatures = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
-	const values = [
-		{
-			url: `https://ik.imagekit.io/demo/image.jpg?ik-s=${signatures[0]}&ik-t=1790000000`,
-			signature: signatures[0]!,
-		},
-		{
-			url: `https://cdn.example.test/private.jpg?ik-t=1790000000&ik-s=${signatures[1]}`,
-			signature: signatures[1]!,
-		},
-		{
-			url: `https://ik.imagekit.io/demo/private.jpg?ik-s=${signatures[2]}`,
-			signature: signatures[2]!,
-		},
-	];
-	const promptAt = (url: string, signature: string, start: number) => {
-		const urlStart = start - url.indexOf(signature);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const signatures = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
+  const values = [
+    {
+      url: `https://ik.imagekit.io/demo/image.jpg?ik-s=${signatures[0]}&ik-t=1790000000`,
+      signature: signatures[0]!,
+    },
+    {
+      url: `https://cdn.example.test/private.jpg?ik-t=1790000000&ik-s=${signatures[1]}`,
+      signature: signatures[1]!,
+    },
+    {
+      url: `https://ik.imagekit.io/demo/private.jpg?ik-s=${signatures[2]}`,
+      signature: signatures[2]!,
+    },
+  ];
+  const promptAt = (url: string, signature: string, start: number) => {
+    const urlStart = start - url.indexOf(signature);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, signature } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(signature, `${signature.slice(0, 20)}\u200b${signature.slice(20)}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, signature } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(
+      signature,
+      `${signature.slice(0, 20)}\u200b${signature.slice(20)}`,
+    );
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 20, suffixStart - 20]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+    for (const tokenStart of [prefixLength - 20, suffixStart - 20]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const obfuscatedSignature = `${signature.slice(0, 20)}\u200b${signature.slice(20)}`;
-		const obfuscatedContext = buildNamingRequestContext([], promptAt(obfuscated, obfuscatedSignature, prefixLength - 20));
-		expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    const obfuscatedSignature = `${signature.slice(0, 20)}\u200b${signature.slice(20)}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedSignature, prefixLength - 20),
+    );
+    expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
 
-		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
-		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedSignature = buildNamingRequestContext(
+      [],
+      promptAt(url, signature, prefixLength + 5),
+    );
+    expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const signature = signatures[0]!;
-	const nearMisses = [
-		{ url: `?ik-s=${"a".repeat(39)}`, signature: "a".repeat(39) },
-		{ url: `?ik-s=${"a".repeat(41)}`, signature: "a".repeat(41) },
-		{ url: `?ik-s=${"a".repeat(39)}g`, signature: `${"a".repeat(39)}g` },
-		{ url: `?xik-s=${signature}`, signature },
-		{ url: `?ik-signature=${signature}`, signature },
-		{ url: `?ik-s=${signature}x`, signature: `${signature}x` },
-	];
-	for (const { url, signature: candidate } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 20, suffixStart - 20]) {
-			const context = buildNamingRequestContext([], promptAt(url, candidate, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const signature = signatures[0]!;
+  const nearMisses = [
+    { url: `?ik-s=${"a".repeat(39)}`, signature: "a".repeat(39) },
+    { url: `?ik-s=${"a".repeat(41)}`, signature: "a".repeat(41) },
+    { url: `?ik-s=${"a".repeat(39)}g`, signature: `${"a".repeat(39)}g` },
+    { url: `?xik-s=${signature}`, signature },
+    { url: `?ik-signature=${signature}`, signature },
+    { url: `?ik-s=${signature}x`, signature: `${signature}x` },
+  ];
+  for (const { url, signature: candidate } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 20, suffixStart - 20]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, candidate, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens expiring NGINX Secure Link URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const signatures = ["a".repeat(22), "b".repeat(22)];
-	const values = [
-		{
-			url: `https://downloads.example.test/s/link?md5=${signatures[0]}&format=raw&expires=1790000000`,
-			signature: signatures[0]!,
-		},
-		{
-			url: `https://cdn.example.test/private/file.zip?expires=2147483647&md5=${signatures[1]}`,
-			signature: signatures[1]!,
-		},
-	];
-	const promptAt = (url: string, signature: string, start: number) => {
-		const urlStart = start - url.indexOf(signature);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const signatures = ["a".repeat(22), "b".repeat(22)];
+  const values = [
+    {
+      url: `https://downloads.example.test/s/link?md5=${signatures[0]}&format=raw&expires=1790000000`,
+      signature: signatures[0]!,
+    },
+    {
+      url: `https://cdn.example.test/private/file.zip?expires=2147483647&md5=${signatures[1]}`,
+      signature: signatures[1]!,
+    },
+  ];
+  const promptAt = (url: string, signature: string, start: number) => {
+    const urlStart = start - url.indexOf(signature);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, signature } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(signature, `${signature.slice(0, 11)}\u200b${signature.slice(11)}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, signature } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(
+      signature,
+      `${signature.slice(0, 11)}\u200b${signature.slice(11)}`,
+    );
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const obfuscatedSignature = `${signature.slice(0, 11)}\u200b${signature.slice(11)}`;
-		const obfuscatedContext = buildNamingRequestContext([], promptAt(obfuscated, obfuscatedSignature, prefixLength - 11));
-		expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    const obfuscatedSignature = `${signature.slice(0, 11)}\u200b${signature.slice(11)}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedSignature, prefixLength - 11),
+    );
+    expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
 
-		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
-		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedSignature = buildNamingRequestContext(
+      [],
+      promptAt(url, signature, prefixLength + 5),
+    );
+    expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const signature = signatures[0]!;
-	const nearMisses = [
-		{ url: `?md5=${"a".repeat(21)}&expires=1790000000`, signature: "a".repeat(21) },
-		{ url: `?md5=${"a".repeat(23)}&expires=1790000000`, signature: "a".repeat(23) },
-		{ url: `?md5=${"a".repeat(21)}.&expires=1790000000`, signature: `${"a".repeat(21)}.` },
-		{ url: `?md5=${signature}`, signature },
-		{ url: `?md5=${signature}&expire=1790000000`, signature },
-		{ url: `?expires=not-a-timestamp&md5=${signature}`, signature },
-		{ url: `?xmd5=${signature}&expires=1790000000`, signature },
-		{ url: `?md5=${signature}x&expires=1790000000`, signature: `${signature}x` },
-	];
-	for (const { url, signature: candidate } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(url, candidate, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const signature = signatures[0]!;
+  const nearMisses = [
+    {
+      url: `?md5=${"a".repeat(21)}&expires=1790000000`,
+      signature: "a".repeat(21),
+    },
+    {
+      url: `?md5=${"a".repeat(23)}&expires=1790000000`,
+      signature: "a".repeat(23),
+    },
+    {
+      url: `?md5=${"a".repeat(21)}.&expires=1790000000`,
+      signature: `${"a".repeat(21)}.`,
+    },
+    { url: `?md5=${signature}`, signature },
+    { url: `?md5=${signature}&expire=1790000000`, signature },
+    { url: `?expires=not-a-timestamp&md5=${signature}`, signature },
+    { url: `?xmd5=${signature}&expires=1790000000`, signature },
+    {
+      url: `?md5=${signature}x&expires=1790000000`,
+      signature: `${signature}x`,
+    },
+  ];
+  for (const { url, signature: candidate } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, candidate, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens Dropbox shared-link keys across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const keys = ["A".repeat(32), "b".repeat(32)];
-	const values = [
-		{
-			url: `https://www.dropbox.com/scl/fi/abc123/manual.pdf?rlkey=${keys[0]}&dl=0`,
-			key: keys[0]!,
-		},
-		{
-			url: `https://dropbox.com/scl/fo/folder123/shared-folder?dl=0&rlkey=${keys[1]}&st=example`,
-			key: keys[1]!,
-		},
-	];
-	const promptAt = (url: string, key: string, start: number) => {
-		const urlStart = start - url.indexOf(key);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const keys = ["A".repeat(32), "b".repeat(32)];
+  const values = [
+    {
+      url: `https://www.dropbox.com/scl/fi/abc123/manual.pdf?rlkey=${keys[0]}&dl=0`,
+      key: keys[0]!,
+    },
+    {
+      url: `https://dropbox.com/scl/fo/folder123/shared-folder?dl=0&rlkey=${keys[1]}&st=example`,
+      key: keys[1]!,
+    },
+  ];
+  const promptAt = (url: string, key: string, start: number) => {
+    const urlStart = start - url.indexOf(key);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, key } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(key, `${key.slice(0, 16)}\u200b${key.slice(16)}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, key } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(
+      key,
+      `${key.slice(0, 16)}\u200b${key.slice(16)}`,
+    );
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(url, key, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, key, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
-		const obfuscatedContext = buildNamingRequestContext([], promptAt(obfuscated, obfuscatedKey, prefixLength - 11));
-		expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedKey, prefixLength - 11),
+    );
+    expect(hasSensitiveNamingContext(obfuscatedContext.text)).toBe(false);
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
 
-		const omittedKey = buildNamingRequestContext([], promptAt(url, key, prefixLength + 5));
-		expect(omittedKey.hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedKey = buildNamingRequestContext(
+      [],
+      promptAt(url, key, prefixLength + 5),
+    );
+    expect(omittedKey.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const key = keys[0]!;
-	const nearMisses = [
-		{ url: `https://www.dropbox.com/scl/fi/file?rlkey=${"a".repeat(19)}&dl=0`, key: "a".repeat(19) },
-		{ url: `https://www.dropbox.com/scl/fi/file?rlkey=${"a".repeat(129)}&dl=0`, key: "a".repeat(129) },
-		{ url: `https://www.dropbox.com.evil.test/scl/fi/file?rlkey=${key}`, key },
-		{ url: `https://www.dropbox.com/s/file?rlkey=${key}`, key },
-		{ url: `https://www.dropbox.com/scl/fi/file?notrlkey=${key}`, key },
-		{ url: `https://files.example.test/scl/fi/file?rlkey=${key}`, key },
-		{ url: `https://www.dropbox.com/scl/fo/folder?other=${key}`, key },
-		{ url: `discussion about rlkey=${key}`, key },
-	];
-	for (const { url, key: candidate } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(url, candidate, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const key = keys[0]!;
+  const nearMisses = [
+    {
+      url: `https://www.dropbox.com/scl/fi/file?rlkey=${"a".repeat(19)}&dl=0`,
+      key: "a".repeat(19),
+    },
+    {
+      url: `https://www.dropbox.com/scl/fi/file?rlkey=${"a".repeat(129)}&dl=0`,
+      key: "a".repeat(129),
+    },
+    { url: `https://www.dropbox.com.evil.test/scl/fi/file?rlkey=${key}`, key },
+    { url: `https://www.dropbox.com/s/file?rlkey=${key}`, key },
+    { url: `https://www.dropbox.com/scl/fi/file?notrlkey=${key}`, key },
+    { url: `https://files.example.test/scl/fi/file?rlkey=${key}`, key },
+    { url: `https://www.dropbox.com/scl/fo/folder?other=${key}`, key },
+    { url: `discussion about rlkey=${key}`, key },
+  ];
+  for (const { url, key: candidate } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, candidate, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens legacy Dropbox file and folder share IDs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const ids = ["a".repeat(15), "B".repeat(32)];
-	const values = [
-		{ url: `https://www.dropbox.com/s/${ids[0]}/manual.pdf?dl=0`, id: ids[0]! },
-		{ url: `https://dropbox.com/sh/${ids[1]}/shared-folder`, id: ids[1]! },
-	];
-	const promptAt = (url: string, id: string, start: number) => {
-		const urlStart = start - url.indexOf(id);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const ids = ["a".repeat(15), "B".repeat(32)];
+  const values = [
+    { url: `https://www.dropbox.com/s/${ids[0]}/manual.pdf?dl=0`, id: ids[0]! },
+    { url: `https://dropbox.com/sh/${ids[1]}/shared-folder`, id: ids[1]! },
+  ];
+  const promptAt = (url: string, id: string, start: number) => {
+    const urlStart = start - url.indexOf(id);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, id } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(id, `${id.slice(0, 7)}\u200b${id.slice(7)}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, id } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(id, `${id.slice(0, 7)}\u200b${id.slice(7)}`);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(url, id, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, id, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const obfuscatedId = `${id.slice(0, 7)}\u200b${id.slice(7)}`;
-		const obfuscatedContext = buildNamingRequestContext(
-			[], promptAt(obfuscated, obfuscatedId, prefixLength - 11),
-		);
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
-		expect(buildNamingRequestContext([], promptAt(url, id, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
-	}
+    const obfuscatedId = `${id.slice(0, 7)}\u200b${id.slice(7)}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedId, prefixLength - 11),
+    );
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(url, id, prefixLength + 5),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 
-	const id = ids[0]!;
-	const nearMisses = [
-		`https://www.dropbox.com/s/${"a".repeat(14)}/file.pdf`,
-		`https://www.dropbox.com/sh/${"a".repeat(65)}/folder`,
-		`https://www.dropbox.com.evil.test/s/${id}/file.pdf`,
-		`https://dropbox.com/scl/fi/${id}/file.pdf`,
-		`https://files.example.test/s/${id}/file.pdf`,
-		`discussion of Dropbox shared link ${id}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			expect(buildNamingRequestContext([], promptAt(url, id, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const id = ids[0]!;
+  const nearMisses = [
+    `https://www.dropbox.com/s/${"a".repeat(14)}/file.pdf`,
+    `https://www.dropbox.com/sh/${"a".repeat(65)}/folder`,
+    `https://www.dropbox.com.evil.test/s/${id}/file.pdf`,
+    `https://dropbox.com/scl/fi/${id}/file.pdf`,
+    `https://files.example.test/s/${id}/file.pdf`,
+    `discussion of Dropbox shared link ${id}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, id, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens Google Drive shared-link resource keys across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const keys = [`0-${"a".repeat(28)}`, `0-${"b".repeat(28)}`];
-	const values = [
-		{
-			url: `https://drive.google.com/file/d/fileId/view?usp=sharing&resourcekey=${keys[0]}`,
-			key: keys[0]!,
-		},
-		{
-			url: `https://docs.google.com/document/d/fileId/edit?resourcekey=${keys[1]}&usp=sharing`,
-			key: keys[1]!,
-		},
-	];
-	const promptAt = (url: string, key: string, start: number) => {
-		const urlStart = start - url.indexOf(key);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const keys = [`0-${"a".repeat(28)}`, `0-${"b".repeat(28)}`];
+  const values = [
+    {
+      url: `https://drive.google.com/file/d/fileId/view?usp=sharing&resourcekey=${keys[0]}`,
+      key: keys[0]!,
+    },
+    {
+      url: `https://docs.google.com/document/d/fileId/edit?resourcekey=${keys[1]}&usp=sharing`,
+      key: keys[1]!,
+    },
+  ];
+  const promptAt = (url: string, key: string, start: number) => {
+    const urlStart = start - url.indexOf(key);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, key } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(key, `${key.slice(0, 16)}\u200b${key.slice(16)}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, key } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(
+      key,
+      `${key.slice(0, 16)}\u200b${key.slice(16)}`,
+    );
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(url, key, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, key, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
-		const obfuscatedContext = buildNamingRequestContext(
-			[], promptAt(obfuscated, obfuscatedKey, prefixLength - 11),
-		);
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedKey, prefixLength - 11),
+    );
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
 
-		const omittedKey = buildNamingRequestContext([], promptAt(url, key, prefixLength + 5));
-		expect(omittedKey.hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedKey = buildNamingRequestContext(
+      [],
+      promptAt(url, key, prefixLength + 5),
+    );
+    expect(omittedKey.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const key = keys[0]!;
-	const nearMisses = [
-		`https://drive.google.com/file/d/fileId/view?resourcekey=${"a".repeat(19)}`,
-		`https://drive.google.com/file/d/fileId/view?resourcekey=${"a".repeat(129)}`,
-		`https://drive.google.com.evil.test/file/d/fileId/view?resourcekey=${key}`,
-		`https://docs.google.com.evil.test/document/d/fileId/edit?resourcekey=${key}`,
-		`https://files.example.test/file/d/fileId/view?resourcekey=${key}`,
-		`https://drive.google.com/file/d/fileId/view?notresourcekey=${key}`,
-		"https://drive.google.com/file/d/fileId/view?usp=sharing",
-		`discussion about resourcekey=${key}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			expect(buildNamingRequestContext([], promptAt(url, key, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const key = keys[0]!;
+  const nearMisses = [
+    `https://drive.google.com/file/d/fileId/view?resourcekey=${"a".repeat(19)}`,
+    `https://drive.google.com/file/d/fileId/view?resourcekey=${"a".repeat(129)}`,
+    `https://drive.google.com.evil.test/file/d/fileId/view?resourcekey=${key}`,
+    `https://docs.google.com.evil.test/document/d/fileId/edit?resourcekey=${key}`,
+    `https://files.example.test/file/d/fileId/view?resourcekey=${key}`,
+    `https://drive.google.com/file/d/fileId/view?notresourcekey=${key}`,
+    "https://drive.google.com/file/d/fileId/view?usp=sharing",
+    `discussion about resourcekey=${key}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, key, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens Google Photos shared-album links across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const values = [
-		{ url: "https://photos.app.goo.gl/Ab3dEf5gHi7jKl9mNo", id: "Ab3dEf5gHi7jKl9mNo" },
-		{ url: "https://photos.app.goo.gl/0123456789ABCDEFGH?utm_source=share", id: "0123456789ABCDEFGH" },
-	];
-	const promptAt = (url: string, id: string, start: number) => {
-		const urlStart = start - url.indexOf(id);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const values = [
+    {
+      url: "https://photos.app.goo.gl/Ab3dEf5gHi7jKl9mNo",
+      id: "Ab3dEf5gHi7jKl9mNo",
+    },
+    {
+      url: "https://photos.app.goo.gl/0123456789ABCDEFGH?utm_source=share",
+      id: "0123456789ABCDEFGH",
+    },
+  ];
+  const promptAt = (url: string, id: string, start: number) => {
+    const urlStart = start - url.indexOf(id);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, id } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedId = `${id.slice(0, 9)}\u200b${id.slice(9)}`;
-		const obfuscated = url.replace(id, obfuscatedId);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, id } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedId = `${id.slice(0, 9)}\u200b${id.slice(9)}`;
+    const obfuscated = url.replace(id, obfuscatedId);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, id },
-			{ text: obfuscated, id: obfuscatedId },
-		]) {
-			for (const tokenStart of [prefixLength - 8, suffixStart - 8]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.id, tokenStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+    for (const candidate of [
+      { text: url, id },
+      { text: obfuscated, id: obfuscatedId },
+    ]) {
+      for (const tokenStart of [prefixLength - 8, suffixStart - 8]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.id, tokenStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const id = values[0]!.id;
-	const nearMisses = [
-		`https://photos.app.goo.gl/${id.slice(1)}`,
-		`https://photos.app.goo.gl/${id}A`,
-		`https://photos.app.goo.gl.evil.test/${id}`,
-		`https://evil.photos.app.goo.gl/${id}`,
-		`https://photos.google.com/${id}`,
-		`https://example.test/${id}`,
-		`discussion of a Google Photos shared album ${id}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		if (!url.includes(id)) continue;
-		for (const tokenStart of [prefixLength - 8, suffixStart - 8]) {
-			expect(buildNamingRequestContext([], promptAt(url, id, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const id = values[0]!.id;
+  const nearMisses = [
+    `https://photos.app.goo.gl/${id.slice(1)}`,
+    `https://photos.app.goo.gl/${id}A`,
+    `https://photos.app.goo.gl.evil.test/${id}`,
+    `https://evil.photos.app.goo.gl/${id}`,
+    `https://photos.google.com/${id}`,
+    `https://example.test/${id}`,
+    `discussion of a Google Photos shared album ${id}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    if (!url.includes(id)) continue;
+    for (const tokenStart of [prefixLength - 8, suffixStart - 8]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, id, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 
-	expect(buildNamingRequestContext([], promptAt(values[0]!.url, id, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(values[0]!.url, id, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Apple iCloud shared-album links across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const values = [
-		{
-			url: `https://www.icloud.com/sharedalbum/#${"A".repeat(14)};photo-guid`,
-			token: "A".repeat(14),
-		},
-		{
-			url: `https://photos.icloud.com/shared/album/${"B".repeat(16)}?utm_source=share`,
-			token: "B".repeat(16),
-		},
-	];
-	const promptAt = (text: string, token: string, start: number) => {
-		const textStart = start - text.indexOf(token);
-		const prefix = `${"x".repeat(textStart - 1)} `;
-		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const values = [
+    {
+      url: `https://www.icloud.com/sharedalbum/#${"A".repeat(14)};photo-guid`,
+      token: "A".repeat(14),
+    },
+    {
+      url: `https://photos.icloud.com/shared/album/${"B".repeat(16)}?utm_source=share`,
+      token: "B".repeat(16),
+    },
+  ];
+  const promptAt = (text: string, token: string, start: number) => {
+    const textStart = start - text.indexOf(token);
+    const prefix = `${"x".repeat(textStart - 1)} `;
+    return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+  };
 
-	for (const { url, token } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedToken = `${token.slice(0, 7)}\u200b${token.slice(7)}`;
-		const obfuscated = url.replace(token, obfuscatedToken);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, token } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedToken = `${token.slice(0, 7)}\u200b${token.slice(7)}`;
+    const obfuscated = url.replace(token, obfuscatedToken);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, token },
-			{ text: obfuscated, token: obfuscatedToken },
-		]) {
-			for (const tokenStart of [prefixLength - 4, suffixStart - candidate.token.length + 4]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.token, tokenStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
+    for (const candidate of [
+      { text: url, token },
+      { text: obfuscated, token: obfuscatedToken },
+    ]) {
+      for (const tokenStart of [
+        prefixLength - 4,
+        suffixStart - candidate.token.length + 4,
+      ]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.token, tokenStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
 
-		const historyContent = `${"x".repeat(996 - url.indexOf(token))} ${url} trailing text`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(996 - url.indexOf(token))} ${url} trailing text`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const token = values[0]!.token;
-	const nearMisses = [
-		`https://www.icloud.com/sharedalbum/#${token.slice(0, 5)}`,
-		`https://www.icloud.com/sharedalbum/#${token}${"A".repeat(115)}`,
-		`https://icloud.com.evil.test/sharedalbum/#${token}`,
-		`https://evil.icloud.com/sharedalbum/#${token}`,
-		`https://www.icloud.com/shared-album/#${token}`,
-		`https://photos.icloud.com.evil.test/shared/album/${token}`,
-		`https://photos.icloud.com/shared/albumish/${token}`,
-		`https://photos.icloud.com/other/${token}`,
-		`https://example.test/shared/album/${token}`,
-		`discussion of an iCloud shared album ${token}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		if (!url.includes(token)) continue;
-		for (const tokenStart of [prefixLength - 4, suffixStart - token.length + 4]) {
-			expect(buildNamingRequestContext([], promptAt(url, token, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const token = values[0]!.token;
+  const nearMisses = [
+    `https://www.icloud.com/sharedalbum/#${token.slice(0, 5)}`,
+    `https://www.icloud.com/sharedalbum/#${token}${"A".repeat(115)}`,
+    `https://icloud.com.evil.test/sharedalbum/#${token}`,
+    `https://evil.icloud.com/sharedalbum/#${token}`,
+    `https://www.icloud.com/shared-album/#${token}`,
+    `https://photos.icloud.com.evil.test/shared/album/${token}`,
+    `https://photos.icloud.com/shared/albumish/${token}`,
+    `https://photos.icloud.com/other/${token}`,
+    `https://example.test/shared/album/${token}`,
+    `discussion of an iCloud shared album ${token}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    if (!url.includes(token)) continue;
+    for (const tokenStart of [
+      prefixLength - 4,
+      suffixStart - token.length + 4,
+    ]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, token, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 
-	expect(buildNamingRequestContext([], promptAt(values[0]!.url, token, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(values[0]!.url, token, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Apple iCloud Photo links across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const values = [
-		{
-			url: `https://www.icloud.com/photos/#/icloudlinks/${"A".repeat(16)}`,
-			token: "A".repeat(16),
-		},
-		{
-			url: `https://share.icloud.com/photos/${"B".repeat(18)}?share=1`,
-			token: "B".repeat(18),
-		},
-	];
-	const promptAt = (text: string, token: string, start: number) => {
-		const textStart = start - text.indexOf(token);
-		const prefix = `${"x".repeat(textStart - 1)} `;
-		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const values = [
+    {
+      url: `https://www.icloud.com/photos/#/icloudlinks/${"A".repeat(16)}`,
+      token: "A".repeat(16),
+    },
+    {
+      url: `https://share.icloud.com/photos/${"B".repeat(18)}?share=1`,
+      token: "B".repeat(18),
+    },
+  ];
+  const promptAt = (text: string, token: string, start: number) => {
+    const textStart = start - text.indexOf(token);
+    const prefix = `${"x".repeat(textStart - 1)} `;
+    return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+  };
 
-	for (const { url, token } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedToken = `${token.slice(0, 7)}\u200b${token.slice(7)}`;
-		const obfuscated = url.replace(token, obfuscatedToken);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, token } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedToken = `${token.slice(0, 7)}\u200b${token.slice(7)}`;
+    const obfuscated = url.replace(token, obfuscatedToken);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, token },
-			{ text: obfuscated, token: obfuscatedToken },
-		]) {
-			for (const tokenStart of [prefixLength - 4, suffixStart - candidate.token.length + 4]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.token, tokenStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
+    for (const candidate of [
+      { text: url, token },
+      { text: obfuscated, token: obfuscatedToken },
+    ]) {
+      for (const tokenStart of [
+        prefixLength - 4,
+        suffixStart - candidate.token.length + 4,
+      ]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.token, tokenStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
 
-		const historyContent = `${"x".repeat(996 - url.indexOf(token))} ${url} trailing text`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(996 - url.indexOf(token))} ${url} trailing text`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const token = values[0]!.token;
-	const nearMisses = [
-		`https://share.icloud.com/photos/${token.slice(0, 9)}`,
-		`https://share.icloud.com/photos/${token}${"A".repeat(113)}`,
-		`https://share.icloud.com.evil.test/photos/${token}`,
-		`https://evil.share.icloud.com/photos/${token}`,
-		`https://share.icloud.com/videos/${token}`,
-		`https://www.icloud.com.evil.test/photos/#/icloudlinks/${token}`,
-		`https://www.icloud.com/photos/#/other/${token}`,
-		`https://example.test/photos/${token}`,
-		`discussion of an iCloud photo link ${token}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		if (!url.includes(token)) continue;
-		for (const tokenStart of [prefixLength - 4, suffixStart - token.length + 4]) {
-			expect(buildNamingRequestContext([], promptAt(url, token, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const token = values[0]!.token;
+  const nearMisses = [
+    `https://share.icloud.com/photos/${token.slice(0, 9)}`,
+    `https://share.icloud.com/photos/${token}${"A".repeat(113)}`,
+    `https://share.icloud.com.evil.test/photos/${token}`,
+    `https://evil.share.icloud.com/photos/${token}`,
+    `https://share.icloud.com/videos/${token}`,
+    `https://www.icloud.com.evil.test/photos/#/icloudlinks/${token}`,
+    `https://www.icloud.com/photos/#/other/${token}`,
+    `https://example.test/photos/${token}`,
+    `discussion of an iCloud photo link ${token}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    if (!url.includes(token)) continue;
+    for (const tokenStart of [
+      prefixLength - 4,
+      suffixStart - token.length + 4,
+    ]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, token, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 
-	expect(buildNamingRequestContext([], promptAt(values[0]!.url, token, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(values[0]!.url, token, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens pCloud public-link codes across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const values = [
-		{
-			url: `https://my.pcloud.com/publink/show?code=${"A".repeat(32)}`,
-			token: "A".repeat(32),
-		},
-		{
-			url: `https://u.pcloud.link/publink/show?code=${"B".repeat(32)}&download=1`,
-			token: "B".repeat(32),
-		},
-		{
-			url: `https://e.pcloud.link/publink/show?download=1&code=${"C".repeat(32)}#folder=1`,
-			token: "C".repeat(32),
-		},
-	];
-	const promptAt = (text: string, token: string, start: number) => {
-		const textStart = start - text.indexOf(token);
-		const prefix = `${"x".repeat(textStart - 1)} `;
-		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const values = [
+    {
+      url: `https://my.pcloud.com/publink/show?code=${"A".repeat(32)}`,
+      token: "A".repeat(32),
+    },
+    {
+      url: `https://u.pcloud.link/publink/show?code=${"B".repeat(32)}&download=1`,
+      token: "B".repeat(32),
+    },
+    {
+      url: `https://e.pcloud.link/publink/show?download=1&code=${"C".repeat(32)}#folder=1`,
+      token: "C".repeat(32),
+    },
+  ];
+  const promptAt = (text: string, token: string, start: number) => {
+    const textStart = start - text.indexOf(token);
+    const prefix = `${"x".repeat(textStart - 1)} `;
+    return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+  };
 
-	for (const { url, token } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedToken = `${token.slice(0, 16)}\u200b${token.slice(16)}`;
-		const obfuscated = url.replace(token, obfuscatedToken);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, token } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedToken = `${token.slice(0, 16)}\u200b${token.slice(16)}`;
+    const obfuscated = url.replace(token, obfuscatedToken);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, token },
-			{ text: obfuscated, token: obfuscatedToken },
-		]) {
-			for (const tokenStart of [prefixLength - 4, suffixStart - candidate.token.length + 4]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.token, tokenStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
+    for (const candidate of [
+      { text: url, token },
+      { text: obfuscated, token: obfuscatedToken },
+    ]) {
+      for (const tokenStart of [
+        prefixLength - 4,
+        suffixStart - candidate.token.length + 4,
+      ]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.token, tokenStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
 
-		const historyContent = `${"x".repeat(996 - url.indexOf(token))} ${url} trailing text`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(996 - url.indexOf(token))} ${url} trailing text`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const token = values[0]!.token;
-	const nearMisses = [
-		`https://my.pcloud.com/publink/show?code=${token.slice(0, 15)}`,
-		`https://my.pcloud.com/publink/show?code=${token}${"A".repeat(97)}`,
-		`https://my.pcloud.com.evil.test/publink/show?code=${token}`,
-		`https://u.pcloud.link.evil.test/publink/show?code=${token}`,
-		`https://my.pcloud.com/publink/showcase?code=${token}`,
-		`https://my.pcloud.com/#page=puplink&code=${token}`,
-		`https://example.test/publink/show?code=${token}`,
-		`https://my.pcloud.com/publink/show?notcode=${token}`,
-		`discussion of pCloud public link ${token}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		if (!url.includes(token)) continue;
-		for (const tokenStart of [prefixLength - 4, suffixStart - token.length + 4]) {
-			expect(buildNamingRequestContext([], promptAt(url, token, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const token = values[0]!.token;
+  const nearMisses = [
+    `https://my.pcloud.com/publink/show?code=${token.slice(0, 15)}`,
+    `https://my.pcloud.com/publink/show?code=${token}${"A".repeat(97)}`,
+    `https://my.pcloud.com.evil.test/publink/show?code=${token}`,
+    `https://u.pcloud.link.evil.test/publink/show?code=${token}`,
+    `https://my.pcloud.com/publink/showcase?code=${token}`,
+    `https://my.pcloud.com/#page=puplink&code=${token}`,
+    `https://example.test/publink/show?code=${token}`,
+    `https://my.pcloud.com/publink/show?notcode=${token}`,
+    `discussion of pCloud public link ${token}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    if (!url.includes(token)) continue;
+    for (const tokenStart of [
+      prefixLength - 4,
+      suffixStart - token.length + 4,
+    ]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, token, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 
-	expect(buildNamingRequestContext([], promptAt(values[0]!.url, token, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(values[0]!.url, token, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Google Drive resourceKey fields in API responses across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const key = `0-${"a".repeat(28)}`;
-	const shortKey = "a".repeat(19);
-	const longKey = "a".repeat(129);
-	const responses = [
-		`{"id":"${"F".repeat(33)}","resourceKey":"${key}"}`,
-		`resourceKey:\n  ${key}`,
-	];
-	const promptAt = (text: string, token: string, start: number) => {
-		const textStart = start - text.indexOf(token);
-		const prefix = `${"x".repeat(textStart - 1)} `;
-		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const key = `0-${"a".repeat(28)}`;
+  const shortKey = "a".repeat(19);
+  const longKey = "a".repeat(129);
+  const responses = [
+    `{"id":"${"F".repeat(33)}","resourceKey":"${key}"}`,
+    `resourceKey:\n  ${key}`,
+  ];
+  const promptAt = (text: string, token: string, start: number) => {
+    const textStart = start - text.indexOf(token);
+    const prefix = `${"x".repeat(textStart - 1)} `;
+    return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+  };
 
-	for (const response of responses) {
-		expect(hasSensitiveNamingContext(response)).toBe(true);
-		expect(hasSensitiveOutput(response)).toBe(true);
-		const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
-		const obfuscated = response.replace(key, obfuscatedKey);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const response of responses) {
+    expect(hasSensitiveNamingContext(response)).toBe(true);
+    expect(hasSensitiveOutput(response)).toBe(true);
+    const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
+    const obfuscated = response.replace(key, obfuscatedKey);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			for (const { text, token } of [{ text: response, token: key }, { text: obfuscated, token: obfuscatedKey }]) {
-				const context = buildNamingRequestContext([], promptAt(text, token, tokenStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      for (const { text, token } of [
+        { text: response, token: key },
+        { text: obfuscated, token: obfuscatedKey },
+      ]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(text, token, tokenStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const omittedKey = buildNamingRequestContext([], promptAt(responses[0]!, key, prefixLength + 5));
-	expect(omittedKey.hasSensitiveBoundary()).toBe(false);
+  const omittedKey = buildNamingRequestContext(
+    [],
+    promptAt(responses[0]!, key, prefixLength + 5),
+  );
+  expect(omittedKey.hasSensitiveBoundary()).toBe(false);
 
-	const nearMisses = [
-		`{"resourceKey":"${shortKey}"}`,
-		`{"resourceKey":"${longKey}"}`,
-		`{"resourceKeyId":"${key}"}`,
-		`{"notresourceKey":"${key}"}`,
-		`resourceKey=${key}`,
-		`discussion of resourceKey ${key}`,
-	];
-	for (const value of nearMisses) {
-		expect(hasSensitiveNamingContext(value)).toBe(false);
-		expect(hasSensitiveOutput(value)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			expect(buildNamingRequestContext([], promptAt(value, key, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    `{"resourceKey":"${shortKey}"}`,
+    `{"resourceKey":"${longKey}"}`,
+    `{"resourceKeyId":"${key}"}`,
+    `{"notresourceKey":"${key}"}`,
+    `resourceKey=${key}`,
+    `discussion of resourceKey ${key}`,
+  ];
+  for (const value of nearMisses) {
+    expect(hasSensitiveNamingContext(value)).toBe(false);
+    expect(hasSensitiveOutput(value)).toBe(false);
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(value, key, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens MEGA file and folder share-link keys across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const fileKey = "A".repeat(43);
-	const folderKey = "B".repeat(22);
-	const values = [
-		{ url: `https://mega.nz/file/abcdefgh#${fileKey}`, key: fileKey },
-		{ url: `https://www.mega.co.nz/#!abcdefgh!${fileKey}`, key: fileKey },
-		{ url: `https://mega.co.nz/folder/abcdefgh#${folderKey}`, key: folderKey },
-		{ url: `https://www.mega.nz/#F!abcdefgh!${folderKey}`, key: folderKey },
-	];
-	const promptAt = (url: string, key: string, start: number) => {
-		const urlStart = start - url.indexOf(key);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const fileKey = "A".repeat(43);
+  const folderKey = "B".repeat(22);
+  const values = [
+    { url: `https://mega.nz/file/abcdefgh#${fileKey}`, key: fileKey },
+    { url: `https://www.mega.co.nz/#!abcdefgh!${fileKey}`, key: fileKey },
+    { url: `https://mega.co.nz/folder/abcdefgh#${folderKey}`, key: folderKey },
+    { url: `https://www.mega.nz/#F!abcdefgh!${folderKey}`, key: folderKey },
+  ];
+  const promptAt = (url: string, key: string, start: number) => {
+    const urlStart = start - url.indexOf(key);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, key } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(key, `${key.slice(0, Math.floor(key.length / 2))}\u200b${key.slice(Math.floor(key.length / 2))}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, key } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(
+      key,
+      `${key.slice(0, Math.floor(key.length / 2))}\u200b${key.slice(Math.floor(key.length / 2))}`,
+    );
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(url, key, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-		const obfuscatedKey = `${key.slice(0, Math.floor(key.length / 2))}\u200b${key.slice(Math.floor(key.length / 2))}`;
-		const obfuscatedContext = buildNamingRequestContext([], promptAt(obfuscated, obfuscatedKey, prefixLength - 11));
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
-		const omittedKey = buildNamingRequestContext([], promptAt(url, key, prefixLength + 5));
-		expect(omittedKey.hasSensitiveBoundary()).toBe(false);
-	}
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, key, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+    const obfuscatedKey = `${key.slice(0, Math.floor(key.length / 2))}\u200b${key.slice(Math.floor(key.length / 2))}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedKey, prefixLength - 11),
+    );
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    const omittedKey = buildNamingRequestContext(
+      [],
+      promptAt(url, key, prefixLength + 5),
+    );
+    expect(omittedKey.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const nearMisses = [
-		`https://mega.nz/file/abcdefgh#${"A".repeat(42)}`,
-		`https://mega.nz/file/abcdefgh#${"A".repeat(44)}`,
-		`https://mega.nz/folder/abcdefgh#${"B".repeat(21)}`,
-		`https://mega.nz/folder/abcdefgh#${"B".repeat(23)}`,
-		`https://mega.nz/file/abcdefg#${fileKey}`,
-		`https://mega.nz.evil.test/file/abcdefgh#${fileKey}`,
-		`https://files.example.test/file/abcdefgh#${fileKey}`,
-		`https://mega.nz/file/abcdefgh?key=${fileKey}`,
-		`https://mega.nz/folder/abcdefgh#${fileKey}`,
-		`discussion of MEGA share keys ${fileKey}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-	}
+  const nearMisses = [
+    `https://mega.nz/file/abcdefgh#${"A".repeat(42)}`,
+    `https://mega.nz/file/abcdefgh#${"A".repeat(44)}`,
+    `https://mega.nz/folder/abcdefgh#${"B".repeat(21)}`,
+    `https://mega.nz/folder/abcdefgh#${"B".repeat(23)}`,
+    `https://mega.nz/file/abcdefg#${fileKey}`,
+    `https://mega.nz.evil.test/file/abcdefgh#${fileKey}`,
+    `https://files.example.test/file/abcdefgh#${fileKey}`,
+    `https://mega.nz/file/abcdefgh?key=${fileKey}`,
+    `https://mega.nz/folder/abcdefgh#${fileKey}`,
+    `discussion of MEGA share keys ${fileKey}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+  }
 });
 
 test("screens Proton Drive share-link passwords across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const keys = [`${"A".repeat(5)}_-${"A".repeat(5)}`, "B".repeat(12)];
-	const values = [
-		{ url: `https://drive.proton.me/urls/sharetoken#${keys[0]}`, key: keys[0]! },
-		{ url: `https://drive.protonmail.com/urls/sharedlink#${keys[1]}`, key: keys[1]! },
-	];
-	const promptAt = (url: string, key: string, start: number) => {
-		const urlStart = start - url.indexOf(key);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const keys = [`${"A".repeat(5)}_-${"A".repeat(5)}`, "B".repeat(12)];
+  const values = [
+    {
+      url: `https://drive.proton.me/urls/sharetoken#${keys[0]}`,
+      key: keys[0]!,
+    },
+    {
+      url: `https://drive.protonmail.com/urls/sharedlink#${keys[1]}`,
+      key: keys[1]!,
+    },
+  ];
+  const promptAt = (url: string, key: string, start: number) => {
+    const urlStart = start - url.indexOf(key);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, key } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(key, `${key.slice(0, 6)}\u200b${key.slice(6)}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, key } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(
+      key,
+      `${key.slice(0, 6)}\u200b${key.slice(6)}`,
+    );
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(url, key, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, key, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const obfuscatedKey = `${key.slice(0, 6)}\u200b${key.slice(6)}`;
-		const obfuscatedContext = buildNamingRequestContext(
-			[], promptAt(obfuscated, obfuscatedKey, prefixLength - 11),
-		);
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
-		expect(buildNamingRequestContext([], promptAt(url, key, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
-	}
+    const obfuscatedKey = `${key.slice(0, 6)}\u200b${key.slice(6)}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedKey, prefixLength - 11),
+    );
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(url, key, prefixLength + 5),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 
-	const key = values[0]!.key;
-	const nearMisses = [
-		`https://drive.proton.me/urls/sharetoken#${key.slice(1)}`,
-		`https://drive.proton.me/urls/sharetoken#${key}X`,
-		`https://drive.proton.me/urls/short#${key}`,
-		`https://drive.proton.me.evil.test/urls/sharetoken#${key}`,
-		`https://mail.proton.me/urls/sharetoken#${key}`,
-		`https://drive.proton.me/file/sharetoken#${key}`,
-		`https://drive.proton.me/urls/sharetoken?key=${key}`,
-		`https://drive.proton.me/urls/sharetoken`,
-		`discussion of Proton Drive share links ${key}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			expect(buildNamingRequestContext([], promptAt(url, key, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const key = values[0]!.key;
+  const nearMisses = [
+    `https://drive.proton.me/urls/sharetoken#${key.slice(1)}`,
+    `https://drive.proton.me/urls/sharetoken#${key}X`,
+    `https://drive.proton.me/urls/short#${key}`,
+    `https://drive.proton.me.evil.test/urls/sharetoken#${key}`,
+    `https://mail.proton.me/urls/sharetoken#${key}`,
+    `https://drive.proton.me/file/sharetoken#${key}`,
+    `https://drive.proton.me/urls/sharetoken?key=${key}`,
+    `https://drive.proton.me/urls/sharetoken`,
+    `discussion of Proton Drive share links ${key}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, key, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens GoFile shared-link IDs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const values = [
-		{ url: "https://gofile.io/d/SXwLDt", id: "SXwLDt" },
-		{ url: "https://www.gofile.io/d/AbC123?lang=en", id: "AbC123" },
-	];
-	const promptAt = (text: string, id: string, start: number) => {
-		const textStart = start - text.indexOf(id);
-		const prefix = `${"x".repeat(textStart - 1)} `;
-		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const values = [
+    { url: "https://gofile.io/d/SXwLDt", id: "SXwLDt" },
+    { url: "https://www.gofile.io/d/AbC123?lang=en", id: "AbC123" },
+  ];
+  const promptAt = (text: string, id: string, start: number) => {
+    const textStart = start - text.indexOf(id);
+    const prefix = `${"x".repeat(textStart - 1)} `;
+    return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+  };
 
-	for (const { url, id } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedId = `${id.slice(0, 3)}\u200b${id.slice(3)}`;
-		const obfuscated = url.replace(id, obfuscatedId);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, id } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedId = `${id.slice(0, 3)}\u200b${id.slice(3)}`;
+    const obfuscated = url.replace(id, obfuscatedId);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, id },
-			{ text: obfuscated, id: obfuscatedId },
-		]) {
-			for (const idStart of [prefixLength - 2, suffixStart - candidate.id.length + 2]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.id, idStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
+    for (const candidate of [
+      { text: url, id },
+      { text: obfuscated, id: obfuscatedId },
+    ]) {
+      for (const idStart of [
+        prefixLength - 2,
+        suffixStart - candidate.id.length + 2,
+      ]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.id, idStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
 
-		const historyContent = `${"x".repeat(996 - url.indexOf(id))} ${url} trailing text`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(996 - url.indexOf(id))} ${url} trailing text`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const id = values[0]!.id;
-	const nearMisses = [
-		`https://gofile.io/d/${id.slice(1)}`,
-		`https://gofile.io/d/${id}a`,
-		`https://gofile.io.evil.test/d/${id}`,
-		`https://cdn.gofile.io/d/${id}`,
-		`https://gofile.io/d/${id}/extra`,
-		`https://gofile.io/download/${id}`,
-		`https://example.test/d/${id}`,
-		`discussion of a GoFile link ${id}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		expect(buildNamingRequestContext([], promptAt(url, id, prefixLength - 2)).hasSensitiveBoundary()).toBe(false);
-		expect(buildNamingRequestContext([], promptAt(url, id, suffixStart - id.length + 2)).hasSensitiveBoundary()).toBe(false);
-	}
+  const id = values[0]!.id;
+  const nearMisses = [
+    `https://gofile.io/d/${id.slice(1)}`,
+    `https://gofile.io/d/${id}a`,
+    `https://gofile.io.evil.test/d/${id}`,
+    `https://cdn.gofile.io/d/${id}`,
+    `https://gofile.io/d/${id}/extra`,
+    `https://gofile.io/download/${id}`,
+    `https://example.test/d/${id}`,
+    `discussion of a GoFile link ${id}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(url, id, prefixLength - 2),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(url, id, suffixStart - id.length + 2),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 
-	expect(buildNamingRequestContext([], promptAt(values[0]!.url, id, prefixLength + 2)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(values[0]!.url, id, prefixLength + 2),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Wormhole share keys across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const keys = [`${"Ab3_-X".repeat(3)}QWER`, `${"A1b2_-".repeat(3)}QWER`];
-	const values = [
-		{ url: `https://wormhole.app/Test42#${keys[0]}`, key: keys[0]! },
-		{ url: `https://www.wormhole.app/Fake99#${keys[1]}`, key: keys[1]! },
-	];
-	const promptAt = (text: string, key: string, start: number) => {
-		const textStart = start - text.indexOf(key);
-		const prefix = `${"x".repeat(textStart - 1)} `;
-		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const keys = [`${"Ab3_-X".repeat(3)}QWER`, `${"A1b2_-".repeat(3)}QWER`];
+  const values = [
+    { url: `https://wormhole.app/Test42#${keys[0]}`, key: keys[0]! },
+    { url: `https://www.wormhole.app/Fake99#${keys[1]}`, key: keys[1]! },
+  ];
+  const promptAt = (text: string, key: string, start: number) => {
+    const textStart = start - text.indexOf(key);
+    const prefix = `${"x".repeat(textStart - 1)} `;
+    return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+  };
 
-	for (const { url, key } of values) {
-		expect(key).toHaveLength(22);
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedKey = `${key.slice(0, 11)}\u200b${key.slice(11)}`;
-		const obfuscated = url.replace(key, obfuscatedKey);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, key } of values) {
+    expect(key).toHaveLength(22);
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedKey = `${key.slice(0, 11)}\u200b${key.slice(11)}`;
+    const obfuscated = url.replace(key, obfuscatedKey);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, key },
-			{ text: obfuscated, key: obfuscatedKey },
-		]) {
-			for (const keyStart of [prefixLength - 4, suffixStart - candidate.key.length + 4]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.key, keyStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
+    for (const candidate of [
+      { text: url, key },
+      { text: obfuscated, key: obfuscatedKey },
+    ]) {
+      for (const keyStart of [
+        prefixLength - 4,
+        suffixStart - candidate.key.length + 4,
+      ]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.key, keyStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
 
-		const historyContent = `${"x".repeat(996 - url.indexOf(key))} ${url} trailing text`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(996 - url.indexOf(key))} ${url} trailing text`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const { url, key } = values[0]!;
-	const nearMisses = [
-		`https://wormhole.app/Test42#${key.slice(1)}`,
-		`https://wormhole.app/Test42#${key}a`,
-		`https://wormhole.app/Test4#${key}`,
-		`https://wormhole.app/Test420#${key}`,
-		`https://wormhole.app.evil.test/Test42#${key}`,
-		`https://files.wormhole.app/Test42#${key}`,
-		`https://wormhole.app/share/Test42#${key}`,
-		`https://wormhole.app/Test42`,
-		`discussion of a Wormhole share key ${key}`,
-	];
-	for (const candidate of nearMisses) {
-		expect(hasSensitiveNamingContext(candidate)).toBe(false);
-		expect(hasSensitiveOutput(candidate)).toBe(false);
-		expect(buildNamingRequestContext([], promptAt(candidate, key, prefixLength - 4)).hasSensitiveBoundary()).toBe(false);
-		expect(buildNamingRequestContext([], promptAt(candidate, key, suffixStart - key.length + 4)).hasSensitiveBoundary()).toBe(false);
-	}
+  const { url, key } = values[0]!;
+  const nearMisses = [
+    `https://wormhole.app/Test42#${key.slice(1)}`,
+    `https://wormhole.app/Test42#${key}a`,
+    `https://wormhole.app/Test4#${key}`,
+    `https://wormhole.app/Test420#${key}`,
+    `https://wormhole.app.evil.test/Test42#${key}`,
+    `https://files.wormhole.app/Test42#${key}`,
+    `https://wormhole.app/share/Test42#${key}`,
+    `https://wormhole.app/Test42`,
+    `discussion of a Wormhole share key ${key}`,
+  ];
+  for (const candidate of nearMisses) {
+    expect(hasSensitiveNamingContext(candidate)).toBe(false);
+    expect(hasSensitiveOutput(candidate)).toBe(false);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(candidate, key, prefixLength - 4),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(candidate, key, suffixStart - key.length + 4),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 
-	expect(buildNamingRequestContext([], promptAt(url, key, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(url, key, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Filemail transfer IDs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const values = [
-		{ url: "https://www.filemail.com/d/ifyvssdfbjbnzni", id: "ifyvssdfbjbnzni" },
-		{ url: "https://filemail.com/d/qwertyuiopasdfg?source=chat", id: "qwertyuiopasdfg" },
-	];
-	const promptAt = (text: string, id: string, start: number) => {
-		const textStart = start - text.indexOf(id);
-		const prefix = `${"x".repeat(textStart - 1)} `;
-		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const values = [
+    {
+      url: "https://www.filemail.com/d/ifyvssdfbjbnzni",
+      id: "ifyvssdfbjbnzni",
+    },
+    {
+      url: "https://filemail.com/d/qwertyuiopasdfg?source=chat",
+      id: "qwertyuiopasdfg",
+    },
+  ];
+  const promptAt = (text: string, id: string, start: number) => {
+    const textStart = start - text.indexOf(id);
+    const prefix = `${"x".repeat(textStart - 1)} `;
+    return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+  };
 
-	for (const { url, id } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedId = `${id.slice(0, 7)}\u200b${id.slice(7)}`;
-		const obfuscated = url.replace(id, obfuscatedId);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, id } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedId = `${id.slice(0, 7)}\u200b${id.slice(7)}`;
+    const obfuscated = url.replace(id, obfuscatedId);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, id },
-			{ text: obfuscated, id: obfuscatedId },
-		]) {
-			for (const idStart of [prefixLength - 4, suffixStart - candidate.id.length + 4]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.id, idStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
+    for (const candidate of [
+      { text: url, id },
+      { text: obfuscated, id: obfuscatedId },
+    ]) {
+      for (const idStart of [
+        prefixLength - 4,
+        suffixStart - candidate.id.length + 4,
+      ]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.id, idStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
 
-		const historyContent = `${"x".repeat(996 - url.indexOf(id))} ${url} trailing text`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(996 - url.indexOf(id))} ${url} trailing text`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const id = values[0]!.id;
-	const nearMisses = [
-		`https://www.filemail.com/d/${id.slice(1)}`,
-		`https://www.filemail.com/d/${id}a`,
-		`https://filemail.com.evil.test/d/${id}`,
-		`https://files.filemail.com/d/${id}`,
-		`https://www.filemail.com/d/${id}/extra`,
-		`https://www.filemail.com/download/${id}`,
-		`https://example.test/d/${id}`,
-		`discussion of a Filemail transfer ${id}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		expect(buildNamingRequestContext([], promptAt(url, id, prefixLength - 4)).hasSensitiveBoundary()).toBe(false);
-		expect(buildNamingRequestContext([], promptAt(url, id, suffixStart - id.length + 4)).hasSensitiveBoundary()).toBe(false);
-	}
+  const id = values[0]!.id;
+  const nearMisses = [
+    `https://www.filemail.com/d/${id.slice(1)}`,
+    `https://www.filemail.com/d/${id}a`,
+    `https://filemail.com.evil.test/d/${id}`,
+    `https://files.filemail.com/d/${id}`,
+    `https://www.filemail.com/d/${id}/extra`,
+    `https://www.filemail.com/download/${id}`,
+    `https://example.test/d/${id}`,
+    `discussion of a Filemail transfer ${id}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(url, id, prefixLength - 4),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(url, id, suffixStart - id.length + 4),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 
-	expect(buildNamingRequestContext([], promptAt(values[0]!.url, id, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(values[0]!.url, id, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens SwissTransfer share-link UUIDs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const values = [
-		{
-			url: "https://www.swisstransfer.com/d/a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-			uuid: "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-		},
-		{
-			url: "https://swisstransfer.com/de/dl/018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b?lang=fr",
-			uuid: "018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b",
-		},
-		{
-			url: "https://swisstransfer.infomaniak.com/dl/7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70/",
-			uuid: "7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70",
-		},
-	];
-	const promptAt = (text: string, uuid: string, start: number) => {
-		const textStart = start - text.indexOf(uuid);
-		const prefix = `${"x".repeat(textStart - 1)} `;
-		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const values = [
+    {
+      url: "https://www.swisstransfer.com/d/a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      uuid: "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+    },
+    {
+      url: "https://swisstransfer.com/de/dl/018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b?lang=fr",
+      uuid: "018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b",
+    },
+    {
+      url: "https://swisstransfer.infomaniak.com/dl/7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70/",
+      uuid: "7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70",
+    },
+  ];
+  const promptAt = (text: string, uuid: string, start: number) => {
+    const textStart = start - text.indexOf(uuid);
+    const prefix = `${"x".repeat(textStart - 1)} `;
+    return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+  };
 
-	for (const { url, uuid } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedUuid = `${uuid.slice(0, 18)}\u200b${uuid.slice(18)}`;
-		const obfuscated = url.replace(uuid, obfuscatedUuid);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, uuid } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedUuid = `${uuid.slice(0, 18)}\u200b${uuid.slice(18)}`;
+    const obfuscated = url.replace(uuid, obfuscatedUuid);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, uuid },
-			{ text: obfuscated, uuid: obfuscatedUuid },
-		]) {
-			for (const uuidStart of [prefixLength - 4, suffixStart - candidate.uuid.length + 4]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.uuid, uuidStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
+    for (const candidate of [
+      { text: url, uuid },
+      { text: obfuscated, uuid: obfuscatedUuid },
+    ]) {
+      for (const uuidStart of [
+        prefixLength - 4,
+        suffixStart - candidate.uuid.length + 4,
+      ]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.uuid, uuidStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
 
-		const historyContent = `${"x".repeat(996 - url.indexOf(uuid))} ${url} trailing text`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(996 - url.indexOf(uuid))} ${url} trailing text`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const uuid = values[0]!.uuid;
-	const nearMisses = [
-		{ url: `https://www.swisstransfer.com/d/${uuid.replaceAll("-", "")}`, uuid: uuid.replaceAll("-", "") },
-		{ url: `https://www.swisstransfer.com/d/${uuid.slice(1)}`, uuid: uuid.slice(1) },
-		{ url: `https://www.swisstransfer.com/d/${uuid}a`, uuid: `${uuid}a` },
-		{ url: `https://www.swisstransfer.com.evil.test/d/${uuid}`, uuid },
-		{ url: `https://files.swisstransfer.com/d/${uuid}`, uuid },
-		{ url: `https://swisstransfer.com/d/${uuid}/extra`, uuid },
-		{ url: `https://swisstransfer.com/download/${uuid}`, uuid },
-		{ url: `https://example.test/d/${uuid}`, uuid },
-		{ url: `discussion of a SwissTransfer link ${uuid}`, uuid },
-	];
-	for (const { url, uuid: nearMissUuid } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const uuidStart of [prefixLength - 4, suffixStart - nearMissUuid.length + 4]) {
-			expect(buildNamingRequestContext([], promptAt(url, nearMissUuid, uuidStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const uuid = values[0]!.uuid;
+  const nearMisses = [
+    {
+      url: `https://www.swisstransfer.com/d/${uuid.replaceAll("-", "")}`,
+      uuid: uuid.replaceAll("-", ""),
+    },
+    {
+      url: `https://www.swisstransfer.com/d/${uuid.slice(1)}`,
+      uuid: uuid.slice(1),
+    },
+    { url: `https://www.swisstransfer.com/d/${uuid}a`, uuid: `${uuid}a` },
+    { url: `https://www.swisstransfer.com.evil.test/d/${uuid}`, uuid },
+    { url: `https://files.swisstransfer.com/d/${uuid}`, uuid },
+    { url: `https://swisstransfer.com/d/${uuid}/extra`, uuid },
+    { url: `https://swisstransfer.com/download/${uuid}`, uuid },
+    { url: `https://example.test/d/${uuid}`, uuid },
+    { url: `discussion of a SwissTransfer link ${uuid}`, uuid },
+  ];
+  for (const { url, uuid: nearMissUuid } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const uuidStart of [
+      prefixLength - 4,
+      suffixStart - nearMissUuid.length + 4,
+    ]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, nearMissUuid, uuidStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 
-	expect(buildNamingRequestContext([], promptAt(values[0]!.url, uuid, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(values[0]!.url, uuid, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Box shared-link IDs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const ids = ["a".repeat(20), "b".repeat(32), "c".repeat(12)];
-	const values = [
-		{ url: `https://www.box.com/s/${ids[0]}?utm_source=docs`, id: ids[0]! },
-		{ url: `https://cloud.app.box.com/s/${ids[1]}`, id: ids[1]! },
-		{ url: `https://app.box.com/s/${ids[2]}`, id: ids[2]! },
-	];
-	const promptAt = (url: string, id: string, start: number) => {
-		const urlStart = start - url.indexOf(id);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const ids = ["a".repeat(20), "b".repeat(32), "c".repeat(12)];
+  const values = [
+    { url: `https://www.box.com/s/${ids[0]}?utm_source=docs`, id: ids[0]! },
+    { url: `https://cloud.app.box.com/s/${ids[1]}`, id: ids[1]! },
+    { url: `https://app.box.com/s/${ids[2]}`, id: ids[2]! },
+  ];
+  const promptAt = (url: string, id: string, start: number) => {
+    const urlStart = start - url.indexOf(id);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, id } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(id, `${id.slice(0, 10)}\u200b${id.slice(10)}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, id } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(
+      id,
+      `${id.slice(0, 10)}\u200b${id.slice(10)}`,
+    );
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(url, id, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, id, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const obfuscatedId = `${id.slice(0, 10)}\u200b${id.slice(10)}`;
-		const obfuscatedContext = buildNamingRequestContext(
-			[], promptAt(obfuscated, obfuscatedId, prefixLength - 11),
-		);
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
-		expect(buildNamingRequestContext([], promptAt(url, id, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
-	}
+    const obfuscatedId = `${id.slice(0, 10)}\u200b${id.slice(10)}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedId, prefixLength - 11),
+    );
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(url, id, prefixLength + 5),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 
-	const id = ids[0]!;
-	const nearMisses = [
-		`https://app.box.com/s/${"a".repeat(11)}`,
-		`https://app.box.com/s/${"a".repeat(65)}`,
-		`https://app.box.com.evil.test/s/${id}`,
-		`https://example.box.com/s/${id}`,
-		`https://box.com/s/${id}`,
-		`https://app.box.com/file/${id}`,
-		`https://app.box.com/s/?id=${id}`,
-		"https://app.box.com/s/",
-		`discussion of Box shared links ${id}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			expect(buildNamingRequestContext([], promptAt(url, id, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const id = ids[0]!;
+  const nearMisses = [
+    `https://app.box.com/s/${"a".repeat(11)}`,
+    `https://app.box.com/s/${"a".repeat(65)}`,
+    `https://app.box.com.evil.test/s/${id}`,
+    `https://example.box.com/s/${id}`,
+    `https://box.com/s/${id}`,
+    `https://app.box.com/file/${id}`,
+    `https://app.box.com/s/?id=${id}`,
+    "https://app.box.com/s/",
+    `discussion of Box shared links ${id}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, id, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens legacy OneDrive shared-link auth keys across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const keys = ["1201919!12921!1", "!KLMNOPQRST_uvWX"];
-	const values = [
-		{
-			url: `https://onedrive.live.com/redir?resid=1231244193912!12&authKey=${keys[0]}`,
-			key: keys[0]!,
-		},
-		{
-			url: `https://www.onedrive.live.com/embed?cid=example&authkey=${keys[1]}`,
-			key: keys[1]!,
-		},
-	];
-	const promptAt = (url: string, key: string, start: number) => {
-		const urlStart = start - url.indexOf(key);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const keys = ["1201919!12921!1", "!KLMNOPQRST_uvWX"];
+  const values = [
+    {
+      url: `https://onedrive.live.com/redir?resid=1231244193912!12&authKey=${keys[0]}`,
+      key: keys[0]!,
+    },
+    {
+      url: `https://www.onedrive.live.com/embed?cid=example&authkey=${keys[1]}`,
+      key: keys[1]!,
+    },
+  ];
+  const promptAt = (url: string, key: string, start: number) => {
+    const urlStart = start - url.indexOf(key);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, key } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(key, `${key.slice(0, 7)}\u200b${key.slice(7)}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, key } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(
+      key,
+      `${key.slice(0, 7)}\u200b${key.slice(7)}`,
+    );
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(url, key, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, key, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const obfuscatedKey = `${key.slice(0, 7)}\u200b${key.slice(7)}`;
-		const obfuscatedContext = buildNamingRequestContext(
-			[], promptAt(obfuscated, obfuscatedKey, prefixLength - 11),
-		);
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
-		expect(buildNamingRequestContext([], promptAt(url, key, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
-	}
+    const obfuscatedKey = `${key.slice(0, 7)}\u200b${key.slice(7)}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedKey, prefixLength - 11),
+    );
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(url, key, prefixLength + 5),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 
-	const key = keys[0]!;
-	const nearMisses = [
-		`https://onedrive.live.com/redir?resid=id&authkey=${"a".repeat(14)}`,
-		`https://onedrive.live.com.evil.test/redir?resid=id&authkey=${key}`,
-		`https://onedrive.live.com/redir.evil.test?resid=id&authkey=${key}`,
-		`https://onedrive.live.com/download?resid=id&authkey=${key}`,
-		`https://1drv.ms/redir?resid=id&authkey=${key}`,
-		`https://example.test/redir?resid=id&authkey=${key}`,
-		`https://onedrive.live.com/redir?resid=id&xauthkey=${key}`,
-		`discussion of OneDrive authkey=${key}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			expect(buildNamingRequestContext([], promptAt(url, key, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const key = keys[0]!;
+  const nearMisses = [
+    `https://onedrive.live.com/redir?resid=id&authkey=${"a".repeat(14)}`,
+    `https://onedrive.live.com.evil.test/redir?resid=id&authkey=${key}`,
+    `https://onedrive.live.com/redir.evil.test?resid=id&authkey=${key}`,
+    `https://onedrive.live.com/download?resid=id&authkey=${key}`,
+    `https://1drv.ms/redir?resid=id&authkey=${key}`,
+    `https://example.test/redir?resid=id&authkey=${key}`,
+    `https://onedrive.live.com/redir?resid=id&xauthkey=${key}`,
+    `discussion of OneDrive authkey=${key}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, key, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens OneDrive short-link IDs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const ids = ["A".repeat(32), "0123456789abcdef0123456789abcdef"];
-	const values = [
-		{ url: `https://1drv.ms/${ids[0]}?e=example`, id: ids[0]! },
-		{ url: `https://1drv.ms/${ids[1]}`, id: ids[1]! },
-	];
-	const promptAt = (url: string, id: string, start: number) => {
-		const urlStart = start - url.indexOf(id);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const ids = ["A".repeat(32), "0123456789abcdef0123456789abcdef"];
+  const values = [
+    { url: `https://1drv.ms/${ids[0]}?e=example`, id: ids[0]! },
+    { url: `https://1drv.ms/${ids[1]}`, id: ids[1]! },
+  ];
+  const promptAt = (url: string, id: string, start: number) => {
+    const urlStart = start - url.indexOf(id);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, id } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscated = url.replace(id, `${id.slice(0, 16)}\u200b${id.slice(16)}`);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, id } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscated = url.replace(
+      id,
+      `${id.slice(0, 16)}\u200b${id.slice(16)}`,
+    );
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(url, id, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, id, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const obfuscatedId = `${id.slice(0, 16)}\u200b${id.slice(16)}`;
-		const obfuscatedContext = buildNamingRequestContext(
-			[], promptAt(obfuscated, obfuscatedId, prefixLength - 11),
-		);
-		expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
-		expect(buildNamingRequestContext([], promptAt(url, id, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
-	}
+    const obfuscatedId = `${id.slice(0, 16)}\u200b${id.slice(16)}`;
+    const obfuscatedContext = buildNamingRequestContext(
+      [],
+      promptAt(obfuscated, obfuscatedId, prefixLength - 11),
+    );
+    expect(obfuscatedContext.hasSensitiveBoundary()).toBe(true);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(url, id, prefixLength + 5),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 
-	const id = ids[0]!;
-	const nearMisses = [
-		`https://1drv.ms/${id.slice(1)}`,
-		`https://1drv.ms/${id}0`,
-		`https://1drv.ms.evil.test/${id}`,
-		`https://evil.1drv.ms/${id}`,
-		`https://example.test/${id}`,
-		`discussion of OneDrive share ID ${id}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			expect(buildNamingRequestContext([], promptAt(url, id, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const id = ids[0]!;
+  const nearMisses = [
+    `https://1drv.ms/${id.slice(1)}`,
+    `https://1drv.ms/${id}0`,
+    `https://1drv.ms.evil.test/${id}`,
+    `https://evil.1drv.ms/${id}`,
+    `https://example.test/${id}`,
+    `discussion of OneDrive share ID ${id}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, id, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens OneDrive s! short-link share keys across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const values = [
-		{
-			url: `https://1drv.ms/f/s!${"A1b2".repeat(7)}?e=example`,
-			key: "A1b2".repeat(7),
-		},
-		{
-			url: `https://1drv.ms/u/s!${"ab_CD-".repeat(4)}`,
-			key: "ab_CD-".repeat(4),
-		},
-	];
-	const promptAt = (url: string, key: string, start: number) => {
-		const urlStart = start - url.indexOf(key);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const values = [
+    {
+      url: `https://1drv.ms/f/s!${"A1b2".repeat(7)}?e=example`,
+      key: "A1b2".repeat(7),
+    },
+    {
+      url: `https://1drv.ms/u/s!${"ab_CD-".repeat(4)}`,
+      key: "ab_CD-".repeat(4),
+    },
+  ];
+  const promptAt = (url: string, key: string, start: number) => {
+    const urlStart = start - url.indexOf(key);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, key } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedKey = `${key.slice(0, 12)}\u200b${key.slice(12)}`;
-		const obfuscated = url.replace(key, obfuscatedKey);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, key } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedKey = `${key.slice(0, 12)}\u200b${key.slice(12)}`;
+    const obfuscated = url.replace(key, obfuscatedKey);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, key },
-			{ text: obfuscated, key: obfuscatedKey },
-		]) {
-			for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.key, tokenStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
+    for (const candidate of [
+      { text: url, key },
+      { text: obfuscated, key: obfuscatedKey },
+    ]) {
+      for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.key, tokenStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
 
-		const historyContent = `${"x".repeat(996 - url.indexOf(key))} ${url} trailing text`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(996 - url.indexOf(key))} ${url} trailing text`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const key = values[0]!.key;
-	const nearMisses = [
-		`https://1drv.ms/f/s!${key.slice(0, 19)}`,
-		`https://1drv.ms/f/s!${key}${"A".repeat(101)}`,
-		`https://1drv.ms.evil.test/f/s!${key}`,
-		`https://evil.1drv.ms/f/s!${key}`,
-		`https://1drv.ms/f/t!${key}`,
-		`https://1drv.ms/f/${key}`,
-		`https://example.test/f/s!${key}`,
-		`discussion of OneDrive share keys ${key}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - key.length + 11]) {
-			expect(buildNamingRequestContext([], promptAt(url, key, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const key = values[0]!.key;
+  const nearMisses = [
+    `https://1drv.ms/f/s!${key.slice(0, 19)}`,
+    `https://1drv.ms/f/s!${key}${"A".repeat(101)}`,
+    `https://1drv.ms.evil.test/f/s!${key}`,
+    `https://evil.1drv.ms/f/s!${key}`,
+    `https://1drv.ms/f/t!${key}`,
+    `https://1drv.ms/f/${key}`,
+    `https://example.test/f/s!${key}`,
+    `discussion of OneDrive share keys ${key}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [
+      prefixLength - 11,
+      suffixStart - key.length + 11,
+    ]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, key, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 
-	expect(buildNamingRequestContext([], promptAt(values[0]!.url, key, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(values[0]!.url, key, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Microsoft Graph OneDrive share tokens across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const tokens = ["A".repeat(48), "ab_CD-".repeat(8)];
-	const urls = [
-		`https://graph.microsoft.com/v1.0/shares/u!${tokens[0]}`,
-		`https://graph.microsoft.com/beta/shares/u!${tokens[1]}/driveItem?$select=id`,
-	];
-	const promptAt = (url: string, token: string, start: number) => {
-		const urlStart = start - url.indexOf(token);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const tokens = ["A".repeat(48), "ab_CD-".repeat(8)];
+  const urls = [
+    `https://graph.microsoft.com/v1.0/shares/u!${tokens[0]}`,
+    `https://graph.microsoft.com/beta/shares/u!${tokens[1]}/driveItem?$select=id`,
+  ];
+  const promptAt = (url: string, token: string, start: number) => {
+    const urlStart = start - url.indexOf(token);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const [index, url] of urls.entries()) {
-		const token = tokens[index]!;
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedToken = `${token.slice(0, 16)}\u200b${token.slice(16)}`;
-		const obfuscated = url.replace(token, obfuscatedToken);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const [index, url] of urls.entries()) {
+    const token = tokens[index]!;
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedToken = `${token.slice(0, 16)}\u200b${token.slice(16)}`;
+    const obfuscated = url.replace(token, obfuscatedToken);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			for (const { text, value } of [{ text: url, value: token }, { text: obfuscated, value: obfuscatedToken }]) {
-				const context = buildNamingRequestContext([], promptAt(text, value, tokenStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      for (const { text, value } of [
+        { text: url, value: token },
+        { text: obfuscated, value: obfuscatedToken },
+      ]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(text, value, tokenStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const omitted = buildNamingRequestContext([], promptAt(urls[0]!, tokens[0]!, prefixLength + 5));
-	expect(omitted.hasSensitiveBoundary()).toBe(false);
+  const omitted = buildNamingRequestContext(
+    [],
+    promptAt(urls[0]!, tokens[0]!, prefixLength + 5),
+  );
+  expect(omitted.hasSensitiveBoundary()).toBe(false);
 
-	const nearMisses = [
-		`https://graph.microsoft.com/v1.0/shares/u!${"a".repeat(23)}`,
-		`https://graph.microsoft.com/v1.0/shares/u!${"a".repeat(513)}`,
-		`https://graph.microsoft.com.evil.test/v1.0/shares/u!${tokens[0]}`,
-		`https://evil.graph.microsoft.com/v1.0/shares/u!${tokens[0]}`,
-		`https://example.test/v1.0/shares/u!${tokens[0]}`,
-		`https://graph.microsoft.com/v2.0/shares/u!${tokens[0]}`,
-		`https://graph.microsoft.com/v1.0/users/me/drive/sharedWithMe/u!${tokens[0]}`,
-		`https://graph.microsoft.com/v1.0/shares/${tokens[0]}`,
-		`discussion of an encoded OneDrive share token u!${tokens[0]}`,
-	];
-	for (const value of nearMisses) {
-		expect(hasSensitiveNamingContext(value)).toBe(false);
-		expect(hasSensitiveOutput(value)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			expect(buildNamingRequestContext([], promptAt(value, tokens[0]!, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    `https://graph.microsoft.com/v1.0/shares/u!${"a".repeat(23)}`,
+    `https://graph.microsoft.com/v1.0/shares/u!${"a".repeat(513)}`,
+    `https://graph.microsoft.com.evil.test/v1.0/shares/u!${tokens[0]}`,
+    `https://evil.graph.microsoft.com/v1.0/shares/u!${tokens[0]}`,
+    `https://example.test/v1.0/shares/u!${tokens[0]}`,
+    `https://graph.microsoft.com/v2.0/shares/u!${tokens[0]}`,
+    `https://graph.microsoft.com/v1.0/users/me/drive/sharedWithMe/u!${tokens[0]}`,
+    `https://graph.microsoft.com/v1.0/shares/${tokens[0]}`,
+    `discussion of an encoded OneDrive share token u!${tokens[0]}`,
+  ];
+  for (const value of nearMisses) {
+    expect(hasSensitiveNamingContext(value)).toBe(false);
+    expect(hasSensitiveOutput(value)).toBe(false);
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(value, tokens[0]!, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens WeTransfer short-link codes across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const values = [
-		{ url: "https://we.tl/t-aB3cD5eF7g", code: "aB3cD5eF7g" },
-		{ url: "https://we.tl/t-0123456789?utm_source=share", code: "0123456789" },
-	];
-	const promptAt = (text: string, code: string, start: number) => {
-		const textStart = start - text.indexOf(code);
-		const prefix = `${"x".repeat(textStart - 1)} `;
-		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const values = [
+    { url: "https://we.tl/t-aB3cD5eF7g", code: "aB3cD5eF7g" },
+    { url: "https://we.tl/t-0123456789?utm_source=share", code: "0123456789" },
+  ];
+  const promptAt = (text: string, code: string, start: number) => {
+    const textStart = start - text.indexOf(code);
+    const prefix = `${"x".repeat(textStart - 1)} `;
+    return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+  };
 
-	for (const { url, code } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedCode = `${code.slice(0, 5)}\u200b${code.slice(5)}`;
-		const obfuscated = url.replace(code, obfuscatedCode);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, code } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedCode = `${code.slice(0, 5)}\u200b${code.slice(5)}`;
+    const obfuscated = url.replace(code, obfuscatedCode);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, code },
-			{ text: obfuscated, code: obfuscatedCode },
-		]) {
-			for (const codeStart of [prefixLength - 4, suffixStart - candidate.code.length + 4]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.code, codeStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
+    for (const candidate of [
+      { text: url, code },
+      { text: obfuscated, code: obfuscatedCode },
+    ]) {
+      for (const codeStart of [
+        prefixLength - 4,
+        suffixStart - candidate.code.length + 4,
+      ]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.code, codeStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
 
-		const historyContent = `${"x".repeat(996 - url.indexOf(code))} ${url} trailing text`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(996 - url.indexOf(code))} ${url} trailing text`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const code = values[0]!.code;
-	const nearMisses = [
-		{ url: `https://we.tl/t-${code.slice(1)}`, code: code.slice(1) },
-		{ url: `https://we.tl/t-${code}A`, code: `${code}A` },
-		{ url: `https://we.tl.evil.test/t-${code}`, code },
-		{ url: `https://evil.we.tl/t-${code}`, code },
-		{ url: `https://we.tl/u-${code}`, code },
-		{ url: `https://example.test/t-${code}`, code },
-		{ url: `discussion of WeTransfer link code ${code}`, code },
-	];
-	for (const { url, code: nearMissCode } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const codeStart of [prefixLength - 4, suffixStart - nearMissCode.length + 4]) {
-			expect(buildNamingRequestContext([], promptAt(url, nearMissCode, codeStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const code = values[0]!.code;
+  const nearMisses = [
+    { url: `https://we.tl/t-${code.slice(1)}`, code: code.slice(1) },
+    { url: `https://we.tl/t-${code}A`, code: `${code}A` },
+    { url: `https://we.tl.evil.test/t-${code}`, code },
+    { url: `https://evil.we.tl/t-${code}`, code },
+    { url: `https://we.tl/u-${code}`, code },
+    { url: `https://example.test/t-${code}`, code },
+    { url: `discussion of WeTransfer link code ${code}`, code },
+  ];
+  for (const { url, code: nearMissCode } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const codeStart of [
+      prefixLength - 4,
+      suffixStart - nearMissCode.length + 4,
+    ]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, nearMissCode, codeStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 
-	expect(buildNamingRequestContext([], promptAt(values[0]!.url, code, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(values[0]!.url, code, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Zoom meeting passcodes in join URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const values = [
-		{
-			url: "https://us02web.zoom.us/j/12345678901?pwd=QWxwaGE3ODk=",
-			passcode: "QWxwaGE3ODk=",
-		},
-		{
-			url: "https://zoom.us/wc/join/987654321?from=direct&pwd=123456",
-			passcode: "123456",
-		},
-	];
-	const promptAt = (url: string, passcode: string, start: number) => {
-		const urlStart = start - url.indexOf(passcode);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const values = [
+    {
+      url: "https://us02web.zoom.us/j/12345678901?pwd=QWxwaGE3ODk=",
+      passcode: "QWxwaGE3ODk=",
+    },
+    {
+      url: "https://zoom.us/wc/join/987654321?from=direct&pwd=123456",
+      passcode: "123456",
+    },
+  ];
+  const promptAt = (url: string, passcode: string, start: number) => {
+    const urlStart = start - url.indexOf(passcode);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, passcode } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedPasscode = `${passcode.slice(0, 3)}\u200b${passcode.slice(3)}`;
-		const obfuscated = url.replace(passcode, obfuscatedPasscode);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, passcode } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedPasscode = `${passcode.slice(0, 3)}\u200b${passcode.slice(3)}`;
+    const obfuscated = url.replace(passcode, obfuscatedPasscode);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, value: passcode },
-			{ text: obfuscated, value: obfuscatedPasscode },
-		]) {
-			for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.value, tokenStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+    for (const candidate of [
+      { text: url, value: passcode },
+      { text: obfuscated, value: obfuscatedPasscode },
+    ]) {
+      for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.value, tokenStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const passcode = values[0]!.passcode;
-	const nearMisses = [
-		`https://us02web.zoom.us/j/12345678901?pwd=`,
-		"https://us02web.zoom.us/j/12345678901?pwd=abc",
-		`https://us02web.zoom.us/j/12345678901?from=direct&xpwd=${passcode}`,
-		`https://us02web.zoom.us/j/12345678901/extra?pwd=${passcode}`,
-		`https://us02web.zoom.us/j/12345678?pwd=${passcode}`,
-		`https://us02web.zoom.us/j/123456789012?pwd=${passcode}`,
-		`https://zoom.us.evil.test/j/12345678901?pwd=${passcode}`,
-		`https://evilzoom.us/j/12345678901?pwd=${passcode}`,
-		`https://zoom.us.example.test/j/12345678901?pwd=${passcode}`,
-		`https://example.test/j/12345678901?pwd=${passcode}`,
-		`https://zoom.us/meeting/12345678901?pwd=${passcode}`,
-		`https://zoom.us/j/not-a-meeting-id?pwd=${passcode}`,
-		`https://zoom.us/j/12345678901`,
-		`discussion of a Zoom passcode pwd=${passcode}`,
-	];
-	for (const url of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		if (!url.includes(passcode)) continue;
-		for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
-			expect(buildNamingRequestContext([], promptAt(url, passcode, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const passcode = values[0]!.passcode;
+  const nearMisses = [
+    `https://us02web.zoom.us/j/12345678901?pwd=`,
+    "https://us02web.zoom.us/j/12345678901?pwd=abc",
+    `https://us02web.zoom.us/j/12345678901?from=direct&xpwd=${passcode}`,
+    `https://us02web.zoom.us/j/12345678901/extra?pwd=${passcode}`,
+    `https://us02web.zoom.us/j/12345678?pwd=${passcode}`,
+    `https://us02web.zoom.us/j/123456789012?pwd=${passcode}`,
+    `https://zoom.us.evil.test/j/12345678901?pwd=${passcode}`,
+    `https://evilzoom.us/j/12345678901?pwd=${passcode}`,
+    `https://zoom.us.example.test/j/12345678901?pwd=${passcode}`,
+    `https://example.test/j/12345678901?pwd=${passcode}`,
+    `https://zoom.us/meeting/12345678901?pwd=${passcode}`,
+    `https://zoom.us/j/not-a-meeting-id?pwd=${passcode}`,
+    `https://zoom.us/j/12345678901`,
+    `discussion of a Zoom passcode pwd=${passcode}`,
+  ];
+  for (const url of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    if (!url.includes(passcode)) continue;
+    for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(url, passcode, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 
-	expect(buildNamingRequestContext([], promptAt(values[0]!.url, passcode, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(values[0]!.url, passcode, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Discord invite codes across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	// All invite codes are synthetic and do not grant access to any server.
-	const links = [
-		{ url: "https://discord.gg/SYNTHETIC-ONLY-123", code: "SYNTHETIC-ONLY-123" },
-		{ url: "`https://discord.gg/MARKDOWN-SYNTHETIC-45`", code: "MARKDOWN-SYNTHETIC-45" },
-		{ url: "discord.com/invite/synthetic-discord-code?event=fake", code: "synthetic-discord-code" },
-		{ url: "https://discordapp.com/invite/legacy-synthetic-code", code: "legacy-synthetic-code" },
-	];
-	const promptAt = (url: string, code: string, start: number) => {
-		const urlStart = start - url.indexOf(code);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  // All invite codes are synthetic and do not grant access to any server.
+  const links = [
+    {
+      url: "https://discord.gg/SYNTHETIC-ONLY-123",
+      code: "SYNTHETIC-ONLY-123",
+    },
+    {
+      url: "`https://discord.gg/MARKDOWN-SYNTHETIC-45`",
+      code: "MARKDOWN-SYNTHETIC-45",
+    },
+    {
+      url: "discord.com/invite/synthetic-discord-code?event=fake",
+      code: "synthetic-discord-code",
+    },
+    {
+      url: "https://discordapp.com/invite/legacy-synthetic-code",
+      code: "legacy-synthetic-code",
+    },
+  ];
+  const promptAt = (url: string, code: string, start: number) => {
+    const urlStart = start - url.indexOf(code);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, code } of links) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedCode = `${code.slice(0, 7)}\u200b${code.slice(7)}`;
-		const obfuscated = url.replace(code, obfuscatedCode);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, code } of links) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedCode = `${code.slice(0, 7)}\u200b${code.slice(7)}`;
+    const obfuscated = url.replace(code, obfuscatedCode);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, value: code },
-			{ text: obfuscated, value: obfuscatedCode },
-		]) {
-			for (const tokenStart of [prefixLength - 1, suffixStart - candidate.value.length + 1]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.value, tokenStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+    for (const candidate of [
+      { text: url, value: code },
+      { text: obfuscated, value: obfuscatedCode },
+    ]) {
+      for (const tokenStart of [
+        prefixLength - 1,
+        suffixStart - candidate.value.length + 1,
+      ]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.value, tokenStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const code = links[0]!.code;
-	const nearMisses = [
-		"https://discord.gg/",
-		"https://discord.gg/a",
-		`https://discord.gg/${"A".repeat(33)}`,
-		`https://discord.gg.evil.test/${code}`,
-		`https://evil.discord.gg/${code}`,
-		`https://notdiscord.gg/${code}`,
-		`https://discord.com/${code}`,
-		`https://discord.com/invites/${code}`,
-		`https://discord.com/invite/${code}/extra`,
-		`https://discordapp.com.evil.test/invite/${code}`,
-		`https://example.test/invite/${code}`,
-		`discussion of a Discord invite code ${code}`,
-	];
-	for (const candidate of nearMisses) {
-		expect(hasSensitiveNamingContext(candidate)).toBe(false);
-		expect(hasSensitiveOutput(candidate)).toBe(false);
-		if (candidate.includes(code)) {
-			for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
-				expect(buildNamingRequestContext([], promptAt(candidate, code, tokenStart)).hasSensitiveBoundary()).toBe(false);
-			}
-		}
-	}
+  const code = links[0]!.code;
+  const nearMisses = [
+    "https://discord.gg/",
+    "https://discord.gg/a",
+    `https://discord.gg/${"A".repeat(33)}`,
+    `https://discord.gg.evil.test/${code}`,
+    `https://evil.discord.gg/${code}`,
+    `https://notdiscord.gg/${code}`,
+    `https://discord.com/${code}`,
+    `https://discord.com/invites/${code}`,
+    `https://discord.com/invite/${code}/extra`,
+    `https://discordapp.com.evil.test/invite/${code}`,
+    `https://example.test/invite/${code}`,
+    `discussion of a Discord invite code ${code}`,
+  ];
+  for (const candidate of nearMisses) {
+    expect(hasSensitiveNamingContext(candidate)).toBe(false);
+    expect(hasSensitiveOutput(candidate)).toBe(false);
+    if (candidate.includes(code)) {
+      for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
+        expect(
+          buildNamingRequestContext(
+            [],
+            promptAt(candidate, code, tokenStart),
+          ).hasSensitiveBoundary(),
+        ).toBe(false);
+      }
+    }
+  }
 
-	expect(buildNamingRequestContext([], promptAt(links[0]!.url, code, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(links[0]!.url, code, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Webex meeting passwords in join URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	// These deliberately synthetic hosts and passwords are not real invitations.
-	const values = [
-		{
-			url: "https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake&pwd=SYNTHETIC-ONLY-123&locale=en",
-			password: "SYNTHETIC-ONLY-123",
-		},
-		{
-			url: "https://meeting.invalid.webex.com/meet/synthetic-user?pwd=TEST+ONLY%2FKEY=",
-			password: "TEST+ONLY%2FKEY=",
-		},
-	];
-	const promptAt = (url: string, password: string, start: number) => {
-		const urlStart = start - url.indexOf(password);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  // These deliberately synthetic hosts and passwords are not real invitations.
+  const values = [
+    {
+      url: "https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake&pwd=SYNTHETIC-ONLY-123&locale=en",
+      password: "SYNTHETIC-ONLY-123",
+    },
+    {
+      url: "https://meeting.invalid.webex.com/meet/synthetic-user?pwd=TEST+ONLY%2FKEY=",
+      password: "TEST+ONLY%2FKEY=",
+    },
+  ];
+  const promptAt = (url: string, password: string, start: number) => {
+    const urlStart = start - url.indexOf(password);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, password } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		const obfuscatedPassword = `${password.slice(0, 5)}\u200b${password.slice(5)}`;
-		const obfuscated = url.replace(password, obfuscatedPassword);
-		expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-		expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  for (const { url, password } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    const obfuscatedPassword = `${password.slice(0, 5)}\u200b${password.slice(5)}`;
+    const obfuscated = url.replace(password, obfuscatedPassword);
+    expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+    expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-		for (const candidate of [
-			{ text: url, value: password },
-			{ text: obfuscated, value: obfuscatedPassword },
-		]) {
-			for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
-				const context = buildNamingRequestContext([], promptAt(candidate.text, candidate.value, tokenStart));
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+    for (const candidate of [
+      { text: url, value: password },
+      { text: obfuscated, value: obfuscatedPassword },
+    ]) {
+      for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
+        const context = buildNamingRequestContext(
+          [],
+          promptAt(candidate.text, candidate.value, tokenStart),
+        );
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const password = values[0]!.password;
-	const nearMisses = [
-		`https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake&xpwd=${password}`,
-		`https://synthetic.invalid.webex.com/meet/synthetic-user?pwd=abc`,
-		`https://synthetic.invalid.webex.com/meeting/synthetic-user?pwd=${password}`,
-		`https://synthetic.invalid.webex.com/meet?pwd=${password}`,
-		`https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake`,
-		`https://webex.com/synthetic/j.php?MTID=fake&pwd=${password}`,
-		`https://synthetic.invalid.webex.com.evil.test/synthetic/j.php?pwd=${password}`,
-		`https://synthetic.invalid.webex.com.example.test/meet/synthetic-user?pwd=${password}`,
-		`https://synthetic.invalid.webex.org/meet/synthetic-user?pwd=${password}`,
-		`https://example.test/meet/synthetic-user?pwd=${password}`,
-		`https://synthetic.invalid.webex.com/not-a-meeting?pwd=${password}`,
-		`discussion of a Webex meeting password pwd=${password}`,
-	];
-	for (const candidate of nearMisses) {
-		expect(hasSensitiveNamingContext(candidate)).toBe(false);
-		expect(hasSensitiveOutput(candidate)).toBe(false);
-		if (candidate.includes(password)) {
-			for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
-				expect(buildNamingRequestContext([], promptAt(candidate, password, tokenStart)).hasSensitiveBoundary()).toBe(false);
-			}
-		}
-	}
+  const password = values[0]!.password;
+  const nearMisses = [
+    `https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake&xpwd=${password}`,
+    `https://synthetic.invalid.webex.com/meet/synthetic-user?pwd=abc`,
+    `https://synthetic.invalid.webex.com/meeting/synthetic-user?pwd=${password}`,
+    `https://synthetic.invalid.webex.com/meet?pwd=${password}`,
+    `https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake`,
+    `https://webex.com/synthetic/j.php?MTID=fake&pwd=${password}`,
+    `https://synthetic.invalid.webex.com.evil.test/synthetic/j.php?pwd=${password}`,
+    `https://synthetic.invalid.webex.com.example.test/meet/synthetic-user?pwd=${password}`,
+    `https://synthetic.invalid.webex.org/meet/synthetic-user?pwd=${password}`,
+    `https://example.test/meet/synthetic-user?pwd=${password}`,
+    `https://synthetic.invalid.webex.com/not-a-meeting?pwd=${password}`,
+    `discussion of a Webex meeting password pwd=${password}`,
+  ];
+  for (const candidate of nearMisses) {
+    expect(hasSensitiveNamingContext(candidate)).toBe(false);
+    expect(hasSensitiveOutput(candidate)).toBe(false);
+    if (candidate.includes(password)) {
+      for (const tokenStart of [prefixLength - 3, suffixStart - 3]) {
+        expect(
+          buildNamingRequestContext(
+            [],
+            promptAt(candidate, password, tokenStart),
+          ).hasSensitiveBoundary(),
+        ).toBe(false);
+      }
+    }
+  }
 
-	expect(buildNamingRequestContext([], promptAt(values[0]!.url, password, prefixLength + 5)).hasSensitiveBoundary()).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      promptAt(values[0]!.url, password, prefixLength + 5),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Google Drive resource-key API headers across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const fileIds = ["A".repeat(33), "B".repeat(33)];
-	const keys = [`0-${"a".repeat(28)}`, `0-${"b".repeat(28)}`];
-	const header = `X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${keys[0]}`;
-	const multiplePairs = `X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${keys[0]}, ${fileIds[1]}/${keys[1]}`;
-	const promptAt = (text: string, token: string, start: number) => {
-		const textStart = start - text.indexOf(token);
-		const prefix = `${"x".repeat(textStart - 1)} `;
-		return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const fileIds = ["A".repeat(33), "B".repeat(33)];
+  const keys = [`0-${"a".repeat(28)}`, `0-${"b".repeat(28)}`];
+  const header = `X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${keys[0]}`;
+  const multiplePairs = `X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${keys[0]}, ${fileIds[1]}/${keys[1]}`;
+  const promptAt = (text: string, token: string, start: number) => {
+    const textStart = start - text.indexOf(token);
+    const prefix = `${"x".repeat(textStart - 1)} `;
+    return `${prefix}${text} ${"y".repeat(promptLength - prefix.length - text.length - 1)}`;
+  };
 
-	expect(hasSensitiveNamingContext(header)).toBe(true);
-	expect(hasSensitiveOutput(header)).toBe(true);
-	expect(hasSensitiveNamingContext(multiplePairs)).toBe(true);
-	expect(hasSensitiveOutput(multiplePairs)).toBe(true);
+  expect(hasSensitiveNamingContext(header)).toBe(true);
+  expect(hasSensitiveOutput(header)).toBe(true);
+  expect(hasSensitiveNamingContext(multiplePairs)).toBe(true);
+  expect(hasSensitiveOutput(multiplePairs)).toBe(true);
 
-	const key = keys[0]!;
-	const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
-	const obfuscated = header.replace(key, obfuscatedKey);
-	expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
-	expect(hasSensitiveOutput(obfuscated)).toBe(true);
+  const key = keys[0]!;
+  const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
+  const obfuscated = header.replace(key, obfuscatedKey);
+  expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
+  expect(hasSensitiveOutput(obfuscated)).toBe(true);
 
-	for (const { source, token } of [{ source: header, token: key }, { source: obfuscated, token: obfuscatedKey }]) {
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			const context = buildNamingRequestContext([], promptAt(source, token, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const { source, token } of [
+    { source: header, token: key },
+    { source: obfuscated, token: obfuscatedKey },
+  ]) {
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(source, token, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const omittedKey = buildNamingRequestContext([], promptAt(header, keys[0]!, prefixLength + 5));
-	expect(omittedKey.hasSensitiveBoundary()).toBe(false);
-	const laterPairAtSuffixBoundary = buildNamingRequestContext(
-		[], promptAt(multiplePairs, keys[1]!, suffixStart - 11),
-	);
-	expect(hasSensitiveNamingContext(laterPairAtSuffixBoundary.text)).toBe(false);
-	expect(laterPairAtSuffixBoundary.hasSensitiveBoundary()).toBe(true);
+  const omittedKey = buildNamingRequestContext(
+    [],
+    promptAt(header, keys[0]!, prefixLength + 5),
+  );
+  expect(omittedKey.hasSensitiveBoundary()).toBe(false);
+  const laterPairAtSuffixBoundary = buildNamingRequestContext(
+    [],
+    promptAt(multiplePairs, keys[1]!, suffixStart - 11),
+  );
+  expect(hasSensitiveNamingContext(laterPairAtSuffixBoundary.text)).toBe(false);
+  expect(laterPairAtSuffixBoundary.hasSensitiveBoundary()).toBe(true);
 
-	const nearMisses = [
-		`X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${"a".repeat(19)}`,
-		`X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${"a".repeat(129)}`,
-		`X-Goog-Drive-Resource-Keys: /${keys[0]}`,
-		`X-Goog-Drive-Resource-Key: ${fileIds[0]}/${keys[0]}`,
-		`X-Other-Resource-Keys: ${fileIds[0]}/${keys[0]}`,
-		`resourcekey=${keys[0]}`,
-	];
-	for (const value of nearMisses) {
-		expect(hasSensitiveNamingContext(value)).toBe(false);
-		expect(hasSensitiveOutput(value)).toBe(false);
-		for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
-			expect(buildNamingRequestContext([], promptAt(value, keys[0]!, tokenStart)).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    `X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${"a".repeat(19)}`,
+    `X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${"a".repeat(129)}`,
+    `X-Goog-Drive-Resource-Keys: /${keys[0]}`,
+    `X-Goog-Drive-Resource-Key: ${fileIds[0]}/${keys[0]}`,
+    `X-Other-Resource-Keys: ${fileIds[0]}/${keys[0]}`,
+    `resourcekey=${keys[0]}`,
+  ];
+  for (const value of nearMisses) {
+    expect(hasSensitiveNamingContext(value)).toBe(false);
+    expect(hasSensitiveOutput(value)).toBe(false);
+    for (const tokenStart of [prefixLength - 11, suffixStart - 11]) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          promptAt(value, keys[0]!, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(false);
+    }
+  }
 });
 
 test("screens Google Cloud CDN signed URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const signature = `${"A1b_".repeat(6)}A1b=`;
-	const urlPrefix = "URLPrefix=aHR0cHM6Ly9tZWRpYS5leGFtcGxlLmNvbS92aWRlb3Mv";
-	const values = [
-		`https://media.example.com/videos/137138595?Expires=1790000000&KeyName=mySigningKey&Signature=${signature}`,
-		`https://media.example.com/videos/master.m3u8?userID=abc123&${urlPrefix}&Expires=1790000000&KeyName=mySigningKey&Signature=${signature}`,
-	];
-	const promptAt = (url: string, token: string, start: number) => {
-		const urlStart = start - url.indexOf(token);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const signature = `${"A1b_".repeat(6)}A1b=`;
+  const urlPrefix = "URLPrefix=aHR0cHM6Ly9tZWRpYS5leGFtcGxlLmNvbS92aWRlb3Mv";
+  const values = [
+    `https://media.example.com/videos/137138595?Expires=1790000000&KeyName=mySigningKey&Signature=${signature}`,
+    `https://media.example.com/videos/master.m3u8?userID=abc123&${urlPrefix}&Expires=1790000000&KeyName=mySigningKey&Signature=${signature}`,
+  ];
+  const promptAt = (url: string, token: string, start: number) => {
+    const urlStart = start - url.indexOf(token);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const url of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const url of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const omittedSignature = buildNamingRequestContext([], promptAt(values[0]!, signature, prefixLength + 5));
-	expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  const omittedSignature = buildNamingRequestContext(
+    [],
+    promptAt(values[0]!, signature, prefixLength + 5),
+  );
+  expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
 
-	const nearMisses = [
-		{ url: `https://media.example.com/file?Expires=1790000000&KeyName=mySigningKey&Signature=${"A".repeat(26)}=`, signature: `${"A".repeat(26)}=` },
-		{ url: `https://media.example.com/file?Expires=1790000000&KeyName=mySigningKey&Signature=${"A".repeat(28)}=`, signature: `${"A".repeat(28)}=` },
-		{ url: `https://media.example.com/file?Expires=1790000000&KeyId=mySigningKey&Signature=${signature}`, signature },
-		{ url: `https://media.example.com/file?Expires=1790000000&KeyName=${"A".repeat(64)}&Signature=${signature}`, signature },
-		{ url: `https://media.example.com/file?KeyName=mySigningKey&Expires=1790000000&Signature=${signature}`, signature },
-		{ url: `https://media.example.com/file?Expires=1790000000&KeyName=mySigningKey&NotSignature=${signature}`, signature },
-	];
-	for (const { url, signature: candidate } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, candidate, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    {
+      url: `https://media.example.com/file?Expires=1790000000&KeyName=mySigningKey&Signature=${"A".repeat(26)}=`,
+      signature: `${"A".repeat(26)}=`,
+    },
+    {
+      url: `https://media.example.com/file?Expires=1790000000&KeyName=mySigningKey&Signature=${"A".repeat(28)}=`,
+      signature: `${"A".repeat(28)}=`,
+    },
+    {
+      url: `https://media.example.com/file?Expires=1790000000&KeyId=mySigningKey&Signature=${signature}`,
+      signature,
+    },
+    {
+      url: `https://media.example.com/file?Expires=1790000000&KeyName=${"A".repeat(64)}&Signature=${signature}`,
+      signature,
+    },
+    {
+      url: `https://media.example.com/file?KeyName=mySigningKey&Expires=1790000000&Signature=${signature}`,
+      signature,
+    },
+    {
+      url: `https://media.example.com/file?Expires=1790000000&KeyName=mySigningKey&NotSignature=${signature}`,
+      signature,
+    },
+  ];
+  for (const { url, signature: candidate } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, candidate, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens Akamai EdgeAuth tokens across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const md5Signature = "a".repeat(32);
-	const sha1Signature = "b".repeat(40);
-	const sha256Signature = "c".repeat(64);
-	const values = [
-		{
-			value: `https://media.example.com/video.mp4?hdnts=exp=1790000000~acl=/video/*~hmac=${md5Signature}`,
-			signature: md5Signature,
-		},
-		{
-			value: `https://media.example.com/video.mp4?hdnts=st=1790000000~exp=1790003600~hmac=${sha1Signature}`,
-			signature: sha1Signature,
-		},
-		{
-			value: `Set-Cookie: hdnts=exp=1790000000~acl=/video/*~hmac=${sha256Signature}; Path=/; Secure; HttpOnly`,
-			signature: sha256Signature,
-		},
-		{
-			value: `https://media.example.com/video.mp4?__token__=ip=192.0.2.1~st=1790000000~exp=1790003600~acl=/video/*~id=session42~data=foo~hmac=${sha256Signature}`,
-			signature: sha256Signature,
-		},
-	];
-	const promptAt = (value: string, token: string, start: number) => {
-		const valueStart = start - value.indexOf(token);
-		const prefix = `${"x".repeat(valueStart - 1)} `;
-		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const md5Signature = "a".repeat(32);
+  const sha1Signature = "b".repeat(40);
+  const sha256Signature = "c".repeat(64);
+  const values = [
+    {
+      value: `https://media.example.com/video.mp4?hdnts=exp=1790000000~acl=/video/*~hmac=${md5Signature}`,
+      signature: md5Signature,
+    },
+    {
+      value: `https://media.example.com/video.mp4?hdnts=st=1790000000~exp=1790003600~hmac=${sha1Signature}`,
+      signature: sha1Signature,
+    },
+    {
+      value: `Set-Cookie: hdnts=exp=1790000000~acl=/video/*~hmac=${sha256Signature}; Path=/; Secure; HttpOnly`,
+      signature: sha256Signature,
+    },
+    {
+      value: `https://media.example.com/video.mp4?__token__=ip=192.0.2.1~st=1790000000~exp=1790003600~acl=/video/*~id=session42~data=foo~hmac=${sha256Signature}`,
+      signature: sha256Signature,
+    },
+  ];
+  const promptAt = (value: string, token: string, start: number) => {
+    const valueStart = start - value.indexOf(token);
+    const prefix = `${"x".repeat(valueStart - 1)} `;
+    return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+  };
 
-	for (const { value, signature } of values) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(value, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const { value, signature } of values) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(value, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const omittedSignature = buildNamingRequestContext([], promptAt(values[0]!.value, md5Signature, prefixLength + 5));
-	expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  const omittedSignature = buildNamingRequestContext(
+    [],
+    promptAt(values[0]!.value, md5Signature, prefixLength + 5),
+  );
+  expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
 
-	const nearMisses = [
-		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(31)}`, signature: "a".repeat(31) },
-		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(33)}`, signature: "a".repeat(33) },
-		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(39)}`, signature: "a".repeat(39) },
-		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(41)}`, signature: "a".repeat(41) },
-		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(63)}`, signature: "a".repeat(63) },
-		{ value: `?hdnts=exp=1790000000~hmac=${"a".repeat(65)}`, signature: "a".repeat(65) },
-		{ value: `?hdntx=exp=1790000000~acl=/video/*~hmac=${sha256Signature}`, signature: sha256Signature },
-		{ value: `?hdnts=acl=/video/*~hmac=${sha256Signature}`, signature: sha256Signature },
-		{ value: `?__token__=exp=1790000000~hmac=${sha256Signature}x`, signature: `${sha256Signature}x` },
-	];
-	for (const { value, signature } of nearMisses) {
-		expect(hasSensitiveNamingContext(value)).toBe(false);
-		expect(hasSensitiveOutput(value)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(value, signature, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    {
+      value: `?hdnts=exp=1790000000~hmac=${"a".repeat(31)}`,
+      signature: "a".repeat(31),
+    },
+    {
+      value: `?hdnts=exp=1790000000~hmac=${"a".repeat(33)}`,
+      signature: "a".repeat(33),
+    },
+    {
+      value: `?hdnts=exp=1790000000~hmac=${"a".repeat(39)}`,
+      signature: "a".repeat(39),
+    },
+    {
+      value: `?hdnts=exp=1790000000~hmac=${"a".repeat(41)}`,
+      signature: "a".repeat(41),
+    },
+    {
+      value: `?hdnts=exp=1790000000~hmac=${"a".repeat(63)}`,
+      signature: "a".repeat(63),
+    },
+    {
+      value: `?hdnts=exp=1790000000~hmac=${"a".repeat(65)}`,
+      signature: "a".repeat(65),
+    },
+    {
+      value: `?hdntx=exp=1790000000~acl=/video/*~hmac=${sha256Signature}`,
+      signature: sha256Signature,
+    },
+    {
+      value: `?hdnts=acl=/video/*~hmac=${sha256Signature}`,
+      signature: sha256Signature,
+    },
+    {
+      value: `?__token__=exp=1790000000~hmac=${sha256Signature}x`,
+      signature: `${sha256Signature}x`,
+    },
+  ];
+  for (const { value, signature } of nearMisses) {
+    expect(hasSensitiveNamingContext(value)).toBe(false);
+    expect(hasSensitiveOutput(value)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(value, signature, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens Baidu BCE signed authorization values across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const signature = "e".repeat(64);
-	const accessKey = "ABCDEFGHIJKLMNOPQRST";
-	const values = [
-		{
-			value: `https://bj.bcebos.com/bucket/object?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}`,
-			signature,
-		},
-		{
-			value: `Authorization: bce-auth-v1/${accessKey}/2026-06-13T12:00:00Z/1800/host;x-bce-content-sha256/${signature}`,
-			signature,
-		},
-		{
-			value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%3Bx-bce-content-sha256%2F${signature}`,
-			signature,
-		},
-		{
-			value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2F%2F${signature}`,
-			signature,
-		},
-	];
-	const promptAt = (value: string, token: string, start: number) => {
-		const valueStart = start - value.indexOf(token);
-		const prefix = `${"x".repeat(valueStart - 1)} `;
-		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const signature = "e".repeat(64);
+  const accessKey = "ABCDEFGHIJKLMNOPQRST";
+  const values = [
+    {
+      value: `https://bj.bcebos.com/bucket/object?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}`,
+      signature,
+    },
+    {
+      value: `Authorization: bce-auth-v1/${accessKey}/2026-06-13T12:00:00Z/1800/host;x-bce-content-sha256/${signature}`,
+      signature,
+    },
+    {
+      value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%3Bx-bce-content-sha256%2F${signature}`,
+      signature,
+    },
+    {
+      value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2F%2F${signature}`,
+      signature,
+    },
+  ];
+  const promptAt = (value: string, token: string, start: number) => {
+    const valueStart = start - value.indexOf(token);
+    const prefix = `${"x".repeat(valueStart - 1)} `;
+    return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+  };
 
-	for (const { value, signature: digest } of values) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(value, digest, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const { value, signature: digest } of values) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(value, digest, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const nearMisses = [
-		{ value: `?authorization=bce-auth-v2%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}`, digest: signature },
-		{ value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00.000Z%2F1800%2Fhost%2F${signature}`, digest: signature },
-		{ value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2Fabc%2Fhost%2F${signature}`, digest: signature },
-		{ value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${"e".repeat(63)}`, digest: "e".repeat(63) },
-		{ value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${"e".repeat(65)}`, digest: "e".repeat(65) },
-		{ value: `?authorizationx=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}`, digest: signature },
-		{ value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}x`, digest: `${signature}x` },
-	];
-	for (const { value, digest } of nearMisses) {
-		expect(hasSensitiveNamingContext(value)).toBe(false);
-		expect(hasSensitiveOutput(value)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(value, digest, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    {
+      value: `?authorization=bce-auth-v2%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}`,
+      digest: signature,
+    },
+    {
+      value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00.000Z%2F1800%2Fhost%2F${signature}`,
+      digest: signature,
+    },
+    {
+      value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2Fabc%2Fhost%2F${signature}`,
+      digest: signature,
+    },
+    {
+      value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${"e".repeat(63)}`,
+      digest: "e".repeat(63),
+    },
+    {
+      value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${"e".repeat(65)}`,
+      digest: "e".repeat(65),
+    },
+    {
+      value: `?authorizationx=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}`,
+      digest: signature,
+    },
+    {
+      value: `?authorization=bce-auth-v1%2F${accessKey}%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${signature}x`,
+      digest: `${signature}x`,
+    },
+  ];
+  for (const { value, digest } of nearMisses) {
+    expect(hasSensitiveNamingContext(value)).toBe(false);
+    expect(hasSensitiveOutput(value)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(value, digest, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens OpenStack Swift temporary URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const sha1Signature = "f".repeat(40);
-	const sha256Signature = "a".repeat(64);
-	const values = [
-		{
-			value: `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_sig=${sha256Signature}&temp_url_expires=1790000000`,
-			signature: sha256Signature,
-		},
-		{
-			value: `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_expires=1790000000&filename=photo.png&temp_url_sig=${sha1Signature}`,
-			signature: sha1Signature,
-		},
-	];
-	const promptAt = (value: string, token: string, start: number) => {
-		const valueStart = start - value.indexOf(token);
-		const prefix = `${"x".repeat(valueStart - 1)} `;
-		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const sha1Signature = "f".repeat(40);
+  const sha256Signature = "a".repeat(64);
+  const values = [
+    {
+      value: `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_sig=${sha256Signature}&temp_url_expires=1790000000`,
+      signature: sha256Signature,
+    },
+    {
+      value: `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_expires=1790000000&filename=photo.png&temp_url_sig=${sha1Signature}`,
+      signature: sha1Signature,
+    },
+  ];
+  const promptAt = (value: string, token: string, start: number) => {
+    const valueStart = start - value.indexOf(token);
+    const prefix = `${"x".repeat(valueStart - 1)} `;
+    return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+  };
 
-	for (const { value, signature } of values) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(value, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const { value, signature } of values) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(value, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const nearMisses = [
-		{ value: `?temp_url_sig=${"a".repeat(39)}&temp_url_expires=1790000000`, signature: "a".repeat(39) },
-		{ value: `?temp_url_sig=${"a".repeat(41)}&temp_url_expires=1790000000`, signature: "a".repeat(41) },
-		{ value: `?temp_url_sig=${"a".repeat(63)}&temp_url_expires=1790000000`, signature: "a".repeat(63) },
-		{ value: `?temp_url_sig=${"a".repeat(65)}&temp_url_expires=1790000000`, signature: "a".repeat(65) },
-		{ value: `?temp_url_sig=${sha256Signature}x&temp_url_expires=1790000000`, signature: `${sha256Signature}x` },
-		{ value: `?temp_url_sig=${sha256Signature}&expires=1790000000`, signature: sha256Signature },
-		{ value: `?temp_url_signature=${sha256Signature}&temp_url_expires=1790000000`, signature: sha256Signature },
-		{ value: `?xtemp_url_sig=${sha256Signature}&temp_url_expires=1790000000`, signature: sha256Signature },
-		{ value: `?temp_url_sig=${sha256Signature}&temp_url_expires=${"1".repeat(21)}`, signature: sha256Signature },
-	];
-	for (const { value, signature } of nearMisses) {
-		expect(hasSensitiveNamingContext(value)).toBe(false);
-		expect(hasSensitiveOutput(value)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(value, signature, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    {
+      value: `?temp_url_sig=${"a".repeat(39)}&temp_url_expires=1790000000`,
+      signature: "a".repeat(39),
+    },
+    {
+      value: `?temp_url_sig=${"a".repeat(41)}&temp_url_expires=1790000000`,
+      signature: "a".repeat(41),
+    },
+    {
+      value: `?temp_url_sig=${"a".repeat(63)}&temp_url_expires=1790000000`,
+      signature: "a".repeat(63),
+    },
+    {
+      value: `?temp_url_sig=${"a".repeat(65)}&temp_url_expires=1790000000`,
+      signature: "a".repeat(65),
+    },
+    {
+      value: `?temp_url_sig=${sha256Signature}x&temp_url_expires=1790000000`,
+      signature: `${sha256Signature}x`,
+    },
+    {
+      value: `?temp_url_sig=${sha256Signature}&expires=1790000000`,
+      signature: sha256Signature,
+    },
+    {
+      value: `?temp_url_signature=${sha256Signature}&temp_url_expires=1790000000`,
+      signature: sha256Signature,
+    },
+    {
+      value: `?xtemp_url_sig=${sha256Signature}&temp_url_expires=1790000000`,
+      signature: sha256Signature,
+    },
+    {
+      value: `?temp_url_sig=${sha256Signature}&temp_url_expires=${"1".repeat(21)}`,
+      signature: sha256Signature,
+    },
+  ];
+  for (const { value, signature } of nearMisses) {
+    expect(hasSensitiveNamingContext(value)).toBe(false);
+    expect(hasSensitiveOutput(value)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(value, signature, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens Tencent COS SHA-1 signed URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const signature = "a".repeat(40);
-	const values = [
-		{
-			url: `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-ak=EXAMPLEID&q-sign-time=1790000000%3B1790003600&q-signature=${signature}`,
-		},
-		{
-			url: `https://example.cos.ap-guangzhou.myqcloud.com/private?q-signature=${signature}&q-sign-algorithm=sha1&q-ak=EXAMPLEID`,
-		},
-	];
-	const promptAt = (url: string, token: string, start: number) => {
-		const urlStart = start - url.indexOf(token);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const signature = "a".repeat(40);
+  const values = [
+    {
+      url: `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-ak=EXAMPLEID&q-sign-time=1790000000%3B1790003600&q-signature=${signature}`,
+    },
+    {
+      url: `https://example.cos.ap-guangzhou.myqcloud.com/private?q-signature=${signature}&q-sign-algorithm=sha1&q-ak=EXAMPLEID`,
+    },
+  ];
+  const promptAt = (url: string, token: string, start: number) => {
+    const urlStart = start - url.indexOf(token);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+  for (const { url } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
-		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedSignature = buildNamingRequestContext(
+      [],
+      promptAt(url, signature, prefixLength + 5),
+    );
+    expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const nearMisses = [
-		{ url: `q-signature=${signature}`, signature },
-		{ url: `q-sign-algorithm=sha256&q-signature=${signature}`, signature },
-		{ url: `q-sign-algorithm=sha1&q-signature=${"a".repeat(39)}`, signature: "a".repeat(39) },
-		{ url: `q-sign-algorithm=sha1&q-signature=${"a".repeat(41)}`, signature: "a".repeat(41) },
-		{ url: `q-sign-algorithm=sha1ish&q-signature=${signature}`, signature },
-		{ url: `q-sign-algorithm=sha1&q-sign=${signature}`, signature },
-	];
-	for (const { url, signature: token } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, token, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    { url: `q-signature=${signature}`, signature },
+    { url: `q-sign-algorithm=sha256&q-signature=${signature}`, signature },
+    {
+      url: `q-sign-algorithm=sha1&q-signature=${"a".repeat(39)}`,
+      signature: "a".repeat(39),
+    },
+    {
+      url: `q-sign-algorithm=sha1&q-signature=${"a".repeat(41)}`,
+      signature: "a".repeat(41),
+    },
+    { url: `q-sign-algorithm=sha1ish&q-signature=${signature}`, signature },
+    { url: `q-sign-algorithm=sha1&q-sign=${signature}`, signature },
+  ];
+  for (const { url, signature: token } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, token, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens Alibaba Cloud OSS V1 and V4 signed URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const legacySignature = "+/" + "A".repeat(25) + "=";
-	const encodedLegacySignature = `%2B%2F${"A".repeat(25)}%3D`;
-	const v4Signature = "b".repeat(64);
-	const values = [
-		{
-			url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?OSSAccessKeyId=EXAMPLE_ID&Expires=1790000000&Signature=${encodedLegacySignature}`,
-			signature: encodedLegacySignature,
-		},
-		{
-			url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?Signature=${legacySignature}&OSSAccessKeyId=EXAMPLE_ID`,
-			signature: legacySignature,
-		},
-		{
-			url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${v4Signature}`,
-			signature: v4Signature,
-		},
-		{
-			url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature=${v4Signature}&x-oss-signature-version=OSS4-HMAC-SHA256`,
-			signature: v4Signature,
-		},
-	];
-	const promptAt = (url: string, token: string, start: number) => {
-		const urlStart = start - url.indexOf(token);
-		const prefix = `${"x".repeat(urlStart - 1)} `;
-		return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const legacySignature = "+/" + "A".repeat(25) + "=";
+  const encodedLegacySignature = `%2B%2F${"A".repeat(25)}%3D`;
+  const v4Signature = "b".repeat(64);
+  const values = [
+    {
+      url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?OSSAccessKeyId=EXAMPLE_ID&Expires=1790000000&Signature=${encodedLegacySignature}`,
+      signature: encodedLegacySignature,
+    },
+    {
+      url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?Signature=${legacySignature}&OSSAccessKeyId=EXAMPLE_ID`,
+      signature: legacySignature,
+    },
+    {
+      url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${v4Signature}`,
+      signature: v4Signature,
+    },
+    {
+      url: `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature=${v4Signature}&x-oss-signature-version=OSS4-HMAC-SHA256`,
+      signature: v4Signature,
+    },
+  ];
+  const promptAt = (url: string, token: string, start: number) => {
+    const urlStart = start - url.indexOf(token);
+    const prefix = `${"x".repeat(urlStart - 1)} `;
+    return `${prefix}${url} ${"y".repeat(promptLength - prefix.length - url.length - 1)}`;
+  };
 
-	for (const { url, signature } of values) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
+  for (const { url, signature } of values) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const omittedSignature = buildNamingRequestContext([], promptAt(url, signature, prefixLength + 5));
-		expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedSignature = buildNamingRequestContext(
+      [],
+      promptAt(url, signature, prefixLength + 5),
+    );
+    expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
+  }
 
-	const nearMisses = [
-		{ url: `Signature=${legacySignature}`, signature: legacySignature },
-		{ url: `OSSAccessKeyId=EXAMPLE_ID&Signature=${"A".repeat(26)}=`, signature: `${"A".repeat(26)}=` },
-		{ url: `OSSAccessKeyId=EXAMPLE_ID&Signature=${"A".repeat(28)}=`, signature: `${"A".repeat(28)}=` },
-		{ url: `xOSSAccessKeyId=EXAMPLE_ID&Signature=${legacySignature}`, signature: legacySignature },
-		{ url: `x-oss-signature=${v4Signature}`, signature: v4Signature },
-		{ url: `x-oss-signature-version=OSS4-HMAC-SHA1&x-oss-signature=${v4Signature}`, signature: v4Signature },
-		{ url: `x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${"b".repeat(63)}`, signature: "b".repeat(63) },
-		{ url: `x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${"b".repeat(65)}`, signature: "b".repeat(65) },
-	];
-	for (const { url, signature } of nearMisses) {
-		expect(hasSensitiveNamingContext(url)).toBe(false);
-		expect(hasSensitiveOutput(url)).toBe(false);
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const context = buildNamingRequestContext([], promptAt(url, signature, tokenStart));
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    { url: `Signature=${legacySignature}`, signature: legacySignature },
+    {
+      url: `OSSAccessKeyId=EXAMPLE_ID&Signature=${"A".repeat(26)}=`,
+      signature: `${"A".repeat(26)}=`,
+    },
+    {
+      url: `OSSAccessKeyId=EXAMPLE_ID&Signature=${"A".repeat(28)}=`,
+      signature: `${"A".repeat(28)}=`,
+    },
+    {
+      url: `xOSSAccessKeyId=EXAMPLE_ID&Signature=${legacySignature}`,
+      signature: legacySignature,
+    },
+    { url: `x-oss-signature=${v4Signature}`, signature: v4Signature },
+    {
+      url: `x-oss-signature-version=OSS4-HMAC-SHA1&x-oss-signature=${v4Signature}`,
+      signature: v4Signature,
+    },
+    {
+      url: `x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${"b".repeat(63)}`,
+      signature: "b".repeat(63),
+    },
+    {
+      url: `x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${"b".repeat(65)}`,
+      signature: "b".repeat(65),
+    },
+  ];
+  for (const { url, signature } of nearMisses) {
+    expect(hasSensitiveNamingContext(url)).toBe(false);
+    expect(hasSensitiveOutput(url)).toBe(false);
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const context = buildNamingRequestContext(
+        [],
+        promptAt(url, signature, tokenStart),
+      );
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("screens Oracle Object Storage pre-authenticated URLs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const token = "Ab3_".repeat(16);
-	const url = `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${token}/n/MyNamespace/b/MyParBucket/o/`;
-	const promptAt = (value: string, secret: string, start: number) => {
-		const valueStart = start - value.indexOf(secret);
-		const prefix = `${"x".repeat(valueStart - 1)} `;
-		return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const token = "Ab3_".repeat(16);
+  const url = `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${token}/n/MyNamespace/b/MyParBucket/o/`;
+  const promptAt = (value: string, secret: string, start: number) => {
+    const valueStart = start - value.indexOf(secret);
+    const prefix = `${"x".repeat(valueStart - 1)} `;
+    return `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+  };
 
-	expect(hasSensitiveNamingContext(url)).toBe(true);
-	expect(hasSensitiveOutput(url)).toBe(true);
-	for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-		const context = buildNamingRequestContext([], promptAt(url, token, tokenStart));
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  expect(hasSensitiveNamingContext(url)).toBe(true);
+  expect(hasSensitiveOutput(url)).toBe(true);
+  for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+    const context = buildNamingRequestContext(
+      [],
+      promptAt(url, token, tokenStart),
+    );
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 
-	const omittedToken = buildNamingRequestContext([], promptAt(url, token, prefixLength + 5));
-	expect(omittedToken.hasSensitiveBoundary()).toBe(false);
+  const omittedToken = buildNamingRequestContext(
+    [],
+    promptAt(url, token, prefixLength + 5),
+  );
+  expect(omittedToken.hasSensitiveBoundary()).toBe(false);
 
-	const nearMisses = [
-		{
-			value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${"a".repeat(63)}/n/MyNamespace/b/MyParBucket/o/`,
-			token: "a".repeat(63),
-		},
-		{
-			value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${"a".repeat(65)}/n/MyNamespace/b/MyParBucket/o/`,
-			token: "a".repeat(65),
-		},
-		{ value: `https://objectstorage.us-phoenix-1.oraclecloud.com/q/${token}/n/MyNamespace/b/MyParBucket/o/`, token },
-		{ value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${token}/b/MyParBucket/o/`, token },
-		{ value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${token}/n/MyNamespace/b/MyParBucket/`, token },
-		{ value: `https://example.com/p/${token}/n/MyNamespace/b/MyParBucket/object/`, token },
-	];
-	for (const { value, token: nearMissToken } of nearMisses) {
-		expect(hasSensitiveNamingContext(value)).toBe(false);
-		expect(hasSensitiveOutput(value)).toBe(false);
-		expect(buildNamingRequestContext([], promptAt(value, nearMissToken, prefixLength - 10)).hasSensitiveBoundary()).toBe(false);
-	}
+  const nearMisses = [
+    {
+      value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${"a".repeat(63)}/n/MyNamespace/b/MyParBucket/o/`,
+      token: "a".repeat(63),
+    },
+    {
+      value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${"a".repeat(65)}/n/MyNamespace/b/MyParBucket/o/`,
+      token: "a".repeat(65),
+    },
+    {
+      value: `https://objectstorage.us-phoenix-1.oraclecloud.com/q/${token}/n/MyNamespace/b/MyParBucket/o/`,
+      token,
+    },
+    {
+      value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${token}/b/MyParBucket/o/`,
+      token,
+    },
+    {
+      value: `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${token}/n/MyNamespace/b/MyParBucket/`,
+      token,
+    },
+    {
+      value: `https://example.com/p/${token}/n/MyNamespace/b/MyParBucket/object/`,
+      token,
+    },
+  ];
+  for (const { value, token: nearMissToken } of nearMisses) {
+    expect(hasSensitiveNamingContext(value)).toBe(false);
+    expect(hasSensitiveOutput(value)).toBe(false);
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAt(value, nearMissToken, prefixLength - 10),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens HTTP Signature Authorization proofs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const headers = [
-		{
-			label: 'Authorization: Signature keyId="client-key",algorithm="hmac-sha256",headers="date",signature="',
-			token: Buffer.from("A".repeat(32)).toString("base64"),
-		},
-		{
-			label: 'Proxy-Authorization: Signature keyId="client-key",algorithm="ed25519",signature="',
-			token: Buffer.from("B".repeat(64)).toString("base64"),
-		},
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const headers = [
+    {
+      label:
+        'Authorization: Signature keyId="client-key",algorithm="hmac-sha256",headers="date",signature="',
+      token: Buffer.from("A".repeat(32)).toString("base64"),
+    },
+    {
+      label:
+        'Proxy-Authorization: Signature keyId="client-key",algorithm="ed25519",signature="',
+      token: Buffer.from("B".repeat(64)).toString("base64"),
+    },
+  ];
 
-	for (const { label, token } of headers) {
-		const value = `${label}${token}"`;
-		const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}"`;
-		for (const candidate of [value, obfuscated]) {
-			expect(hasSensitiveNamingContext(candidate)).toBe(true);
-			expect(hasSensitiveOutput(candidate)).toBe(true);
-		}
+  for (const { label, token } of headers) {
+    const value = `${label}${token}"`;
+    const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}"`;
+    for (const candidate of [value, obfuscated]) {
+      expect(hasSensitiveNamingContext(candidate)).toBe(true);
+      expect(hasSensitiveOutput(candidate)).toBe(true);
+    }
 
-		const tokenStart = prefixLength - 8;
-		const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
-		const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
+    const tokenStart = prefixLength - 8;
+    const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+    const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixTokenStart = suffixStart - 8;
-		const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
-		const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
-			promptLength - suffixPrefix.length - value.length - 1,
-		)}`;
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixTokenStart = suffixStart - 8;
+    const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+    const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
+      promptLength - suffixPrefix.length - value.length - 1,
+    )}`;
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-		const historyContent = `${"x".repeat(990 - label.length - 1)} ${value}`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const historyContext = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
-			expect(historyContext.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(990 - label.length - 1)} ${value}`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const historyContext = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
+      expect(historyContext.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const signature = Buffer.from("C".repeat(32)).toString("base64");
-	for (const nearMiss of [
-		`Authorization: Signature keyId="client-key",signature="${"A".repeat(19)}"`,
-		"Authorization: Signature keyId=client-key, signature=authentication is enabled",
-		`Authorization: Signature keyId=client-key, signatory="${signature}"`,
-		"Authorization: Signature keyId=client-key, signature-key=example",
-		`NotAuthorization: Signature keyId=client-key, signature="${signature}"`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const signature = Buffer.from("C".repeat(32)).toString("base64");
+  for (const nearMiss of [
+    `Authorization: Signature keyId="client-key",signature="${"A".repeat(19)}"`,
+    "Authorization: Signature keyId=client-key, signature=authentication is enabled",
+    `Authorization: Signature keyId=client-key, signatory="${signature}"`,
+    "Authorization: Signature keyId=client-key, signature-key=example",
+    `NotAuthorization: Signature keyId=client-key, signature="${signature}"`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens HTTP Message Signature proofs across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const headers = [
-		{
-			label: "Signature: sig1=:",
-			token: Buffer.from("A".repeat(32)).toString("base64"),
-		},
-		{
-			label: '"Signature": "sig2=:',
-			token: Buffer.from("B".repeat(64)).toString("base64"),
-		},
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const headers = [
+    {
+      label: "Signature: sig1=:",
+      token: Buffer.from("A".repeat(32)).toString("base64"),
+    },
+    {
+      label: '"Signature": "sig2=:',
+      token: Buffer.from("B".repeat(64)).toString("base64"),
+    },
+  ];
 
-	for (const { label, token } of headers) {
-		const value = `${label}${token}:`;
-		const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}:`;
-		for (const candidate of [value, obfuscated]) {
-			expect(hasSensitiveNamingContext(candidate)).toBe(true);
-			expect(hasSensitiveOutput(candidate)).toBe(true);
-		}
+  for (const { label, token } of headers) {
+    const value = `${label}${token}:`;
+    const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}:`;
+    for (const candidate of [value, obfuscated]) {
+      expect(hasSensitiveNamingContext(candidate)).toBe(true);
+      expect(hasSensitiveOutput(candidate)).toBe(true);
+    }
 
-		const tokenStart = prefixLength - 8;
-		const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
-		const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
+    const tokenStart = prefixLength - 8;
+    const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+    const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixTokenStart = suffixStart - 8;
-		const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
-		const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
-			promptLength - suffixPrefix.length - value.length - 1,
-		)}`;
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixTokenStart = suffixStart - 8;
+    const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+    const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
+      promptLength - suffixPrefix.length - value.length - 1,
+    )}`;
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-		const historyContent = `${"x".repeat(990 - label.length - 1)} ${value}`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const historyContext = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
-			expect(historyContext.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(990 - label.length - 1)} ${value}`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const historyContext = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
+      expect(historyContext.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const signature = Buffer.from("C".repeat(32)).toString("base64");
-	for (const nearMiss of [
-		`Signature: sig1=:${"A".repeat(19)}:`,
-		"Signature-Input: sig1=(\"@method\" \"date\");keyid=\"client-key\"",
-		`Signature-Input: sig1=:${signature}:`,
-		`Not-Signature: sig1=:${signature}:`,
-		"Signature: authentication is enabled",
-		`Signature: 1sig=:${signature}:`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const signature = Buffer.from("C".repeat(32)).toString("base64");
+  for (const nearMiss of [
+    `Signature: sig1=:${"A".repeat(19)}:`,
+    'Signature-Input: sig1=("@method" "date");keyid="client-key"',
+    `Signature-Input: sig1=:${signature}:`,
+    `Not-Signature: sig1=:${signature}:`,
+    "Signature: authentication is enabled",
+    `Signature: 1sig=:${signature}:`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 
-	const signatureInputLabel = "Signature-Input: sig1=:";
-	const boundaryTokenStart = prefixLength - 8;
-	const signatureInputPrefix = `${"x".repeat(boundaryTokenStart - signatureInputLabel.length - 1)} `;
-	const signatureInputPrompt = `${signatureInputPrefix}${signatureInputLabel}${signature}: ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], signatureInputPrompt).hasSensitiveBoundary()).toBe(false);
+  const signatureInputLabel = "Signature-Input: sig1=:";
+  const boundaryTokenStart = prefixLength - 8;
+  const signatureInputPrefix = `${"x".repeat(boundaryTokenStart - signatureInputLabel.length - 1)} `;
+  const signatureInputPrompt = `${signatureInputPrefix}${signatureInputLabel}${signature}: ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], signatureInputPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Digest Authorization response hashes across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const headers = [
-		{
-			label: 'Authorization: Digest username="alice", realm="example", nonce="n", uri="/private", response="',
-			token: "A1b2".repeat(8),
-		},
-		{
-			label: 'Proxy-Authorization: Digest username="alice", qop=auth, response="',
-			token: "C3d4".repeat(16),
-		},
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const headers = [
+    {
+      label:
+        'Authorization: Digest username="alice", realm="example", nonce="n", uri="/private", response="',
+      token: "A1b2".repeat(8),
+    },
+    {
+      label:
+        'Proxy-Authorization: Digest username="alice", qop=auth, response="',
+      token: "C3d4".repeat(16),
+    },
+  ];
 
-	for (const { label, token } of headers) {
-		const value = `${label}${token}"`;
-		const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}"`;
-		for (const candidate of [value, obfuscated]) {
-			expect(hasSensitiveNamingContext(candidate)).toBe(true);
-			expect(hasSensitiveOutput(candidate)).toBe(true);
-		}
+  for (const { label, token } of headers) {
+    const value = `${label}${token}"`;
+    const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}"`;
+    for (const candidate of [value, obfuscated]) {
+      expect(hasSensitiveNamingContext(candidate)).toBe(true);
+      expect(hasSensitiveOutput(candidate)).toBe(true);
+    }
 
-		const tokenStart = prefixLength - 8;
-		const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
-		const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
+    const tokenStart = prefixLength - 8;
+    const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+    const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixTokenStart = suffixStart - 8;
-		const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
-		const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
-			promptLength - suffixPrefix.length - value.length - 1,
-		)}`;
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixTokenStart = suffixStart - 8;
+    const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+    const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
+      promptLength - suffixPrefix.length - value.length - 1,
+    )}`;
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-		const historyContent = `${"x".repeat(990 - label.length - 1)} ${value}`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const historyContext = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
-			expect(historyContext.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(990 - label.length - 1)} ${value}`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const historyContext = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
+      expect(historyContext.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	for (const nearMiss of [
-		`Authorization: Digest username="alice", response="${"A".repeat(31)}"`,
-		`Authorization: Digest username="alice", response="${"A".repeat(33)}"`,
-		`Authorization: Digest username="alice", response="${"A".repeat(32)}g"`,
-		"Authorization: Digest authentication response is computed from the request",
-		`NotAuthorization: Digest username="alice", response="${"A".repeat(32)}"`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `Authorization: Digest username="alice", response="${"A".repeat(31)}"`,
+    `Authorization: Digest username="alice", response="${"A".repeat(33)}"`,
+    `Authorization: Digest username="alice", response="${"A".repeat(32)}g"`,
+    "Authorization: Digest authentication response is computed from the request",
+    `NotAuthorization: Digest username="alice", response="${"A".repeat(32)}"`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Digest Authentication-Info rspauth hashes across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const headers = [
-		{ label: 'Authentication-Info: rspauth="', token: "A1b2".repeat(8) },
-		{ label: 'Proxy-Authentication-Info: nextnonce="next", rspauth="', token: "C3d4".repeat(16) },
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const headers = [
+    { label: 'Authentication-Info: rspauth="', token: "A1b2".repeat(8) },
+    {
+      label: 'Proxy-Authentication-Info: nextnonce="next", rspauth="',
+      token: "C3d4".repeat(16),
+    },
+  ];
 
-	for (const { label, token } of headers) {
-		const value = `${label}${token}"`;
-		const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}"`;
-		for (const candidate of [value, obfuscated]) {
-			expect(hasSensitiveNamingContext(candidate)).toBe(true);
-			expect(hasSensitiveOutput(candidate)).toBe(true);
-		}
+  for (const { label, token } of headers) {
+    const value = `${label}${token}"`;
+    const obfuscated = `${label}${token.slice(0, 16)}\u200b${token.slice(16)}"`;
+    for (const candidate of [value, obfuscated]) {
+      expect(hasSensitiveNamingContext(candidate)).toBe(true);
+      expect(hasSensitiveOutput(candidate)).toBe(true);
+    }
 
-		const tokenStart = prefixLength - 8;
-		const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
-		const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
+    const tokenStart = prefixLength - 8;
+    const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+    const prompt = `${prefix}${value} ${"y".repeat(1_200)}`;
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixTokenStart = suffixStart - 8;
-		const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
-		const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
-			promptLength - suffixPrefix.length - value.length - 1,
-		)}`;
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixTokenStart = suffixStart - 8;
+    const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+    const suffixPrompt = `${suffixPrefix}${value} ${"y".repeat(
+      promptLength - suffixPrefix.length - value.length - 1,
+    )}`;
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-		const historyContent = `${"x".repeat(990 - label.length - 1)} ${value}`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const historyContext = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
-			expect(historyContext.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(990 - label.length - 1)} ${value}`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const historyContext = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(historyContext.text)).toBe(false);
+      expect(historyContext.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	for (const nearMiss of [
-		`Authentication-Info: rspauth="${"A".repeat(31)}"`,
-		`Authentication-Info: rspauth="${"A".repeat(33)}"`,
-		`Authentication-Info: rspauth="${"A".repeat(32)}g"`,
-		`Authentication-Info: nextnonce="${"A".repeat(32)}"`,
-		`Authentication-Info: response="${"A".repeat(32)}"`,
-		`NotAuthentication-Info: rspauth="${"A".repeat(32)}"`,
-		"Authentication-Info describes the Digest response parameters",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `Authentication-Info: rspauth="${"A".repeat(31)}"`,
+    `Authentication-Info: rspauth="${"A".repeat(33)}"`,
+    `Authentication-Info: rspauth="${"A".repeat(32)}g"`,
+    `Authentication-Info: nextnonce="${"A".repeat(32)}"`,
+    `Authentication-Info: response="${"A".repeat(32)}"`,
+    `NotAuthentication-Info: rspauth="${"A".repeat(32)}"`,
+    "Authentication-Info describes the Digest response parameters",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens common session-cookie IDs in Set-Cookie headers across retained-context boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const cookies = [
-		{ name: "JSESSIONID", token: "A1b2".repeat(8) },
-		{ name: "PHPSESSID", token: "C3d4".repeat(8) },
-		{ name: "connect.sid", token: `s%3A${"E5f6".repeat(7)}` },
-		{ name: "__Host-session_id", token: "G7h8".repeat(8) },
-		{ name: "_my_app_session", token: "K9l0".repeat(8) },
-		{ name: "myapp_session_id", token: "M1n2".repeat(8) },
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const cookies = [
+    { name: "JSESSIONID", token: "A1b2".repeat(8) },
+    { name: "PHPSESSID", token: "C3d4".repeat(8) },
+    { name: "connect.sid", token: `s%3A${"E5f6".repeat(7)}` },
+    { name: "__Host-session_id", token: "G7h8".repeat(8) },
+    { name: "_my_app_session", token: "K9l0".repeat(8) },
+    { name: "myapp_session_id", token: "M1n2".repeat(8) },
+  ];
 
-	for (const { name, token } of cookies) {
-		const label = `Set-Cookie: ${name}=`;
-		const obfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
-		for (const candidate of [token, obfuscated]) {
-			const value = `${label}${candidate}; Path=/; HttpOnly`;
-			expect(hasSensitiveNamingContext(value)).toBe(true);
-			expect(hasSensitiveOutput(value)).toBe(true);
+  for (const { name, token } of cookies) {
+    const label = `Set-Cookie: ${name}=`;
+    const obfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+    for (const candidate of [token, obfuscated]) {
+      const value = `${label}${candidate}; Path=/; HttpOnly`;
+      expect(hasSensitiveNamingContext(value)).toBe(true);
+      expect(hasSensitiveOutput(value)).toBe(true);
 
-			const tokenStart = prefixLength - 8;
-			const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
-			const prompt = `${prefix}${label}${candidate}; Path=/ ${"y".repeat(1_200)}`;
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
+      const tokenStart = prefixLength - 8;
+      const prefix = `${"x".repeat(tokenStart - label.length - 1)} `;
+      const prompt = `${prefix}${label}${candidate}; Path=/ ${"y".repeat(1_200)}`;
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
 
-			const promptLength = MAX_PROMPT_LENGTH + 300;
-			const suffixStart = promptLength - Math.floor(retainedLength / 2);
-			const suffixTokenStart = suffixStart - 8;
-			const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
-			const suffixPrompt = `${suffixPrefix}${label}${candidate}; Path=/ ${"y".repeat(
-				promptLength - suffixPrefix.length - label.length - candidate.length - "; Path=/ ".length,
-			)}`;
-			const suffixContext = buildNamingRequestContext([], suffixPrompt);
-			expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-			expect(suffixContext.hasSensitiveBoundary()).toBe(true);
-		}
+      const promptLength = MAX_PROMPT_LENGTH + 300;
+      const suffixStart = promptLength - Math.floor(retainedLength / 2);
+      const suffixTokenStart = suffixStart - 8;
+      const suffixPrefix = `${"x".repeat(suffixTokenStart - label.length - 1)} `;
+      const suffixPrompt = `${suffixPrefix}${label}${candidate}; Path=/ ${"y".repeat(
+        promptLength -
+          suffixPrefix.length -
+          label.length -
+          candidate.length -
+          "; Path=/ ".length,
+      )}`;
+      const suffixContext = buildNamingRequestContext([], suffixPrompt);
+      expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+      expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    }
 
-		const historyContent = `${"x".repeat(990 - label.length - 1)} ${label}${token}; Path=/`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const context = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(990 - label.length - 1)} ${label}${token}; Path=/`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const context = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	for (const nearMiss of [
-		`Set-Cookie: PHPSESSID=${"A".repeat(19)}`,
-		`Set-Cookie: PHPSESSID authentication is recommended`,
-		`Set-Cookie: tracking_id=${"A".repeat(32)}`,
-		`Set-Cookie: _myapp_setting=${"A".repeat(32)}`,
-		`Set-Cookie: _myapp_sessions=${"A".repeat(32)}`,
-		`X-Set-Cookie: JSESSIONID=${"A".repeat(32)}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `Set-Cookie: PHPSESSID=${"A".repeat(19)}`,
+    `Set-Cookie: PHPSESSID authentication is recommended`,
+    `Set-Cookie: tracking_id=${"A".repeat(32)}`,
+    `Set-Cookie: _myapp_setting=${"A".repeat(32)}`,
+    `Set-Cookie: _myapp_sessions=${"A".repeat(32)}`,
+    `X-Set-Cookie: JSESSIONID=${"A".repeat(32)}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens short labeled passwords and passphrases across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const cases = [
-		{ label: " password: ", value: "R4nd0mxZ;" },
-		{ label: ' password: "', value: 'my strong phrase";' },
-		{ label: " passphrase: ", value: "my strong phrase;" },
-		{ label: " password: |-\n  ", value: "R4nd0mxZ\n" },
-	];
-	const promptAtPrefixBoundary = (label: string, value: string) => {
-		const valueStart = prefixLength - 3;
-		return `${"x".repeat(valueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const cases = [
+    { label: " password: ", value: "R4nd0mxZ;" },
+    { label: ' password: "', value: 'my strong phrase";' },
+    { label: " passphrase: ", value: "my strong phrase;" },
+    { label: " password: |-\n  ", value: "R4nd0mxZ\n" },
+  ];
+  const promptAtPrefixBoundary = (label: string, value: string) => {
+    const valueStart = prefixLength - 3;
+    return `${"x".repeat(valueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
+  };
 
-	for (const { label, value } of cases) {
-		const prompt = promptAtPrefixBoundary(label, value);
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-		expect(context.text).toBe(buildNamingContext([], prompt));
+  for (const { label, value } of cases) {
+    const prompt = promptAtPrefixBoundary(label, value);
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+    expect(context.text).toBe(buildNamingContext([], prompt));
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixValueStart = suffixStart - 3;
-		const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value}`
-			+ `${"y".repeat(promptLength - suffixValueStart - value.length)}`;
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixValueStart = suffixStart - 3;
+    const suffixPrompt =
+      `${"x".repeat(suffixValueStart - label.length)}${label}${value}` +
+      `${"y".repeat(promptLength - suffixValueStart - value.length)}`;
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-		const historyContent = `${"x".repeat(993 - label.length)}${label}${value} y`;
-		for (const input of [
-			[{ role: "user", content: historyContent }],
-			[{ role: "compactionSummary", summary: historyContent }],
-		] as any[]) {
-			const history = buildNamingRequestContext(input);
-			expect(hasSensitiveNamingContext(history.text)).toBe(false);
-			expect(history.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+    const historyContent = `${"x".repeat(993 - label.length)}${label}${value} y`;
+    for (const input of [
+      [{ role: "user", content: historyContent }],
+      [{ role: "compactionSummary", summary: historyContent }],
+    ] as any[]) {
+      const history = buildNamingRequestContext(input);
+      expect(hasSensitiveNamingContext(history.text)).toBe(false);
+      expect(history.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const controlObfuscated = promptAtPrefixBoundary(" password: ", "R4nd0m\u0000xZ;");
-	expect(buildNamingRequestContext([], controlObfuscated).hasSensitiveBoundary()).toBe(true);
-	for (const [label, value] of [
-		[" password: ", "placeholder;"],
-		[" password: ", "R4nd0mx;"],
-		[" passphrase: ", "example phrase;"],
-		[" password: |-\n  ", "placeholder\n"],
-	] as const) {
-		expect(buildNamingRequestContext([], promptAtPrefixBoundary(label, value)).hasSensitiveBoundary()).toBe(false);
-	}
-	const npmPasswordLabel = "//registry.npmjs.org/:_password=";
-	const encodedPlaceholder = Buffer.from("example").toString("base64");
-	const npmPlaceholderStart = prefixLength - 3;
-	const npmPlaceholderPrompt = `${"x".repeat(npmPlaceholderStart - npmPasswordLabel.length)}`
-		+ `${npmPasswordLabel}${encodedPlaceholder}; ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], npmPlaceholderPrompt).hasSensitiveBoundary()).toBe(false);
+  const controlObfuscated = promptAtPrefixBoundary(
+    " password: ",
+    "R4nd0m\u0000xZ;",
+  );
+  expect(
+    buildNamingRequestContext([], controlObfuscated).hasSensitiveBoundary(),
+  ).toBe(true);
+  for (const [label, value] of [
+    [" password: ", "placeholder;"],
+    [" password: ", "R4nd0mx;"],
+    [" passphrase: ", "example phrase;"],
+    [" password: |-\n  ", "placeholder\n"],
+  ] as const) {
+    expect(
+      buildNamingRequestContext(
+        [],
+        promptAtPrefixBoundary(label, value),
+      ).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
+  const npmPasswordLabel = "//registry.npmjs.org/:_password=";
+  const encodedPlaceholder = Buffer.from("example").toString("base64");
+  const npmPlaceholderStart = prefixLength - 3;
+  const npmPlaceholderPrompt =
+    `${"x".repeat(npmPlaceholderStart - npmPasswordLabel.length)}` +
+    `${npmPasswordLabel}${encodedPlaceholder}; ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], npmPlaceholderPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens labeled U.S. tax IDs, dates of birth, and phone numbers across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const cases = [
-		{ label: " SSN: ", value: "000-00-0000", shortValue: "000-00-000" },
-		{ label: " SSN: ", value: "٠٠٠-٠٠-٠٠٠٠", shortValue: "٠٠٠-٠٠-٠٠٠" },
-		{ label: " SSN No.: ", value: "000-00-0000", shortValue: "000-00-000" },
-		{ label: " SSN#: ", value: "000-00-0000", shortValue: "000-00-000" },
-		{ label: " Social Security No.: ", value: "000-00-0000", shortValue: "000-00-000" },
-		{ label: " Social Security #: ", value: "000-00-0000", shortValue: "000-00-000" },
-		{ label: " TIN: ", value: "000-00-0000", shortValue: "000-00-000" },
-		{ label: " Tax ID No.: ", value: "000000000", shortValue: "00000000" },
-		{ label: " Taxpayer Identification Number: ", value: "000-00-0000", shortValue: "000-00-000" },
-		{ label: " EIN: ", value: "12-3456789", shortValue: "12-345678" },
-		{ label: " FEIN: ", value: "12-3456789", shortValue: "12-345678" },
-		{ label: " Employer Identification Number: ", value: "12-3456789", shortValue: "12-345678" },
-		{ label: " DOB: ", value: "2000-02-29", shortValue: "2001-02-29" },
-		{ label: " DOB: ", value: "٢٠٠٠-٠٢-٢٩", shortValue: "٢٠٠١-٠٢-٢٩" },
-		{ label: " Date of Birth: ", value: "31.12.1999", shortValue: "31.13.1999" },
-		{ label: " Phone: ", value: "000-000-0000", shortValue: "000-000" },
-		{ label: " Phone #: ", value: "000-000-0000", shortValue: "000-000" },
-		{ label: " Phone No.: ", value: "000-000-0000", shortValue: "000-000" },
-		{ label: " Phone: ", value: "٠٠٠-٠٠٠-٠٠٠٠", shortValue: "٠٠٠-٠٠" },
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const cases = [
+    { label: " SSN: ", value: "000-00-0000", shortValue: "000-00-000" },
+    { label: " SSN: ", value: "٠٠٠-٠٠-٠٠٠٠", shortValue: "٠٠٠-٠٠-٠٠٠" },
+    { label: " SSN No.: ", value: "000-00-0000", shortValue: "000-00-000" },
+    { label: " SSN#: ", value: "000-00-0000", shortValue: "000-00-000" },
+    {
+      label: " Social Security No.: ",
+      value: "000-00-0000",
+      shortValue: "000-00-000",
+    },
+    {
+      label: " Social Security #: ",
+      value: "000-00-0000",
+      shortValue: "000-00-000",
+    },
+    { label: " TIN: ", value: "000-00-0000", shortValue: "000-00-000" },
+    { label: " Tax ID No.: ", value: "000000000", shortValue: "00000000" },
+    {
+      label: " Taxpayer Identification Number: ",
+      value: "000-00-0000",
+      shortValue: "000-00-000",
+    },
+    { label: " EIN: ", value: "12-3456789", shortValue: "12-345678" },
+    { label: " FEIN: ", value: "12-3456789", shortValue: "12-345678" },
+    {
+      label: " Employer Identification Number: ",
+      value: "12-3456789",
+      shortValue: "12-345678",
+    },
+    { label: " DOB: ", value: "2000-02-29", shortValue: "2001-02-29" },
+    { label: " DOB: ", value: "٢٠٠٠-٠٢-٢٩", shortValue: "٢٠٠١-٠٢-٢٩" },
+    {
+      label: " Date of Birth: ",
+      value: "31.12.1999",
+      shortValue: "31.13.1999",
+    },
+    { label: " Phone: ", value: "000-000-0000", shortValue: "000-000" },
+    { label: " Phone #: ", value: "000-000-0000", shortValue: "000-000" },
+    { label: " Phone No.: ", value: "000-000-0000", shortValue: "000-000" },
+    { label: " Phone: ", value: "٠٠٠-٠٠٠-٠٠٠٠", shortValue: "٠٠٠-٠٠" },
+  ];
 
-	for (const { label, value, shortValue } of cases) {
-		expect(hasSensitiveNamingContext(`${label}${value}`)).toBe(true);
-		expect(hasSensitiveOutput(`${label}${value}`)).toBe(true);
-		const prefixValueStart = prefixLength - 6;
-		const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"x".repeat(1_200)}`;
-		const prefixContext = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
-		expect(prefixContext.text).toBe(buildNamingContext([], prompt));
-		const controlObfuscatedValue = `${value.slice(0, 6)}\u0000${value.slice(6)}`;
-		const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${controlObfuscatedValue} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  for (const { label, value, shortValue } of cases) {
+    expect(hasSensitiveNamingContext(`${label}${value}`)).toBe(true);
+    expect(hasSensitiveOutput(`${label}${value}`)).toBe(true);
+    const prefixValueStart = prefixLength - 6;
+    const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"x".repeat(1_200)}`;
+    const prefixContext = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+    expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+    expect(prefixContext.text).toBe(buildNamingContext([], prompt));
+    const controlObfuscatedValue = `${value.slice(0, 6)}\u0000${value.slice(6)}`;
+    const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${controlObfuscatedValue} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+    ).toBe(true);
 
-		const historyContent = `${"x".repeat(993 - label.length)}${label}${value} y`;
-		const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-		expect(hasSensitiveNamingContext(history.text)).toBe(false);
-		expect(history.hasSensitiveBoundary()).toBe(true);
-		const summary = buildNamingRequestContext([
-			{ role: "compactionSummary", summary: historyContent },
-		] as any);
-		expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-		expect(summary.hasSensitiveBoundary()).toBe(true);
+    const historyContent = `${"x".repeat(993 - label.length)}${label}${value} y`;
+    const history = buildNamingRequestContext([
+      { role: "user", content: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(history.text)).toBe(false);
+    expect(history.hasSensitiveBoundary()).toBe(true);
+    const summary = buildNamingRequestContext([
+      { role: "compactionSummary", summary: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+    expect(summary.hasSensitiveBoundary()).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixValueStart = suffixStart - 6;
-		const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} ${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixValueStart = suffixStart - 6;
+    const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} ${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-		const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${value} ${"y".repeat(3_000)}`;
-		expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-		const labelOnlyPrompt = `${"x".repeat(prefixLength - label.length)}${label}${value} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], labelOnlyPrompt).hasSensitiveBoundary()).toBe(false);
-		const unlabeledPrompt = `${"x".repeat(prefixValueStart - 1)} ${value} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], unlabeledPrompt).hasSensitiveBoundary()).toBe(false);
-		const nearMissPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${shortValue} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${value} ${"y".repeat(3_000)}`;
+    expect(
+      buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+    const labelOnlyPrompt = `${"x".repeat(prefixLength - label.length)}${label}${value} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], labelOnlyPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+    const unlabeledPrompt = `${"x".repeat(prefixValueStart - 1)} ${value} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], unlabeledPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+    const nearMissPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${shortValue} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 
-	const overlongPhone = `Phone: ${"٠".repeat(16)}`;
-	expect(hasSensitiveNamingContext(overlongPhone)).toBe(false);
-	expect(hasSensitiveOutput(overlongPhone)).toBe(false);
-	for (const nearMiss of [
-		`SSN: ${"٠".repeat(10)}`,
-		"éSSN: 000-00-0000",
-		"SSN: ٠٠٠-٠٠-٠٠٠٠٠",
-		"SSN No. 000-00-0000",
-		"TIN No. 000-00-0000",
-		"Tax ID No. 000-00-0000",
-		"Taxpayer Identification Number: 000-00-000",
-		"EIN 12-3456789",
-		"EIN: 12-345678",
-		"Employee ID: 12-3456789",
-		"2000-02-29",
-		"DOB 2000-02-29",
-		"DOB: 2001-02-29",
-		"DOB: 2020-02-30",
-		"Birth Date: 31.13.1999",
-		"Social Security #: 000-00-000",
-		"Phone # 000-000-0000",
-		"Ticket #: 000-000-0000",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const overlongPhone = `Phone: ${"٠".repeat(16)}`;
+  expect(hasSensitiveNamingContext(overlongPhone)).toBe(false);
+  expect(hasSensitiveOutput(overlongPhone)).toBe(false);
+  for (const nearMiss of [
+    `SSN: ${"٠".repeat(10)}`,
+    "éSSN: 000-00-0000",
+    "SSN: ٠٠٠-٠٠-٠٠٠٠٠",
+    "SSN No. 000-00-0000",
+    "TIN No. 000-00-0000",
+    "Tax ID No. 000-00-0000",
+    "Taxpayer Identification Number: 000-00-000",
+    "EIN 12-3456789",
+    "EIN: 12-345678",
+    "Employee ID: 12-3456789",
+    "2000-02-29",
+    "DOB 2000-02-29",
+    "DOB: 2001-02-29",
+    "DOB: 2020-02-30",
+    "Birth Date: 31.13.1999",
+    "Social Security #: 000-00-000",
+    "Phone # 000-000-0000",
+    "Ticket #: 000-000-0000",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens explicitly labeled IBANs only for selected country lengths and valid checksums", () => {
-	const values = [
-		["IBAN: ", "GB05TEST00000000000000"],
-		["IBAN No.: ", "DE41SYNTHETIC000000000"],
-		["International Bank Account Number: ", "NO92SYNTHETIC01"],
-	] as const;
-	for (const [label, value] of values) {
-		expect(hasSensitiveNamingContext(`${label}${value}`)).toBe(true);
-		expect(hasSensitiveOutput(`${label}${value}`)).toBe(true);
-	}
-	expect(hasSensitiveNamingContext("IBAN: GB05 TEST 0000 0000 0000 00")).toBe(true);
-	expect(hasSensitiveNamingContext("IBAN: GB06TEST00000000000000; IBAN: DE41SYNTHETIC000000000")).toBe(true);
-	expect(hasSensitiveNamingContext("GB05TEST00000000000000")).toBe(false);
-	for (const nearMiss of [
-		"IBAN: GB06TEST00000000000000",
-		"IBAN: GB05TEST0000000000000",
-		"IBAN: XX95SYNTHETIC000000000",
-		"Account Number: GB05TEST00000000000000",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const values = [
+    ["IBAN: ", "GB05TEST00000000000000"],
+    ["IBAN No.: ", "DE41SYNTHETIC000000000"],
+    ["International Bank Account Number: ", "NO92SYNTHETIC01"],
+  ] as const;
+  for (const [label, value] of values) {
+    expect(hasSensitiveNamingContext(`${label}${value}`)).toBe(true);
+    expect(hasSensitiveOutput(`${label}${value}`)).toBe(true);
+  }
+  expect(hasSensitiveNamingContext("IBAN: GB05 TEST 0000 0000 0000 00")).toBe(
+    true,
+  );
+  expect(
+    hasSensitiveNamingContext(
+      "IBAN: GB06TEST00000000000000; IBAN: DE41SYNTHETIC000000000",
+    ),
+  ).toBe(true);
+  expect(hasSensitiveNamingContext("GB05TEST00000000000000")).toBe(false);
+  for (const nearMiss of [
+    "IBAN: GB06TEST00000000000000",
+    "IBAN: GB05TEST0000000000000",
+    "IBAN: XX95SYNTHETIC000000000",
+    "Account Number: GB05TEST00000000000000",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens explicitly labeled ABA routing numbers with accepted prefixes and valid checksums", () => {
-	const identifiers = [
-		"Routing number: 087294619",
-		"ABA routing number=126804371",
-		"Routing Transit Number: 329170640",
-		"Bank Routing Number: 329170640",
-		"Routing #: 329170640",
-		"RTN: 659173045",
-		"ABA RTN: 659173045",
-		"Routing Number: 800000006",
-		"Routing No.: 087-294-619",
-		"Routing number: ٠٨٧٢٩٤٦١٩",
-		"Routing number: 08729\u200b4619",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "Routing number: 087294619",
+    "ABA routing number=126804371",
+    "Routing Transit Number: 329170640",
+    "Bank Routing Number: 329170640",
+    "Routing #: 329170640",
+    "RTN: 659173045",
+    "ABA RTN: 659173045",
+    "Routing Number: 800000006",
+    "Routing No.: 087-294-619",
+    "Routing number: ٠٨٧٢٩٤٦١٩",
+    "Routing number: 08729\u200b4619",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"087294619",
-		"Routing number: 087294618",
-		"Routing number: 139999999",
-		"Routing number: 08729461",
-		"Routing number: 0872946190",
-		"Routing number 087294619",
-		"RTN 087294619",
-		"Routing # 087294619",
-		"Bank number: 087294619",
-		"Routing number validation",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "087294619",
+    "Routing number: 087294618",
+    "Routing number: 139999999",
+    "Routing number: 08729461",
+    "Routing number: 0872946190",
+    "Routing number 087294619",
+    "RTN 087294619",
+    "Routing # 087294619",
+    "Bank number: 087294619",
+    "Routing number validation",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("ABA routing numbers crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " ABA routing number: ";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const label = " ABA routing number: ";
 
-	for (const boundaryLabel of [label, " RTN: "]) {
-		for (const value of ["087294619", "٠٨٧٢٩٤٦١٩"]) {
-			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-				const before = "x".repeat(valueStart - boundaryLabel.length);
-				const prompt = `${before}${boundaryLabel}${value} ${"y".repeat(promptLength - before.length - boundaryLabel.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  for (const boundaryLabel of [label, " RTN: "]) {
+    for (const value of ["087294619", "٠٨٧٢٩٤٦١٩"]) {
+      for (const valueStart of [
+        prefixLength - 4,
+        suffixStart - value.length + 4,
+      ]) {
+        const before = "x".repeat(valueStart - boundaryLabel.length);
+        const prompt = `${before}${boundaryLabel}${value} ${"y".repeat(promptLength - before.length - boundaryLabel.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const invalidPrompt = `${"x".repeat(prefixLength - 4 - label.length)}${label}087294618 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixLength - 4 - label.length)}${label}087294618 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens explicitly labeled passport numbers with bounded digit-bearing ASCII shapes", () => {
-	const identifiers = [
-		"Passport Number: QX730194",
-		"Passport No.: 59381724",
-		"Passport #: A7B29C41",
-		"Passport ID=K4D8P271",
-		"Passport: U20041986",
-		"Passport Card Number: R8K2M519",
-		"Passport Card No.: 84027195",
-		"Passport Card #: C7N49218",
-		"Passport No.: QX73\u200b0194",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "Passport Number: QX730194",
+    "Passport No.: 59381724",
+    "Passport #: A7B29C41",
+    "Passport ID=K4D8P271",
+    "Passport: U20041986",
+    "Passport Card Number: R8K2M519",
+    "Passport Card No.: 84027195",
+    "Passport Card #: C7N49218",
+    "Passport No.: QX73\u200b0194",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"QX730194",
-		"Passport Number: ABCDEF",
-		"Passport No.: Q1234",
-		"Passport #: QX73019485730",
-		"Passport Number: QX73019-4",
-		"Passport Card Reference: R8K2M519",
-		"Travel Document: QX730194",
-		"Passport number validation",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "QX730194",
+    "Passport Number: ABCDEF",
+    "Passport No.: Q1234",
+    "Passport #: QX73019485730",
+    "Passport Number: QX73019-4",
+    "Passport Card Reference: R8K2M519",
+    "Travel Document: QX730194",
+    "Passport number validation",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("passport numbers crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	for (const label of [" Passport No.: ", " Passport Card Number: "]) {
-		for (const value of ["QX730194", "59381724"]) {
-			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  for (const label of [" Passport No.: ", " Passport Card Number: "]) {
+    for (const value of ["QX730194", "59381724"]) {
+      for (const valueStart of [
+        prefixLength - 3,
+        suffixStart - value.length + 3,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const invalidLabel = " Passport No.: ";
-	const invalidPrompt = `${"x".repeat(prefixLength - 3 - invalidLabel.length)}${invalidLabel}ABCDEF ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidLabel = " Passport No.: ";
+  const invalidPrompt = `${"x".repeat(prefixLength - 3 - invalidLabel.length)}${invalidLabel}ABCDEF ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens explicitly labeled driver-license numbers with bounded digit-bearing ASCII shapes", () => {
-	const identifiers = [
-		"Driver's License Number: A1234567",
-		"Driver License No.: D8F4K21",
-		"Driver Licence: 83920145",
-		"Drivers Licence Number: Z4-8K-2J9",
-		"Driving License No.: B7152048",
-		"Driver ID: C7429051",
-		"Driver's ID Number: W3F-57291",
-		"DL Number: X9428576",
-		"Driver License #: 12-345-6789",
-		"Driver ID: C742\u200b9051",
-		"Driver License: １２３４５６",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "Driver's License Number: A1234567",
+    "Driver License No.: D8F4K21",
+    "Driver Licence: 83920145",
+    "Drivers Licence Number: Z4-8K-2J9",
+    "Driving License No.: B7152048",
+    "Driver ID: C7429051",
+    "Driver's ID Number: W3F-57291",
+    "DL Number: X9428576",
+    "Driver License #: 12-345-6789",
+    "Driver ID: C742\u200b9051",
+    "Driver License: １２３４５６",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"A1234567",
-		"License Number: A1234567",
-		"State ID: C7429051",
-		"Driver License: ABCDEF",
-		"Driver License: 12345",
-		"Driver License: A12345678901234567890",
-		"Driver License: A--123456",
-		"Driver License Reference: A1234567",
-		"Driver license format",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "A1234567",
+    "License Number: A1234567",
+    "State ID: C7429051",
+    "Driver License: ABCDEF",
+    "Driver License: 12345",
+    "Driver License: A12345678901234567890",
+    "Driver License: A--123456",
+    "Driver License Reference: A1234567",
+    "Driver license format",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("driver-license numbers crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	for (const label of [" Driver's License No.: ", " DL Number: "]) {
-		for (const value of ["A1234567", "X9-428576"]) {
-			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  for (const label of [" Driver's License No.: ", " DL Number: "]) {
+    for (const value of ["A1234567", "X9-428576"]) {
+      for (const valueStart of [
+        prefixLength - 3,
+        suffixStart - value.length + 3,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const label = " Driver's License No.: ";
-	const invalidPrompt = `${"x".repeat(prefixLength - 3 - label.length)}${label}ABCDEF ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const label = " Driver's License No.: ";
+  const invalidPrompt = `${"x".repeat(prefixLength - 3 - label.length)}${label}ABCDEF ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens numeric bank-account values only with an explicit bank account label", () => {
-	const identifiers = [
-		"Bank Account Number: 4829163705",
-		"bank account no.: 0375918642",
-		"Bank Acct #: 7305-1948-62",
-		"Bank Account=804193762510",
-		"Bank Account Number: ٨٢٠٥١٩٣٧",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "Bank Account Number: 4829163705",
+    "bank account no.: 0375918642",
+    "Bank Acct #: 7305-1948-62",
+    "Bank Account=804193762510",
+    "Bank Account Number: ٨٢٠٥١٩٣٧",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"4829163705",
-		"Account Number: 4829163705",
-		"Bank Account Number: 12345",
-		"Bank Account Number: 123456789012345678",
-		"Bank Account Number: 12--345678",
-		"Bank Account Number: 12A4567890",
-		"Bank Account Number format",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "4829163705",
+    "Account Number: 4829163705",
+    "Bank Account Number: 12345",
+    "Bank Account Number: 123456789012345678",
+    "Bank Account Number: 12--345678",
+    "Bank Account Number: 12A4567890",
+    "Bank Account Number format",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("bank-account numbers crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
 
-	for (const label of [" Bank Account Number: ", " Bank Acct #: "]) {
-		for (const value of ["4829163705", "7305-1948-62"]) {
-			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  for (const label of [" Bank Account Number: ", " Bank Acct #: "]) {
+    for (const value of ["4829163705", "7305-1948-62"]) {
+      for (const valueStart of [
+        prefixLength - 3,
+        suffixStart - value.length + 3,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const label = " Bank Account Number: ";
-	for (const invalidValue of ["12345", "12--345678"]) {
-		const invalidPrompt = `${"x".repeat(prefixLength - 3 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const label = " Bank Account Number: ";
+  for (const invalidValue of ["12345", "12--345678"]) {
+    const invalidPrompt = `${"x".repeat(prefixLength - 3 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens labeled IBANs across retained-context boundaries and control obfuscation", () => {
-	const iban = "GB05 TEST 0000 0000 0000 00";
-	const label = " IBAN: ";
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const valueStart = prefixLength - 5;
-	const prompt = `${"x".repeat(valueStart - label.length)}${label}${iban} ${"y".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
+  const iban = "GB05 TEST 0000 0000 0000 00";
+  const label = " IBAN: ";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const valueStart = prefixLength - 5;
+  const prompt = `${"x".repeat(valueStart - label.length)}${label}${iban} ${"y".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
 
-	const obfuscated = `${iban.slice(0, 8)}\u200b${iban.slice(8)}`;
-	const obfuscatedPrompt = `${"x".repeat(valueStart - label.length)}${label}${obfuscated} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const obfuscated = `${iban.slice(0, 8)}\u200b${iban.slice(8)}`;
+  const obfuscatedPrompt = `${"x".repeat(valueStart - label.length)}${label}${obfuscated} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const suffixLength = Math.floor(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - suffixLength;
-	const suffixValueStart = suffixStart - 5;
-	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${iban} `
-		+ "y".repeat(promptLength - suffixValueStart - iban.length - 1);
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const suffixLength = Math.floor(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - suffixLength;
+  const suffixValueStart = suffixStart - 5;
+  const suffixPrompt =
+    `${"x".repeat(suffixValueStart - label.length)}${label}${iban} ` +
+    "y".repeat(promptLength - suffixValueStart - iban.length - 1);
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const invalidPrompt = `${"x".repeat(valueStart - label.length)}${label}GB06TEST00000000000000 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(valueStart - label.length)}${label}GB06TEST00000000000000 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Luhn-valid Canadian SIN values only with an explicit label", () => {
-	const identifiers = [
-		"SIN: 712-345-677",
-		"SIN Number=712345677",
-		"Social Insurance Number: 712 345 677",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "SIN: 712-345-677",
+    "SIN Number=712345677",
+    "Social Insurance Number: 712 345 677",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	const unicodeSin = "712345677".replace(/\d/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	for (const identifier of [`SIN: ${unicodeSin}`, "SIN: 712.34\u200b5.677"]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const unicodeSin = "712345677".replace(/\d/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  for (const identifier of [`SIN: ${unicodeSin}`, "SIN: 712.34\u200b5.677"]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"712-345-677",
-		"SIN: 712-345-678",
-		"SIN: 000-000-000",
-		"SIN: 71234567",
-		"SIN: 7123456770",
-		"SIN validation in the task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "712-345-677",
+    "SIN: 712-345-678",
+    "SIN: 000-000-000",
+    "SIN: 71234567",
+    "SIN: 7123456770",
+    "SIN validation in the task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const label = " SIN No.: ";
-	const value = "712-345-677";
-	const prefixValueStart = prefixLength - 5;
-	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
-	const prefixContext = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const label = " SIN No.: ";
+  const value = "712-345-677";
+  const prefixValueStart = prefixLength - 5;
+  const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
+  const prefixContext = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+  expect(prefixContext.hasSensitiveBoundary()).toBe(true);
 
-	const obfuscatedValue = `${value.slice(0, 5)}\u200b${value.slice(5)}`;
-	const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const obfuscatedValue = `${value.slice(0, 5)}\u200b${value.slice(5)}`;
+  const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(995 - label.length)}${label}${value} y`;
-	for (const messages of [
-		[{ role: "user", content: historyContent }],
-		[{ role: "compactionSummary", summary: historyContent }],
-	] as any[]) {
-		const context = buildNamingRequestContext(messages);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  const historyContent = `${"x".repeat(995 - label.length)}${label}${value} y`;
+  for (const messages of [
+    [{ role: "user", content: historyContent }],
+    [{ role: "compactionSummary", summary: historyContent }],
+  ] as any[]) {
+    const context = buildNamingRequestContext(messages);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 
-	const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}712-345-678 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}712-345-678 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Australian TFNs only with an explicit label and valid checksum", () => {
-	const identifiers = [
-		"TFN: 806 314 275",
-		"TFN Number=806314275",
-		"Tax File Number: 806-314-275",
-		"Australian Tax File No.: 806314275",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "TFN: 806 314 275",
+    "TFN Number=806314275",
+    "Tax File Number: 806-314-275",
+    "Australian Tax File No.: 806314275",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	const unicodeTfn = "806314275".replace(/\d/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	for (const identifier of [`TFN: ${unicodeTfn}`, "TFN: 806\u200b314 275"]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const unicodeTfn = "806314275".replace(/\d/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  for (const identifier of [`TFN: ${unicodeTfn}`, "TFN: 806\u200b314 275"]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"806314275",
-		"TFN: 806 314 276",
-		"TFN: 000000000",
-		"TFN: 80631427",
-		"TFN No. 806314275",
-		"TFN validation in the task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "806314275",
+    "TFN: 806 314 276",
+    "TFN: 000000000",
+    "TFN: 80631427",
+    "TFN No. 806314275",
+    "TFN validation in the task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const label = " TFN No.: ";
-	const value = "806 314 275";
-	const prefixValueStart = prefixLength - 5;
-	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
-	const prefixContext = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const label = " TFN No.: ";
+  const value = "806 314 275";
+  const prefixValueStart = prefixLength - 5;
+  const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
+  const prefixContext = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+  expect(prefixContext.hasSensitiveBoundary()).toBe(true);
 
-	const obfuscatedValue = `${value.slice(0, 5)}\u0000${value.slice(5)}`;
-	const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const obfuscatedValue = `${value.slice(0, 5)}\u0000${value.slice(5)}`;
+  const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(995 - label.length)}${label}${value} y`;
-	for (const messages of [
-		[{ role: "user", content: historyContent }],
-		[{ role: "compactionSummary", summary: historyContent }],
-	] as any[]) {
-		const context = buildNamingRequestContext(messages);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  const historyContent = `${"x".repeat(995 - label.length)}${label}${value} y`;
+  for (const messages of [
+    [{ role: "user", content: historyContent }],
+    [{ role: "compactionSummary", summary: historyContent }],
+  ] as any[]) {
+    const context = buildNamingRequestContext(messages);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const suffixValueStart = suffixStart - value.length + 5;
-	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} `
-		+ `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const suffixValueStart = suffixStart - value.length + 5;
+  const suffixPrompt =
+    `${"x".repeat(suffixValueStart - label.length)}${label}${value} ` +
+    `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}806 314 276 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}806 314 276 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens checksum-valid Australian Medicare numbers only with an explicit label", () => {
-	const identifiers = [
-		"Medicare Card Number: 5271 84638 4 2",
-		"Medicare Number=5271846384",
-		"Medicare No.: 52718463842",
-		"Medicare Card: 52718463842",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "Medicare Card Number: 5271 84638 4 2",
+    "Medicare Number=5271846384",
+    "Medicare No.: 52718463842",
+    "Medicare Card: 52718463842",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	const unicodeMedicareNumber = "52718463842".replace(/\d/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	for (const identifier of [`Medicare Number: ${unicodeMedicareNumber}`, "Medicare Number: 52718\u200b463842"]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const unicodeMedicareNumber = "52718463842".replace(/\d/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  for (const identifier of [
+    `Medicare Number: ${unicodeMedicareNumber}`,
+    "Medicare Number: 52718\u200b463842",
+  ]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"52718463842",
-		"Medicare: 52718463842",
-		"Medicare Number: 52718463942",
-		"Medicare Card: 12718463442",
-		"Medicare Number: 527184638",
-		"Medicare Number: 527184638420",
-		"Medicare No. 52718463842",
-		"Medicare number validation in the task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "52718463842",
+    "Medicare: 52718463842",
+    "Medicare Number: 52718463942",
+    "Medicare Card: 12718463442",
+    "Medicare Number: 527184638",
+    "Medicare Number: 527184638420",
+    "Medicare No. 52718463842",
+    "Medicare number validation in the task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const label = " Medicare Card Number: ";
-	const value = "52718463842";
-	const prefixValueStart = prefixLength - 5;
-	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
-	const prefixContext = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const label = " Medicare Card Number: ";
+  const value = "52718463842";
+  const prefixValueStart = prefixLength - 5;
+  const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
+  const prefixContext = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+  expect(prefixContext.hasSensitiveBoundary()).toBe(true);
 
-	const obfuscatedValue = `${value.slice(0, 5)}\u0000${value.slice(5)}`;
-	const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const obfuscatedValue = `${value.slice(0, 5)}\u0000${value.slice(5)}`;
+  const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(995 - label.length)}${label}${value} y`;
-	for (const messages of [
-		[{ role: "user", content: historyContent }],
-		[{ role: "compactionSummary", summary: historyContent }],
-	] as any[]) {
-		const context = buildNamingRequestContext(messages);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  const historyContent = `${"x".repeat(995 - label.length)}${label}${value} y`;
+  for (const messages of [
+    [{ role: "user", content: historyContent }],
+    [{ role: "compactionSummary", summary: historyContent }],
+  ] as any[]) {
+    const context = buildNamingRequestContext(messages);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const suffixValueStart = suffixStart - value.length + 5;
-	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} `
-		+ `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const suffixValueStart = suffixStart - value.length + 5;
+  const suffixPrompt =
+    `${"x".repeat(suffixValueStart - label.length)}${label}${value} ` +
+    `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}52718463942 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}52718463942 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens valid New Zealand IRD numbers in the current range only with an explicit label", () => {
-	const identifiers = [
-		"IRD: 138629473",
-		"IRD Number=138-629-473",
-		"NZ IRD No.: 27-384-919",
-		"New Zealand IRD Number: 100000131",
-		"NZ IRD Number: 199999990", // Synthetic checksum-valid value above the former 150,000,000 ceiling.
-		"Inland Revenue Department Number: 138629473",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "IRD: 138629473",
+    "IRD Number=138-629-473",
+    "NZ IRD No.: 27-384-919",
+    "New Zealand IRD Number: 100000131",
+    "NZ IRD Number: 199999990", // Synthetic checksum-valid value above the former 150,000,000 ceiling.
+    "Inland Revenue Department Number: 138629473",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	const unicodeIrdNumber = "138629473".replace(/\d/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	for (const identifier of [`IRD Number: ${unicodeIrdNumber}`, "IRD: 13862\u200b9473"]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const unicodeIrdNumber = "138629473".replace(/\d/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  for (const identifier of [
+    `IRD Number: ${unicodeIrdNumber}`,
+    "IRD: 13862\u200b9473",
+  ]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"138629473",
-		"IRD Number: 138629472",
-		"IRD: 100000130",
-		"IRD: 100010640",
-		"IRD: 01000004",
-		"IRD: 200000005",
-		"IRD Number: 2738491",
-		"IRD Number: 1386294730",
-		"IRD No 138629473",
-		"Tax number: 138629473",
-		"IRD number validation in the task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "138629473",
+    "IRD Number: 138629472",
+    "IRD: 100000130",
+    "IRD: 100010640",
+    "IRD: 01000004",
+    "IRD: 200000005",
+    "IRD Number: 2738491",
+    "IRD Number: 1386294730",
+    "IRD No 138629473",
+    "Tax number: 138629473",
+    "IRD number validation in the task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const label = " NZ IRD Number: ";
-	const value = "138629473";
-	const prefixValueStart = prefixLength - 4;
-	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
-	const prefixContext = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const label = " NZ IRD Number: ";
+  const value = "138629473";
+  const prefixValueStart = prefixLength - 4;
+  const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
+  const prefixContext = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+  expect(prefixContext.hasSensitiveBoundary()).toBe(true);
 
-	const obfuscatedValue = `${value.slice(0, 5)}\u0000${value.slice(5)}`;
-	const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const obfuscatedValue = `${value.slice(0, 5)}\u0000${value.slice(5)}`;
+  const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(995 - label.length)}${label}${value} y`;
-	for (const messages of [
-		[{ role: "user", content: historyContent }],
-		[{ role: "compactionSummary", summary: historyContent }],
-	] as any[]) {
-		const context = buildNamingRequestContext(messages);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  const historyContent = `${"x".repeat(995 - label.length)}${label}${value} y`;
+  for (const messages of [
+    [{ role: "user", content: historyContent }],
+    [{ role: "compactionSummary", summary: historyContent }],
+  ] as any[]) {
+    const context = buildNamingRequestContext(messages);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const suffixValueStart = suffixStart - value.length + 4;
-	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} `
-		+ `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const suffixValueStart = suffixStart - value.length + 4;
+  const suffixPrompt =
+    `${"x".repeat(suffixValueStart - label.length)}${label}${value} ` +
+    `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}138629472 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}138629472 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Verhoeff-valid Aadhaar numbers only with an explicit label", () => {
-	const identifiers = [
-		"Aadhaar: 234567890124",
-		"Aadhaar Number=2345 6789 0124",
-		"Aadhaar No.: 2345-6789-0124",
-		"Aadhaar ID: 234567890124",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "Aadhaar: 234567890124",
+    "Aadhaar Number=2345 6789 0124",
+    "Aadhaar No.: 2345-6789-0124",
+    "Aadhaar ID: 234567890124",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	const unicodeAadhaar = "234567890124".replace(/\d/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	for (const identifier of [`Aadhaar: ${unicodeAadhaar}`, "Aadhaar: 234567\u200b890124"]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const unicodeAadhaar = "234567890124".replace(/\d/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  for (const identifier of [
+    `Aadhaar: ${unicodeAadhaar}`,
+    "Aadhaar: 234567\u200b890124",
+  ]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"234567890124",
-		"Aadhaar: 234567890125",
-		"Aadhaar: 123456789010",
-		"Aadhaar: 000000000000",
-		"Aadhaar: 23456789012",
-		"Aadhaar Number: 2345678901245",
-		"Aadhaar No. 234567890124",
-		"Aadhaar number validation in the task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "234567890124",
+    "Aadhaar: 234567890125",
+    "Aadhaar: 123456789010",
+    "Aadhaar: 000000000000",
+    "Aadhaar: 23456789012",
+    "Aadhaar Number: 2345678901245",
+    "Aadhaar No. 234567890124",
+    "Aadhaar number validation in the task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("Aadhaar values crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " Aadhaar Number: ";
-	const value = "234567890124";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const label = " Aadhaar Number: ";
+  const value = "234567890124";
 
-	for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
-		const before = "x".repeat(valueStart - label.length);
-		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-		expect(prompt).toHaveLength(promptLength);
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
+    const before = "x".repeat(valueStart - label.length);
+    const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+    expect(prompt).toHaveLength(promptLength);
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 
-	const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}234567890125 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}234567890125 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens checksum-valid Chinese resident ID numbers only with explicit labels", () => {
-	const identifiers = [
-		"Chinese National ID Number: 12999920000101001X",
-		"PRC ID No.: 129999199912310026",
-		"Resident Identity Card Number: 129999200402290032",
-		"Chinese Identity Card Number: 12999920000101001x",
-		"居民身份证号码：12999920000101001X",
-		"本人身份证号: 129999199912310026",
-		"中国公民身份号码=129999200402290032",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "Chinese National ID Number: 12999920000101001X",
+    "PRC ID No.: 129999199912310026",
+    "Resident Identity Card Number: 129999200402290032",
+    "Chinese Identity Card Number: 12999920000101001x",
+    "居民身份证号码：12999920000101001X",
+    "本人身份证号: 129999199912310026",
+    "中国公民身份号码=129999200402290032",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	const syntheticId = "12999920000101001X";
-	const arabicDigitsId = syntheticId.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	const fullwidthId = syntheticId.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0xff10 + Number(digit)));
-	for (const identifier of [
-		`Chinese National ID Number: ${arabicDigitsId}`,
-		`PRC ID: ${fullwidthId}`,
-		`Resident Identity Card No.: ${syntheticId.slice(0, 8)}\u200b${syntheticId.slice(8)}`,
-	]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const syntheticId = "12999920000101001X";
+  const arabicDigitsId = syntheticId.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  const fullwidthId = syntheticId.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0xff10 + Number(digit)),
+  );
+  for (const identifier of [
+    `Chinese National ID Number: ${arabicDigitsId}`,
+    `PRC ID: ${fullwidthId}`,
+    `Resident Identity Card No.: ${syntheticId.slice(0, 8)}\u200b${syntheticId.slice(8)}`,
+  ]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		syntheticId,
-		`ID Number: ${syntheticId}`,
-		`National ID Number: ${syntheticId}`,
-		"Chinese National ID Number: 129999200001010011",
-		"Chinese National ID Number: 129999200002300019",
-		"Chinese National ID Number: 199999200001010012",
-		"Chinese National ID Number: 12999920000101001",
-		"Chinese National ID Number 12999920000101001X",
-		`身份证: ${syntheticId}`,
-		`个人信息: ${syntheticId}`,
-		`身份证号码 ${syntheticId}`,
-		"Chinese national ID number validation",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    syntheticId,
+    `ID Number: ${syntheticId}`,
+    `National ID Number: ${syntheticId}`,
+    "Chinese National ID Number: 129999200001010011",
+    "Chinese National ID Number: 129999200002300019",
+    "Chinese National ID Number: 199999200001010012",
+    "Chinese National ID Number: 12999920000101001",
+    "Chinese National ID Number 12999920000101001X",
+    `身份证: ${syntheticId}`,
+    `个人信息: ${syntheticId}`,
+    `身份证号码 ${syntheticId}`,
+    "Chinese national ID number validation",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("Chinese resident ID numbers crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	for (const label of [
-		" Chinese National ID Number: ",
-		" Resident Identity Card Number: ",
-		" 居民身份证号码：",
-		" 本人身份证号: ",
-	]) {
-		for (const value of ["12999920000101001X", "129999199912310026"]) {
-			for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  for (const label of [
+    " Chinese National ID Number: ",
+    " Resident Identity Card Number: ",
+    " 居民身份证号码：",
+    " 本人身份证号: ",
+  ]) {
+    for (const value of ["12999920000101001X", "129999199912310026"]) {
+      for (const valueStart of [
+        prefixLength - 5,
+        suffixStart - value.length + 5,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	for (const label of [" Chinese National ID Number: ", " 居民身份证号码："]) {
-		const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}129999200001010011 ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  for (const label of [" Chinese National ID Number: ", " 居民身份证号码："]) {
+    const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}129999200001010011 ${"y".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens checksum-valid Japanese My Numbers only with explicit labels", () => {
-	const sample = "012345678903";
-	const arabicDigits = sample.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	const fullwidthDigits = sample.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0xff10 + Number(digit)));
-	for (const identifier of [
-		`Japanese My Number: ${sample}`,
-		"Japan individual number=314159265352",
-		"Japanese national ID number: 987654321093",
-		`個人番号：${sample}`,
-		"マイナンバー=314159265352",
-		"Japanese My Number: 0123-4567-8903",
-		`Japanese My Number: ${arabicDigits}`,
-		`個人番号：${fullwidthDigits}`,
-		`マイナンバー: ${sample.slice(0, 5)}\u200b${sample.slice(5)}`,
-	]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const sample = "012345678903";
+  const arabicDigits = sample.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  const fullwidthDigits = sample.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0xff10 + Number(digit)),
+  );
+  for (const identifier of [
+    `Japanese My Number: ${sample}`,
+    "Japan individual number=314159265352",
+    "Japanese national ID number: 987654321093",
+    `個人番号：${sample}`,
+    "マイナンバー=314159265352",
+    "Japanese My Number: 0123-4567-8903",
+    `Japanese My Number: ${arabicDigits}`,
+    `個人番号：${fullwidthDigits}`,
+    `マイナンバー: ${sample.slice(0, 5)}\u200b${sample.slice(5)}`,
+  ]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		sample,
-		`ID Number: ${sample}`,
-		`My Number: ${sample}`,
-		"Japanese My Number: 012345678904",
-		"Japanese My Number: 01234567890",
-		"Japanese My Number 012345678903",
-		`個人番号 ${sample}`,
-		"個人番号 validation",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    sample,
+    `ID Number: ${sample}`,
+    `My Number: ${sample}`,
+    "Japanese My Number: 012345678904",
+    "Japanese My Number: 01234567890",
+    "Japanese My Number 012345678903",
+    `個人番号 ${sample}`,
+    "個人番号 validation",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("Japanese My Numbers crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	for (const label of [" Japanese My Number: ", " 個人番号："]) {
-		for (const value of ["012345678903", "0123-4567-8903"]) {
-			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  for (const label of [" Japanese My Number: ", " 個人番号："]) {
+    for (const value of ["012345678903", "0123-4567-8903"]) {
+      for (const valueStart of [
+        prefixLength - 4,
+        suffixStart - value.length + 4,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	for (const label of [" Japanese My Number: ", " 個人番号："]) {
-		const invalidPrompt = `${"x".repeat(prefixLength - 4 - label.length)}${label}012345678904 ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  for (const label of [" Japanese My Number: ", " 個人番号："]) {
+    const invalidPrompt = `${"x".repeat(prefixLength - 4 - label.length)}${label}012345678904 ${"y".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens Swedish personal and coordination numbers only with explicit labels", () => {
-	const shortNumber = "900102-1238";
-	const fullNumber = "19900102-1237";
-	const arabicDigits = shortNumber.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	const fullwidthDigits = fullNumber.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0xff10 + Number(digit)));
-	for (const identifier of [
-		`Swedish personal identity number: ${shortNumber}`,
-		`Sweden personal identification number=${fullNumber}`,
-		`Swedish ID number: ${shortNumber.replace("-", "+")}`,
-		`Personnummer: ${shortNumber}`,
-		"Samordningsnummer: 900162-1235",
-		"Swedish coordination number: 19900162-1234",
-		`Swedish personal ID number: ${arabicDigits}`,
-		`Personnummer: ${fullwidthDigits}`,
-		"Samordningsnummer: 9001\u200b62-1235",
-	]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const shortNumber = "900102-1238";
+  const fullNumber = "19900102-1237";
+  const arabicDigits = shortNumber.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  const fullwidthDigits = fullNumber.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0xff10 + Number(digit)),
+  );
+  for (const identifier of [
+    `Swedish personal identity number: ${shortNumber}`,
+    `Sweden personal identification number=${fullNumber}`,
+    `Swedish ID number: ${shortNumber.replace("-", "+")}`,
+    `Personnummer: ${shortNumber}`,
+    "Samordningsnummer: 900162-1235",
+    "Swedish coordination number: 19900162-1234",
+    `Swedish personal ID number: ${arabicDigits}`,
+    `Personnummer: ${fullwidthDigits}`,
+    "Samordningsnummer: 9001\u200b62-1235",
+  ]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		shortNumber,
-		`ID Number: ${shortNumber}`,
-		`Personal identity number: ${shortNumber}`,
-		`Coordination number: ${shortNumber}`,
-		"Swedish personal identity number: 9001021239",
-		"Swedish personal identity number: 199002301232",
-		"Swedish personal identity number: 900102123",
-		"Swedish personal identity number 900102-1238",
-		"Personnummer: 9001-02-1238",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    shortNumber,
+    `ID Number: ${shortNumber}`,
+    `Personal identity number: ${shortNumber}`,
+    `Coordination number: ${shortNumber}`,
+    "Swedish personal identity number: 9001021239",
+    "Swedish personal identity number: 199002301232",
+    "Swedish personal identity number: 900102123",
+    "Swedish personal identity number 900102-1238",
+    "Personnummer: 9001-02-1238",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("Swedish personal identity numbers crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	for (const label of [" Swedish personal identity number: ", " Personnummer: "]) {
-		for (const value of ["900102-1238", "19900102-1237"]) {
-			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  for (const label of [
+    " Swedish personal identity number: ",
+    " Personnummer: ",
+  ]) {
+    for (const value of ["900102-1238", "19900102-1237"]) {
+      for (const valueStart of [
+        prefixLength - 4,
+        suffixStart - value.length + 4,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " Swedish personal identity number: ".length)} Swedish personal identity number: 900102-1239 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixLength - 4 - " Swedish personal identity number: ".length)} Swedish personal identity number: 900102-1239 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens French NIR values with valid control keys only with French-specific labels", () => {
-	const syntheticNir = "123456789012311";
-	const corsicanNirA = "123452A67890102";
-	const corsicanNirB = "123452B67890129";
-	const arabicDigits = syntheticNir.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	const fullwidthDigits = syntheticNir.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0xff10 + Number(digit)));
-	const arabicCorsicanNirA = corsicanNirA.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	for (const identifier of [
-		`French NIR: ${syntheticNir}`,
-		`French NIR Number=${syntheticNir}`,
-		`French social security number: 1 23 45 67 890 123 11`,
-		`French national identification number: 123-456-789-012-3-11`,
-		`Numéro de sécurité sociale français : ${syntheticNir}`,
-		`Numéro d'inscription au répertoire=${syntheticNir}`,
-		`NIR français : ${syntheticNir}`,
-		`French NIR: ${arabicDigits}`,
-		`French NIR: ${fullwidthDigits}`,
-		`French NIR: ${corsicanNirA}`,
-		`French NIR: ${corsicanNirB.toLowerCase()}`,
-		`French social security number: 1 2345 2 A 6789 01 02`,
-		`NIR français : ${arabicCorsicanNirA}`,
-		`French NIR: 123456\u200b789012311`,
-	]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const syntheticNir = "123456789012311";
+  const corsicanNirA = "123452A67890102";
+  const corsicanNirB = "123452B67890129";
+  const arabicDigits = syntheticNir.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  const fullwidthDigits = syntheticNir.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0xff10 + Number(digit)),
+  );
+  const arabicCorsicanNirA = corsicanNirA.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  for (const identifier of [
+    `French NIR: ${syntheticNir}`,
+    `French NIR Number=${syntheticNir}`,
+    `French social security number: 1 23 45 67 890 123 11`,
+    `French national identification number: 123-456-789-012-3-11`,
+    `Numéro de sécurité sociale français : ${syntheticNir}`,
+    `Numéro d'inscription au répertoire=${syntheticNir}`,
+    `NIR français : ${syntheticNir}`,
+    `French NIR: ${arabicDigits}`,
+    `French NIR: ${fullwidthDigits}`,
+    `French NIR: ${corsicanNirA}`,
+    `French NIR: ${corsicanNirB.toLowerCase()}`,
+    `French social security number: 1 2345 2 A 6789 01 02`,
+    `NIR français : ${arabicCorsicanNirA}`,
+    `French NIR: 123456\u200b789012311`,
+  ]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		syntheticNir,
-		`NIR: ${syntheticNir}`,
-		`NIR: ${corsicanNirA}`,
-		`ID Number: ${syntheticNir}`,
-		`French NIR: 123456789012310`,
-		`French NIR: ${corsicanNirA.slice(0, -1)}3`,
-		`French NIR: 12345A267890102`,
-		`French NIR: 123453A67890102`,
-		`French NIR: 12345678901231`,
-		`French NIR: 1234567890123110`,
-		`French NIR ${syntheticNir}`,
-		`French NIR: 12345--67890-12311`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    syntheticNir,
+    `NIR: ${syntheticNir}`,
+    `NIR: ${corsicanNirA}`,
+    `ID Number: ${syntheticNir}`,
+    `French NIR: 123456789012310`,
+    `French NIR: ${corsicanNirA.slice(0, -1)}3`,
+    `French NIR: 12345A267890102`,
+    `French NIR: 123453A67890102`,
+    `French NIR: 12345678901231`,
+    `French NIR: 1234567890123110`,
+    `French NIR ${syntheticNir}`,
+    `French NIR: 12345--67890-12311`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("French NIR values, including Corsican codes, crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	for (const value of ["123456789012311", "123452A67890102", "123452B67890129"]) {
-		for (const label of [" French NIR: ", " Numéro de sécurité sociale : "]) {
-			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  for (const value of [
+    "123456789012311",
+    "123452A67890102",
+    "123452B67890129",
+  ]) {
+    for (const label of [" French NIR: ", " Numéro de sécurité sociale : "]) {
+      for (const valueStart of [
+        prefixLength - 4,
+        suffixStart - value.length + 4,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " French NIR: ".length)} French NIR: 123452A67890103 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixLength - 4 - " French NIR: ".length)} French NIR: 123452A67890103 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens checksum-valid Spanish DNI and NIE values only with Spain-specific labels", () => {
-	const dni = "00000000T";
-	const nie = "X0000000T";
-	const arabicDni = dni.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	const fullwidthNie = nie.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0xff10 + Number(digit)));
-	for (const identifier of [
-		`Spanish DNI: ${dni}`,
-		`Spain national identity number=${dni}`,
-		`DNI español: 00.000.000-T`,
-		`Documento Nacional de Identidad español: ${dni}`,
-		`Spanish NIE: ${nie}`,
-		`Spain NIE Number=${nie}`,
-		`Número de identidad de extranjero: ${nie}`,
-		`Spanish DNI: ${arabicDni}`,
-		`Spanish NIE: ${fullwidthNie}`,
-		`Spanish NIE: X1234\u200b567L`,
-	]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const dni = "00000000T";
+  const nie = "X0000000T";
+  const arabicDni = dni.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  const fullwidthNie = nie.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0xff10 + Number(digit)),
+  );
+  for (const identifier of [
+    `Spanish DNI: ${dni}`,
+    `Spain national identity number=${dni}`,
+    `DNI español: 00.000.000-T`,
+    `Documento Nacional de Identidad español: ${dni}`,
+    `Spanish NIE: ${nie}`,
+    `Spain NIE Number=${nie}`,
+    `Número de identidad de extranjero: ${nie}`,
+    `Spanish DNI: ${arabicDni}`,
+    `Spanish NIE: ${fullwidthNie}`,
+    `Spanish NIE: X1234\u200b567L`,
+  ]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		dni,
-		nie,
-		`DNI: ${dni}`,
-		`NIE: ${nie}`,
-		`ID Number: ${dni}`,
-		`Spanish NIF: ${dni}`,
-		`Spanish DNI: 00000000A`,
-		`Spanish NIE: X0000000A`,
-		`Spanish DNI ${dni}`,
-		`Documento Nacional de Identidad: ${dni}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    dni,
+    nie,
+    `DNI: ${dni}`,
+    `NIE: ${nie}`,
+    `ID Number: ${dni}`,
+    `Spanish NIF: ${dni}`,
+    `Spanish DNI: 00000000A`,
+    `Spanish NIE: X0000000A`,
+    `Spanish DNI ${dni}`,
+    `Documento Nacional de Identidad: ${dni}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("Spanish DNI and NIE values crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	for (const [label, value] of [
-		[" Spanish DNI: ", "00000000T"],
-		[" Número de identidad de extranjero: ", "X0000000T"],
-	]) {
-		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-			const before = "x".repeat(valueStart - label.length);
-			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  for (const [label, value] of [
+    [" Spanish DNI: ", "00000000T"],
+    [" Número de identidad de extranjero: ", "X0000000T"],
+  ]) {
+    for (const valueStart of [
+      prefixLength - 4,
+      suffixStart - value.length + 4,
+    ]) {
+      const before = "x".repeat(valueStart - label.length);
+      const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " Spanish DNI: ".length)} Spanish DNI: 00000000A ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixLength - 4 - " Spanish DNI: ".length)} Spanish DNI: 00000000A ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens conventionally formatted Indian PAN values only with an explicit label", () => {
-	const identifiers = [
-		"PAN: ZZZPZ9876Q",
-		"PAN Number=QQQFQ2345Z",
-		"PAN No.: XXXTZ3141Y",
-		"PAN Card: RRRHR6789M",
-		"Permanent Account Number: LLLAL5432N",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "PAN: ZZZPZ9876Q",
+    "PAN Number=QQQFQ2345Z",
+    "PAN No.: XXXTZ3141Y",
+    "PAN Card: RRRHR6789M",
+    "Permanent Account Number: LLLAL5432N",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const identifier of [
-		"PAN: ZZZPZ٩٨٧٦Q",
-		"PAN: ZZZPZ98\u200b76Q",
-	]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  for (const identifier of ["PAN: ZZZPZ٩٨٧٦Q", "PAN: ZZZPZ98\u200b76Q"]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"ZZZPZ9876Q",
-		"PAN: ZZZXZ9876Q",
-		"PAN: ZZZPZ987Q",
-		"PAN: ZZZPZ98765Q",
-		"PAN Number ZZZPZ9876Q",
-		"PAN: ZZZPZABCDQ",
-		"PAN number validation in the task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "ZZZPZ9876Q",
+    "PAN: ZZZXZ9876Q",
+    "PAN: ZZZPZ987Q",
+    "PAN: ZZZPZ98765Q",
+    "PAN Number ZZZPZ9876Q",
+    "PAN: ZZZPZABCDQ",
+    "PAN number validation in the task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("Indian PAN values crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " PAN Number: ";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const label = " PAN Number: ";
 
-	for (const value of ["ZZZPZ9876Q", "ZZZPZ٩٨٧٦Q"]) {
-		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-			const before = "x".repeat(valueStart - label.length);
-			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const value of ["ZZZPZ9876Q", "ZZZPZ٩٨٧٦Q"]) {
+    for (const valueStart of [
+      prefixLength - 4,
+      suffixStart - value.length + 4,
+    ]) {
+      const before = "x".repeat(valueStart - label.length);
+      const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const invalidPrompt = `${"x".repeat(prefixLength - 4 - label.length)}${label}ZZZXZ9876Q ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixLength - 4 - label.length)}${label}ZZZXZ9876Q ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Modulus-11-valid NHS numbers only with explicit NHS labels", () => {
-	const nhsNumber = "2468135792";
-	const zeroCheckDigitNhsNumber = "2718281820";
-	const arabicNhsNumber = nhsNumber.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	const fullwidthNhsNumber = zeroCheckDigitNhsNumber.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0xff10 + Number(digit)));
-	for (const identifier of [
-		`NHS Number: ${nhsNumber}`,
-		"NHS No.: 246-813-5792",
-		`National Health Service number=${zeroCheckDigitNhsNumber}`,
-		"NHS Patient Number: 271 828 1820",
-		`NHS Number: ${arabicNhsNumber}`,
-		`National Health Service Number: ${fullwidthNhsNumber}`,
-		`NHS Number: ${nhsNumber.slice(0, 5)}\u200b${nhsNumber.slice(5)}`,
-	]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const nhsNumber = "2468135792";
+  const zeroCheckDigitNhsNumber = "2718281820";
+  const arabicNhsNumber = nhsNumber.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  const fullwidthNhsNumber = zeroCheckDigitNhsNumber.replace(
+    /[0-9]/gu,
+    (digit) => String.fromCodePoint(0xff10 + Number(digit)),
+  );
+  for (const identifier of [
+    `NHS Number: ${nhsNumber}`,
+    "NHS No.: 246-813-5792",
+    `National Health Service number=${zeroCheckDigitNhsNumber}`,
+    "NHS Patient Number: 271 828 1820",
+    `NHS Number: ${arabicNhsNumber}`,
+    `National Health Service Number: ${fullwidthNhsNumber}`,
+    `NHS Number: ${nhsNumber.slice(0, 5)}\u200b${nhsNumber.slice(5)}`,
+  ]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		nhsNumber,
-		"NHS Number: 2468135793",
-		"NHS Number: 1234567890",
-		"NHS Number: 0000000000",
-		"NHS Number: 1111111111",
-		"NHS: 2468135792",
-		"NHS Pension Number: 2468135792",
-		"NHS Number 2468135792",
-		"NHS Number: 24681357921",
-		"National Health Service number: validation",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    nhsNumber,
+    "NHS Number: 2468135793",
+    "NHS Number: 1234567890",
+    "NHS Number: 0000000000",
+    "NHS Number: 1111111111",
+    "NHS: 2468135792",
+    "NHS Pension Number: 2468135792",
+    "NHS Number 2468135792",
+    "NHS Number: 24681357921",
+    "National Health Service number: validation",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("NHS numbers crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	for (const [label, value] of [
-		[" NHS Number: ", "2468135792"],
-		[" National Health Service number=", "2718281820"],
-	]) {
-		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-			const before = "x".repeat(valueStart - label.length);
-			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  for (const [label, value] of [
+    [" NHS Number: ", "2468135792"],
+    [" National Health Service number=", "2718281820"],
+  ]) {
+    for (const valueStart of [
+      prefixLength - 4,
+      suffixStart - value.length + 4,
+    ]) {
+      const before = "x".repeat(valueStart - label.length);
+      const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " NHS Number: ".length)} NHS Number: 2468135793 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixLength - 4 - " NHS Number: ".length)} NHS Number: 2468135793 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens check-digit-valid Brazilian CPF values only with an explicit label", () => {
-	const identifiers = [
-		"CPF: 529.982.247-25",
-		"CPF number=52998224725",
-		"Cadastro de Pessoas Físicas: 529 982 247 25",
-	];
-	for (const identifier of identifiers) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const identifiers = [
+    "CPF: 529.982.247-25",
+    "CPF number=52998224725",
+    "Cadastro de Pessoas Físicas: 529 982 247 25",
+  ];
+  for (const identifier of identifiers) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	const unicodeCpf = "529.982.247-25".replace(/\d/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	for (const identifier of [`CPF: ${unicodeCpf}`, `CPF: 529.98\u200b2.247-25`]) {
-		expect(hasSensitiveNamingContext(identifier)).toBe(true);
-		expect(hasSensitiveOutput(identifier)).toBe(true);
-	}
+  const unicodeCpf = "529.982.247-25".replace(/\d/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  for (const identifier of [
+    `CPF: ${unicodeCpf}`,
+    `CPF: 529.98\u200b2.247-25`,
+  ]) {
+    expect(hasSensitiveNamingContext(identifier)).toBe(true);
+    expect(hasSensitiveOutput(identifier)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"529.982.247-25",
-		"CPF: 529.982.247-24",
-		"CPF number: 1234567890",
-		"CPF: 000.000.000-00",
-		"CPF: 529.982.247-250",
-		"CPF parsing in the task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "529.982.247-25",
+    "CPF: 529.982.247-24",
+    "CPF number: 1234567890",
+    "CPF: 000.000.000-00",
+    "CPF: 529.982.247-250",
+    "CPF parsing in the task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const label = " CPF No.: ";
-	const value = "529.982.247-25";
-	const prefixValueStart = prefixLength - 7;
-	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
-	const prefixContext = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const label = " CPF No.: ";
+  const value = "529.982.247-25";
+  const prefixValueStart = prefixLength - 7;
+  const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"y".repeat(1_200)}`;
+  const prefixContext = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+  expect(prefixContext.hasSensitiveBoundary()).toBe(true);
 
-	const obfuscatedValue = `${value.slice(0, 7)}\u200b${value.slice(7)}`;
-	const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const obfuscatedValue = `${value.slice(0, 7)}\u200b${value.slice(7)}`;
+  const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(988 - label.length)}${label}${value} y`;
-	for (const messages of [
-		[{ role: "user", content: historyContent }],
-		[{ role: "compactionSummary", summary: historyContent }],
-	] as any[]) {
-		const context = buildNamingRequestContext(messages);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-	}
+  const historyContent = `${"x".repeat(988 - label.length)}${label}${value} y`;
+  for (const messages of [
+    [{ role: "user", content: historyContent }],
+    [{ role: "compactionSummary", summary: historyContent }],
+  ] as any[]) {
+    const context = buildNamingRequestContext(messages);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+  }
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const suffixValueStart = suffixStart - value.length + 7;
-	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} `
-		+ `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const suffixValueStart = suffixStart - value.length + 7;
+  const suffixPrompt =
+    `${"x".repeat(suffixValueStart - label.length)}${label}${value} ` +
+    `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${value} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}529.982.247-24 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${value} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}529.982.247-24 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens common punctuation in explicitly labeled payment-card numbers", () => {
-	const value = "0000-0000-0000-0000";
-	for (const label of ["Card No.:", "Card #:", "Credit Card No.:", "CC#:", "Payment Card Number #="]) {
-		const text = `${label} ${value}`;
-		expect(hasSensitiveNamingContext(text)).toBe(true);
-		expect(hasSensitiveOutput(text)).toBe(true);
-	}
+  const value = "0000-0000-0000-0000";
+  for (const label of [
+    "Card No.:",
+    "Card #:",
+    "Credit Card No.:",
+    "CC#:",
+    "Payment Card Number #=",
+  ]) {
+    const text = `${label} ${value}`;
+    expect(hasSensitiveNamingContext(text)).toBe(true);
+    expect(hasSensitiveOutput(text)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`Card No. ${value}`,
-		"Card No.: 0000-0000-0000-0001",
-		`Invoice #: ${value}`,
-		value,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `Card No. ${value}`,
+    "Card No.: 0000-0000-0000-0001",
+    `Invoice #: ${value}`,
+    value,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens explicitly labeled payment-card security codes without flagging generic codes", () => {
-	const codes = [
-		"CVV: 483",
-		"CVV2 Code: 6190",
-		"CVC=274",
-		"CVC2: 615",
-		"Card CVV: 741",
-		"Credit Card Security Code: 3805",
-		"Card Verification Value: 9304",
-		"Card Verification Code: ٨٢٠",
-		"Card Security Code: １２３４",
-	];
-	for (const code of codes) {
-		expect(hasSensitiveNamingContext(code)).toBe(true);
-		expect(hasSensitiveOutput(code)).toBe(true);
-	}
+  const codes = [
+    "CVV: 483",
+    "CVV2 Code: 6190",
+    "CVC=274",
+    "CVC2: 615",
+    "Card CVV: 741",
+    "Credit Card Security Code: 3805",
+    "Card Verification Value: 9304",
+    "Card Verification Code: ٨٢٠",
+    "Card Security Code: １２３４",
+  ];
+  for (const code of codes) {
+    expect(hasSensitiveNamingContext(code)).toBe(true);
+    expect(hasSensitiveOutput(code)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"483",
-		"Security Code: 483",
-		"Order security code: 483",
-		"CVV: 12",
-		"CVV: 12345",
-		"CVV 483",
-		"CVV is 483",
-		"Card Security Code: 12345",
-		"Card Verification Value: 12",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "483",
+    "Security Code: 483",
+    "Order security code: 483",
+    "CVV: 12",
+    "CVV: 12345",
+    "CVV 483",
+    "CVV is 483",
+    "Card Security Code: 12345",
+    "Card Verification Value: 12",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("card security codes crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
 
-	for (const label of [" CVV: ", " Card Security Code: ", " Card Verification Value: "]) {
-		for (const value of ["483", "6190"]) {
-			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  for (const label of [
+    " CVV: ",
+    " Card Security Code: ",
+    " Card Verification Value: ",
+  ]) {
+    for (const value of ["483", "6190"]) {
+      for (const valueStart of [
+        prefixLength - 1,
+        suffixStart - value.length + 1,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const label = " CVV: ";
-	for (const invalidValue of ["12", "12345"]) {
-		const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const label = " CVV: ";
+  for (const invalidValue of ["12", "12345"]) {
+    const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens numeric PINs only with an explicit PIN label", () => {
-	const pins = [
-		"PIN: 4827",
-		"PIN Code: 736194",
-		"PIN Number=8026",
-		"PIN No.: 0000",
-		"Card PIN: 7482",
-		"Personal Identification Number: ٣٩٢٨",
-		"PIN: 48\u200b27",
-	];
-	for (const pin of pins) {
-		expect(hasSensitiveNamingContext(pin)).toBe(true);
-		expect(hasSensitiveOutput(pin)).toBe(true);
-	}
+  const pins = [
+    "PIN: 4827",
+    "PIN Code: 736194",
+    "PIN Number=8026",
+    "PIN No.: 0000",
+    "Card PIN: 7482",
+    "Personal Identification Number: ٣٩٢٨",
+    "PIN: 48\u200b27",
+  ];
+  for (const pin of pins) {
+    expect(hasSensitiveNamingContext(pin)).toBe(true);
+    expect(hasSensitiveOutput(pin)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"4827",
-		"PIN the task to the front",
-		"pinning: 4827",
-		"PIN: 123",
-		"PIN: 123456789",
-		"PIN: 1234AB",
-		"Personal Identification Number: 123",
-		"Personal Identification Number: 123456789",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "4827",
+    "PIN the task to the front",
+    "pinning: 4827",
+    "PIN: 123",
+    "PIN: 123456789",
+    "PIN: 1234AB",
+    "Personal Identification Number: 123",
+    "Personal Identification Number: 123456789",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("numeric PINs crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
 
-	for (const label of [" PIN: ", " Personal Identification Number: "]) {
-		for (const value of ["4827", "736194"]) {
-			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  for (const label of [" PIN: ", " Personal Identification Number: "]) {
+    for (const value of ["4827", "736194"]) {
+      for (const valueStart of [
+        prefixLength - 1,
+        suffixStart - value.length + 1,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const label = " PIN: ";
-	for (const invalidValue of ["123", "123456789"]) {
-		const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const label = " PIN: ";
+  for (const invalidValue of ["123", "123456789"]) {
+    const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens explicitly labeled one-time authentication codes without flagging generic codes", () => {
-	const codes = [
-		"OTP: 482739",
-		"OTP Code: 736194",
-		"TOTP=8026",
-		"MFA: 184926",
-		"MFA Verification Code: 583017",
-		"2FA Code: 743926",
-		"2FA Verification Code: 2937",
-		"One-Time Password: 740182",
-		"One-time passcode: 684201",
-		"Authenticator Code: ٤٣٢١",
-		"OTP: 48\u200b27",
-	];
-	for (const code of codes) {
-		expect(hasSensitiveNamingContext(code)).toBe(true);
-		expect(hasSensitiveOutput(code)).toBe(true);
-	}
+  const codes = [
+    "OTP: 482739",
+    "OTP Code: 736194",
+    "TOTP=8026",
+    "MFA: 184926",
+    "MFA Verification Code: 583017",
+    "2FA Code: 743926",
+    "2FA Verification Code: 2937",
+    "One-Time Password: 740182",
+    "One-time passcode: 684201",
+    "Authenticator Code: ٤٣٢١",
+    "OTP: 48\u200b27",
+  ];
+  for (const code of codes) {
+    expect(hasSensitiveNamingContext(code)).toBe(true);
+    expect(hasSensitiveOutput(code)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"482739",
-		"Verification Code: 482739",
-		"Security Code: 482739",
-		"Authentication Code: 482739",
-		"OTP is a type of one-time password",
-		"OTP: 123",
-		"OTP: 123456789",
-		"OTP: 1234AB",
-		"One-time password support is enabled",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "482739",
+    "Verification Code: 482739",
+    "Security Code: 482739",
+    "Authentication Code: 482739",
+    "OTP is a type of one-time password",
+    "OTP: 123",
+    "OTP: 123456789",
+    "OTP: 1234AB",
+    "One-time password support is enabled",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("one-time authentication codes crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
 
-	for (const label of [" OTP: ", " MFA Code: ", " One-Time Password: ", " Authenticator Code: "]) {
-		for (const value of ["4827", "736194"]) {
-			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  for (const label of [
+    " OTP: ",
+    " MFA Code: ",
+    " One-Time Password: ",
+    " Authenticator Code: ",
+  ]) {
+    for (const value of ["4827", "736194"]) {
+      for (const valueStart of [
+        prefixLength - 1,
+        suffixStart - value.length + 1,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const label = " OTP: ";
-	for (const invalidValue of ["123", "123456789"]) {
-		const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const label = " OTP: ";
+  for (const invalidValue of ["123", "123456789"]) {
+    const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens explicitly labeled backup and recovery codes with digits", () => {
-	const codes = [
-		"Recovery Code: 482739",
-		"Backup Code: 736194",
-		"Recovery Codes=ABCD-EF12",
-		"Backup Key: K4J7-M3Q9",
-		"MFA Recovery Code: Q8R2-17NX",
-		"Recovery Key: 12345678901234567890123456789012",
-		"Backup Code: 4829\u200b3710",
-	];
-	for (const code of codes) {
-		expect(hasSensitiveNamingContext(code)).toBe(true);
-		expect(hasSensitiveOutput(code)).toBe(true);
-	}
+  const codes = [
+    "Recovery Code: 482739",
+    "Backup Code: 736194",
+    "Recovery Codes=ABCD-EF12",
+    "Backup Key: K4J7-M3Q9",
+    "MFA Recovery Code: Q8R2-17NX",
+    "Recovery Key: 12345678901234567890123456789012",
+    "Backup Code: 4829\u200b3710",
+  ];
+  for (const code of codes) {
+    expect(hasSensitiveNamingContext(code)).toBe(true);
+    expect(hasSensitiveOutput(code)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		"482739",
-		"Code: 482739",
-		"Key: AB12345",
-		"Recovery Code: ABCDEF",
-		"Backup Code: 12345",
-		"Recovery Code: 123456789012345678901234567890123",
-		"Recovery Code: please reset my account",
-		"I need to understand recovery codes",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "482739",
+    "Code: 482739",
+    "Key: AB12345",
+    "Recovery Code: ABCDEF",
+    "Backup Code: 12345",
+    "Recovery Code: 123456789012345678901234567890123",
+    "Recovery Code: please reset my account",
+    "I need to understand recovery codes",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("backup and recovery codes crossing either retained prompt boundary are detected", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
 
-	for (const label of [" Recovery Code: ", " Backup Key: "]) {
-		for (const value of ["482739", "ABCD-EF12"]) {
-			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const context = buildNamingRequestContext([], prompt);
-				expect(hasSensitiveNamingContext(context.text)).toBe(false);
-				expect(context.hasSensitiveBoundary()).toBe(true);
-			}
-		}
-	}
+  for (const label of [" Recovery Code: ", " Backup Key: "]) {
+    for (const value of ["482739", "ABCD-EF12"]) {
+      for (const valueStart of [
+        prefixLength - 1,
+        suffixStart - value.length + 1,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const context = buildNamingRequestContext([], prompt);
+        expect(hasSensitiveNamingContext(context.text)).toBe(false);
+        expect(context.hasSensitiveBoundary()).toBe(true);
+      }
+    }
+  }
 
-	const label = " Recovery Code: ";
-	for (const invalidValue of ["12345", "ABCDEF", "123456789012345678901234567890123"]) {
-		const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const label = " Recovery Code: ";
+  for (const invalidValue of [
+    "12345",
+    "ABCDEF",
+    "123456789012345678901234567890123",
+  ]) {
+    const invalidPrompt = `${"x".repeat(prefixLength - 1 - label.length)}${label}${invalidValue} ${"y".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens Luhn-valid labeled payment cards across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const label = " Card Number: ";
-	const value = "0000-0000-0000-0000";
-	const invalidLuhnValue = "0000-0000-0000-0001";
-	const prefixValueStart = prefixLength - 8;
-	const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"x".repeat(1_200)}`;
-	const prefixContext = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
-	expect(prefixContext.text).toBe(buildNamingContext([], prompt));
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const label = " Card Number: ";
+  const value = "0000-0000-0000-0000";
+  const invalidLuhnValue = "0000-0000-0000-0001";
+  const prefixValueStart = prefixLength - 8;
+  const prompt = `${"x".repeat(prefixValueStart - label.length)}${label}${value} ${"x".repeat(1_200)}`;
+  const prefixContext = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+  expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+  expect(prefixContext.text).toBe(buildNamingContext([], prompt));
 
-	const obfuscatedValue = `${value.slice(0, 8)}\u0000${value.slice(8)}`;
-	const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const obfuscatedValue = `${value.slice(0, 8)}\u0000${value.slice(8)}`;
+  const obfuscatedPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${obfuscatedValue} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(988 - label.length)}${label}${value} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(988 - label.length)}${label}${value} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const suffixValueStart = suffixStart - 8;
-	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} ${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const suffixValueStart = suffixStart - 8;
+  const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} ${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${value} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	const labelOnlyPrompt = `${"x".repeat(prefixLength - label.length)}${label}${value} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], labelOnlyPrompt).hasSensitiveBoundary()).toBe(false);
-	const unlabeledPrompt = `${"x".repeat(prefixValueStart - 1)} ${value} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], unlabeledPrompt).hasSensitiveBoundary()).toBe(false);
-	const invalidLuhnPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${invalidLuhnValue} ${"x".repeat(1_200)}`;
-	expect(hasSensitiveNamingContext(`${label}${invalidLuhnValue}`)).toBe(false);
-	expect(buildNamingRequestContext([], invalidLuhnPrompt).hasSensitiveBoundary()).toBe(false);
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)}${label}${value} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const labelOnlyPrompt = `${"x".repeat(prefixLength - label.length)}${label}${value} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], labelOnlyPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const unlabeledPrompt = `${"x".repeat(prefixValueStart - 1)} ${value} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], unlabeledPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const invalidLuhnPrompt = `${"x".repeat(prefixValueStart - label.length)}${label}${invalidLuhnValue} ${"x".repeat(1_200)}`;
+  expect(hasSensitiveNamingContext(`${label}${invalidLuhnValue}`)).toBe(false);
+  expect(
+    buildNamingRequestContext([], invalidLuhnPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Luhn-valid labeled payment cards written with Unicode decimal digits", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const label = " Card Number: ";
-	const value = "٠٠٠٠-٠٠٠٠-٠٠٠٠-٠٠٠٠";
-	const labeledValue = `${label}${value}`;
-	expect(hasSensitiveNamingContext(labeledValue)).toBe(true);
-	expect(hasSensitiveOutput(labeledValue)).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const label = " Card Number: ";
+  const value = "٠٠٠٠-٠٠٠٠-٠٠٠٠-٠٠٠٠";
+  const labeledValue = `${label}${value}`;
+  expect(hasSensitiveNamingContext(labeledValue)).toBe(true);
+  expect(hasSensitiveOutput(labeledValue)).toBe(true);
 
-	const valueStart = prefixLength - 8;
-	const prompt = `${"x".repeat(valueStart - label.length)}${labeledValue} ${"y".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
+  const valueStart = prefixLength - 8;
+  const prompt = `${"x".repeat(valueStart - label.length)}${labeledValue} ${"y".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
 
-	const obfuscated = `${value.slice(0, 8)}\u0000${value.slice(8)}`;
-	const obfuscatedPrompt = `${"x".repeat(valueStart - label.length)}${label}${obfuscated} ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const obfuscated = `${value.slice(0, 8)}\u0000${value.slice(8)}`;
+  const obfuscatedPrompt = `${"x".repeat(valueStart - label.length)}${label}${obfuscated} ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(988 - label.length)}${label}${value} y`;
-	for (const input of [
-		[{ role: "user", content: historyContent }],
-		[{ role: "compactionSummary", summary: historyContent }],
-	] as any[]) {
-		const history = buildNamingRequestContext(input);
-		expect(hasSensitiveNamingContext(history.text)).toBe(false);
-		expect(history.hasSensitiveBoundary()).toBe(true);
-	}
+  const historyContent = `${"x".repeat(988 - label.length)}${label}${value} y`;
+  for (const input of [
+    [{ role: "user", content: historyContent }],
+    [{ role: "compactionSummary", summary: historyContent }],
+  ] as any[]) {
+    const history = buildNamingRequestContext(input);
+    expect(hasSensitiveNamingContext(history.text)).toBe(false);
+    expect(history.hasSensitiveBoundary()).toBe(true);
+  }
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const suffixValueStart = suffixStart - 8;
-	const suffixPrompt = `${"x".repeat(suffixValueStart - label.length)}${label}${value} `
-		+ `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
-	const suffix = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffix.text)).toBe(false);
-	expect(suffix.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const suffixValueStart = suffixStart - 8;
+  const suffixPrompt =
+    `${"x".repeat(suffixValueStart - label.length)}${label}${value} ` +
+    `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+  const suffix = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffix.text)).toBe(false);
+  expect(suffix.hasSensitiveBoundary()).toBe(true);
 
-	const cardInDigitSet = (zero: number, finalDigit = 0) => {
-		const digits = Array.from({ length: 16 }, (_, index) =>
-			String.fromCodePoint(zero + (index === 15 ? finalDigit : 0)));
-		return [0, 4, 8, 12].map((start) => digits.slice(start, start + 4).join("")).join("-");
-	};
-	for (const zero of [0x06f0, 0x0966, 0x09e6, 0x1e950]) {
-		expect(hasSensitiveNamingContext(`${label}${cardInDigitSet(zero)}`)).toBe(true);
-		expect(hasSensitiveOutput(`${label}${cardInDigitSet(zero)}`)).toBe(true);
-		expect(hasSensitiveNamingContext(`${label}${cardInDigitSet(zero, 1)}`)).toBe(false);
-		expect(hasSensitiveOutput(`${label}${cardInDigitSet(zero, 1)}`)).toBe(false);
-	}
-	const invalidLuhn = "٠٠٠٠-٠٠٠٠-٠٠٠٠-٠٠٠١";
-	const overlong = `Card Number: ${"٠".repeat(20)}`;
-	for (const nearMiss of [`${label}${invalidLuhn}`, overlong]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const unlabeled = `  ${value} `;
-	expect(hasSensitiveNamingContext(unlabeled)).toBe(false);
-	expect(hasSensitiveOutput(unlabeled)).toBe(false);
+  const cardInDigitSet = (zero: number, finalDigit = 0) => {
+    const digits = Array.from({ length: 16 }, (_, index) =>
+      String.fromCodePoint(zero + (index === 15 ? finalDigit : 0)),
+    );
+    return [0, 4, 8, 12]
+      .map((start) => digits.slice(start, start + 4).join(""))
+      .join("-");
+  };
+  for (const zero of [0x06f0, 0x0966, 0x09e6, 0x1e950]) {
+    expect(hasSensitiveNamingContext(`${label}${cardInDigitSet(zero)}`)).toBe(
+      true,
+    );
+    expect(hasSensitiveOutput(`${label}${cardInDigitSet(zero)}`)).toBe(true);
+    expect(
+      hasSensitiveNamingContext(`${label}${cardInDigitSet(zero, 1)}`),
+    ).toBe(false);
+    expect(hasSensitiveOutput(`${label}${cardInDigitSet(zero, 1)}`)).toBe(
+      false,
+    );
+  }
+  const invalidLuhn = "٠٠٠٠-٠٠٠٠-٠٠٠٠-٠٠٠١";
+  const overlong = `Card Number: ${"٠".repeat(20)}`;
+  for (const nearMiss of [`${label}${invalidLuhn}`, overlong]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const unlabeled = `  ${value} `;
+  expect(hasSensitiveNamingContext(unlabeled)).toBe(false);
+  expect(hasSensitiveOutput(unlabeled)).toBe(false);
 });
 
 test("screens email addresses across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const address = "alice@example.test";
-	const prefixAddressStart = prefixLength - 6;
-	const prompt = `${"x".repeat(prefixAddressStart - 1)} ${address} ${"x".repeat(1_200)}`;
-	const prefixContext = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-	expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const address = "alice@example.test";
+  const prefixAddressStart = prefixLength - 6;
+  const prompt = `${"x".repeat(prefixAddressStart - 1)} ${address} ${"x".repeat(1_200)}`;
+  const prefixContext = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+  expect(prefixContext.hasSensitiveBoundary()).toBe(true);
 
-	const obfuscatedAddress = address.replace("@", "@\u200b");
-	const obfuscatedPrompt = `${"x".repeat(prefixAddressStart - 1)} ${obfuscatedAddress} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const obfuscatedAddress = address.replace("@", "@\u200b");
+  const obfuscatedPrompt = `${"x".repeat(prefixAddressStart - 1)} ${obfuscatedAddress} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(993)} ${address} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(993)} ${address} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = promptLength - suffixLength;
-	const suffixAddressStart = suffixStart - address.length + 6;
-	const suffixPrompt = `${"x".repeat(suffixAddressStart - 1)} ${address} ${"y".repeat(promptLength - suffixAddressStart - address.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = promptLength - suffixLength;
+  const suffixAddressStart = suffixStart - address.length + 6;
+  const suffixPrompt = `${"x".repeat(suffixAddressStart - 1)} ${address} ${"y".repeat(promptLength - suffixAddressStart - address.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const omittedAddressPrompt = `${"x".repeat(prefixLength + 19)} ${address} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedAddressPrompt).hasSensitiveBoundary()).toBe(false);
-	const nearMiss = "alice@example.x";
-	const nearMissPrompt = `${"x".repeat(prefixAddressStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
+  const omittedAddressPrompt = `${"x".repeat(prefixLength + 19)} ${address} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedAddressPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  const nearMiss = "alice@example.x";
+  const nearMissPrompt = `${"x".repeat(prefixAddressStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens internationalized email addresses across context and truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const addresses = [
-		"δοκιμή@παράδειγμα.δοκιμή",
-		"用户@example.test",
-		"e\u0301@example.test",
-		"𐐀@example.test",
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const addresses = [
+    "δοκιμή@παράδειγμα.δοκιμή",
+    "用户@example.test",
+    "e\u0301@example.test",
+    "𐐀@example.test",
+  ];
 
-	for (const address of addresses) {
-		expect(hasSensitiveNamingContext(address)).toBe(true);
-		expect(hasSensitiveOutput(address)).toBe(true);
+  for (const address of addresses) {
+    expect(hasSensitiveNamingContext(address)).toBe(true);
+    expect(hasSensitiveOutput(address)).toBe(true);
 
-		const addressOffset = Math.floor(address.length / 2);
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const prefixAddressStart = prefixLength - addressOffset;
-		const prefixPrompt = `${"x".repeat(prefixAddressStart - 1)} ${address} ${"y".repeat(promptLength - prefixAddressStart - address.length - 1)}`;
-		const prefixContext = buildNamingRequestContext([], prefixPrompt);
-		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+    const addressOffset = Math.floor(address.length / 2);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const prefixAddressStart = prefixLength - addressOffset;
+    const prefixPrompt = `${"x".repeat(prefixAddressStart - 1)} ${address} ${"y".repeat(promptLength - prefixAddressStart - address.length - 1)}`;
+    const prefixContext = buildNamingRequestContext([], prefixPrompt);
+    expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+    expect(prefixContext.hasSensitiveBoundary()).toBe(true);
 
-		const suffixStart = promptLength - Math.floor(retainedLength / 2);
-		const suffixAddressStart = suffixStart - addressOffset;
-		const suffixPrompt = `${"x".repeat(suffixAddressStart - 1)} ${address} ${"y".repeat(promptLength - suffixAddressStart - address.length - 1)}`;
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
-	}
+    const suffixStart = promptLength - Math.floor(retainedLength / 2);
+    const suffixAddressStart = suffixStart - addressOffset;
+    const suffixPrompt = `${"x".repeat(suffixAddressStart - 1)} ${address} ${"y".repeat(promptLength - suffixAddressStart - address.length - 1)}`;
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  }
 
-	for (const nearMiss of ["δοκιμή@παράδειγμα.x", "用户@example.1"]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of ["δοκιμή@παράδειγμα.x", "用户@example.1"]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens GitHub tokens across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = [`ghp_${"A".repeat(36)}`, `github_pat_${"B".repeat(30)}`];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = [`ghp_${"A".repeat(36)}`, `github_pat_${"B".repeat(30)}`];
 
-	for (const token of tokens) {
-		const prefixTokenStart = prefixLength - 8;
-		const prompt = `${"x".repeat(prefixTokenStart)}${token} ${"x".repeat(1_200)}`;
-		const prefixContext = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
-		expect(prefixContext.hasSensitiveBoundary()).toBe(true);
-		expect(prefixContext.text).toBe(buildNamingContext([], prompt));
+  for (const token of tokens) {
+    const prefixTokenStart = prefixLength - 8;
+    const prompt = `${"x".repeat(prefixTokenStart)}${token} ${"x".repeat(1_200)}`;
+    const prefixContext = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(prefixContext.text)).toBe(false);
+    expect(prefixContext.hasSensitiveBoundary()).toBe(true);
+    expect(prefixContext.text).toBe(buildNamingContext([], prompt));
 
-		const controlObfuscatedToken = `${token.slice(0, 18)}\u0000${token.slice(18)}`;
-		const obfuscatedPrompt = `${"x".repeat(prefixTokenStart)}${controlObfuscatedToken} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+    const controlObfuscatedToken = `${token.slice(0, 18)}\u0000${token.slice(18)}`;
+    const obfuscatedPrompt = `${"x".repeat(prefixTokenStart)}${controlObfuscatedToken} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+    ).toBe(true);
 
-		const historyContent = `${"x".repeat(992)}${token} y`;
-		const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-		expect(hasSensitiveNamingContext(history.text)).toBe(false);
-		expect(history.hasSensitiveBoundary()).toBe(true);
-		const summary = buildNamingRequestContext([
-			{ role: "compactionSummary", summary: historyContent },
-		] as any);
-		expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-		expect(summary.hasSensitiveBoundary()).toBe(true);
+    const historyContent = `${"x".repeat(992)}${token} y`;
+    const history = buildNamingRequestContext([
+      { role: "user", content: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(history.text)).toBe(false);
+    expect(history.hasSensitiveBoundary()).toBe(true);
+    const summary = buildNamingRequestContext([
+      { role: "compactionSummary", summary: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+    expect(summary.hasSensitiveBoundary()).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixLength = Math.floor(retainedLength / 2);
-		const suffixStart = promptLength - suffixLength;
-		const suffixTokenStart = suffixStart - token.length + 8;
-		const suffixPrompt = `${"x".repeat(suffixTokenStart)}${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
-	}
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixLength = Math.floor(retainedLength / 2);
+    const suffixStart = promptLength - suffixLength;
+    const suffixTokenStart = suffixStart - token.length + 8;
+    const suffixPrompt = `${"x".repeat(suffixTokenStart)}${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  }
 
-	const omittedToken = tokens[0]!;
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${omittedToken} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	for (const shortToken of [`ghp_${"A".repeat(19)}`, `github_pat_${"B".repeat(19)}`]) {
-		const shortPrompt = `${"x".repeat(prefixLength - 8)}${shortToken} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], shortPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const omittedToken = tokens[0]!;
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)}${omittedToken} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  for (const shortToken of [
+    `ghp_${"A".repeat(19)}`,
+    `github_pat_${"B".repeat(19)}`,
+  ]) {
+    const shortPrompt = `${"x".repeat(prefixLength - 8)}${shortToken} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], shortPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens Azure AD client-secret formats without flagging near-misses", () => {
-	const body = `${"Aa0_-.".repeat(5)}C3`;
-	const secrets = [`AbC7Q~${body}`, `AbC7Q~${body.slice(0, 31)}`, `AbC7Q~${body}${"x".repeat(2)}`];
-	const obfuscatedSecrets = [
-		secrets[0]!.replace("Q~", "Q\u200b~"),
-		secrets[0]!.replace("AbC7", "Ab\u200bC7"),
-		secrets[0]!.replace(body.slice(0, 16), `${body.slice(0, 16)}\u200b`),
-	];
+  const body = `${"Aa0_-.".repeat(5)}C3`;
+  const secrets = [
+    `AbC7Q~${body}`,
+    `AbC7Q~${body.slice(0, 31)}`,
+    `AbC7Q~${body}${"x".repeat(2)}`,
+  ];
+  const obfuscatedSecrets = [
+    secrets[0]!.replace("Q~", "Q\u200b~"),
+    secrets[0]!.replace("AbC7", "Ab\u200bC7"),
+    secrets[0]!.replace(body.slice(0, 16), `${body.slice(0, 16)}\u200b`),
+  ];
 
-	for (const value of [...secrets, ...obfuscatedSecrets]) {
-		expect(hasSensitiveNamingContext(`Review Azure AD application access ${value}`)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [...secrets, ...obfuscatedSecrets]) {
+    expect(
+      hasSensitiveNamingContext(`Review Azure AD application access ${value}`),
+    ).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`AbC7Q~${body.slice(0, 30)}`,
-		`AbC7Q~${body}${"x".repeat(3)}`,
-		`AbC7R~${body}`,
-		secrets[0]!.replace("Aa", "A!"),
-		`prefix${secrets[0]}`,
-		`${secrets[0]}suffix`,
-		"Azure AD application registration setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `AbC7Q~${body.slice(0, 30)}`,
+    `AbC7Q~${body}${"x".repeat(3)}`,
+    `AbC7R~${body}`,
+    secrets[0]!.replace("Aa", "A!"),
+    `prefix${secrets[0]}`,
+    `${secrets[0]}suffix`,
+    "Azure AD application registration setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens synthetic Tailscale key strings in context and output", () => {
-	const keys = [
-		`tskey-${"A1b2".repeat(4)}`,
-		`tskey-${"C3d4".repeat(9)}`,
-		`tskey-${"E5f6".repeat(9)}`,
-		`tskey-auth-${"A1b2".repeat(4)}`,
-		`tskey-api-${"C3d4".repeat(5)}`,
-		`tskey-client-${"E5f6".repeat(5)}`,
-	];
+  const keys = [
+    `tskey-${"A1b2".repeat(4)}`,
+    `tskey-${"C3d4".repeat(9)}`,
+    `tskey-${"E5f6".repeat(9)}`,
+    `tskey-auth-${"A1b2".repeat(4)}`,
+    `tskey-api-${"C3d4".repeat(5)}`,
+    `tskey-client-${"E5f6".repeat(5)}`,
+  ];
 
-	for (const key of keys) {
-		expect(hasSensitiveNamingContext(`provision Tailscale auth key ${key}`)).toBe(true);
-		expect(hasSensitiveOutput(key)).toBe(true);
-	}
+  for (const key of keys) {
+    expect(
+      hasSensitiveNamingContext(`provision Tailscale auth key ${key}`),
+    ).toBe(true);
+    expect(hasSensitiveOutput(key)).toBe(true);
+  }
 });
 
 test("screens Tailscale keys with invisible formatting without flagging ordinary setup text", () => {
-	const body = "A1b2C3d4E5f6G7h8";
-	const obfuscatedKeys = [
-		`ts\u200bkey-${body}`,
-		`tskey-${body.slice(0, 8)}\u200b${body.slice(8)}`,
-		`tskey-auth-${body.slice(0, 8)}\u200b${body.slice(8)}`,
-		`tskey-\u200bauth-${body}`,
-	];
-	for (const key of obfuscatedKeys) {
-		expect(hasSensitiveNamingContext(key)).toBe(true);
-		expect(hasSensitiveOutput(key)).toBe(true);
-	}
+  const body = "A1b2C3d4E5f6G7h8";
+  const obfuscatedKeys = [
+    `ts\u200bkey-${body}`,
+    `tskey-${body.slice(0, 8)}\u200b${body.slice(8)}`,
+    `tskey-auth-${body.slice(0, 8)}\u200b${body.slice(8)}`,
+    `tskey-\u200bauth-${body}`,
+  ];
+  for (const key of obfuscatedKeys) {
+    expect(hasSensitiveNamingContext(key)).toBe(true);
+    expect(hasSensitiveOutput(key)).toBe(true);
+  }
 
-	for (const ordinaryText of [
-		"tskey-123456789012345",
-		"tskey-auth-________________",
-		`tskey-other-${"A1b2".repeat(5)}`,
-		"Tailscale auth-key setup",
-	]) {
-		expect(hasSensitiveNamingContext(ordinaryText)).toBe(false);
-		expect(hasSensitiveOutput(ordinaryText)).toBe(false);
-	}
-	for (const subtype of ["auth", "api"]) {
-		const shortTypedValue = ["tskey", subtype, "123456789012345"].join("-");
-		expect(hasSensitiveNamingContext(shortTypedValue)).toBe(false);
-		expect(hasSensitiveOutput(shortTypedValue)).toBe(false);
-	}
+  for (const ordinaryText of [
+    "tskey-123456789012345",
+    "tskey-auth-________________",
+    `tskey-other-${"A1b2".repeat(5)}`,
+    "Tailscale auth-key setup",
+  ]) {
+    expect(hasSensitiveNamingContext(ordinaryText)).toBe(false);
+    expect(hasSensitiveOutput(ordinaryText)).toBe(false);
+  }
+  for (const subtype of ["auth", "api"]) {
+    const shortTypedValue = ["tskey", subtype, "123456789012345"].join("-");
+    expect(hasSensitiveNamingContext(shortTypedValue)).toBe(false);
+    expect(hasSensitiveOutput(shortTypedValue)).toBe(false);
+  }
 });
 
 test("screens synthetic Stripe webhook signing secrets without flagging short or prefixed near-misses", () => {
-	const body = "A1b2".repeat(8);
-	const secret = `whsec_${body}`;
-	const obfuscatedValues = [
-		`whsec_${body.slice(0, 16)}\u200b${body.slice(16)}`,
-		`whsec\u200b_${body}`,
-	];
+  const body = "A1b2".repeat(8);
+  const secret = `whsec_${body}`;
+  const obfuscatedValues = [
+    `whsec_${body.slice(0, 16)}\u200b${body.slice(16)}`,
+    `whsec\u200b_${body}`,
+  ];
 
-	for (const value of [secret, ...obfuscatedValues]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [secret, ...obfuscatedValues]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`whsec_${"A1b2".repeat(5)}`,
-		"whsec_example_secret",
-		"Stripe webhook signing secret",
-		`prefixwhsec_${body}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `whsec_${"A1b2".repeat(5)}`,
+    "whsec_example_secret",
+    "Stripe webhook signing secret",
+    `prefixwhsec_${body}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Stripe secret API keys in supported modes without flagging near-misses", () => {
-	const keys = [
-		...(["live", "test", "prod"] as const).flatMap((mode) => [
-			`sk_${mode}_${"A1b2".repeat(6)}`,
-			`rk_${mode}_${"C3d4".repeat(6)}`,
-		]),
-	];
-	const obfuscatedKeys = [
-		keys[4]!.replace("prod", "pr\u200bod"),
-		keys[5]!.replace("C3d4".repeat(3), `${"C3d4".repeat(3)}\u200b`),
-	];
+  const keys = [
+    ...(["live", "test", "prod"] as const).flatMap((mode) => [
+      `sk_${mode}_${"A1b2".repeat(6)}`,
+      `rk_${mode}_${"C3d4".repeat(6)}`,
+    ]),
+  ];
+  const obfuscatedKeys = [
+    keys[4]!.replace("prod", "pr\u200bod"),
+    keys[5]!.replace("C3d4".repeat(3), `${"C3d4".repeat(3)}\u200b`),
+  ];
 
-	for (const value of [...keys, ...obfuscatedKeys, `sk_prod_${"A".repeat(16)}`]) {
-		expect(hasSensitiveNamingContext(`review payment processing ${value}`)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [
+    ...keys,
+    ...obfuscatedKeys,
+    `sk_prod_${"A".repeat(16)}`,
+  ]) {
+    expect(
+      hasSensitiveNamingContext(`review payment processing ${value}`),
+    ).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`sk_prod_${"A".repeat(15)}`,
-		`rk_prod_${"C".repeat(15)}`,
-		`pk_prod_${"A".repeat(24)}`,
-		`sk_production_${"A".repeat(24)}`,
-		`sk_prod_${"A".repeat(10)}!${"A".repeat(14)}`,
-		"Stripe production API key setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `sk_prod_${"A".repeat(15)}`,
+    `rk_prod_${"C".repeat(15)}`,
+    `pk_prod_${"A".repeat(24)}`,
+    `sk_production_${"A".repeat(24)}`,
+    `sk_prod_${"A".repeat(10)}!${"A".repeat(14)}`,
+    "Stripe production API key setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Typeform API tokens by exact prefix and length without flagging near-misses", () => {
-	const body = `${"A1._-=".repeat(9)}A1._-`;
-	const token = `tfp_${body}`;
-	const obfuscatedTokens = [
-		token.replace("tfp_", "tf\u200bp_"),
-		`${token.slice(0, 30)}\u200b${token.slice(30)}`,
-	];
+  const body = `${"A1._-=".repeat(9)}A1._-`;
+  const token = `tfp_${body}`;
+  const obfuscatedTokens = [
+    token.replace("tfp_", "tf\u200bp_"),
+    `${token.slice(0, 30)}\u200b${token.slice(30)}`,
+  ];
 
-	for (const value of [token, token.toUpperCase(), ...obfuscatedTokens]) {
-		expect(hasSensitiveNamingContext(`review survey integration ${value}`)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [token, token.toUpperCase(), ...obfuscatedTokens]) {
+    expect(
+      hasSensitiveNamingContext(`review survey integration ${value}`),
+    ).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`tfp_${body.slice(0, 58)}`,
-		`tfp_${body}A`,
-		`tfq_${body}`,
-		`tfp_${body.slice(0, 20)}!${body.slice(20)}`,
-		`prefix${token}`,
-		`_${token}`,
-		"Typeform API token setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `tfp_${body.slice(0, 58)}`,
+    `tfp_${body}A`,
+    `tfq_${body}`,
+    `tfp_${body.slice(0, 20)}!${body.slice(20)}`,
+    `prefix${token}`,
+    `_${token}`,
+    "Typeform API token setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens synthetic Slack webhook URLs without flagging similar links", () => {
-	const token = "A1b2".repeat(10) + "A1b";
-	const legacySecret = "C3d4".repeat(6);
-	const legacyUrl = `https://hooks.slack.com/services/T00000000/B11111111/${legacySecret}`;
-	const urls = [
-		`https://hooks.slack.com/services/${token}`,
-		`hooks.slack.com/workflows/${token}`,
-		`http://hooks.slack.com/triggers/${token}`,
-		`https://hooks.slack.com/services/${token.slice(0, 21)}\u200b${token.slice(21)}`,
-		legacyUrl,
-		legacyUrl.replace("hooks.slack.com", "hooks.slack.\u200bcom"),
-		legacyUrl.replace(legacySecret, `${legacySecret.slice(0, 12)}\u200b${legacySecret.slice(12)}`),
-	];
+  const token = "A1b2".repeat(10) + "A1b";
+  const legacySecret = "C3d4".repeat(6);
+  const legacyUrl = `https://hooks.slack.com/services/T00000000/B11111111/${legacySecret}`;
+  const urls = [
+    `https://hooks.slack.com/services/${token}`,
+    `hooks.slack.com/workflows/${token}`,
+    `http://hooks.slack.com/triggers/${token}`,
+    `https://hooks.slack.com/services/${token.slice(0, 21)}\u200b${token.slice(21)}`,
+    legacyUrl,
+    legacyUrl.replace("hooks.slack.com", "hooks.slack.\u200bcom"),
+    legacyUrl.replace(
+      legacySecret,
+      `${legacySecret.slice(0, 12)}\u200b${legacySecret.slice(12)}`,
+    ),
+  ];
 
-	for (const url of urls) {
-		expect(hasSensitiveNamingContext(url)).toBe(true);
-		expect(hasSensitiveOutput(url)).toBe(true);
-	}
+  for (const url of urls) {
+    expect(hasSensitiveNamingContext(url)).toBe(true);
+    expect(hasSensitiveOutput(url)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`https://hooks.slack.com/services/${"A1b2".repeat(10) + "A1"}`,
-		`https://hooks.slack.com/services/${token}${"A".repeat(14)}`,
-		`https://hooks.slack.com.evil.test/services/${token}`,
-		legacyUrl.replace("T00000000", "T0000000"),
-		legacyUrl.replace("B11111111", "B1111111"),
-		legacyUrl.replace(legacySecret, legacySecret.slice(1)),
-		legacyUrl.replace(legacySecret, `${legacySecret}A`),
-		legacyUrl.replace("/services/", "/service/"),
-		legacyUrl.replace("hooks.slack.com", "hooks.slack.com.evil.test"),
-		`https://hooks.slack.com/api/${token}`,
-		"Slack webhook configuration",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `https://hooks.slack.com/services/${"A1b2".repeat(10) + "A1"}`,
+    `https://hooks.slack.com/services/${token}${"A".repeat(14)}`,
+    `https://hooks.slack.com.evil.test/services/${token}`,
+    legacyUrl.replace("T00000000", "T0000000"),
+    legacyUrl.replace("B11111111", "B1111111"),
+    legacyUrl.replace(legacySecret, legacySecret.slice(1)),
+    legacyUrl.replace(legacySecret, `${legacySecret}A`),
+    legacyUrl.replace("/services/", "/service/"),
+    legacyUrl.replace("hooks.slack.com", "hooks.slack.com.evil.test"),
+    `https://hooks.slack.com/api/${token}`,
+    "Slack webhook configuration",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens synthetic Discord webhook URLs without flagging similar links", () => {
-	const id = "123456789012345678";
-	const token = "A1b2".repeat(17);
-	const url = `https://discord.com/api/webhooks/${id}/${token}`;
-	const legacyUrl = url.replace("discord.com", "discordapp.com");
-	const underscoreToken = "A1b_".repeat(17);
-	const underscoreUrl = url.replace(token, underscoreToken);
-	const screenedUrls = [
-		url.replace("discord.com", "dis\u200bcord.com"),
-		url.replace(token, `${token.slice(0, 34)}\u200b${token.slice(34)}`),
-		legacyUrl,
-		legacyUrl.replace("discordapp.com", "discordapp.\u200bcom"),
-		legacyUrl.replace(token, `${token.slice(0, 34)}\u200b${token.slice(34)}`),
-		underscoreUrl,
-		underscoreUrl.replace(underscoreToken, `${underscoreToken.slice(0, 34)}\u200b${underscoreToken.slice(34)}`),
-	];
+  const id = "123456789012345678";
+  const token = "A1b2".repeat(17);
+  const url = `https://discord.com/api/webhooks/${id}/${token}`;
+  const legacyUrl = url.replace("discord.com", "discordapp.com");
+  const underscoreToken = "A1b_".repeat(17);
+  const underscoreUrl = url.replace(token, underscoreToken);
+  const screenedUrls = [
+    url.replace("discord.com", "dis\u200bcord.com"),
+    url.replace(token, `${token.slice(0, 34)}\u200b${token.slice(34)}`),
+    legacyUrl,
+    legacyUrl.replace("discordapp.com", "discordapp.\u200bcom"),
+    legacyUrl.replace(token, `${token.slice(0, 34)}\u200b${token.slice(34)}`),
+    underscoreUrl,
+    underscoreUrl.replace(
+      underscoreToken,
+      `${underscoreToken.slice(0, 34)}\u200b${underscoreToken.slice(34)}`,
+    ),
+  ];
 
-	for (const value of [url, ...screenedUrls]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [url, ...screenedUrls]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		url.replace(id, id.slice(1)),
-		url.replace(token, token.slice(0, -1)),
-		url.replace(token, `${token}a`),
-		url.replace("discord.com", "discord.com.evil.test"),
-		legacyUrl.replace("discordapp.com", "discordapp.com.evil.test"),
-		underscoreUrl.replace(underscoreToken, underscoreToken.slice(1)),
-		underscoreUrl.replace(underscoreToken, `${underscoreToken}_`),
-		url.replace("/api/webhooks/", "/api/webhook/"),
-		url.replace("https://", "http://"),
-		`prefix${url}`,
-		"Discord webhook setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    url.replace(id, id.slice(1)),
+    url.replace(token, token.slice(0, -1)),
+    url.replace(token, `${token}a`),
+    url.replace("discord.com", "discord.com.evil.test"),
+    legacyUrl.replace("discordapp.com", "discordapp.com.evil.test"),
+    underscoreUrl.replace(underscoreToken, underscoreToken.slice(1)),
+    underscoreUrl.replace(underscoreToken, `${underscoreToken}_`),
+    url.replace("/api/webhooks/", "/api/webhook/"),
+    url.replace("https://", "http://"),
+    `prefix${url}`,
+    "Discord webhook setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens synthetic Discord authentication and MFA tokens without flagging near-misses", () => {
-	const first = "A1b_".repeat(6);
-	const middle = "cD9_-Z";
-	const last = "QwErTy9_-".repeat(3);
-	const authToken = `${first}.${middle}.${last}`;
-	const mfaToken = `mfa.${"a1B_".repeat(21)}`;
-	const obfuscatedTokens = [
-		authToken.replace(`${first}.`, `${first}.\u200b`),
-		mfaToken.replace("mfa.", "mfa.\u200b"),
-	];
+  const first = "A1b_".repeat(6);
+  const middle = "cD9_-Z";
+  const last = "QwErTy9_-".repeat(3);
+  const authToken = `${first}.${middle}.${last}`;
+  const mfaToken = `mfa.${"a1B_".repeat(21)}`;
+  const obfuscatedTokens = [
+    authToken.replace(`${first}.`, `${first}.\u200b`),
+    mfaToken.replace("mfa.", "mfa.\u200b"),
+  ];
 
-	for (const value of [authToken, mfaToken, ...obfuscatedTokens]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [authToken, mfaToken, ...obfuscatedTokens]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`${first.slice(1)}.${middle}.${last}`,
-		`${first}.${middle.slice(1)}.${last}`,
-		`${first}.${middle}.${last.slice(1)}`,
-		`${authToken}x`,
-		`x${authToken}`,
-		`mfa.${"a1B_".repeat(20)}`,
-		`mfa.${"a1B_".repeat(21)}A`,
-		mfaToken.slice(1),
-		`${mfaToken}x`,
-		`x${mfaToken}`,
-		"Discord bot authentication setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `${first.slice(1)}.${middle}.${last}`,
+    `${first}.${middle.slice(1)}.${last}`,
+    `${first}.${middle}.${last.slice(1)}`,
+    `${authToken}x`,
+    `x${authToken}`,
+    `mfa.${"a1B_".repeat(20)}`,
+    `mfa.${"a1B_".repeat(21)}A`,
+    mfaToken.slice(1),
+    `${mfaToken}x`,
+    `x${mfaToken}`,
+    "Discord bot authentication setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens synthetic Microsoft Teams incoming webhook URLs without flagging similar links", () => {
-	const guid = "01234567-89ab-cdef-0123-456789abcdef";
-	const otherGuid = "fedcba98-7654-3210-fedc-ba9876543210";
-	const token = "a1b2c3d4".repeat(4);
-	const url = `https://tenant.webhook.office.com/webhookb2/${guid}@${otherGuid}/IncomingWebhook/${token}/${guid}`;
-	const obfuscatedUrls = [
-		url.replace("webhook.office.com", "webhook.office.\u200bcom"),
-		url.replace("IncomingWebhook", "Incoming\u200bWebhook"),
-	];
+  const guid = "01234567-89ab-cdef-0123-456789abcdef";
+  const otherGuid = "fedcba98-7654-3210-fedc-ba9876543210";
+  const token = "a1b2c3d4".repeat(4);
+  const url = `https://tenant.webhook.office.com/webhookb2/${guid}@${otherGuid}/IncomingWebhook/${token}/${guid}`;
+  const obfuscatedUrls = [
+    url.replace("webhook.office.com", "webhook.office.\u200bcom"),
+    url.replace("IncomingWebhook", "Incoming\u200bWebhook"),
+  ];
 
-	for (const value of [url, ...obfuscatedUrls]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [url, ...obfuscatedUrls]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		url.replace("webhook.office.com", "webhook.office.com.evil.test"),
-		url.replace("webhookb2", "api"),
-		url.replace(token, `${token}a`),
-		url.replace("https://", "http://"),
-		`prefix${url}`,
-		"Microsoft Teams webhook setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    url.replace("webhook.office.com", "webhook.office.com.evil.test"),
+    url.replace("webhookb2", "api"),
+    url.replace(token, `${token}a`),
+    url.replace("https://", "http://"),
+    `prefix${url}`,
+    "Microsoft Teams webhook setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens synthetic EasyPost API keys without flagging near-misses", () => {
-	const keys = [
-		`EZAK${"A1b2".repeat(13)}A1`,
-		`EZTK${"C3d4".repeat(13)}C3`,
-		`eztk${"E5f6".repeat(13)}E5`,
-	];
-	const obfuscatedKeys = [
-		keys[0]!.replace("EZAK", "EZ\u200bAK"),
-		keys[1]!.replace("C3d4".repeat(3), `C3d4\u200b${"C3d4".repeat(2)}`),
-	];
+  const keys = [
+    `EZAK${"A1b2".repeat(13)}A1`,
+    `EZTK${"C3d4".repeat(13)}C3`,
+    `eztk${"E5f6".repeat(13)}E5`,
+  ];
+  const obfuscatedKeys = [
+    keys[0]!.replace("EZAK", "EZ\u200bAK"),
+    keys[1]!.replace("C3d4".repeat(3), `C3d4\u200b${"C3d4".repeat(2)}`),
+  ];
 
-	for (const key of [...keys, ...obfuscatedKeys, `${keys[0]}-production`]) {
-		expect(hasSensitiveNamingContext(`rotate EasyPost API key ${key}`)).toBe(true);
-		expect(hasSensitiveOutput(key)).toBe(true);
-	}
+  for (const key of [...keys, ...obfuscatedKeys, `${keys[0]}-production`]) {
+    expect(hasSensitiveNamingContext(`rotate EasyPost API key ${key}`)).toBe(
+      true,
+    );
+    expect(hasSensitiveOutput(key)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`EZAK${"A1b2".repeat(13)}A`,
-		`EZTK${"C3d4".repeat(13)}C3A`,
-		`prefixEZAK${"A1b2".repeat(13)}A1`,
-		`EZAK${"A1b2".repeat(13)}A1suffix`,
-		`EZXX${"A1b2".repeat(13)}A1`,
-		"EasyPost API key setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `EZAK${"A1b2".repeat(13)}A`,
+    `EZTK${"C3d4".repeat(13)}C3A`,
+    `prefixEZAK${"A1b2".repeat(13)}A1`,
+    `EZAK${"A1b2".repeat(13)}A1suffix`,
+    `EZXX${"A1b2".repeat(13)}A1`,
+    "EasyPost API key setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens synthetic Airtable personal access tokens without flagging near-misses", () => {
-	const token = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
-	const obfuscatedTokens = [
-		token.replace("pat", "p\u200bat"),
-		token.replace(".", "\u200b."),
-		token.replace("a1b2".repeat(4), `a1b2\u200b${"a1b2".repeat(3)}`),
-	];
+  const token = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
+  const obfuscatedTokens = [
+    token.replace("pat", "p\u200bat"),
+    token.replace(".", "\u200b."),
+    token.replace("a1b2".repeat(4), `a1b2\u200b${"a1b2".repeat(3)}`),
+  ];
 
-	for (const value of [token, ...obfuscatedTokens]) {
-		expect(hasSensitiveNamingContext(`review Airtable access ${value}`)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [token, ...obfuscatedTokens]) {
+    expect(hasSensitiveNamingContext(`review Airtable access ${value}`)).toBe(
+      true,
+    );
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`pat${"A1b2".repeat(3)}A.${"a1b2".repeat(16)}`,
-		`pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(15)}a1b`,
-		`pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(15)}a1bg`,
-		`prefix${token}`,
-		`${token}suffix`,
-		"Airtable personal access token setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `pat${"A1b2".repeat(3)}A.${"a1b2".repeat(16)}`,
+    `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(15)}a1b`,
+    `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(15)}a1bg`,
+    `prefix${token}`,
+    `${token}suffix`,
+    "Airtable personal access token setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens synthetic ClickHouse Cloud API keys without flagging near-misses", () => {
-	const key = `4b1d${"A1b2".repeat(9)}A1`;
-	const obfuscatedKeys = [
-		key.replace("4b1d", "4b\u200b1d"),
-		key.replace("A1b2".repeat(4), `A1b2\u200b${"A1b2".repeat(3)}`),
-	];
+  const key = `4b1d${"A1b2".repeat(9)}A1`;
+  const obfuscatedKeys = [
+    key.replace("4b1d", "4b\u200b1d"),
+    key.replace("A1b2".repeat(4), `A1b2\u200b${"A1b2".repeat(3)}`),
+  ];
 
-	for (const value of [key, ...obfuscatedKeys, key.toUpperCase()]) {
-		expect(hasSensitiveNamingContext(`review ClickHouse access ${value}`)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
-	}
+  for (const value of [key, ...obfuscatedKeys, key.toUpperCase()]) {
+    expect(hasSensitiveNamingContext(`review ClickHouse access ${value}`)).toBe(
+      true,
+    );
+    expect(hasSensitiveOutput(value)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`4b1d${"A1b2".repeat(9)}A`,
-		`4b1d${"A1b2".repeat(9)}A1B`,
-		`4b1c${"A1b2".repeat(9)}A1`,
-		key.replace("A1b2", "A1b!"),
-		`prefix${key}`,
-		`${key}suffix`,
-		"ClickHouse API key setup",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `4b1d${"A1b2".repeat(9)}A`,
+    `4b1d${"A1b2".repeat(9)}A1B`,
+    `4b1c${"A1b2".repeat(9)}A1`,
+    key.replace("A1b2", "A1b!"),
+    `prefix${key}`,
+    `${key}suffix`,
+    "ClickHouse API key setup",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens classic AWS access-key IDs across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `AKIA${"A".repeat(16)}`;
-	const prefixTokenStart = prefixLength - 8;
-	const prompt = `${"x".repeat(prefixTokenStart)}${token} ${"x".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
-	expect(context.text).toBe(buildNamingContext([], prompt));
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `AKIA${"A".repeat(16)}`;
+  const prefixTokenStart = prefixLength - 8;
+  const prompt = `${"x".repeat(prefixTokenStart)}${token} ${"x".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(context.text).toBe(buildNamingContext([], prompt));
 
-	const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
-	const obfuscatedPrompt = `${"x".repeat(prefixTokenStart)}${controlObfuscated} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+  const obfuscatedPrompt = `${"x".repeat(prefixTokenStart)}${controlObfuscated} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(992)}${token} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(992)}${token} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = promptLength - suffixLength;
-	const suffixTokenStart = suffixStart - token.length + 8;
-	const suffixPrompt = `${"x".repeat(suffixTokenStart)}${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = promptLength - suffixLength;
+  const suffixTokenStart = suffixStart - token.length + 8;
+  const suffixPrompt = `${"x".repeat(suffixTokenStart)}${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 20)}${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	for (const nearMiss of [`AKIA${"A".repeat(15)}`, `AKIX${"A".repeat(16)}`, `akia${"A".repeat(16)}`]) {
-		const nearMissPrompt = `${"x".repeat(prefixTokenStart)}${nearMiss} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)}${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  for (const nearMiss of [
+    `AKIA${"A".repeat(15)}`,
+    `AKIX${"A".repeat(16)}`,
+    `akia${"A".repeat(16)}`,
+  ]) {
+    const nearMissPrompt = `${"x".repeat(prefixTokenStart)}${nearMiss} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens Google API keys across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `AIza${"A".repeat(35)}`;
-	const prefixTokenStart = prefixLength - 8;
-	const prompt = `${"x".repeat(prefixTokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
-	expect(context.text).toBe(buildNamingContext([], prompt));
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `AIza${"A".repeat(35)}`;
+  const prefixTokenStart = prefixLength - 8;
+  const prompt = `${"x".repeat(prefixTokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(context.text).toBe(buildNamingContext([], prompt));
 
-	const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
-	const obfuscatedPrompt = `${"x".repeat(prefixTokenStart - 1)} ${controlObfuscated} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+  const obfuscatedPrompt = `${"x".repeat(prefixTokenStart - 1)} ${controlObfuscated} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(991)} ${token} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(991)} ${token} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = promptLength - suffixLength;
-	const suffixTokenStart = suffixStart - token.length + 8;
-	const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = promptLength - suffixLength;
+  const suffixTokenStart = suffixStart - token.length + 8;
+  const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 19)} ${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	for (const nearMiss of [
-		`AIza${"A".repeat(34)}`,
-		`AIza${"A".repeat(36)}`,
-		`AizA${"A".repeat(35)}`,
-		`AIza${"A".repeat(17)}!${"A".repeat(17)}`,
-	]) {
-		const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const omittedPrompt = `${"x".repeat(prefixLength + 19)} ${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  for (const nearMiss of [
+    `AIza${"A".repeat(34)}`,
+    `AIza${"A".repeat(36)}`,
+    `AizA${"A".repeat(35)}`,
+    `AIza${"A".repeat(17)}!${"A".repeat(17)}`,
+  ]) {
+    const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens Google OAuth tokens across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = [
-		`GOCSPX-${"A1b_-".repeat(7)}`,
-		`1//${"B2c_-".repeat(7)}`,
-		`ya29.${"C3d_-".repeat(7)}`,
-	];
-	const prefixTokenStart = prefixLength - 8;
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = [
+    `GOCSPX-${"A1b_-".repeat(7)}`,
+    `1//${"B2c_-".repeat(7)}`,
+    `ya29.${"C3d_-".repeat(7)}`,
+  ];
+  const prefixTokenStart = prefixLength - 8;
 
-	for (const token of tokens) {
-		const prompt = `${"x".repeat(prefixTokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
-		expect(context.text).toBe(buildNamingContext([], prompt));
+  for (const token of tokens) {
+    const prompt = `${"x".repeat(prefixTokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
+    expect(context.text).toBe(buildNamingContext([], prompt));
 
-		const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
-		const obfuscatedPrompt = `${"x".repeat(prefixTokenStart - 1)} ${controlObfuscated} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+    const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+    const obfuscatedPrompt = `${"x".repeat(prefixTokenStart - 1)} ${controlObfuscated} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+    ).toBe(true);
 
-		const historyContent = `${"x".repeat(991)} ${token} y`;
-		const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-		expect(hasSensitiveNamingContext(history.text)).toBe(false);
-		expect(history.hasSensitiveBoundary()).toBe(true);
-		const summary = buildNamingRequestContext([
-			{ role: "compactionSummary", summary: historyContent },
-		] as any);
-		expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-		expect(summary.hasSensitiveBoundary()).toBe(true);
+    const historyContent = `${"x".repeat(991)} ${token} y`;
+    const history = buildNamingRequestContext([
+      { role: "user", content: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(history.text)).toBe(false);
+    expect(history.hasSensitiveBoundary()).toBe(true);
+    const summary = buildNamingRequestContext([
+      { role: "compactionSummary", summary: historyContent },
+    ] as any);
+    expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+    expect(summary.hasSensitiveBoundary()).toBe(true);
 
-		const promptLength = MAX_PROMPT_LENGTH + 300;
-		const suffixLength = Math.floor(retainedLength / 2);
-		const suffixStart = promptLength - suffixLength;
-		const suffixTokenStart = suffixStart - token.length + 8;
-		const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
-		const suffixContext = buildNamingRequestContext([], suffixPrompt);
-		expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-		expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+    const promptLength = MAX_PROMPT_LENGTH + 300;
+    const suffixLength = Math.floor(retainedLength / 2);
+    const suffixStart = promptLength - suffixLength;
+    const suffixTokenStart = suffixStart - token.length + 8;
+    const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
+    const suffixContext = buildNamingRequestContext([], suffixPrompt);
+    expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+    expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-		const omittedPrompt = `${"x".repeat(prefixLength + 19)} ${token} ${"y".repeat(3_000)}`;
-		expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+    const omittedPrompt = `${"x".repeat(prefixLength + 19)} ${token} ${"y".repeat(3_000)}`;
+    expect(
+      buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 
-	for (const nearMiss of [
-		`GOCSPX-${"A".repeat(19)}`,
-		`1//${"B".repeat(19)}`,
-		`ya29.${"C".repeat(19)}`,
-		`GOCSPY-${"A".repeat(20)}`,
-		`1//${"B".repeat(10)}!${"B".repeat(10)}`,
-		`ya28.${"C".repeat(20)}`,
-		`x${tokens[0]}`,
-	]) {
-		const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  for (const nearMiss of [
+    `GOCSPX-${"A".repeat(19)}`,
+    `1//${"B".repeat(19)}`,
+    `ya29.${"C".repeat(19)}`,
+    `GOCSPY-${"A".repeat(20)}`,
+    `1//${"B".repeat(10)}!${"B".repeat(10)}`,
+    `ya28.${"C".repeat(20)}`,
+    `x${tokens[0]}`,
+  ]) {
+    const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens GitLab personal access tokens across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `glpat-${"A1b_-".repeat(6)}`;
-	const prefixTokenStart = prefixLength - 8;
-	const prompt = `${"x".repeat(prefixTokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
-	expect(context.text).toBe(buildNamingContext([], prompt));
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `glpat-${"A1b_-".repeat(6)}`;
+  const prefixTokenStart = prefixLength - 8;
+  const prompt = `${"x".repeat(prefixTokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(context.text).toBe(buildNamingContext([], prompt));
 
-	const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
-	const obfuscatedPrompt = `${"x".repeat(prefixTokenStart - 1)} ${controlObfuscated} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+  const obfuscatedPrompt = `${"x".repeat(prefixTokenStart - 1)} ${controlObfuscated} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(991)} ${token} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(991)} ${token} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = promptLength - suffixLength;
-	const suffixTokenStart = suffixStart - token.length + 8;
-	const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = promptLength - suffixLength;
+  const suffixTokenStart = suffixStart - token.length + 8;
+  const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 19)} ${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	for (const nearMiss of [
-		`glpat-${"A".repeat(19)}`,
-		`glpatx-${"A".repeat(20)}`,
-		`glpat-${"A".repeat(10)}!${"B".repeat(10)}`,
-		`GLPAT-${"A".repeat(20)}`,
-	]) {
-		const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const omittedPrompt = `${"x".repeat(prefixLength + 19)} ${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  for (const nearMiss of [
+    `glpat-${"A".repeat(19)}`,
+    `glpatx-${"A".repeat(20)}`,
+    `glpat-${"A".repeat(10)}!${"B".repeat(10)}`,
+    `GLPAT-${"A".repeat(20)}`,
+  ]) {
+    const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens npm access tokens across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `npm_${"A1b2C".repeat(5)}`;
-	const prefixTokenStart = prefixLength - 8;
-	const prompt = `${"x".repeat(prefixTokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
-	expect(context.text).toBe(buildNamingContext([], prompt));
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `npm_${"A1b2C".repeat(5)}`;
+  const prefixTokenStart = prefixLength - 8;
+  const prompt = `${"x".repeat(prefixTokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(context.text).toBe(buildNamingContext([], prompt));
 
-	const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
-	const obfuscatedPrompt = `${"x".repeat(prefixTokenStart - 1)} ${controlObfuscated} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+  const obfuscatedPrompt = `${"x".repeat(prefixTokenStart - 1)} ${controlObfuscated} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(991)} ${token} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(991)} ${token} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = promptLength - suffixLength;
-	const suffixTokenStart = suffixStart - token.length + 8;
-	const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = promptLength - suffixLength;
+  const suffixTokenStart = suffixStart - token.length + 8;
+  const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 19)} ${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	for (const nearMiss of [
-		`npm_${"A".repeat(19)}`,
-		`npmx_${"A".repeat(20)}`,
-		`npm_${"A".repeat(10)}!${"B".repeat(10)}`,
-		`NPM_${"A".repeat(20)}`,
-	]) {
-		const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const omittedPrompt = `${"x".repeat(prefixLength + 19)} ${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  for (const nearMiss of [
+    `npm_${"A".repeat(19)}`,
+    `npmx_${"A".repeat(20)}`,
+    `npm_${"A".repeat(10)}!${"B".repeat(10)}`,
+    `NPM_${"A".repeat(20)}`,
+  ]) {
+    const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens Hugging Face tokens across retained-context truncation boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `hf_${"A1b2C".repeat(5)}`;
-	const prefixTokenStart = prefixLength - 8;
-	const prompt = `${"x".repeat(prefixTokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
-	expect(context.text).toBe(buildNamingContext([], prompt));
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `hf_${"A1b2C".repeat(5)}`;
+  const prefixTokenStart = prefixLength - 8;
+  const prompt = `${"x".repeat(prefixTokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(context.text).toBe(buildNamingContext([], prompt));
 
-	const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
-	const obfuscatedPrompt = `${"x".repeat(prefixTokenStart - 1)} ${controlObfuscated} ${"x".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary()).toBe(true);
+  const controlObfuscated = `${token.slice(0, 8)}\u0000${token.slice(8)}`;
+  const obfuscatedPrompt = `${"x".repeat(prefixTokenStart - 1)} ${controlObfuscated} ${"x".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], obfuscatedPrompt).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const historyContent = `${"x".repeat(991)} ${token} y`;
-	const history = buildNamingRequestContext([{ role: "user", content: historyContent }] as any);
-	expect(hasSensitiveNamingContext(history.text)).toBe(false);
-	expect(history.hasSensitiveBoundary()).toBe(true);
-	const summary = buildNamingRequestContext([
-		{ role: "compactionSummary", summary: historyContent },
-	] as any);
-	expect(hasSensitiveNamingContext(summary.text)).toBe(false);
-	expect(summary.hasSensitiveBoundary()).toBe(true);
+  const historyContent = `${"x".repeat(991)} ${token} y`;
+  const history = buildNamingRequestContext([
+    { role: "user", content: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(history.text)).toBe(false);
+  expect(history.hasSensitiveBoundary()).toBe(true);
+  const summary = buildNamingRequestContext([
+    { role: "compactionSummary", summary: historyContent },
+  ] as any);
+  expect(hasSensitiveNamingContext(summary.text)).toBe(false);
+  expect(summary.hasSensitiveBoundary()).toBe(true);
 
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const suffixStart = promptLength - suffixLength;
-	const suffixTokenStart = suffixStart - token.length + 8;
-	const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
-	const suffixContext = buildNamingRequestContext([], suffixPrompt);
-	expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
-	expect(suffixContext.hasSensitiveBoundary()).toBe(true);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const suffixStart = promptLength - suffixLength;
+  const suffixTokenStart = suffixStart - token.length + 8;
+  const suffixPrompt = `${"x".repeat(suffixTokenStart - 1)} ${token} ${"y".repeat(promptLength - suffixTokenStart - token.length - 1)}`;
+  const suffixContext = buildNamingRequestContext([], suffixPrompt);
+  expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
+  expect(suffixContext.hasSensitiveBoundary()).toBe(true);
 
-	const omittedPrompt = `${"x".repeat(prefixLength + 19)} ${token} ${"y".repeat(3_000)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
-	for (const nearMiss of [
-		`hf_${"A".repeat(19)}`,
-		`hfx_${"A".repeat(20)}`,
-		`hf_${"A".repeat(10)}!${"B".repeat(10)}`,
-		`HF_${"A".repeat(20)}`,
-	]) {
-		const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  const omittedPrompt = `${"x".repeat(prefixLength + 19)} ${token} ${"y".repeat(3_000)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
+  for (const nearMiss of [
+    `hf_${"A".repeat(19)}`,
+    `hfx_${"A".repeat(20)}`,
+    `hf_${"A".repeat(10)}!${"B".repeat(10)}`,
+    `HF_${"A".repeat(20)}`,
+  ]) {
+    const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], nearMissPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("screens additional AWS access-key ID prefixes without flagging near-misses", () => {
-	const keys = [
-		`A3TA${"B".repeat(16)}`,
-		`ABIA${"C".repeat(16)}`,
-		`ACCA${"D".repeat(16)}`,
-	];
-	const obfuscatedKey = `${keys[0]!.slice(0, 10)}\u200b${keys[0]!.slice(10)}`;
+  const keys = [
+    `A3TA${"B".repeat(16)}`,
+    `ABIA${"C".repeat(16)}`,
+    `ACCA${"D".repeat(16)}`,
+  ];
+  const obfuscatedKey = `${keys[0]!.slice(0, 10)}\u200b${keys[0]!.slice(10)}`;
 
-	for (const key of [...keys, obfuscatedKey]) {
-		expect(hasSensitiveNamingContext(`review AWS access ${key}`)).toBe(true);
-		expect(hasSensitiveOutput(key)).toBe(true);
-	}
+  for (const key of [...keys, obfuscatedKey]) {
+    expect(hasSensitiveNamingContext(`review AWS access ${key}`)).toBe(true);
+    expect(hasSensitiveOutput(key)).toBe(true);
+  }
 
-	for (const nearMiss of [
-		`ABIA${"C".repeat(15)}`,
-		`ACCA${"D".repeat(17)}`,
-		`ABIA${"C".repeat(15)}0`,
-		`prefixABIA${"C".repeat(16)}`,
-		`ACCA${"D".repeat(16)}x`,
-		"AWS temporary access key configuration",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `ABIA${"C".repeat(15)}`,
+    `ACCA${"D".repeat(17)}`,
+    `ABIA${"C".repeat(15)}0`,
+    `prefixABIA${"C".repeat(16)}`,
+    `ACCA${"D".repeat(16)}x`,
+    "AWS temporary access key configuration",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens credential-bearing URI user-info across retained boundaries without flagging no-password URLs", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const url = "postgres://test-user:!examplepassword!!!@db.example.test/app";
-	const variants = [
-		url,
-		`${url.slice(0, 4)}\u0000${url.slice(4)}`,
-		`${url.slice(0, 15)}\u200b${url.slice(15)}`,
-	];
-	const tokenStarts = [prefixLength - 20, suffixStart - 20];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const url = "postgres://test-user:!examplepassword!!!@db.example.test/app";
+  const variants = [
+    url,
+    `${url.slice(0, 4)}\u0000${url.slice(4)}`,
+    `${url.slice(0, 15)}\u200b${url.slice(15)}`,
+  ];
+  const tokenStarts = [prefixLength - 20, suffixStart - 20];
 
-	for (const value of variants) {
-		for (const tokenStart of tokenStarts) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const value of variants) {
+    for (const tokenStart of tokenStarts) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const noPasswordUrls = [
-		"postgres://test-user@localhost/app",
-		"redis://:@localhost:6379/0",
-		"postgres:/test-user:password@localhost/app",
-	];
-	for (const value of noPasswordUrls) {
-		for (const tokenStart of tokenStarts) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
-			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const noPasswordUrls = [
+    "postgres://test-user@localhost/app",
+    "redis://:@localhost:6379/0",
+    "postgres:/test-user:password@localhost/app",
+  ];
+  for (const value of noPasswordUrls) {
+    for (const tokenStart of tokenStarts) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${value} ${"y".repeat(promptLength - prefix.length - value.length - 1)}`;
+      expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+        false,
+      );
+    }
+  }
 });
 
 test("screens alternate AWS access IDs and ABSK bearer tokens across retained boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const tokens = [
-		`A3TA${"B".repeat(16)}`,
-		`A3T7${"C".repeat(16)}`,
-		`ABIA${"D".repeat(16)}`,
-		`ACCA${"E".repeat(16)}`,
-		`ABSK${"A".repeat(109)}`,
-		`ABSK${"B".repeat(269)}==`,
-	];
-	const candidates = tokens.flatMap((token) => [
-		token,
-		`${token.slice(0, 10)}\u0000${token.slice(10)}`,
-	]);
-	const tokenStarts = [prefixLength - 10, suffixStart - 10];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const tokens = [
+    `A3TA${"B".repeat(16)}`,
+    `A3T7${"C".repeat(16)}`,
+    `ABIA${"D".repeat(16)}`,
+    `ACCA${"E".repeat(16)}`,
+    `ABSK${"A".repeat(109)}`,
+    `ABSK${"B".repeat(269)}==`,
+  ];
+  const candidates = tokens.flatMap((token) => [
+    token,
+    `${token.slice(0, 10)}\u0000${token.slice(10)}`,
+  ]);
+  const tokenStarts = [prefixLength - 10, suffixStart - 10];
 
-	for (const token of candidates) {
-		for (const tokenStart of tokenStarts) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const token of candidates) {
+    for (const tokenStart of tokenStarts) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+        true,
+      );
+    }
+  }
 
-	const nearMisses = [
-		`A3TA${"B".repeat(15)}`,
-		`ABIA${"C".repeat(16)}x`,
-		`prefixACCA${"D".repeat(16)}`,
-		`ACCA${"D".repeat(15)}0`,
-		`ABSK${"A".repeat(108)}`,
-	];
-	for (const token of nearMisses) {
-		for (const tokenStart of tokenStarts) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
-			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    `A3TA${"B".repeat(15)}`,
+    `ABIA${"C".repeat(16)}x`,
+    `prefixACCA${"D".repeat(16)}`,
+    `ACCA${"D".repeat(15)}0`,
+    `ABSK${"A".repeat(108)}`,
+  ];
+  for (const token of nearMisses) {
+    for (const tokenStart of tokenStarts) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+      expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+        false,
+      );
+    }
+  }
 });
 
 test("screens fixed-format Bedrock API-key matches across both retained prompt boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const token = `bedrock-api-key-${Buffer.from("bedrock.amazonaws.com").toString("base64")}`;
-	const candidates = [
-		token,
-		token.replace("bedrock", "bed\u200brock"),
-		`${token.slice(0, 22)}\u0000${token.slice(22)}`,
-	];
-	const tokenStarts = [prefixLength - 10, suffixStart - 10];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const token = `bedrock-api-key-${Buffer.from("bedrock.amazonaws.com").toString("base64")}`;
+  const candidates = [
+    token,
+    token.replace("bedrock", "bed\u200brock"),
+    `${token.slice(0, 22)}\u0000${token.slice(22)}`,
+  ];
+  const tokenStarts = [prefixLength - 10, suffixStart - 10];
 
-	for (const candidate of candidates) {
-		expect(hasSensitiveNamingContext(candidate)).toBe(true);
-		expect(hasSensitiveOutput(candidate)).toBe(true);
-		for (const tokenStart of tokenStarts) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${candidate} ${"y".repeat(promptLength - prefix.length - candidate.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const candidate of candidates) {
+    expect(hasSensitiveNamingContext(candidate)).toBe(true);
+    expect(hasSensitiveOutput(candidate)).toBe(true);
+    for (const tokenStart of tokenStarts) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${candidate} ${"y".repeat(promptLength - prefix.length - candidate.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	for (const nearMiss of [token.slice(0, -1), token.slice(0, -1) + "x"]) {
-		for (const tokenStart of tokenStarts) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${nearMiss} ${"y".repeat(promptLength - prefix.length - nearMiss.length - 1)}`;
-			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  for (const nearMiss of [token.slice(0, -1), token.slice(0, -1) + "x"]) {
+    for (const tokenStart of tokenStarts) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${nearMiss} ${"y".repeat(promptLength - prefix.length - nearMiss.length - 1)}`;
+      expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+        false,
+      );
+    }
+  }
 
-	const omittedTokenStart = prefixLength + 20;
-	const omittedPrefix = `${"x".repeat(omittedTokenStart - 1)} `;
-	const omittedPrompt = `${omittedPrefix}${token} ${"y".repeat(promptLength - omittedPrefix.length - token.length - 1)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+  const omittedTokenStart = prefixLength + 20;
+  const omittedPrefix = `${"x".repeat(omittedTokenStart - 1)} `;
+  const omittedPrompt = `${omittedPrefix}${token} ${"y".repeat(promptLength - omittedPrefix.length - token.length - 1)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Sentry organization tokens across both retained prompt boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const firstClaim = "eyJpYXQiO";
-	const regionClaims = ["LCJyZWdpb25fdXJs", "InJlZ2lvbl91cmwi", "cmVnaW9uX3VybCI6"];
-	const tokenFor = (
-		first: string,
-		region: string,
-		second: string,
-		suffix = "C".repeat(43),
-		padding = "",
-	) => `sntrys_${firstClaim}${first}${region}${second}${padding}_${suffix}`;
-	const tokens = regionClaims.map((region) => ({
-		region,
-		token: tokenFor("a".repeat(20), region, "b".repeat(20)),
-	}));
-	// Exercise the longest accepted format, which must still fit the boundary scan window.
-	tokens.push({
-		region: regionClaims[0]!,
-		token: tokenFor("a".repeat(200), regionClaims[0]!, "b".repeat(200)),
-	});
-	tokens.push({
-		region: regionClaims[1]!,
-		token: tokenFor("a".repeat(20), regionClaims[1]!, "b".repeat(20), "C".repeat(43), "=="),
-	});
-	const candidates = tokens.flatMap(({ region, token }) => [
-		token,
-		token.replace("sntrys_", "sntry\u200bs_"),
-		token.replace(region, `${region.slice(0, 8)}\u0000${region.slice(8)}`),
-	]);
-	const tokenStarts = [prefixLength - 10, suffixStart - 10];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const firstClaim = "eyJpYXQiO";
+  const regionClaims = [
+    "LCJyZWdpb25fdXJs",
+    "InJlZ2lvbl91cmwi",
+    "cmVnaW9uX3VybCI6",
+  ];
+  const tokenFor = (
+    first: string,
+    region: string,
+    second: string,
+    suffix = "C".repeat(43),
+    padding = "",
+  ) => `sntrys_${firstClaim}${first}${region}${second}${padding}_${suffix}`;
+  const tokens = regionClaims.map((region) => ({
+    region,
+    token: tokenFor("a".repeat(20), region, "b".repeat(20)),
+  }));
+  // Exercise the longest accepted format, which must still fit the boundary scan window.
+  tokens.push({
+    region: regionClaims[0]!,
+    token: tokenFor("a".repeat(200), regionClaims[0]!, "b".repeat(200)),
+  });
+  tokens.push({
+    region: regionClaims[1]!,
+    token: tokenFor(
+      "a".repeat(20),
+      regionClaims[1]!,
+      "b".repeat(20),
+      "C".repeat(43),
+      "==",
+    ),
+  });
+  const candidates = tokens.flatMap(({ region, token }) => [
+    token,
+    token.replace("sntrys_", "sntry\u200bs_"),
+    token.replace(region, `${region.slice(0, 8)}\u0000${region.slice(8)}`),
+  ]);
+  const tokenStarts = [prefixLength - 10, suffixStart - 10];
 
-	for (const token of candidates) {
-		expect(hasSensitiveNamingContext(token)).toBe(true);
-		expect(hasSensitiveOutput(token)).toBe(true);
-		for (const tokenStart of tokenStarts) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const token of candidates) {
+    expect(hasSensitiveNamingContext(token)).toBe(true);
+    expect(hasSensitiveOutput(token)).toBe(true);
+    for (const tokenStart of tokenStarts) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	const nearMisses = [
-		tokenFor("a".repeat(9), regionClaims[0]!, "b".repeat(20)),
-		tokenFor("a".repeat(20), regionClaims[0]!, "b".repeat(9)),
-		tokenFor("a".repeat(20), "LCJyZWdpb25fdXls", "b".repeat(20)),
-		tokenFor("a".repeat(20), regionClaims[0]!, "b".repeat(20), "C".repeat(42)),
-	];
-	for (const nearMiss of nearMisses) {
-		for (const tokenStart of tokenStarts) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${nearMiss} ${"y".repeat(promptLength - prefix.length - nearMiss.length - 1)}`;
-			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  const nearMisses = [
+    tokenFor("a".repeat(9), regionClaims[0]!, "b".repeat(20)),
+    tokenFor("a".repeat(20), regionClaims[0]!, "b".repeat(9)),
+    tokenFor("a".repeat(20), "LCJyZWdpb25fdXls", "b".repeat(20)),
+    tokenFor("a".repeat(20), regionClaims[0]!, "b".repeat(20), "C".repeat(42)),
+  ];
+  for (const nearMiss of nearMisses) {
+    for (const tokenStart of tokenStarts) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${nearMiss} ${"y".repeat(promptLength - prefix.length - nearMiss.length - 1)}`;
+      expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+        false,
+      );
+    }
+  }
 
-	const omittedToken = tokens[0]!.token;
-	const omittedTokenStart = prefixLength + 20;
-	const omittedPrefix = `${"x".repeat(omittedTokenStart - 1)} `;
-	const omittedPrompt = `${omittedPrefix}${omittedToken} ${"y".repeat(promptLength - omittedPrefix.length - omittedToken.length - 1)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+  const omittedToken = tokens[0]!.token;
+  const omittedTokenStart = prefixLength + 20;
+  const omittedPrefix = `${"x".repeat(omittedTokenStart - 1)} `;
+  const omittedPrompt = `${omittedPrefix}${omittedToken} ${"y".repeat(promptLength - omittedPrefix.length - omittedToken.length - 1)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("screens Fireworks AI tokens across both retained prompt boundaries", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const tokens = [
-		`fw-${"A".repeat(40)}`,
-		`fw_${"B".repeat(40)}`,
-		`fpk_${"C".repeat(40)}`,
-	];
-	const candidates = tokens.flatMap((token) => [
-		token,
-		token.replace(/^(?:fw[-_]|fpk_)/, (prefix) => `${prefix[0]}\u200b${prefix.slice(1)}`),
-		`${token.slice(0, 10)}\u0000${token.slice(10)}`,
-	]);
-	const tokenStarts = [prefixLength - 10, suffixStart - 10];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const tokens = [
+    `fw-${"A".repeat(40)}`,
+    `fw_${"B".repeat(40)}`,
+    `fpk_${"C".repeat(40)}`,
+  ];
+  const candidates = tokens.flatMap((token) => [
+    token,
+    token.replace(
+      /^(?:fw[-_]|fpk_)/,
+      (prefix) => `${prefix[0]}\u200b${prefix.slice(1)}`,
+    ),
+    `${token.slice(0, 10)}\u0000${token.slice(10)}`,
+  ]);
+  const tokenStarts = [prefixLength - 10, suffixStart - 10];
 
-	for (const token of candidates) {
-		expect(hasSensitiveNamingContext(token)).toBe(true);
-		expect(hasSensitiveOutput(token)).toBe(true);
-		for (const tokenStart of tokenStarts) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const token of candidates) {
+    expect(hasSensitiveNamingContext(token)).toBe(true);
+    expect(hasSensitiveOutput(token)).toBe(true);
+    for (const tokenStart of tokenStarts) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(true);
+    }
+  }
 
-	for (const nearMiss of [`fw-${"A".repeat(19)}`, `fpk_${"B".repeat(19)}`]) {
-		for (const tokenStart of tokenStarts) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${nearMiss} ${"y".repeat(promptLength - prefix.length - nearMiss.length - 1)}`;
-			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  for (const nearMiss of [`fw-${"A".repeat(19)}`, `fpk_${"B".repeat(19)}`]) {
+    for (const tokenStart of tokenStarts) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${nearMiss} ${"y".repeat(promptLength - prefix.length - nearMiss.length - 1)}`;
+      expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+        false,
+      );
+    }
+  }
 
-	const omittedTokenStart = prefixLength + 20;
-	const omittedToken = tokens[0]!;
-	const omittedPrefix = `${"x".repeat(omittedTokenStart - 1)} `;
-	const omittedPrompt = `${omittedPrefix}${omittedToken} ${"y".repeat(promptLength - omittedPrefix.length - omittedToken.length - 1)}`;
-	expect(buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary()).toBe(false);
+  const omittedTokenStart = prefixLength + 20;
+  const omittedToken = tokens[0]!;
+  const omittedPrefix = `${"x".repeat(omittedTokenStart - 1)} `;
+  const omittedPrompt = `${omittedPrefix}${omittedToken} ${"y".repeat(promptLength - omittedPrefix.length - omittedToken.length - 1)}`;
+  expect(
+    buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("long variable-length tokens stay detectable when a retained suffix starts mid-token", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const promptLength = 6_000;
-	const suffixStart = promptLength - suffixLength;
-	const token = `fm2_${"A".repeat(1_100)}`;
-	const tokenStart = suffixStart - 800;
-	const prompt = `${"x".repeat(tokenStart - 1)} ${token}${"x".repeat(promptLength - tokenStart - token.length)}`;
-	const context = buildNamingRequestContext([], prompt);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const promptLength = 6_000;
+  const suffixStart = promptLength - suffixLength;
+  const token = `fm2_${"A".repeat(1_100)}`;
+  const tokenStart = suffixStart - 800;
+  const prompt = `${"x".repeat(tokenStart - 1)} ${token}${"x".repeat(promptLength - tokenStart - token.length)}`;
+  const context = buildNamingRequestContext([], prompt);
 
-	expect(prompt).toHaveLength(promptLength);
-	expect(hasSensitiveNamingContext(context.text)).toBe(false);
-	expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(prompt).toHaveLength(promptLength);
+  expect(hasSensitiveNamingContext(context.text)).toBe(false);
+  expect(context.hasSensitiveBoundary()).toBe(true);
 
-	const omittedTokenStart = 1_500;
-	const omittedPrompt = `${"x".repeat(omittedTokenStart - 1)} ${token}`
-		+ `${"x".repeat(promptLength - omittedTokenStart - token.length)}`;
-	const omittedContext = buildNamingRequestContext([], omittedPrompt);
-	expect(hasSensitiveNamingContext(omittedContext.text)).toBe(false);
-	expect(omittedContext.hasSensitiveBoundary()).toBe(false);
+  const omittedTokenStart = 1_500;
+  const omittedPrompt =
+    `${"x".repeat(omittedTokenStart - 1)} ${token}` +
+    `${"x".repeat(promptLength - omittedTokenStart - token.length)}`;
+  const omittedContext = buildNamingRequestContext([], omittedPrompt);
+  expect(hasSensitiveNamingContext(omittedContext.text)).toBe(false);
+  expect(omittedContext.hasSensitiveBoundary()).toBe(false);
 });
 
 test("requestNamingTitle screens sensitive context before model-registry access", async () => {
-	const contextTexts = [
-		"task: pi-tmux@example.invalid",
-		"task: phone: ٠٠٠-٠٠٠-٠٠٠٠",
-		"task: δοκιμή@παράδειγμα.δοκιμή",
-		"task: 用户@example.test",
-		`${"A1b_".repeat(6)}.${"cD9_-Z"}.${"QwErTy9_-".repeat(3)}`,
-		`mfa.${"a1B_".repeat(21)}`,
-	];
-	const context = {
-		get modelRegistry() {
-			throw new Error("Sensitive context must be rejected before model-registry access");
-		},
-	} as unknown as ExtensionContext;
+  const contextTexts = [
+    "task: pi-tmux@example.invalid",
+    "task: phone: ٠٠٠-٠٠٠-٠٠٠٠",
+    "task: δοκιμή@παράδειγμα.δοκιμή",
+    "task: 用户@example.test",
+    `${"A1b_".repeat(6)}.${"cD9_-Z"}.${"QwErTy9_-".repeat(3)}`,
+    `mfa.${"a1B_".repeat(21)}`,
+  ];
+  const context = {
+    get modelRegistry() {
+      throw new Error(
+        "Sensitive context must be rejected before model-registry access",
+      );
+    },
+  } as unknown as ExtensionContext;
 
-	for (const contextText of contextTexts) {
-		let error: unknown;
-		try {
-			await requestNamingTitle(
-				contextText,
-				context,
-				{ provider: "openai-codex", id: "gpt-6-luna" },
-				new AbortController().signal,
-				() => true,
-			);
-		} catch (caught) {
-			error = caught;
-		}
+  for (const contextText of contextTexts) {
+    let error: unknown;
+    try {
+      await requestNamingTitle(
+        contextText,
+        context,
+        { provider: "openai-codex", id: "gpt-6-luna" },
+        new AbortController().signal,
+        () => true,
+      );
+    } catch (caught) {
+      error = caught;
+    }
 
-		expect(error).toBeInstanceOf(UnsafeNamingContextError);
-		expect((error as Error).message).toBe("Naming context looked like it contained sensitive data");
-		expect((error as Error).message).not.toContain(contextText);
-	}
+    expect(error).toBeInstanceOf(UnsafeNamingContextError);
+    expect((error as Error).message).toBe(
+      "Naming context looked like it contained sensitive data",
+    );
+    expect((error as Error).message).not.toContain(contextText);
+  }
 });

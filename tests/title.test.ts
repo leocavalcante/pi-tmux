@@ -6,20 +6,48 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piTmux, { buildNamingContext, buildWindowTitleFormat, WINDOW_WAITING_FORMAT, cleanTitle, formatTitle, parseNamingModel, MAX_CONTEXT_LENGTH, MAX_HISTORY_MESSAGES, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH, READY_PREFIX, SESSION_TITLE_FORMAT, WAITING_OPTION, ACTIVE_OPTION, QUIT_TITLE_FORMAT, type RunTmux } from "../index.ts";
-import { readWindowTitle, STATUS_SNAPSHOT_FORMAT, WINDOW_INFO_INTERNAL_FORMAT } from "../src/tmux.ts";
-import { buildNamingRequestContext, hasSensitiveNamingContext, hasSensitiveOutput } from "../src/naming.ts";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
+import piTmux, {
+  buildNamingContext,
+  buildWindowTitleFormat,
+  WINDOW_WAITING_FORMAT,
+  cleanTitle,
+  formatTitle,
+  parseNamingModel,
+  MAX_CONTEXT_LENGTH,
+  MAX_HISTORY_MESSAGES,
+  MAX_PROMPT_LENGTH,
+  MAX_TITLE_LENGTH,
+  READY_PREFIX,
+  SESSION_TITLE_FORMAT,
+  WAITING_OPTION,
+  ACTIVE_OPTION,
+  QUIT_TITLE_FORMAT,
+  type RunTmux,
+} from "../index.ts";
+import {
+  readWindowTitle,
+  STATUS_SNAPSHOT_FORMAT,
+  WINDOW_INFO_INTERNAL_FORMAT,
+} from "../src/tmux.ts";
+import {
+  buildNamingRequestContext,
+  hasSensitiveNamingContext,
+  hasSensitiveOutput,
+} from "../src/naming.ts";
 import { MAX_TITLE_INPUT_LENGTH } from "../src/title.ts";
 import {
-	buildQuitTitleFormat,
-	buildWindowBaseQuitTitleFormats,
-	PRESERVED_WINDOW_TITLE_FORMAT,
-	WINDOW_BASE_NAME_OPTION,
-	WINDOW_BASE_NAME_TITLE_FORMAT,
-	WINDOW_BASE_NAME_UPDATE_FORMAT,
-	WINDOW_TITLE_MARKED_OPTION,
-	WINDOW_TITLE_MARKED_VALUE_FORMAT,
+  buildQuitTitleFormat,
+  buildWindowBaseQuitTitleFormats,
+  PRESERVED_WINDOW_TITLE_FORMAT,
+  WINDOW_BASE_NAME_OPTION,
+  WINDOW_BASE_NAME_TITLE_FORMAT,
+  WINDOW_BASE_NAME_UPDATE_FORMAT,
+  WINDOW_TITLE_MARKED_OPTION,
+  WINDOW_TITLE_MARKED_VALUE_FORMAT,
 } from "../src/tmux.ts";
 
 let originalPane: string | undefined;
@@ -28,10967 +56,13894 @@ let originalIdleTitle: string | undefined;
 const serverIdentityKey = Symbol.for("@leocavalcante/pi-tmux/server-identity");
 let originalServerIdentityDescriptor: PropertyDescriptor | undefined;
 beforeEach(() => {
-	originalServerIdentityDescriptor = Object.getOwnPropertyDescriptor(process, serverIdentityKey);
-	Reflect.deleteProperty(process, serverIdentityKey);
-	originalPane = process.env.TMUX_PANE;
-	originalModel = process.env.PI_TMUX_MODEL;
-	originalIdleTitle = process.env.PI_TMUX_IDLE_TITLE;
-	process.env.TMUX_PANE = "%1";
-	delete process.env.PI_TMUX_MODEL;
-	delete process.env.PI_TMUX_IDLE_TITLE;
+  originalServerIdentityDescriptor = Object.getOwnPropertyDescriptor(
+    process,
+    serverIdentityKey,
+  );
+  Reflect.deleteProperty(process, serverIdentityKey);
+  originalPane = process.env.TMUX_PANE;
+  originalModel = process.env.PI_TMUX_MODEL;
+  originalIdleTitle = process.env.PI_TMUX_IDLE_TITLE;
+  process.env.TMUX_PANE = "%1";
+  delete process.env.PI_TMUX_MODEL;
+  delete process.env.PI_TMUX_IDLE_TITLE;
 });
 afterEach(() => {
-	if (originalServerIdentityDescriptor) Object.defineProperty(process, serverIdentityKey, originalServerIdentityDescriptor);
-	else Reflect.deleteProperty(process, serverIdentityKey);
-	if (originalPane === undefined) delete process.env.TMUX_PANE;
-	else process.env.TMUX_PANE = originalPane;
-	if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
-	else process.env.PI_TMUX_MODEL = originalModel;
-	if (originalIdleTitle === undefined) delete process.env.PI_TMUX_IDLE_TITLE;
-	else process.env.PI_TMUX_IDLE_TITLE = originalIdleTitle;
+  if (originalServerIdentityDescriptor)
+    Object.defineProperty(
+      process,
+      serverIdentityKey,
+      originalServerIdentityDescriptor,
+    );
+  else Reflect.deleteProperty(process, serverIdentityKey);
+  if (originalPane === undefined) delete process.env.TMUX_PANE;
+  else process.env.TMUX_PANE = originalPane;
+  if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+  else process.env.PI_TMUX_MODEL = originalModel;
+  if (originalIdleTitle === undefined) delete process.env.PI_TMUX_IDLE_TITLE;
+  else process.env.PI_TMUX_IDLE_TITLE = originalIdleTitle;
 });
 
 const response = (text: string, stopReason = "stop") => ({
-	content: [{ type: "text", text }],
-	stopReason,
+  content: [{ type: "text", text }],
+  stopReason,
 });
 
-function basicAuthorizationHeader(header: "Authorization" | "Proxy-Authorization", userPass: string): string {
-	return `${header}: Basic ${Buffer.from(userPass).toString("base64")}`;
+function basicAuthorizationHeader(
+  header: "Authorization" | "Proxy-Authorization",
+  userPass: string,
+): string {
+  return `${header}: Basic ${Buffer.from(userPass).toString("base64")}`;
 }
 
 function npmrcAuthSetting(userPass: string): string {
-	return `//registry.npmjs.org/:_auth=${Buffer.from(userPass).toString("base64")}`;
+  return `//registry.npmjs.org/:_auth=${Buffer.from(userPass).toString("base64")}`;
 }
 
 function npmrcPasswordSetting(password: string): string {
-	return `//registry.npmjs.org/:_password=${Buffer.from(password).toString("base64")}`;
+  return `//registry.npmjs.org/:_password=${Buffer.from(password).toString("base64")}`;
 }
 
 function fixture(
-	results: Promise<ReturnType<typeof response>>[] = [Promise.resolve(response("Fix auth tests"))],
-	beforeCommand?: (args: string[], signal: AbortSignal, renderedTitle?: string) => Promise<void>,
+  results: Promise<ReturnType<typeof response>>[] = [
+    Promise.resolve(response("Fix auth tests")),
+  ],
+  beforeCommand?: (
+    args: string[],
+    signal: AbortSignal,
+    renderedTitle?: string,
+  ) => Promise<void>,
 ) {
-	const handlers = new Map<string, Function>();
-	const commands = new Map<string, { handler: Function; getArgumentCompletions?: Function }>();
-	const notices: string[] = [];
-	const calls: string[][] = [];
-	const writes: string[] = [];
-	const requests: { model: unknown; context: any; options: any }[] = [];
-	const warnings: string[] = [];
-	const messages: any[] = [];
-	let shutdownCalls = 0;
-	const ctx = {
-		mode: "tui",
-		shutdown: () => { shutdownCalls++; },
-		sessionManager: { buildSessionProjection: () => ({ messages }) },
-		ui: { notify: (text: string, level: string) => (level === "warning" ? warnings : notices).push(text) },
-		modelRegistry: {
-			find: (provider: string, id: string) => ({ provider, id }),
-			hasConfiguredAuth: () => true,
-			streamSimple: (model: unknown, context: unknown, options: unknown) => {
-				requests.push({ model, context, options });
-				return { result: () => results.shift()! };
-			},
-		},
-	} as unknown as ExtensionContext;
-	let idleTitle = "zsh";
-	const state = {
-		window: "@2", title: "existing task", session: "$0", sessionTitle: "My Session",
-		windowInfo: undefined as string | undefined,
-		statusInfo: undefined as string | undefined,
-		windowBaseName: undefined as string | undefined,
-		windowTitleMarked: undefined as string | undefined,
-		waitingPanes: new Map<string, string>(),
-		activePanes: new Map<string, string>(),
-		otherWindowPanes: new Set<string>(),
-	};
-	const windowWaiting = () => [...state.waitingPanes].some(([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane));
-	const renderTitle = (format: string) => {
-		if (format === PRESERVED_WINDOW_TITLE_FORMAT) {
-			return (windowWaiting() ? READY_PREFIX : "") + state.title.replace(/^\* /, "");
-		}
-		if (format === buildQuitTitleFormat(idleTitle)) {
-			const hasPeer = [...state.activePanes, ...state.waitingPanes].some(([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane));
-			if (!hasPeer) return formatTitle(idleTitle, windowWaiting());
-			const title = state.title.replace(/^\* /, "");
-			return windowWaiting() ? READY_PREFIX + title : title;
-		}
-		const prefix = `#{?${WINDOW_WAITING_FORMAT},`;
-		expect(format).toStartWith(prefix);
-		expect(format).toEndWith("}");
-		const [ready, busy] = format.slice(prefix.length, -1).split(",");
-		return windowWaiting() ? ready : busy;
-	};
-	const tmux: RunTmux = async (args, signal) => {
-		calls.push(args);
-		if (beforeCommand) await beforeCommand(args, signal, args[0] === "rename-window" ? renderTitle(args[4]) : undefined);
-		if (args[0] === "display-message" && args[4] === "#{pid}") return "123";
-		if (args[0] === "display-message" && args[4] === STATUS_SNAPSHOT_FORMAT) {
-			return state.statusInfo ?? `123\t${state.session}\t${state.window}\t${state.waitingPanes.get("%1") === "1" ? "1" : "0"}\t${windowWaiting() ? "1" : "0"}\t${[...state.waitingPanes.values()].includes("1") ? "1" : "0"}`;
-		}
-		if (args[0] === "display-message" && args[4] === "#{window_name}") return state.title;
-		if (args[0] === "display-message") return state.windowInfo ?? `${state.session}\t${state.window}\t${windowWaiting() ? "1" : "0"}\t${state.title}`;
-		if (args[0] === "show-options" && args.at(-1) === WINDOW_TITLE_MARKED_OPTION) return state.windowTitleMarked ?? "";
-		if (args[0] === "set-option" && args.includes(WINDOW_BASE_NAME_OPTION)) {
-			const baseIndex = args.indexOf(WINDOW_BASE_NAME_OPTION);
-			const baseValue = args[baseIndex + 1];
-			const quitFormats = buildWindowBaseQuitTitleFormats(idleTitle);
-			if (baseValue === quitFormats.baseName) {
-				const hasPeer = [...state.activePanes, ...state.waitingPanes].some(([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane));
-				state.windowBaseName = hasPeer
-					? state.windowBaseName && (state.title === state.windowBaseName || state.title === READY_PREFIX + state.windowBaseName)
-						? state.windowBaseName
-						: state.windowTitleMarked === "marked" && state.title.startsWith(READY_PREFIX)
-							? state.title.slice(READY_PREFIX.length) : state.title
-					: idleTitle;
-			} else if (baseValue === WINDOW_BASE_NAME_UPDATE_FORMAT) {
-				state.windowBaseName = state.windowTitleMarked === "marked" && state.title.startsWith(READY_PREFIX)
-					? state.title.slice(READY_PREFIX.length)
-					: state.windowBaseName && (state.title === state.windowBaseName || state.title === READY_PREFIX + state.windowBaseName)
-						? state.windowBaseName : state.title;
-			} else state.windowBaseName = baseValue;
-			const action = args.find((value) => value.startsWith("rename-window -t "));
-			if (action) {
-				const titleFormat = action.match(/ -- '([\s\S]*)'$/)?.[1];
-				expect(titleFormat).toBeDefined();
-				if (titleFormat === quitFormats.title) {
-					const hasPeer = [...state.activePanes, ...state.waitingPanes].some(([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane));
-					state.title = hasPeer
-						? (windowWaiting() ? READY_PREFIX : "") + (state.windowBaseName ?? "")
-						: formatTitle(idleTitle, windowWaiting());
-				} else if (titleFormat === WINDOW_BASE_NAME_TITLE_FORMAT) {
-					state.title = windowWaiting()
-						? `${READY_PREFIX}${state.windowBaseName || "pi"}`
-						: state.windowBaseName ?? "";
-				} else state.title = renderTitle(titleFormat!);
-			}
-			state.windowTitleMarked = args.at(-1) === WINDOW_TITLE_MARKED_VALUE_FORMAT
-				? windowWaiting() ? "marked" : "unmarked"
-				: "transition";
-			return "";
-		}
-		if (args[0] === "set-option") {
-			expect(args).toEqual([
-				"set-option", "-p", "-t", "%1", WAITING_OPTION, args[5],
-				";", "set-option", "-p", "-t", "%1", ACTIVE_OPTION, args[12],
-				";", "rename-session", "-t", "%1", SESSION_TITLE_FORMAT,
-			]);
-			state.waitingPanes.set(args[3], args[5]);
-			state.activePanes.set(args[10], args[12]);
-			const anyWaiting = [...state.waitingPanes.values()].includes("1");
-			state.sessionTitle = (anyWaiting ? READY_PREFIX : "") + state.sessionTitle.replace(/^\* /, "");
-		}
-		if (args[0] === "rename-window") {
-			expect(args.slice(0, 4)).toEqual(["rename-window", "-t", "%1", "--"]);
-			state.title = renderTitle(args[4]);
-			writes.push(state.title);
-		}
-		return "";
-	};
-	const load = () => {
-		const setting = process.env.PI_TMUX_IDLE_TITLE ?? "zsh";
-		idleTitle = setting.length > MAX_TITLE_INPUT_LENGTH || hasSensitiveOutput(setting)
-			? "zsh" : cleanTitle(setting) || "zsh";
-		return piTmux({
-			on: (event: string, handler: Function) => handlers.set(event, handler),
-			registerCommand: (name: string, command: { handler: Function; getArgumentCompletions?: Function }) => commands.set(name, command),
-		} as unknown as ExtensionAPI, tmux);
-	};
-	load();
-	const input = (text: string, source = "interactive") => handlers.get("input")!({ text, source }, ctx);
-	const emit = (event: string, reason = event === "session_shutdown" ? "quit" : "startup") =>
-		handlers.get(event)?.({ type: event, reason }, ctx);
-	return { handlers, calls, writes, requests, warnings, notices, messages, ctx, input, emit, state, load,
-		refresh: (args = "") => commands.get("tmux-title")!.handler(args, ctx),
-		quitPane: (args = "", commandCtx = ctx) => commands.get("quit-pane")!.handler(args, commandCtx),
-		get shutdownCalls() { return shutdownCalls; },
-		complete: (prefix = "") => commands.get("tmux-title")!.getArgumentCompletions!(prefix),
-	};
+  const handlers = new Map<string, Function>();
+  const commands = new Map<
+    string,
+    { handler: Function; getArgumentCompletions?: Function }
+  >();
+  const notices: string[] = [];
+  const calls: string[][] = [];
+  const writes: string[] = [];
+  const requests: { model: unknown; context: any; options: any }[] = [];
+  const warnings: string[] = [];
+  const messages: any[] = [];
+  let shutdownCalls = 0;
+  const ctx = {
+    mode: "tui",
+    shutdown: () => {
+      shutdownCalls++;
+    },
+    sessionManager: { buildSessionProjection: () => ({ messages }) },
+    ui: {
+      notify: (text: string, level: string) =>
+        (level === "warning" ? warnings : notices).push(text),
+    },
+    modelRegistry: {
+      find: (provider: string, id: string) => ({ provider, id }),
+      hasConfiguredAuth: () => true,
+      streamSimple: (model: unknown, context: unknown, options: unknown) => {
+        requests.push({ model, context, options });
+        return { result: () => results.shift()! };
+      },
+    },
+  } as unknown as ExtensionContext;
+  let idleTitle = "zsh";
+  const state = {
+    window: "@2",
+    title: "existing task",
+    session: "$0",
+    sessionTitle: "My Session",
+    windowInfo: undefined as string | undefined,
+    statusInfo: undefined as string | undefined,
+    windowBaseName: undefined as string | undefined,
+    windowTitleMarked: undefined as string | undefined,
+    waitingPanes: new Map<string, string>(),
+    activePanes: new Map<string, string>(),
+    otherWindowPanes: new Set<string>(),
+  };
+  const windowWaiting = () =>
+    [...state.waitingPanes].some(
+      ([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane),
+    );
+  const renderTitle = (format: string) => {
+    if (format === PRESERVED_WINDOW_TITLE_FORMAT) {
+      return (
+        (windowWaiting() ? READY_PREFIX : "") + state.title.replace(/^\* /, "")
+      );
+    }
+    if (format === buildQuitTitleFormat(idleTitle)) {
+      const hasPeer = [...state.activePanes, ...state.waitingPanes].some(
+        ([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane),
+      );
+      if (!hasPeer) return formatTitle(idleTitle, windowWaiting());
+      const title = state.title.replace(/^\* /, "");
+      return windowWaiting() ? READY_PREFIX + title : title;
+    }
+    const prefix = `#{?${WINDOW_WAITING_FORMAT},`;
+    expect(format).toStartWith(prefix);
+    expect(format).toEndWith("}");
+    const [ready, busy] = format.slice(prefix.length, -1).split(",");
+    return windowWaiting() ? ready : busy;
+  };
+  const tmux: RunTmux = async (args, signal) => {
+    calls.push(args);
+    if (beforeCommand)
+      await beforeCommand(
+        args,
+        signal,
+        args[0] === "rename-window" ? renderTitle(args[4]) : undefined,
+      );
+    if (args[0] === "display-message" && args[4] === "#{pid}") return "123";
+    if (args[0] === "display-message" && args[4] === STATUS_SNAPSHOT_FORMAT) {
+      return (
+        state.statusInfo ??
+        `123\t${state.session}\t${state.window}\t${state.waitingPanes.get("%1") === "1" ? "1" : "0"}\t${windowWaiting() ? "1" : "0"}\t${[...state.waitingPanes.values()].includes("1") ? "1" : "0"}`
+      );
+    }
+    if (args[0] === "display-message" && args[4] === "#{window_name}")
+      return state.title;
+    if (args[0] === "display-message")
+      return (
+        state.windowInfo ??
+        `${state.session}\t${state.window}\t${windowWaiting() ? "1" : "0"}\t${state.title}`
+      );
+    if (
+      args[0] === "show-options" &&
+      args.at(-1) === WINDOW_TITLE_MARKED_OPTION
+    )
+      return state.windowTitleMarked ?? "";
+    if (args[0] === "set-option" && args.includes(WINDOW_BASE_NAME_OPTION)) {
+      const baseIndex = args.indexOf(WINDOW_BASE_NAME_OPTION);
+      const baseValue = args[baseIndex + 1];
+      const quitFormats = buildWindowBaseQuitTitleFormats(idleTitle);
+      if (baseValue === quitFormats.baseName) {
+        const hasPeer = [...state.activePanes, ...state.waitingPanes].some(
+          ([pane, value]) => value === "1" && !state.otherWindowPanes.has(pane),
+        );
+        state.windowBaseName = hasPeer
+          ? state.windowBaseName &&
+            (state.title === state.windowBaseName ||
+              state.title === READY_PREFIX + state.windowBaseName)
+            ? state.windowBaseName
+            : state.windowTitleMarked === "marked" &&
+                state.title.startsWith(READY_PREFIX)
+              ? state.title.slice(READY_PREFIX.length)
+              : state.title
+          : idleTitle;
+      } else if (baseValue === WINDOW_BASE_NAME_UPDATE_FORMAT) {
+        state.windowBaseName =
+          state.windowTitleMarked === "marked" &&
+          state.title.startsWith(READY_PREFIX)
+            ? state.title.slice(READY_PREFIX.length)
+            : state.windowBaseName &&
+                (state.title === state.windowBaseName ||
+                  state.title === READY_PREFIX + state.windowBaseName)
+              ? state.windowBaseName
+              : state.title;
+      } else state.windowBaseName = baseValue;
+      const action = args.find((value) =>
+        value.startsWith("rename-window -t "),
+      );
+      if (action) {
+        const titleFormat = action.match(/ -- '([\s\S]*)'$/)?.[1];
+        expect(titleFormat).toBeDefined();
+        if (titleFormat === quitFormats.title) {
+          const hasPeer = [...state.activePanes, ...state.waitingPanes].some(
+            ([pane, value]) =>
+              value === "1" && !state.otherWindowPanes.has(pane),
+          );
+          state.title = hasPeer
+            ? (windowWaiting() ? READY_PREFIX : "") +
+              (state.windowBaseName ?? "")
+            : formatTitle(idleTitle, windowWaiting());
+        } else if (titleFormat === WINDOW_BASE_NAME_TITLE_FORMAT) {
+          state.title = windowWaiting()
+            ? `${READY_PREFIX}${state.windowBaseName || "pi"}`
+            : (state.windowBaseName ?? "");
+        } else state.title = renderTitle(titleFormat!);
+      }
+      state.windowTitleMarked =
+        args.at(-1) === WINDOW_TITLE_MARKED_VALUE_FORMAT
+          ? windowWaiting()
+            ? "marked"
+            : "unmarked"
+          : "transition";
+      return "";
+    }
+    if (args[0] === "set-option") {
+      expect(args).toEqual([
+        "set-option",
+        "-p",
+        "-t",
+        "%1",
+        WAITING_OPTION,
+        args[5],
+        ";",
+        "set-option",
+        "-p",
+        "-t",
+        "%1",
+        ACTIVE_OPTION,
+        args[12],
+        ";",
+        "rename-session",
+        "-t",
+        "%1",
+        SESSION_TITLE_FORMAT,
+      ]);
+      state.waitingPanes.set(args[3], args[5]);
+      state.activePanes.set(args[10], args[12]);
+      const anyWaiting = [...state.waitingPanes.values()].includes("1");
+      state.sessionTitle =
+        (anyWaiting ? READY_PREFIX : "") +
+        state.sessionTitle.replace(/^\* /, "");
+    }
+    if (args[0] === "rename-window") {
+      expect(args.slice(0, 4)).toEqual(["rename-window", "-t", "%1", "--"]);
+      state.title = renderTitle(args[4]);
+      writes.push(state.title);
+    }
+    return "";
+  };
+  const load = () => {
+    const setting = process.env.PI_TMUX_IDLE_TITLE ?? "zsh";
+    idleTitle =
+      setting.length > MAX_TITLE_INPUT_LENGTH || hasSensitiveOutput(setting)
+        ? "zsh"
+        : cleanTitle(setting) || "zsh";
+    return piTmux(
+      {
+        on: (event: string, handler: Function) => handlers.set(event, handler),
+        registerCommand: (
+          name: string,
+          command: { handler: Function; getArgumentCompletions?: Function },
+        ) => commands.set(name, command),
+      } as unknown as ExtensionAPI,
+      tmux,
+    );
+  };
+  load();
+  const input = (text: string, source = "interactive") =>
+    handlers.get("input")!({ text, source }, ctx);
+  const emit = (
+    event: string,
+    reason = event === "session_shutdown" ? "quit" : "startup",
+  ) => handlers.get(event)?.({ type: event, reason }, ctx);
+  return {
+    handlers,
+    calls,
+    writes,
+    requests,
+    warnings,
+    notices,
+    messages,
+    ctx,
+    input,
+    emit,
+    state,
+    load,
+    refresh: (args = "") => commands.get("tmux-title")!.handler(args, ctx),
+    quitPane: (args = "", commandCtx = ctx) =>
+      commands.get("quit-pane")!.handler(args, commandCtx),
+    get shutdownCalls() {
+      return shutdownCalls;
+    },
+    complete: (prefix = "") =>
+      commands.get("tmux-title")!.getArgumentCompletions!(prefix),
+  };
 }
 
 async function settle() {
-	for (let i = 0; i < 40; i++) await Promise.resolve();
+  for (let i = 0; i < 40; i++) await Promise.resolve();
 }
 
 test("automatic server-change warnings stay deduplicated across extension reloads", async () => {
-	const warningKey = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
-	const previousWarningDescriptor = Object.getOwnPropertyDescriptor(process, warningKey);
-	Reflect.deleteProperty(process, warningKey);
-	try {
-		process.env.PI_TMUX_MODEL = "off";
-		const warnings: string[] = [];
-		const ctx = {
-			mode: "tui",
-			ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
-		} as unknown as ExtensionContext;
-		let serverPid = "123";
-		const writes: string[][] = [];
-		const tmux: RunTmux = async (args) => {
-			if (args[0] === "display-message") return `$0:1:${serverPid}:0\t@2\t0\texisting task`;
-			writes.push(args);
-			return "";
-		};
-		const load = () => {
-			const handlers = new Map<string, Function>();
-			piTmux({
-				on: (event: string, handler: Function) => handlers.set(event, handler),
-				registerCommand: () => {},
-			} as unknown as ExtensionAPI, tmux);
-			return async (event: string, reason = "startup") => {
-				await handlers.get(event)!({ type: event, reason }, ctx);
-				await settle();
-			};
-		};
+  const warningKey = Symbol.for(
+    "@leocavalcante/pi-tmux/server-change-warning-shown",
+  );
+  const previousWarningDescriptor = Object.getOwnPropertyDescriptor(
+    process,
+    warningKey,
+  );
+  Reflect.deleteProperty(process, warningKey);
+  try {
+    process.env.PI_TMUX_MODEL = "off";
+    const warnings: string[] = [];
+    const ctx = {
+      mode: "tui",
+      ui: {
+        notify: (text: string, level: string) => {
+          if (level === "warning") warnings.push(text);
+        },
+      },
+    } as unknown as ExtensionContext;
+    let serverPid = "123";
+    const writes: string[][] = [];
+    const tmux: RunTmux = async (args) => {
+      if (args[0] === "display-message")
+        return `$0:1:${serverPid}:0\t@2\t0\texisting task`;
+      writes.push(args);
+      return "";
+    };
+    const load = () => {
+      const handlers = new Map<string, Function>();
+      piTmux(
+        {
+          on: (event: string, handler: Function) =>
+            handlers.set(event, handler),
+          registerCommand: () => {},
+        } as unknown as ExtensionAPI,
+        tmux,
+      );
+      return async (event: string, reason = "startup") => {
+        await handlers.get(event)!({ type: event, reason }, ctx);
+        await settle();
+      };
+    };
 
-		const firstRuntime = load();
-		await firstRuntime("session_start");
-		const initialWrites = writes.length;
-		expect(initialWrites).toBeGreaterThan(0);
-		serverPid = "124";
-		await firstRuntime("agent_start");
-		const warning = "The tmux server changed; restart Pi to resume title updates.";
-		expect(warnings).toEqual([warning]);
-		expect(writes).toHaveLength(initialWrites);
+    const firstRuntime = load();
+    await firstRuntime("session_start");
+    const initialWrites = writes.length;
+    expect(initialWrites).toBeGreaterThan(0);
+    serverPid = "124";
+    await firstRuntime("agent_start");
+    const warning =
+      "The tmux server changed; restart Pi to resume title updates.";
+    expect(warnings).toEqual([warning]);
+    expect(writes).toHaveLength(initialWrites);
 
-		await firstRuntime("session_shutdown", "reload");
-		const secondRuntime = load();
-		await secondRuntime("session_start", "reload");
-		expect(writes).toHaveLength(initialWrites);
-		serverPid = "125";
-		await secondRuntime("agent_start");
-		expect(writes).toHaveLength(initialWrites);
-		expect(warnings).toEqual([warning]);
-	} finally {
-		if (previousWarningDescriptor) Object.defineProperty(process, warningKey, previousWarningDescriptor);
-		else Reflect.deleteProperty(process, warningKey);
-	}
+    await firstRuntime("session_shutdown", "reload");
+    const secondRuntime = load();
+    await secondRuntime("session_start", "reload");
+    expect(writes).toHaveLength(initialWrites);
+    serverPid = "125";
+    await secondRuntime("agent_start");
+    expect(writes).toHaveLength(initialWrites);
+    expect(warnings).toEqual([warning]);
+  } finally {
+    if (previousWarningDescriptor)
+      Object.defineProperty(process, warningKey, previousWarningDescriptor);
+    else Reflect.deleteProperty(process, warningKey);
+  }
 });
 
-const renameCommand = (title: string) => ["rename-window", "-t", "%1", "--", buildWindowTitleFormat(title)];
-const quitCommand = () => ["rename-window", "-t", "%1", "--", QUIT_TITLE_FORMAT];
+const renameCommand = (title: string) => [
+  "rename-window",
+  "-t",
+  "%1",
+  "--",
+  buildWindowTitleFormat(title),
+];
+const quitCommand = () => [
+  "rename-window",
+  "-t",
+  "%1",
+  "--",
+  QUIT_TITLE_FORMAT,
+];
 
 function deferred() {
-	let resolve!: (result: ReturnType<typeof response>) => void;
-	const promise = new Promise<ReturnType<typeof response>>((done) => { resolve = done; });
-	return { promise, resolve };
+  let resolve!: (result: ReturnType<typeof response>) => void;
+  const promise = new Promise<ReturnType<typeof response>>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
-async function withNamingTimers(run: (timers: { handle: ReturnType<typeof setTimeout>; fire: () => void }[], cleared: Set<unknown>) => Promise<void>) {
-	const nativeSet = globalThis.setTimeout;
-	const nativeClear = globalThis.clearTimeout;
-	const timers: { handle: ReturnType<typeof setTimeout>; fire: () => void }[] = [];
-	const cleared = new Set<unknown>();
-	const set = spyOn(globalThis, "setTimeout").mockImplementation(((callback: (...args: any[]) => void, delay?: number, ...args: any[]) => {
-		const handle = nativeSet(callback, delay, ...args);
-		if (delay === 15_000) timers.push({ handle, fire: () => callback(...args) });
-		return handle;
-	}) as typeof globalThis.setTimeout);
-	const clear = spyOn(globalThis, "clearTimeout").mockImplementation((handle) => {
-		cleared.add(handle);
-		nativeClear(handle as Timer);
-	});
-	try { await run(timers, cleared); }
-	finally {
-		set.mockRestore();
-		clear.mockRestore();
-		for (const { handle } of timers) nativeClear(handle as Timer);
-	}
+async function withNamingTimers(
+  run: (
+    timers: { handle: ReturnType<typeof setTimeout>; fire: () => void }[],
+    cleared: Set<unknown>,
+  ) => Promise<void>,
+) {
+  const nativeSet = globalThis.setTimeout;
+  const nativeClear = globalThis.clearTimeout;
+  const timers: { handle: ReturnType<typeof setTimeout>; fire: () => void }[] =
+    [];
+  const cleared = new Set<unknown>();
+  const set = spyOn(globalThis, "setTimeout").mockImplementation(((
+    callback: (...args: any[]) => void,
+    delay?: number,
+    ...args: any[]
+  ) => {
+    const handle = nativeSet(callback, delay, ...args);
+    if (delay === 15_000)
+      timers.push({ handle, fire: () => callback(...args) });
+    return handle;
+  }) as typeof globalThis.setTimeout);
+  const clear = spyOn(globalThis, "clearTimeout").mockImplementation(
+    (handle) => {
+      cleared.add(handle);
+      nativeClear(handle as Timer);
+    },
+  );
+  try {
+    await run(timers, cleared);
+  } finally {
+    set.mockRestore();
+    clear.mockRestore();
+    for (const { handle } of timers) nativeClear(handle as Timer);
+  }
 }
 
 test("cleans markup, accents, controls, and tmux formatting characters", () => {
-	expect(cleanTitle('"Fix café\n# auth"\u001b')).toBe("fix cafe auth");
-	expect(cleanTitle("Fix auth tests")).toBe("fix auth tests");
-	expect(cleanTitle("FIX API Titles")).toBe("fix api titles");
-	expect(cleanTitle("#[]\n\u001b")).toBe("");
-	expect(cleanTitle("---")).toBe("");
+  expect(cleanTitle('"Fix café\n# auth"\u001b')).toBe("fix cafe auth");
+  expect(cleanTitle("Fix auth tests")).toBe("fix auth tests");
+  expect(cleanTitle("FIX API Titles")).toBe("fix api titles");
+  expect(cleanTitle("#[]\n\u001b")).toBe("");
+  expect(cleanTitle("---")).toBe("");
 });
 
 test("removes combining marks from Unicode blocks beyond the basic diacritics range", () => {
-	expect(cleanTitle("Fix e\u1ab0mail tests")).toBe("fix email tests");
+  expect(cleanTitle("Fix e\u1ab0mail tests")).toBe("fix email tests");
 });
 
-test.each([-1, -24])("returns an empty title for a negative length limit: %i", (maxLength) => {
-	expect(cleanTitle("fix auth", maxLength)).toBe("");
-});
+test.each([-1, -24])(
+  "returns an empty title for a negative length limit: %i",
+  (maxLength) => {
+    expect(cleanTitle("fix auth", maxLength)).toBe("");
+  },
+);
 
 test("caps names at 24 ASCII cells, preferably on a word boundary", () => {
-	expect(cleanTitle("Investigate authentication failures")).toBe("investigate");
-	expect(cleanTitle("x".repeat(80))).toHaveLength(MAX_TITLE_LENGTH);
-	expect(cleanTitle("x".repeat(24))).toHaveLength(MAX_TITLE_LENGTH);
-	expect(cleanTitle("unbounded title", Number.MAX_SAFE_INTEGER)).toBe("unbounded title");
+  expect(cleanTitle("Investigate authentication failures")).toBe("investigate");
+  expect(cleanTitle("x".repeat(80))).toHaveLength(MAX_TITLE_LENGTH);
+  expect(cleanTitle("x".repeat(24))).toHaveLength(MAX_TITLE_LENGTH);
+  expect(cleanTitle("unbounded title", Number.MAX_SAFE_INTEGER)).toBe(
+    "unbounded title",
+  );
 });
 
 test("accepts an empty window-name field and supplies the waiting fallback", async () => {
-	const f = fixture();
-	f.state.title = "";
-	await f.emit("session_start");
-	expect(f.state.title).toBe("");
-	expect(f.writes).toEqual([]);
-	expect(f.warnings).toEqual([]);
+  const f = fixture();
+  f.state.title = "";
+  await f.emit("session_start");
+  expect(f.state.title).toBe("");
+  expect(f.writes).toEqual([]);
+  expect(f.warnings).toEqual([]);
 
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* pi");
-	expect(f.warnings).toEqual([]);
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* pi");
+  expect(f.warnings).toEqual([]);
 });
 
 test("an empty server-PID field remains compatible with older tmux adapters", async () => {
-	const handlers = new Map<string, Function>();
-	const calls: string[][] = [];
-	const warnings: string[] = [];
-	piTmux({ on: (event: string, handler: Function) => handlers.set(event, handler), registerCommand: () => {} } as unknown as ExtensionAPI,
-		async (args) => {
-			calls.push(args);
-			return args[0] === "display-message" ? "$0:1:\t@2\t0\tcustom name" : "";
-		});
-	const ctx = { mode: "tui", sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
-		ui: { notify: (text: string) => warnings.push(text) } } as unknown as ExtensionContext;
-	await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, ctx);
-	expect(calls[0]).toEqual(["display-message", "-p", "-t", "%1", WINDOW_INFO_INTERNAL_FORMAT]);
-	expect(calls[1][0]).toBe("set-option");
-	expect(warnings).toEqual([]);
+  const handlers = new Map<string, Function>();
+  const calls: string[][] = [];
+  const warnings: string[] = [];
+  piTmux(
+    {
+      on: (event: string, handler: Function) => handlers.set(event, handler),
+      registerCommand: () => {},
+    } as unknown as ExtensionAPI,
+    async (args) => {
+      calls.push(args);
+      return args[0] === "display-message" ? "$0:1:\t@2\t0\tcustom name" : "";
+    },
+  );
+  const ctx = {
+    mode: "tui",
+    sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+    ui: { notify: (text: string) => warnings.push(text) },
+  } as unknown as ExtensionContext;
+  await handlers.get("session_start")!(
+    { type: "session_start", reason: "startup" },
+    ctx,
+  );
+  expect(calls[0]).toEqual([
+    "display-message",
+    "-p",
+    "-t",
+    "%1",
+    WINDOW_INFO_INTERNAL_FORMAT,
+  ]);
+  expect(calls[1][0]).toBe("set-option");
+  expect(warnings).toEqual([]);
 });
 
 test.each([
-	["0", false],
-	["1", true],
-])("readWindowTitle reports whether a session name may not round-trip: %s", async (flag, expected) => {
-	const snapshot = await readWindowTitle(
-		async () => `$2:1:123:${flag}\t@4\t0\tcustom\tname`,
-		"%1",
-		new AbortController().signal,
-	);
-	expect(snapshot).toMatchObject({
-		session: "$2",
-		window: "@4",
-		title: "custom\tname",
-		server: "123",
-		sessionMetadataAvailable: true,
-		sessionNameMayNotRoundTrip: expected,
-	});
-});
+  ["0", false],
+  ["1", true],
+])(
+  "readWindowTitle reports whether a session name may not round-trip: %s",
+  async (flag, expected) => {
+    const snapshot = await readWindowTitle(
+      async () => `$2:1:123:${flag}\t@4\t0\tcustom\tname`,
+      "%1",
+      new AbortController().signal,
+    );
+    expect(snapshot).toMatchObject({
+      session: "$2",
+      window: "@4",
+      title: "custom\tname",
+      server: "123",
+      sessionMetadataAvailable: true,
+      sessionNameMayNotRoundTrip: expected,
+    });
+  },
+);
 
-test.each([
-	["invalid-session", "@2", "0", "custom"],
-	["$0", "invalid-window", "0", "custom"],
-	["$0", "@2", "2", "custom"],
-	["$0", "@2", "0"],
-].map((fields) => fields.join("\t")))("malformed tmux window snapshot %s is rejected without writes", async (info) => {
-	const f = fixture();
-	f.state.windowInfo = info;
-	await f.emit("session_start");
-	await f.emit("agent_settled");
-	expect(f.calls.filter((args) => args[0] !== "display-message")).toEqual([]);
-	expect(f.warnings).toEqual(["tmux window/session status could not be updated. Check tmux."]);
-	expect(f.requests).toEqual([]);
-});
+test.each(
+  [
+    ["invalid-session", "@2", "0", "custom"],
+    ["$0", "invalid-window", "0", "custom"],
+    ["$0", "@2", "2", "custom"],
+    ["$0", "@2", "0"],
+  ].map((fields) => fields.join("\t")),
+)(
+  "malformed tmux window snapshot %s is rejected without writes",
+  async (info) => {
+    const f = fixture();
+    f.state.windowInfo = info;
+    await f.emit("session_start");
+    await f.emit("agent_settled");
+    expect(f.calls.filter((args) => args[0] !== "display-message")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "tmux window/session status could not be updated. Check tmux.",
+    ]);
+    expect(f.requests).toEqual([]);
+  },
+);
 
 test("passes input through immediately and renames the owning window", async () => {
-	const f = fixture();
-	expect(f.input("Fix the failing authentication tests")).toEqual({ action: "continue" });
-	expect(f.calls).toEqual([]);
-	await settle();
-	expect(f.requests[0].model).toEqual({ provider: "openai-codex", id: "gpt-6-luna" });
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
-		renameCommand("fix auth tests"),
-	]);
-	expect(f.calls[0]).toEqual(["display-message", "-p", "-t", "%1", WINDOW_INFO_INTERNAL_FORMAT]);
-	expect(f.warnings).toEqual([]);
+  const f = fixture();
+  expect(f.input("Fix the failing authentication tests")).toEqual({
+    action: "continue",
+  });
+  expect(f.calls).toEqual([]);
+  await settle();
+  expect(f.requests[0].model).toEqual({
+    provider: "openai-codex",
+    id: "gpt-6-luna",
+  });
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
+    renameCommand("fix auth tests"),
+  ]);
+  expect(f.calls[0]).toEqual([
+    "display-message",
+    "-p",
+    "-t",
+    "%1",
+    WINDOW_INFO_INTERNAL_FORMAT,
+  ]);
+  expect(f.warnings).toEqual([]);
 });
 
 test("task-based development prompts are not mistaken for generic API keys", async () => {
-	const f = fixture([Promise.resolve(response("task based development"))]);
-	f.input("task-based development");
-	await settle();
-	expect(f.requests).toHaveLength(1);
-	expect(f.state.title).toBe("task based development");
-	expect(f.warnings).toEqual([]);
+  const f = fixture([Promise.resolve(response("task based development"))]);
+  f.input("task-based development");
+  await settle();
+  expect(f.requests).toHaveLength(1);
+  expect(f.state.title).toBe("task based development");
+  expect(f.warnings).toEqual([]);
 });
 
 test("a descriptive first prompt can be titled without answering it", async () => {
-	const prompt = "Explain in two short sentences what a tmux window title is. Do not use any tools.";
-	const f = fixture([Promise.resolve(response("explain tmux titles"))]);
-	f.input(prompt);
-	await settle();
-	expect(f.requests[0].context.messages).toEqual([{ role: "user", content: `user: ${prompt}`, timestamp: expect.any(Number) }]);
-	expect(f.state.title).toBe("explain tmux titles");
-	expect(f.warnings).toEqual([]);
+  const prompt =
+    "Explain in two short sentences what a tmux window title is. Do not use any tools.";
+  const f = fixture([Promise.resolve(response("explain tmux titles"))]);
+  f.input(prompt);
+  await settle();
+  expect(f.requests[0].context.messages).toEqual([
+    { role: "user", content: `user: ${prompt}`, timestamp: expect.any(Number) },
+  ]);
+  expect(f.state.title).toBe("explain tmux titles");
+  expect(f.warnings).toEqual([]);
 });
 
 test("extension instances keep pins and pending naming state isolated", async () => {
-	const first = fixture();
-	const pending = deferred();
-	const second = fixture([pending.promise]);
+  const first = fixture();
+  const pending = deferred();
+  const second = fixture([pending.promise]);
 
-	await first.refresh("set isolated title");
-	expect(first.state.title).toBe("isolated title");
-	expect(first.requests).toHaveLength(0);
+  await first.refresh("set isolated title");
+  expect(first.state.title).toBe("isolated title");
+  expect(first.requests).toHaveLength(0);
 
-	second.input("Name a different task");
-	await settle();
-	expect(second.requests).toHaveLength(1);
+  second.input("Name a different task");
+  await settle();
+  expect(second.requests).toHaveLength(1);
 
-	// Resetting one instance must not abort another instance's request
-	// or erase its result.
-	await first.emit("session_tree");
-	expect(second.requests[0].options.signal.aborted).toBe(false);
-	pending.resolve(response("second task"));
-	await settle();
-	expect(second.state.title).toBe("second task");
-	expect(first.state.title).toBe("isolated title");
-	expect(second.warnings).toEqual([]);
+  // Resetting one instance must not abort another instance's request
+  // or erase its result.
+  await first.emit("session_tree");
+  expect(second.requests[0].options.signal.aborted).toBe(false);
+  pending.resolve(response("second task"));
+  await settle();
+  expect(second.state.title).toBe("second task");
+  expect(first.state.title).toBe("isolated title");
+  expect(second.warnings).toEqual([]);
 });
 
-test.each(["-fix auth", "-t", "-a"])("model title %s is passed as a literal tmux argument", async (title) => {
-	const f = fixture([Promise.resolve(response(title))]);
-	f.input("Synthetic task");
-	await settle();
-	expect(f.state.title).toBe(title);
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
-		renameCommand(title),
-	]);
-	expect(f.warnings).toEqual([]);
-});
+test.each(["-fix auth", "-t", "-a"])(
+  "model title %s is passed as a literal tmux argument",
+  async (title) => {
+    const f = fixture([Promise.resolve(response(title))]);
+    f.input("Synthetic task");
+    await settle();
+    expect(f.state.title).toBe(title);
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
+      renameCommand(title),
+    ]);
+    expect(f.warnings).toEqual([]);
+  },
+);
 
-test.each([true, false])("selects naming reasoning for a model with reasoning=%s", async (reasoning) => {
-	const f = fixture();
-	const model = f.ctx.modelRegistry.find("openai-codex", "gpt-6-luna")!;
-	spyOn(f.ctx.modelRegistry, "find").mockReturnValue({ ...model, reasoning });
-	f.input("Fix the failing authentication tests");
-	await settle();
-	expect(f.requests).toHaveLength(1);
-	expect(f.requests[0].options.reasoning).toBe(reasoning ? "minimal" : undefined);
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.warnings).toEqual([]);
-});
+test.each([true, false])(
+  "selects naming reasoning for a model with reasoning=%s",
+  async (reasoning) => {
+    const f = fixture();
+    const model = f.ctx.modelRegistry.find("openai-codex", "gpt-6-luna")!;
+    spyOn(f.ctx.modelRegistry, "find").mockReturnValue({ ...model, reasoning });
+    f.input("Fix the failing authentication tests");
+    await settle();
+    expect(f.requests).toHaveLength(1);
+    expect(f.requests[0].options.reasoning).toBe(
+      reasoning ? "minimal" : undefined,
+    );
+    expect(f.state.title).toBe("fix auth tests");
+    expect(f.warnings).toEqual([]);
+  },
+);
 
 test("balances oversized prompt context and disables provider retries", async () => {
-	const f = fixture();
-	f.input("x".repeat(10_000));
-	await settle();
-	const request = f.requests[0];
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
-	expect(request.context.messages).toHaveLength(1);
-	expect(request.context.systemPrompt).toContain("Ignore requested answer format, length, or style");
-	expect(request.context.systemPrompt).toContain("Do not answer or restate the user's request; give it a concise task label");
-	expect(request.context.systemPrompt).toContain("explain tmux titles or fix auth tests");
-	expect(request.context.messages[0].content).toBe(
-		`user: ${"x".repeat(prefixLength)}\n${marker}\n${"x".repeat(suffixLength)}`,
-	);
-	expect(request.options).toMatchObject({ maxTokens: 96, reasoning: undefined, maxRetries: 0, cacheRetention: "none" });
+  const f = fixture();
+  f.input("x".repeat(10_000));
+  await settle();
+  const request = f.requests[0];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
+  expect(request.context.messages).toHaveLength(1);
+  expect(request.context.systemPrompt).toContain(
+    "Ignore requested answer format, length, or style",
+  );
+  expect(request.context.systemPrompt).toContain(
+    "Do not answer or restate the user's request; give it a concise task label",
+  );
+  expect(request.context.systemPrompt).toContain(
+    "explain tmux titles or fix auth tests",
+  );
+  expect(request.context.messages[0].content).toBe(
+    `user: ${"x".repeat(prefixLength)}\n${marker}\n${"x".repeat(suffixLength)}`,
+  );
+  expect(request.options).toMatchObject({
+    maxTokens: 96,
+    reasoning: undefined,
+    maxRetries: 0,
+    cacheRetention: "none",
+  });
 });
 
 test("retains task intent from both ends of a long prompt", () => {
-	const prompt = `TASK: fix authentication tests\n${"x".repeat(10_000)}MIDDLE_SENTINEL${"y".repeat(10_000)}\nAlso add a regression test.`;
-	const context = buildNamingContext([], prompt);
-	expect(context).toContain("user: TASK: fix authentication tests");
-	expect(context).toContain("Also add a regression test.");
-	expect(context).toContain("[... middle of prompt omitted ...]");
-	expect(context).not.toContain("MIDDLE_SENTINEL");
-	expect(context.length).toBeLessThanOrEqual("user: ".length + MAX_PROMPT_LENGTH);
+  const prompt = `TASK: fix authentication tests\n${"x".repeat(10_000)}MIDDLE_SENTINEL${"y".repeat(10_000)}\nAlso add a regression test.`;
+  const context = buildNamingContext([], prompt);
+  expect(context).toContain("user: TASK: fix authentication tests");
+  expect(context).toContain("Also add a regression test.");
+  expect(context).toContain("[... middle of prompt omitted ...]");
+  expect(context).not.toContain("MIDDLE_SENTINEL");
+  expect(context.length).toBeLessThanOrEqual(
+    "user: ".length + MAX_PROMPT_LENGTH,
+  );
 });
 
 test("does not split a supplementary character at the start of a retained prompt suffix", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const suffixLength = Math.floor((MAX_PROMPT_LENGTH - marker.length - 2) / 2);
-	const prompt = `TASK${"m".repeat(10_000)}😀${"x".repeat(suffixLength - 1)}`;
-	const context = buildNamingContext([], prompt);
-	const suffix = context.split(`\n${marker}\n`)[1];
-	expect(suffix).toBe("x".repeat(suffixLength - 1));
+  const marker = "[... middle of prompt omitted ...]";
+  const suffixLength = Math.floor((MAX_PROMPT_LENGTH - marker.length - 2) / 2);
+  const prompt = `TASK${"m".repeat(10_000)}😀${"x".repeat(suffixLength - 1)}`;
+  const context = buildNamingContext([], prompt);
+  const suffix = context.split(`\n${marker}\n`)[1];
+  expect(suffix).toBe("x".repeat(suffixLength - 1));
 });
 
 test("does not split a supplementary character at the end of a retained prompt prefix", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
-	const prompt = `${"x".repeat(prefixLength - 1)}😀${"y".repeat(10_000)}`;
-	const context = buildNamingContext([], prompt);
-	const [prefix, suffix] = context.slice("user: ".length).split(`\n${marker}\n`);
-	expect(prefix).toBe(`${"x".repeat(prefixLength - 1)}😀`);
-	expect(suffix).toBe("y".repeat(suffixLength - 1));
-	expect(context.length).toBeLessThanOrEqual("user: ".length + MAX_PROMPT_LENGTH);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
+  const prompt = `${"x".repeat(prefixLength - 1)}😀${"y".repeat(10_000)}`;
+  const context = buildNamingContext([], prompt);
+  const [prefix, suffix] = context
+    .slice("user: ".length)
+    .split(`\n${marker}\n`);
+  expect(prefix).toBe(`${"x".repeat(prefixLength - 1)}😀`);
+  expect(suffix).toBe("y".repeat(suffixLength - 1));
+  expect(context.length).toBeLessThanOrEqual(
+    "user: ".length + MAX_PROMPT_LENGTH,
+  );
 });
 
 test("keeps both retained prompt boundaries Unicode-safe together", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - suffixLength;
-	const prompt = `${"x".repeat(prefixLength - 1)}😀${"x".repeat(suffixStart - prefixLength - 1)}😀${"y".repeat(promptLength - suffixStart - 2)}`;
-	const context = buildNamingContext([], prompt);
-	const [prefix, suffix] = context.slice("user: ".length).split(`\n${marker}\n`);
-	expect(prefix).toBe(`${"x".repeat(prefixLength - 1)}😀`);
-	expect(suffix).toBe("y".repeat(promptLength - suffixStart - 2));
-	expect(context.length).toBeLessThanOrEqual("user: ".length + MAX_PROMPT_LENGTH);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - suffixLength;
+  const prompt = `${"x".repeat(prefixLength - 1)}😀${"x".repeat(suffixStart - prefixLength - 1)}😀${"y".repeat(promptLength - suffixStart - 2)}`;
+  const context = buildNamingContext([], prompt);
+  const [prefix, suffix] = context
+    .slice("user: ".length)
+    .split(`\n${marker}\n`);
+  expect(prefix).toBe(`${"x".repeat(prefixLength - 1)}😀`);
+  expect(suffix).toBe("y".repeat(promptLength - suffixStart - 2));
+  expect(context.length).toBeLessThanOrEqual(
+    "user: ".length + MAX_PROMPT_LENGTH,
+  );
 });
 
 test("input skips trimming a bounded prompt's unneeded suffix", async () => {
-	const f = fixture();
-	const trim = spyOn(String.prototype, "trim").mockImplementation(() => {
-		throw new Error("The input gate must not scan the prompt suffix");
-	});
-	try {
-		expect(f.input("Task" + " ".repeat(100_000))).toEqual({ action: "continue" });
-	} finally {
-		trim.mockRestore();
-	}
-	await settle();
-	expect(f.requests[0].context.messages[0].content).toBe("user: Task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([renameCommand("fix auth tests")]);
+  const f = fixture();
+  const trim = spyOn(String.prototype, "trim").mockImplementation(() => {
+    throw new Error("The input gate must not scan the prompt suffix");
+  });
+  try {
+    expect(f.input("Task" + " ".repeat(100_000))).toEqual({
+      action: "continue",
+    });
+  } finally {
+    trim.mockRestore();
+  }
+  await settle();
+  expect(f.requests[0].context.messages[0].content).toBe("user: Task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
+    renameCommand("fix auth tests"),
+  ]);
 });
 
 test("ignores print/RPC, injected messages, empty input, and non-tmux sessions", async () => {
-	const f = fixture();
-	f.input("", "interactive");
-	f.input("\u00a0\ufeff \n\t", "interactive");
-	f.input("Injected task", "extension");
-	f.input("RPC task", "rpc");
-	(f.ctx as any).mode = "text";
-	f.input("Print task");
-	(f.ctx as any).mode = "tui";
-	delete process.env.TMUX_PANE;
-	f.input("No tmux");
-	process.env.TMUX_PANE = "bad-target";
-	f.input("Invalid pane");
-	await settle();
-	expect(f.requests).toEqual([]);
-	expect(f.calls).toEqual([]);
+  const f = fixture();
+  f.input("", "interactive");
+  f.input("\u00a0\ufeff \n\t", "interactive");
+  f.input("Injected task", "extension");
+  f.input("RPC task", "rpc");
+  (f.ctx as any).mode = "text";
+  f.input("Print task");
+  (f.ctx as any).mode = "tui";
+  delete process.env.TMUX_PANE;
+  f.input("No tmux");
+  process.env.TMUX_PANE = "bad-target";
+  f.input("Invalid pane");
+  await settle();
+  expect(f.requests).toEqual([]);
+  expect(f.calls).toEqual([]);
 });
 
 test("superseding input aborts old work and an old result cannot overwrite the new title", async () => {
-	const old = deferred();
-	const f = fixture([old.promise, Promise.resolve(response("New task"))]);
-	f.input("Old task");
-	f.input("New task");
-	expect(f.requests[0].options.signal.aborted).toBe(true);
-	await settle();
-	old.resolve(response("Old task"));
-	await settle();
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([renameCommand("new task")]);
+  const old = deferred();
+  const f = fixture([old.promise, Promise.resolve(response("New task"))]);
+  f.input("Old task");
+  f.input("New task");
+  expect(f.requests[0].options.signal.aborted).toBe(true);
+  await settle();
+  old.resolve(response("Old task"));
+  await settle();
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
+    renameCommand("new task"),
+  ]);
 });
 
 test("shutdown and session replacement cancel outstanding naming", async () => {
-	for (const event of ["session_shutdown", "session_start"]) {
-		const work = deferred();
-		const f = fixture([work.promise]);
-		f.input("Task");
-		await f.emit(event);
-		expect(f.requests[0].options.signal.aborted).toBe(true);
-		work.resolve(response("Late title"));
-		await settle();
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual(
-			event === "session_shutdown" ? [quitCommand()] : [],
-		);
-	}
+  for (const event of ["session_shutdown", "session_start"]) {
+    const work = deferred();
+    const f = fixture([work.promise]);
+    f.input("Task");
+    await f.emit(event);
+    expect(f.requests[0].options.signal.aborted).toBe(true);
+    work.resolve(response("Late title"));
+    await settle();
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      event === "session_shutdown" ? [quitCommand()] : [],
+    );
+  }
 });
 
 test("deadline settles pending naming even when the provider never settles", async () => {
-	await withNamingTimers(async (timers, cleared) => {
-		const f = fixture([new Promise(() => {})]);
-		f.input("synthetic task");
-		await settle();
-		expect(timers).toHaveLength(1);
-		expect(timers[0].handle.hasRef()).toBe(false);
-		timers[0].fire();
-		await settle();
-		expect(f.requests[0].options.signal.aborted).toBe(true);
-		expect(cleared.has(timers[0].handle)).toBe(true);
-		expect(getEventListeners(f.requests[0].options.signal, "abort")).toHaveLength(0);
-		await f.refresh("status");
-		expect(f.notices.at(-1)).toContain("Naming request: idle");
-		expect(f.warnings).toHaveLength(1);
-		expect(f.state.title).toBe("existing task");
-		await f.emit("agent_settled");
-		expect(f.state.title).toBe("* existing task");
-		expect(f.requests).toHaveLength(1);
-	});
+  await withNamingTimers(async (timers, cleared) => {
+    const f = fixture([new Promise(() => {})]);
+    f.input("synthetic task");
+    await settle();
+    expect(timers).toHaveLength(1);
+    expect(timers[0].handle.hasRef()).toBe(false);
+    timers[0].fire();
+    await settle();
+    expect(f.requests[0].options.signal.aborted).toBe(true);
+    expect(cleared.has(timers[0].handle)).toBe(true);
+    expect(
+      getEventListeners(f.requests[0].options.signal, "abort"),
+    ).toHaveLength(0);
+    await f.refresh("status");
+    expect(f.notices.at(-1)).toContain("Naming request: idle");
+    expect(f.warnings).toHaveLength(1);
+    expect(f.state.title).toBe("existing task");
+    await f.emit("agent_settled");
+    expect(f.state.title).toBe("* existing task");
+    expect(f.requests).toHaveLength(1);
+  });
 });
 
 test("the original deadline also aborts a hanging title correction request", async () => {
-	await withNamingTimers(async (timers, cleared) => {
-		const retry = deferred();
-		const f = fixture([
-			Promise.resolve(response("Explain what a tmux window title is")),
-			retry.promise,
-		]);
-		f.input("Explain in two short sentences what a tmux window title is.");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.requests[1].options.signal).toBe(f.requests[0].options.signal);
-		expect(timers).toHaveLength(1);
-		timers[0].fire();
-		await settle();
-		const signal = f.requests[1].options.signal as AbortSignal;
-		expect(signal.aborted).toBe(true);
-		expect(cleared.has(timers[0].handle)).toBe(true);
-		expect(getEventListeners(signal, "abort")).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toHaveLength(1);
-		retry.resolve(response("stale correction"));
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toHaveLength(1);
-	});
+  await withNamingTimers(async (timers, cleared) => {
+    const retry = deferred();
+    const f = fixture([
+      Promise.resolve(response("Explain what a tmux window title is")),
+      retry.promise,
+    ]);
+    f.input("Explain in two short sentences what a tmux window title is.");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.requests[1].options.signal).toBe(f.requests[0].options.signal);
+    expect(timers).toHaveLength(1);
+    timers[0].fire();
+    await settle();
+    const signal = f.requests[1].options.signal as AbortSignal;
+    expect(signal.aborted).toBe(true);
+    expect(cleared.has(timers[0].handle)).toBe(true);
+    expect(getEventListeners(signal, "abort")).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toHaveLength(1);
+    retry.resolve(response("stale correction"));
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toHaveLength(1);
+  });
 });
 
-test.each(["resolve", "reject"])("late provider %s after timeout is consumed without changing the title or warning again", async (completion) => {
-	await withNamingTimers(async (timers) => {
-		let resolve!: (value: ReturnType<typeof response>) => void;
-		let reject!: (error: Error) => void;
-		const work = new Promise<ReturnType<typeof response>>((done, fail) => { resolve = done; reject = fail; });
-		const f = fixture([work]);
-		f.input("synthetic task");
-		await settle();
-		timers[0].fire();
-		await settle();
-		expect(f.warnings).toHaveLength(1);
-		if (completion === "resolve") resolve(response("stale late title"));
-		else reject(new Error("Synthetic private provider error"));
-		await settle();
-		expect(f.warnings).toHaveLength(1);
-		expect(f.warnings.join("\n")).not.toContain("Synthetic private provider error");
-		expect(f.state.title).toBe("existing task");
-	});
-});
+test.each(["resolve", "reject"])(
+  "late provider %s after timeout is consumed without changing the title or warning again",
+  async (completion) => {
+    await withNamingTimers(async (timers) => {
+      let resolve!: (value: ReturnType<typeof response>) => void;
+      let reject!: (error: Error) => void;
+      const work = new Promise<ReturnType<typeof response>>((done, fail) => {
+        resolve = done;
+        reject = fail;
+      });
+      const f = fixture([work]);
+      f.input("synthetic task");
+      await settle();
+      timers[0].fire();
+      await settle();
+      expect(f.warnings).toHaveLength(1);
+      if (completion === "resolve") resolve(response("stale late title"));
+      else reject(new Error("Synthetic private provider error"));
+      await settle();
+      expect(f.warnings).toHaveLength(1);
+      expect(f.warnings.join("\n")).not.toContain(
+        "Synthetic private provider error",
+      );
+      expect(f.state.title).toBe("existing task");
+    });
+  },
+);
 
 test("a retry after timeout works and late cleanup cannot clear a newer pending request", async () => {
-	await withNamingTimers(async (timers, cleared) => {
-		const old = deferred();
-		const fresh = deferred();
-		const f = fixture([old.promise, fresh.promise]);
-		f.input("synthetic task");
-		await settle();
-		f.messages.push({ role: "user", content: "synthetic task" });
-		timers[0].fire();
-		await settle();
-		await f.refresh();
-		expect(f.requests).toHaveLength(2);
-		expect(cleared.has(timers[0].handle)).toBe(true);
-		expect(cleared.has(timers[1].handle)).toBe(false);
-		old.resolve(response("stale title"));
-		await settle();
-		await f.refresh("status");
-		expect(f.notices.at(-1)).toContain("Naming request: pending");
-		fresh.resolve(response("fresh title"));
-		await settle();
-		expect(f.state.title).toBe("fresh title");
-		expect(cleared.has(timers[1].handle)).toBe(true);
-		expect(getEventListeners(f.requests[1].options.signal, "abort")).toHaveLength(0);
-	});
+  await withNamingTimers(async (timers, cleared) => {
+    const old = deferred();
+    const fresh = deferred();
+    const f = fixture([old.promise, fresh.promise]);
+    f.input("synthetic task");
+    await settle();
+    f.messages.push({ role: "user", content: "synthetic task" });
+    timers[0].fire();
+    await settle();
+    await f.refresh();
+    expect(f.requests).toHaveLength(2);
+    expect(cleared.has(timers[0].handle)).toBe(true);
+    expect(cleared.has(timers[1].handle)).toBe(false);
+    old.resolve(response("stale title"));
+    await settle();
+    await f.refresh("status");
+    expect(f.notices.at(-1)).toContain("Naming request: pending");
+    fresh.resolve(response("fresh title"));
+    await settle();
+    expect(f.state.title).toBe("fresh title");
+    expect(cleared.has(timers[1].handle)).toBe(true);
+    expect(
+      getEventListeners(f.requests[1].options.signal, "abort"),
+    ).toHaveLength(0);
+  });
 });
 
-test.each(["new input", "manual pin", "reload", "quit", "session tree"])("%s releases naming timers and listeners even when the provider hangs", async (cancellation) => {
-	await withNamingTimers(async (timers, cleared) => {
-		const work = deferred();
-		const f = fixture([work.promise, new Promise(() => {})]);
-		f.input("synthetic task");
-		await settle();
-		if (cancellation === "new input") f.input("another task");
-		else if (cancellation === "manual pin") await f.refresh("set pinned task");
-		else if (cancellation === "session tree") await f.emit("session_tree");
-		else await f.emit("session_shutdown", cancellation);
-		await settle();
-		expect(cleared.has(timers[0].handle)).toBe(true);
-		expect(getEventListeners(f.requests[0].options.signal, "abort")).toHaveLength(0);
-		expect(f.warnings).toEqual([]);
-		work.resolve(response("stale title"));
-		await settle();
-		expect(f.state.title).not.toBe("stale title");
-		expect(f.warnings).toEqual([]);
-		await f.emit("session_shutdown", "quit");
-	});
-});
+test.each(["new input", "manual pin", "reload", "quit", "session tree"])(
+  "%s releases naming timers and listeners even when the provider hangs",
+  async (cancellation) => {
+    await withNamingTimers(async (timers, cleared) => {
+      const work = deferred();
+      const f = fixture([work.promise, new Promise(() => {})]);
+      f.input("synthetic task");
+      await settle();
+      if (cancellation === "new input") f.input("another task");
+      else if (cancellation === "manual pin")
+        await f.refresh("set pinned task");
+      else if (cancellation === "session tree") await f.emit("session_tree");
+      else await f.emit("session_shutdown", cancellation);
+      await settle();
+      expect(cleared.has(timers[0].handle)).toBe(true);
+      expect(
+        getEventListeners(f.requests[0].options.signal, "abort"),
+      ).toHaveLength(0);
+      expect(f.warnings).toEqual([]);
+      work.resolve(response("stale title"));
+      await settle();
+      expect(f.state.title).not.toBe("stale title");
+      expect(f.warnings).toEqual([]);
+      await f.emit("session_shutdown", "quit");
+    });
+  },
+);
 
-test.each(["success", "rejection", "promise rejection", "stream throw", "result throw", "unavailable"])("naming %s clears the timer and abort listener", async (completion) => {
-	await withNamingTimers(async (timers, cleared) => {
-		const work = deferred();
-		const f = fixture([work.promise]);
-		if (completion === "promise rejection") (f.ctx.modelRegistry as any).streamSimple = () => ({ result: () => Promise.reject(new Error("Synthetic provider rejection")) });
-		if (completion === "stream throw") (f.ctx.modelRegistry as any).streamSimple = () => { throw new Error("Synthetic stream failure"); };
-		if (completion === "result throw") (f.ctx.modelRegistry as any).streamSimple = () => ({ result: () => { throw new Error("Synthetic result failure"); } });
-		if (completion === "unavailable") (f.ctx.modelRegistry as any).find = () => undefined;
-		f.input("synthetic task");
-		await settle();
-		if (completion === "success") work.resolve(response("fresh title"));
-		if (completion === "rejection") work.resolve(response("", "error"));
-		await settle();
-		expect(cleared.has(timers[0].handle)).toBe(true);
-		if (f.requests[0]) expect(getEventListeners(f.requests[0].options.signal, "abort")).toHaveLength(0);
-		await f.refresh("status");
-		expect(f.notices.at(-1)).toContain("Naming request: idle");
-		expect(f.warnings).toHaveLength(completion === "success" ? 0 : 1);
-	});
+test.each([
+  "success",
+  "rejection",
+  "promise rejection",
+  "stream throw",
+  "result throw",
+  "unavailable",
+])("naming %s clears the timer and abort listener", async (completion) => {
+  await withNamingTimers(async (timers, cleared) => {
+    const work = deferred();
+    const f = fixture([work.promise]);
+    if (completion === "promise rejection")
+      (f.ctx.modelRegistry as any).streamSimple = () => ({
+        result: () => Promise.reject(new Error("Synthetic provider rejection")),
+      });
+    if (completion === "stream throw")
+      (f.ctx.modelRegistry as any).streamSimple = () => {
+        throw new Error("Synthetic stream failure");
+      };
+    if (completion === "result throw")
+      (f.ctx.modelRegistry as any).streamSimple = () => ({
+        result: () => {
+          throw new Error("Synthetic result failure");
+        },
+      });
+    if (completion === "unavailable")
+      (f.ctx.modelRegistry as any).find = () => undefined;
+    f.input("synthetic task");
+    await settle();
+    if (completion === "success") work.resolve(response("fresh title"));
+    if (completion === "rejection") work.resolve(response("", "error"));
+    await settle();
+    expect(cleared.has(timers[0].handle)).toBe(true);
+    if (f.requests[0])
+      expect(
+        getEventListeners(f.requests[0].options.signal, "abort"),
+      ).toHaveLength(0);
+    await f.refresh("status");
+    expect(f.notices.at(-1)).toContain("Naming request: idle");
+    expect(f.warnings).toHaveLength(completion === "success" ? 0 : 1);
+  });
 });
 
 test("cancellation during model lookup skips credential checks and provider startup", async () => {
-	await withNamingTimers(async (timers, cleared) => {
-		const f = fixture();
-		let authChecks = 0;
-		(f.ctx.modelRegistry as any).hasConfiguredAuth = () => { authChecks++; return true; };
-		(f.ctx.modelRegistry as any).find = () => {
-			void f.emit("session_shutdown", "reload");
-			return { provider: "synthetic", id: "synthetic" };
-		};
-		f.input("synthetic task");
-		await settle();
-		expect(authChecks).toBe(0);
-		expect(f.requests).toEqual([]);
-		expect(cleared.has(timers[0].handle)).toBe(true);
-		expect(f.warnings).toEqual([]);
-	});
+  await withNamingTimers(async (timers, cleared) => {
+    const f = fixture();
+    let authChecks = 0;
+    (f.ctx.modelRegistry as any).hasConfiguredAuth = () => {
+      authChecks++;
+      return true;
+    };
+    (f.ctx.modelRegistry as any).find = () => {
+      void f.emit("session_shutdown", "reload");
+      return { provider: "synthetic", id: "synthetic" };
+    };
+    f.input("synthetic task");
+    await settle();
+    expect(authChecks).toBe(0);
+    expect(f.requests).toEqual([]);
+    expect(cleared.has(timers[0].handle)).toBe(true);
+    expect(f.warnings).toEqual([]);
+  });
 });
 
 test("missing model leaves the name alone and warns only once", async () => {
-	const f = fixture();
-	(f.ctx.modelRegistry as any).find = () => undefined;
-	f.input("First task");
-	await settle();
-	f.input("Second task");
-	await settle();
-	expect(f.requests).toEqual([]);
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toHaveLength(1);
+  const f = fixture();
+  (f.ctx.modelRegistry as any).find = () => undefined;
+  f.input("First task");
+  await settle();
+  f.input("Second task");
+  await settle();
+  expect(f.requests).toEqual([]);
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  expect(f.warnings).toHaveLength(1);
 });
 
 test("empty or failed responses never become window names", async () => {
-	for (const result of [response(""), response("---"), response("Error details", "error")]) {
-		const f = fixture([Promise.resolve(result)]);
-		f.input("Task");
-		await settle();
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toHaveLength(1);
-	}
+  for (const result of [
+    response(""),
+    response("---"),
+    response("Error details", "error"),
+  ]) {
+    const f = fixture([Promise.resolve(result)]);
+    f.input("Task");
+    await settle();
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toHaveLength(1);
+  }
 });
 
 test("rejects excess naming response blocks before inspecting them", async () => {
-	const content = Array.from({ length: 129 }, () => ({ type: "text", text: "fix auth tests" }));
-	Object.defineProperty(content, 0, { get: () => { throw new Error("response blocks should not be inspected"); } });
-	const f = fixture([Promise.resolve({ ...response(""), content })]);
-	f.input("Name a task");
-	await settle();
-	expect(f.requests).toHaveLength(1);
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model returned too many content blocks; the current title was kept."]);
+  const content = Array.from({ length: 129 }, () => ({
+    type: "text",
+    text: "fix auth tests",
+  }));
+  Object.defineProperty(content, 0, {
+    get: () => {
+      throw new Error("response blocks should not be inspected");
+    },
+  });
+  const f = fixture([Promise.resolve({ ...response(""), content })]);
+  f.input("Name a task");
+  await settle();
+  expect(f.requests).toHaveLength(1);
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  expect(f.warnings).toEqual([
+    "The naming model returned too many content blocks; the current title was kept.",
+  ]);
 });
 
-test.each(["one block", "combined final blocks"])("bounds oversized selected model output from %s before joining it", async (shape) => {
-	const oversized = "x".repeat(64 * 1024 + 1);
-	const first = shape === "one block"
-		? response(oversized)
-		: {
-			...response(""),
-			content: [
-				{ type: "text", text: oversized.slice(0, 32 * 1024), textSignature: JSON.stringify({ v: 1, phase: "final_answer" }) },
-				{ type: "text", text: oversized.slice(32 * 1024), textSignature: JSON.stringify({ v: 1, phase: "final_answer" }) },
-			],
-		};
-	const f = fixture([Promise.resolve(first), Promise.resolve(response("fix auth tests"))]);
-	f.input("Name a task");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.requests[1].context.systemPrompt).toContain("previous candidate exceeded a title limit");
-	expect(f.requests[1].context.systemPrompt).not.toContain(oversized);
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.warnings).toEqual([]);
-});
+test.each(["one block", "combined final blocks"])(
+  "bounds oversized selected model output from %s before joining it",
+  async (shape) => {
+    const oversized = "x".repeat(64 * 1024 + 1);
+    const first =
+      shape === "one block"
+        ? response(oversized)
+        : {
+            ...response(""),
+            content: [
+              {
+                type: "text",
+                text: oversized.slice(0, 32 * 1024),
+                textSignature: JSON.stringify({ v: 1, phase: "final_answer" }),
+              },
+              {
+                type: "text",
+                text: oversized.slice(32 * 1024),
+                textSignature: JSON.stringify({ v: 1, phase: "final_answer" }),
+              },
+            ],
+          };
+    const f = fixture([
+      Promise.resolve(first),
+      Promise.resolve(response("fix auth tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.requests[1].context.systemPrompt).toContain(
+      "previous candidate exceeded a title limit",
+    );
+    expect(f.requests[1].context.systemPrompt).not.toContain(oversized);
+    expect(f.state.title).toBe("fix auth tests");
+    expect(f.warnings).toEqual([]);
+  },
+);
 
 test("ignores oversized commentary when a bounded final answer is available", async () => {
-	const result = {
-		...response(""),
-		content: [
-			{ type: "text", text: "x".repeat(64 * 1024 + 1), textSignature: JSON.stringify({ v: 1, phase: "commentary" }) },
-			{ type: "text", text: "fix auth tests", textSignature: JSON.stringify({ v: 1, phase: "final_answer" }) },
-		],
-	};
-	const f = fixture([Promise.resolve(result)]);
-	f.input("Name a task");
-	await settle();
-	expect(f.requests).toHaveLength(1);
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.warnings).toEqual([]);
+  const result = {
+    ...response(""),
+    content: [
+      {
+        type: "text",
+        text: "x".repeat(64 * 1024 + 1),
+        textSignature: JSON.stringify({ v: 1, phase: "commentary" }),
+      },
+      {
+        type: "text",
+        text: "fix auth tests",
+        textSignature: JSON.stringify({ v: 1, phase: "final_answer" }),
+      },
+    ],
+  };
+  const f = fixture([Promise.resolve(result)]);
+  f.input("Name a task");
+  await settle();
+  expect(f.requests).toHaveLength(1);
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.warnings).toEqual([]);
 });
 
 test("treats an oversized phase signature as unrecognized metadata without parsing it", async () => {
-	const textSignature = JSON.stringify({ v: 1, phase: "final_answer", extra: "x".repeat(4 * 1024) });
-	const result = {
-		...response(""),
-		content: [{ type: "text", text: "fix auth tests", textSignature }],
-	};
-	const f = fixture([Promise.resolve(result)]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model did not return a final answer; the current title was kept."]);
+  const textSignature = JSON.stringify({
+    v: 1,
+    phase: "final_answer",
+    extra: "x".repeat(4 * 1024),
+  });
+  const result = {
+    ...response(""),
+    content: [{ type: "text", text: "fix auth tests", textSignature }],
+  };
+  const f = fixture([Promise.resolve(result)]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  expect(f.warnings).toEqual([
+    "The naming model did not return a final answer; the current title was kept.",
+  ]);
 });
 
 test("a normal final answer remains selectable beside oversized unrecognized metadata", async () => {
-	const textSignature = JSON.stringify({ v: 1, phase: "commentary", extra: "x".repeat(4 * 1024) });
-	const result = {
-		...response(""),
-		content: [
-			{ type: "text", text: "commentary not used", textSignature },
-			{ type: "text", text: "fix auth tests", textSignature: JSON.stringify({ v: 1, phase: "final_answer" }) },
-		],
-	};
-	const f = fixture([Promise.resolve(result)]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.warnings).toEqual([]);
+  const textSignature = JSON.stringify({
+    v: 1,
+    phase: "commentary",
+    extra: "x".repeat(4 * 1024),
+  });
+  const result = {
+    ...response(""),
+    content: [
+      { type: "text", text: "commentary not used", textSignature },
+      {
+        type: "text",
+        text: "fix auth tests",
+        textSignature: JSON.stringify({ v: 1, phase: "final_answer" }),
+      },
+    ],
+  };
+  const f = fixture([Promise.resolve(result)]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.warnings).toEqual([]);
 });
 
 test("uses only final_answer text blocks when available", async () => {
-	const result = {
-		...response(""),
-		content: [
-			{
-				type: "text",
-				text: "I'll inspect the conversation and choose a title.",
-				textSignature: JSON.stringify({ v: 1, id: "commentary-message", phase: "commentary" }),
-			},
-			{
-				type: "text",
-				text: "fix ssh helpers",
-				textSignature: JSON.stringify({ v: 1, id: "final-message", phase: "final_answer" }),
-			},
-		],
-	};
-	const f = fixture([Promise.resolve(result)]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("fix ssh helpers");
-	expect(f.warnings).toEqual([]);
+  const result = {
+    ...response(""),
+    content: [
+      {
+        type: "text",
+        text: "I'll inspect the conversation and choose a title.",
+        textSignature: JSON.stringify({
+          v: 1,
+          id: "commentary-message",
+          phase: "commentary",
+        }),
+      },
+      {
+        type: "text",
+        text: "fix ssh helpers",
+        textSignature: JSON.stringify({
+          v: 1,
+          id: "final-message",
+          phase: "final_answer",
+        }),
+      },
+    ],
+  };
+  const f = fixture([Promise.resolve(result)]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("fix ssh helpers");
+  expect(f.warnings).toEqual([]);
 });
 
 test("does not use commentary text when no final_answer block is present", async () => {
-	const result = {
-		...response(""),
-		content: [{
-			type: "text",
-			text: "fix ssh helpers",
-			textSignature: JSON.stringify({ v: 1, id: "commentary-message", phase: "commentary" }),
-		}],
-	};
-	const f = fixture([Promise.resolve(result)]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model did not return a final answer; the current title was kept."]);
+  const result = {
+    ...response(""),
+    content: [
+      {
+        type: "text",
+        text: "fix ssh helpers",
+        textSignature: JSON.stringify({
+          v: 1,
+          id: "commentary-message",
+          phase: "commentary",
+        }),
+      },
+    ],
+  };
+  const f = fixture([Promise.resolve(result)]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  expect(f.warnings).toEqual([
+    "The naming model did not return a final answer; the current title was kept.",
+  ]);
 });
 
 test("does not fall back to an unrecognized text phase", async () => {
-	const result = {
-		...response(""),
-		content: [{
-			type: "text",
-			text: "repair auth tests",
-			textSignature: JSON.stringify({ v: 1, id: "analysis-message", phase: "analysis" }),
-		}],
-	};
-	const f = fixture([Promise.resolve(result)]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model did not return a final answer; the current title was kept."]);
+  const result = {
+    ...response(""),
+    content: [
+      {
+        type: "text",
+        text: "repair auth tests",
+        textSignature: JSON.stringify({
+          v: 1,
+          id: "analysis-message",
+          phase: "analysis",
+        }),
+      },
+    ],
+  };
+  const f = fixture([Promise.resolve(result)]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  expect(f.warnings).toEqual([
+    "The naming model did not return a final answer; the current title was kept.",
+  ]);
 });
 
 test("honors phase metadata from a newer textSignature version", async () => {
-	const result = {
-		...response(""),
-		content: [{
-			type: "text",
-			text: "repair auth tests",
-			textSignature: JSON.stringify({ v: 2, id: "commentary-message", phase: "commentary" }),
-		}],
-	};
-	const f = fixture([Promise.resolve(result)]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model did not return a final answer; the current title was kept."]);
+  const result = {
+    ...response(""),
+    content: [
+      {
+        type: "text",
+        text: "repair auth tests",
+        textSignature: JSON.stringify({
+          v: 2,
+          id: "commentary-message",
+          phase: "commentary",
+        }),
+      },
+    ],
+  };
+  const f = fixture([Promise.resolve(result)]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  expect(f.warnings).toEqual([
+    "The naming model did not return a final answer; the current title was kept.",
+  ]);
 });
 
 test("falls back to the last text block when phase metadata is absent", async () => {
-	const result = {
-		...response(""),
-		content: [
-			{ type: "text", text: "Earlier commentary that is not a title" },
-			{ type: "text", text: "repair test fixtures" },
-		],
-	};
-	const f = fixture([Promise.resolve(result)]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("repair test fixtures");
-	expect(f.warnings).toEqual([]);
+  const result = {
+    ...response(""),
+    content: [
+      { type: "text", text: "Earlier commentary that is not a title" },
+      { type: "text", text: "repair test fixtures" },
+    ],
+  };
+  const f = fixture([Promise.resolve(result)]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("repair test fixtures");
+  expect(f.warnings).toEqual([]);
 });
 
 test("falls back to the last text block with opaque provider signatures", async () => {
-	const result = {
-		...response(""),
-		content: [
-			{ type: "text", text: "Earlier provider output", textSignature: "opaque-commentary-id" },
-			{ type: "text", text: "repair auth tests", textSignature: "opaque-final-id" },
-		],
-	};
-	const f = fixture([Promise.resolve(result)]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("repair auth tests");
-	expect(f.warnings).toEqual([]);
+  const result = {
+    ...response(""),
+    content: [
+      {
+        type: "text",
+        text: "Earlier provider output",
+        textSignature: "opaque-commentary-id",
+      },
+      {
+        type: "text",
+        text: "repair auth tests",
+        textSignature: "opaque-final-id",
+      },
+    ],
+  };
+  const f = fixture([Promise.resolve(result)]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("repair auth tests");
+  expect(f.warnings).toEqual([]);
 });
 
 test.each([
-	["Explain in two short sentences what a tmux window title is.", "tmux window titles"],
-	["one two three four five", "tmux title basics"],
-])("retries an overlong or over-word-count first title once: %s", async (firstOutput, correctedTitle) => {
-	const f = fixture([
-		Promise.resolve(response(firstOutput)),
-		Promise.resolve(response(correctedTitle)),
-	]);
-	f.input("Explain in two short sentences what a tmux window title is. Do not use any tools.");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.requests[0].context.messages[0].content).toBe(f.requests[1].context.messages[0].content);
-	expect(f.requests[1].context.systemPrompt).toContain("previous candidate exceeded a title limit");
-	expect(f.requests[1].context.systemPrompt).toContain("Do not restate the full request");
-	expect(f.requests[1].context.systemPrompt).toContain("answer-format constraints");
-	expect(f.requests[1].context.systemPrompt).toContain(`${MAX_TITLE_LENGTH} ASCII characters`);
-	expect(f.requests[1].context.systemPrompt).not.toContain(firstOutput);
-	expect(f.requests[1].options.maxRetries).toBe(0);
-	expect(f.state.title).toBe(correctedTitle);
-	expect(f.warnings).toEqual([]);
-});
+  [
+    "Explain in two short sentences what a tmux window title is.",
+    "tmux window titles",
+  ],
+  ["one two three four five", "tmux title basics"],
+])(
+  "retries an overlong or over-word-count first title once: %s",
+  async (firstOutput, correctedTitle) => {
+    const f = fixture([
+      Promise.resolve(response(firstOutput)),
+      Promise.resolve(response(correctedTitle)),
+    ]);
+    f.input(
+      "Explain in two short sentences what a tmux window title is. Do not use any tools.",
+    );
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.requests[0].context.messages[0].content).toBe(
+      f.requests[1].context.messages[0].content,
+    );
+    expect(f.requests[1].context.systemPrompt).toContain(
+      "previous candidate exceeded a title limit",
+    );
+    expect(f.requests[1].context.systemPrompt).toContain(
+      "Do not restate the full request",
+    );
+    expect(f.requests[1].context.systemPrompt).toContain(
+      "answer-format constraints",
+    );
+    expect(f.requests[1].context.systemPrompt).toContain(
+      `${MAX_TITLE_LENGTH} ASCII characters`,
+    );
+    expect(f.requests[1].context.systemPrompt).not.toContain(firstOutput);
+    expect(f.requests[1].options.maxRetries).toBe(0);
+    expect(f.state.title).toBe(correctedTitle);
+    expect(f.warnings).toEqual([]);
+  },
+);
 
 test("clips a still-overlong retry at a word boundary when it remains title-shaped", async () => {
-	const f = fixture([
-		Promise.resolve(response("Explain in two short sentences what a tmux window title is")),
-		Promise.resolve(response("tmux window title explanation")),
-	]);
-	f.input("Explain in two short sentences what a tmux window title is. Do not use any tools.");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.state.title).toBe("tmux window title");
-	expect(f.state.title.length).toBeLessThanOrEqual(MAX_TITLE_LENGTH);
-	expect(f.state.title.split(" ")).toHaveLength(3);
-	expect(f.warnings).toEqual([]);
+  const f = fixture([
+    Promise.resolve(
+      response("Explain in two short sentences what a tmux window title is"),
+    ),
+    Promise.resolve(response("tmux window title explanation")),
+  ]);
+  f.input(
+    "Explain in two short sentences what a tmux window title is. Do not use any tools.",
+  );
+  await settle();
+  expect(f.requests).toHaveLength(2);
+  expect(f.state.title).toBe("tmux window title");
+  expect(f.state.title.length).toBeLessThanOrEqual(MAX_TITLE_LENGTH);
+  expect(f.state.title.split(" ")).toHaveLength(3);
+  expect(f.warnings).toEqual([]);
 });
 
 test("superseding input cancels an overlong-title retry without applying its stale result", async () => {
-	const retry = deferred();
-	const f = fixture([
-		Promise.resolve(response("Explain what a tmux window title is")),
-		retry.promise,
-		Promise.resolve(response("new task")),
-	]);
-	f.input("Old task");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	const retrySignal = f.requests[1].options.signal as AbortSignal;
-	f.input("New task");
-	await settle();
-	expect(retrySignal.aborted).toBe(true);
-	retry.resolve(response("stale title"));
-	await settle();
-	expect(f.requests).toHaveLength(3);
-	expect(f.state.title).toBe("new task");
-	expect(f.warnings).toEqual([]);
+  const retry = deferred();
+  const f = fixture([
+    Promise.resolve(response("Explain what a tmux window title is")),
+    retry.promise,
+    Promise.resolve(response("new task")),
+  ]);
+  f.input("Old task");
+  await settle();
+  expect(f.requests).toHaveLength(2);
+  const retrySignal = f.requests[1].options.signal as AbortSignal;
+  f.input("New task");
+  await settle();
+  expect(retrySignal.aborted).toBe(true);
+  retry.resolve(response("stale title"));
+  await settle();
+  expect(f.requests).toHaveLength(3);
+  expect(f.state.title).toBe("new task");
+  expect(f.warnings).toEqual([]);
 });
 
 test("superseding input cancels a multiline-title correction retry", async () => {
-	const retry = deferred();
-	const f = fixture([
-		Promise.resolve(response("fix ssh\nhelpers")),
-		retry.promise,
-		Promise.resolve(response("new task")),
-	]);
-	f.input("Old task");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.requests[1].context.systemPrompt).toContain("previous response was not a single-line title");
-	const retrySignal = f.requests[1].options.signal as AbortSignal;
-	f.input("New task");
-	await settle();
-	expect(retrySignal.aborted).toBe(true);
-	retry.resolve(response("stale title"));
-	await settle();
-	expect(f.requests).toHaveLength(3);
-	expect(f.state.title).toBe("new task");
-	expect(f.warnings).toEqual([]);
+  const retry = deferred();
+  const f = fixture([
+    Promise.resolve(response("fix ssh\nhelpers")),
+    retry.promise,
+    Promise.resolve(response("new task")),
+  ]);
+  f.input("Old task");
+  await settle();
+  expect(f.requests).toHaveLength(2);
+  expect(f.requests[1].context.systemPrompt).toContain(
+    "previous response was not a single-line title",
+  );
+  const retrySignal = f.requests[1].options.signal as AbortSignal;
+  f.input("New task");
+  await settle();
+  expect(retrySignal.aborted).toBe(true);
+  retry.resolve(response("stale title"));
+  await settle();
+  expect(f.requests).toHaveLength(3);
+  expect(f.state.title).toBe("new task");
+  expect(f.warnings).toEqual([]);
 });
 
 test.each([
-	["line feed", "\n"],
-	["carriage return", "\r"],
-	["vertical tab", "\v"],
-	["form feed", "\f"],
-	["next line", "\u0085"],
-	["line separator", "\u2028"],
-	["paragraph separator", "\u2029"],
-])("retries %s in naming output with a single-line correction", async (_name, separator) => {
-	const rejectedOutput = `fix auth${separator}tests`;
-	const f = fixture([
-		Promise.resolve(response(rejectedOutput)),
-		Promise.resolve(response("fix auth tests")),
-	]);
-	f.input("Name a task");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.requests[1].context.systemPrompt).toContain("previous response was not a single-line title");
-	expect(f.requests[1].context.systemPrompt).toContain("without line breaks");
-	expect(f.requests[1].context.systemPrompt).not.toContain(rejectedOutput);
-	expect(f.requests[1].context.messages[0].content).toBe(f.requests[0].context.messages[0].content);
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.warnings).toEqual([]);
-});
+  ["line feed", "\n"],
+  ["carriage return", "\r"],
+  ["vertical tab", "\v"],
+  ["form feed", "\f"],
+  ["next line", "\u0085"],
+  ["line separator", "\u2028"],
+  ["paragraph separator", "\u2029"],
+])(
+  "retries %s in naming output with a single-line correction",
+  async (_name, separator) => {
+    const rejectedOutput = `fix auth${separator}tests`;
+    const f = fixture([
+      Promise.resolve(response(rejectedOutput)),
+      Promise.resolve(response("fix auth tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.requests[1].context.systemPrompt).toContain(
+      "previous response was not a single-line title",
+    );
+    expect(f.requests[1].context.systemPrompt).toContain("without line breaks");
+    expect(f.requests[1].context.systemPrompt).not.toContain(rejectedOutput);
+    expect(f.requests[1].context.messages[0].content).toBe(
+      f.requests[0].context.messages[0].content,
+    );
+    expect(f.state.title).toBe("fix auth tests");
+    expect(f.warnings).toEqual([]);
+  },
+);
 
 test.each([
-	["line feed", "\n"],
-	["carriage return", "\r"],
-	["vertical tab", "\v"],
-	["form feed", "\f"],
-	["next line", "\u0085"],
-	["line separator", "\u2028"],
-	["paragraph separator", "\u2029"],
-])("retries %s at either edge instead of trimming it into a title", async (_name, separator) => {
-	for (const output of [`${separator}fix auth tests`, `fix auth tests${separator}`]) {
-		const f = fixture([
-			Promise.resolve(response(output)),
-			Promise.resolve(response("fix auth tests")),
-		]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.requests[1].context.systemPrompt).toContain("previous response was not a single-line title");
-		expect(f.requests[1].context.systemPrompt).not.toContain(output);
-		expect(f.state.title).toBe("fix auth tests");
-		expect(f.warnings).toEqual([]);
-	}
-});
+  ["line feed", "\n"],
+  ["carriage return", "\r"],
+  ["vertical tab", "\v"],
+  ["form feed", "\f"],
+  ["next line", "\u0085"],
+  ["line separator", "\u2028"],
+  ["paragraph separator", "\u2029"],
+])(
+  "retries %s at either edge instead of trimming it into a title",
+  async (_name, separator) => {
+    for (const output of [
+      `${separator}fix auth tests`,
+      `fix auth tests${separator}`,
+    ]) {
+      const f = fixture([
+        Promise.resolve(response(output)),
+        Promise.resolve(response("fix auth tests")),
+      ]);
+      f.input("Name a task");
+      await settle();
+      expect(f.requests).toHaveLength(2);
+      expect(f.requests[1].context.systemPrompt).toContain(
+        "previous response was not a single-line title",
+      );
+      expect(f.requests[1].context.systemPrompt).not.toContain(output);
+      expect(f.state.title).toBe("fix auth tests");
+      expect(f.warnings).toEqual([]);
+    }
+  },
+);
 
 test("accepts ordinary surrounding spaces in naming output", async () => {
-	const f = fixture([Promise.resolve(response("  fix auth tests  "))]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.warnings).toEqual([]);
+  const f = fixture([Promise.resolve(response("  fix auth tests  "))]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.warnings).toEqual([]);
 });
 
 test.each([
-	{ output: "I'll inspect the conversation and choose a title.", warning: undefined, retry: true, category: "title length" },
-	{ output: "one two three four five", warning: undefined, retry: true, category: "word count" },
-	{ output: "fix ssh\nhelpers", warning: undefined, retry: true, category: "multiple lines" },
-	{ output: "investigate authentication failures", warning: undefined, retry: true, category: "title length" },
-	{ output: "---", warning: "The naming model returned no usable title; the current title was kept.", retry: false, category: "empty response" },
-])("rejects output that remains invalid after at most one retry: $output", async ({ output, warning, retry, category }) => {
-	const results = [Promise.resolve(response(output))];
-	if (retry) results.push(Promise.resolve(response(output)));
-	const f = fixture(results);
-	f.input("Name a task");
-	await settle();
-	expect(f.requests).toHaveLength(retry ? 2 : 1);
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(warning ? [warning] : []);
-	await f.refresh("status");
-	const status = f.notices.at(-1)!;
-	expect(status).toContain(`Last naming rejection: ${category}; current title kept. Set manually with /tmux-title set <name>.`);
-	expect(status).not.toContain(output);
-});
+  {
+    output: "I'll inspect the conversation and choose a title.",
+    warning: undefined,
+    retry: true,
+    category: "title length",
+  },
+  {
+    output: "one two three four five",
+    warning: undefined,
+    retry: true,
+    category: "word count",
+  },
+  {
+    output: "fix ssh\nhelpers",
+    warning: undefined,
+    retry: true,
+    category: "multiple lines",
+  },
+  {
+    output: "investigate authentication failures",
+    warning: undefined,
+    retry: true,
+    category: "title length",
+  },
+  {
+    output: "---",
+    warning:
+      "The naming model returned no usable title; the current title was kept.",
+    retry: false,
+    category: "empty response",
+  },
+])(
+  "rejects output that remains invalid after at most one retry: $output",
+  async ({ output, warning, retry, category }) => {
+    const results = [Promise.resolve(response(output))];
+    if (retry) results.push(Promise.resolve(response(output)));
+    const f = fixture(results);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(retry ? 2 : 1);
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual(warning ? [warning] : []);
+    await f.refresh("status");
+    const status = f.notices.at(-1)!;
+    expect(status).toContain(
+      `Last naming rejection: ${category}; current title kept. Set manually with /tmux-title set <name>.`,
+    );
+    expect(status).not.toContain(output);
+  },
+);
 
 test("shape-only rejections do not hide a later actionable naming warning", async () => {
-	const f = fixture([
-		Promise.resolve(response("one two three four five")),
-		Promise.resolve(response("one two three four five")),
-		Promise.resolve(response("", "error")),
-	]);
-	f.input("First task");
-	await settle();
-	expect(f.warnings).toEqual([]);
-	f.input("Second task");
-	await settle();
-	expect(f.warnings).toEqual(["tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry."]);
+  const f = fixture([
+    Promise.resolve(response("one two three four five")),
+    Promise.resolve(response("one two three four five")),
+    Promise.resolve(response("", "error")),
+  ]);
+  f.input("First task");
+  await settle();
+  expect(f.warnings).toEqual([]);
+  f.input("Second task");
+  await settle();
+  expect(f.warnings).toEqual([
+    "tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.",
+  ]);
 });
 
 test("a successful title clears the last rejection from status", async () => {
-	const f = fixture([
-		Promise.resolve(response("one two three four five")),
-		Promise.resolve(response("one two three four five")),
-		Promise.resolve(response("fix auth tests")),
-	]);
-	f.input("First task");
-	await settle();
-	await f.refresh("status");
-	expect(f.notices.at(-1)).toContain("Last naming rejection: word count;");
-	f.input("Second task");
-	await settle();
-	expect(f.state.title).toBe("fix auth tests");
-	await f.refresh("status");
-	expect(f.notices.at(-1)).toContain("Last naming rejection: none");
+  const f = fixture([
+    Promise.resolve(response("one two three four five")),
+    Promise.resolve(response("one two three four five")),
+    Promise.resolve(response("fix auth tests")),
+  ]);
+  f.input("First task");
+  await settle();
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Last naming rejection: word count;");
+  f.input("Second task");
+  await settle();
+  expect(f.state.title).toBe("fix auth tests");
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Last naming rejection: none");
 });
 
 test("sensitive model output updates the status category without disclosing the reply", async () => {
-	const syntheticToken = `ghp_${"a".repeat(20)}`;
-	const f = fixture([
-		Promise.resolve(response("one two three four five")),
-		Promise.resolve(response("one two three four five")),
-		Promise.resolve(response(syntheticToken)),
-	]);
-	f.input("First task");
-	await settle();
-	await f.refresh("status");
-	expect(f.notices.at(-1)).toContain("Last naming rejection: word count;");
-	f.input("Second task");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings.at(-1)).toBe("Sensitive-looking naming output was not applied.");
-	expect(f.warnings.join(" ")).not.toContain(syntheticToken);
-	await f.refresh("status");
-	const status = f.notices.at(-1)!;
-	expect(status).toContain("Last naming rejection: sensitive-looking output;");
-	expect(status).not.toContain(syntheticToken);
+  const syntheticToken = `ghp_${"a".repeat(20)}`;
+  const f = fixture([
+    Promise.resolve(response("one two three four five")),
+    Promise.resolve(response("one two three four five")),
+    Promise.resolve(response(syntheticToken)),
+  ]);
+  f.input("First task");
+  await settle();
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Last naming rejection: word count;");
+  f.input("Second task");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings.at(-1)).toBe(
+    "Sensitive-looking naming output was not applied.",
+  );
+  expect(f.warnings.join(" ")).not.toContain(syntheticToken);
+  await f.refresh("status");
+  const status = f.notices.at(-1)!;
+  expect(status).toContain("Last naming rejection: sensitive-looking output;");
+  expect(status).not.toContain(syntheticToken);
 });
 
 test("does not apply a French NIR returned by the naming model", async () => {
-	const syntheticNir = "123456789012311";
-	const f = fixture([Promise.resolve(response(`French NIR: ${syntheticNir}`))]);
-	f.input("Name a task");
-	await settle();
-	expect(f.requests).toHaveLength(1);
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-	expect(f.warnings.join(" ")).not.toContain(syntheticNir);
+  const syntheticNir = "123456789012311";
+  const f = fixture([Promise.resolve(response(`French NIR: ${syntheticNir}`))]);
+  f.input("Name a task");
+  await settle();
+  expect(f.requests).toHaveLength(1);
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  expect(f.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
+  expect(f.warnings.join(" ")).not.toContain(syntheticNir);
 });
 
 test("does not apply checksum-valid Spanish DNI or NIE returned by the naming model", async () => {
-	for (const identifier of ["Spanish DNI: 00000000T", "Spanish NIE: X0000000T"]) {
-		const f = fixture([Promise.resolve(response(identifier))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(1);
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(identifier);
-	}
+  for (const identifier of [
+    "Spanish DNI: 00000000T",
+    "Spanish NIE: X0000000T",
+  ]) {
+    const f = fixture([Promise.resolve(response(identifier))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(1);
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(identifier);
+  }
 });
 
 test("does not apply a short-looking response truncated by the token limit", async () => {
-	const f = fixture([Promise.resolve(response("fix ssh", "length"))]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["The naming model hit its token limit before finishing a title; the current title was kept."]);
+  const f = fixture([Promise.resolve(response("fix ssh", "length"))]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  expect(f.warnings).toEqual([
+    "The naming model hit its token limit before finishing a title; the current title was kept.",
+  ]);
 });
 
 test("sensitive-looking prompts and recent history never reach the naming model", async () => {
-	const token = ["ghp_", "A".repeat(20)].join("");
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	const suppressed = async (f: ReturnType<typeof fixture>, prompt: string, sensitiveText = token) => {
-		const find = spyOn(f.ctx.modelRegistry, "find");
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(sensitiveText);
-	};
+  const token = ["ghp_", "A".repeat(20)].join("");
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const suppressed = async (
+    f: ReturnType<typeof fixture>,
+    prompt: string,
+    sensitiveText = token,
+  ) => {
+    const find = spyOn(f.ctx.modelRegistry, "find");
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(sensitiveText);
+  };
 
-	await suppressed(fixture(), `Review the auth flow with ${token}`);
-	const frenchNir = "123456789012311";
-	await suppressed(fixture(), `French NIR: ${frenchNir}`, frenchNir);
-	const spanishDni = "00000000T";
-	await suppressed(fixture(), `Spanish DNI: ${spanishDni}`, spanishDni);
-	const spanishNie = "X0000000T";
-	await suppressed(fixture(), `Spanish NIE: ${spanishNie}`, spanishNie);
-	const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
-	await suppressed(fixture(), `Review Airtable data access ${airtableToken}`, airtableToken);
-	const onePasswordToken = `ops_eyJ${"Aa0+/".repeat(50)}`;
-	await suppressed(fixture(), `Review 1Password vault access ${onePasswordToken}`, onePasswordToken);
-	const obfuscatedOnePasswordToken = onePasswordToken.replace("eyJ", "ey\u200bJ");
-	await suppressed(fixture(), `Review 1Password vault access ${obfuscatedOnePasswordToken}`, obfuscatedOnePasswordToken);
-	const clickhouseKey = `4b1d${"A1b2".repeat(9)}A1`;
-	const alibabaAccessKeyId = `LTAI${"A1b2".repeat(5)}`;
-	await suppressed(fixture(), `Review ClickHouse access ${clickhouseKey}`, clickhouseKey);
-	const obfuscatedClickhouseKey = clickhouseKey.replace("4b1d", "4b\u200b1d");
-	await suppressed(fixture(), `Review ClickHouse access ${obfuscatedClickhouseKey}`, obfuscatedClickhouseKey);
-	await suppressed(fixture(), `Review Alibaba Cloud access ${alibabaAccessKeyId}`, alibabaAccessKeyId);
-	const obfuscatedAlibabaAccessKeyId = alibabaAccessKeyId.replace("LTAI", "LT\u200bAI");
-	await suppressed(fixture(), `Review Alibaba Cloud access ${obfuscatedAlibabaAccessKeyId}`, obfuscatedAlibabaAccessKeyId);
-	const tencentCloudSecretId = `AKID${"A1b2".repeat(8)}`;
-	await suppressed(fixture(), `Review Tencent Cloud access ${tencentCloudSecretId}`, tencentCloudSecretId);
-	const obfuscatedTencentCloudSecretId = tencentCloudSecretId.replace("AKID", "A\u200bKID");
-	await suppressed(fixture(), `Review Tencent Cloud access ${obfuscatedTencentCloudSecretId}`, obfuscatedTencentCloudSecretId);
-	const typeformToken = `tfp_${"A1._-=".repeat(9)}A1._-`;
-	await suppressed(fixture(), `Review survey integration ${typeformToken}`, typeformToken);
-	const obfuscatedTypeformToken = typeformToken.replace("tfp_", "tf\u200bp_");
-	await suppressed(fixture(), `Review survey integration ${obfuscatedTypeformToken}`, obfuscatedTypeformToken);
-	const stripeProductionKeys = [
-		`sk_prod_${"A1b2".repeat(6)}`,
-		`rk_prod_${"C3d4".repeat(6)}`,
-	];
-	for (const key of stripeProductionKeys) {
-		await suppressed(fixture(), `Review payment processing ${key}`, key);
-	}
-	const obfuscatedStripeProductionKey = stripeProductionKeys[0]!.replace("prod", "pr\u200bod");
-	await suppressed(
-		fixture(), `Review payment processing ${obfuscatedStripeProductionKey}`, obfuscatedStripeProductionKey,
-	);
-	const squareAccessToken = `sq0atp-${"A1_-".repeat(6)}`;
-	const obfuscatedSquareAccessToken = squareAccessToken.replace("sq0atp-", "sq0\u200batp-");
-	const legacySquareAccessToken = `EAAA${"B2_c".repeat(6)}`;
-	await suppressed(fixture(), `Review payment integration ${squareAccessToken}`, squareAccessToken);
-	await suppressed(fixture(), `Review payment integration ${obfuscatedSquareAccessToken}`, obfuscatedSquareAccessToken);
-	await suppressed(fixture(), `Review payment integration ${legacySquareAccessToken}`, legacySquareAccessToken);
-	const genericAccessKeyAssignment = `access_key=${"M3n4".repeat(6)}`;
-	await suppressed(fixture(), `Review cloud configuration ${genericAccessKeyAssignment}`, genericAccessKeyAssignment);
-	for (const label of [
-		"APP_KEY", "AES_KEY", "AES_256_KEY", "AES-256-KEY",
-		"SECRET_KEY_BASE", "ENCRYPTION_KEY", "FERNET_KEY",
-		"HMAC_KEY", "SIGNING_KEY", "JWT_SIGNING_KEY", "TOKEN_SIGNING_KEY", "MASTER_KEY",
-		"SESSION_KEY", "SESSION-KEY", "SESSION KEY", "SESSION",
-		"COOKIE_KEY", "COOKIE-KEY", "COOKIE",
-		"AUTH_KEY", "SECURE_AUTH_KEY", "LOGGED_IN_KEY", "NONCE_KEY",
-		"AUTH_SALT", "SECURE_AUTH_SALT", "LOGGED_IN_SALT", "NONCE_SALT",
-	]) {
-		const assignment = `${label}=${"K3y4".repeat(8)}`;
-		await suppressed(fixture(), `Review deployment settings ${assignment}`, assignment);
-	}
+  await suppressed(fixture(), `Review the auth flow with ${token}`);
+  const frenchNir = "123456789012311";
+  await suppressed(fixture(), `French NIR: ${frenchNir}`, frenchNir);
+  const spanishDni = "00000000T";
+  await suppressed(fixture(), `Spanish DNI: ${spanishDni}`, spanishDni);
+  const spanishNie = "X0000000T";
+  await suppressed(fixture(), `Spanish NIE: ${spanishNie}`, spanishNie);
+  const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
+  await suppressed(
+    fixture(),
+    `Review Airtable data access ${airtableToken}`,
+    airtableToken,
+  );
+  const onePasswordToken = `ops_eyJ${"Aa0+/".repeat(50)}`;
+  await suppressed(
+    fixture(),
+    `Review 1Password vault access ${onePasswordToken}`,
+    onePasswordToken,
+  );
+  const obfuscatedOnePasswordToken = onePasswordToken.replace(
+    "eyJ",
+    "ey\u200bJ",
+  );
+  await suppressed(
+    fixture(),
+    `Review 1Password vault access ${obfuscatedOnePasswordToken}`,
+    obfuscatedOnePasswordToken,
+  );
+  const clickhouseKey = `4b1d${"A1b2".repeat(9)}A1`;
+  const alibabaAccessKeyId = `LTAI${"A1b2".repeat(5)}`;
+  await suppressed(
+    fixture(),
+    `Review ClickHouse access ${clickhouseKey}`,
+    clickhouseKey,
+  );
+  const obfuscatedClickhouseKey = clickhouseKey.replace("4b1d", "4b\u200b1d");
+  await suppressed(
+    fixture(),
+    `Review ClickHouse access ${obfuscatedClickhouseKey}`,
+    obfuscatedClickhouseKey,
+  );
+  await suppressed(
+    fixture(),
+    `Review Alibaba Cloud access ${alibabaAccessKeyId}`,
+    alibabaAccessKeyId,
+  );
+  const obfuscatedAlibabaAccessKeyId = alibabaAccessKeyId.replace(
+    "LTAI",
+    "LT\u200bAI",
+  );
+  await suppressed(
+    fixture(),
+    `Review Alibaba Cloud access ${obfuscatedAlibabaAccessKeyId}`,
+    obfuscatedAlibabaAccessKeyId,
+  );
+  const tencentCloudSecretId = `AKID${"A1b2".repeat(8)}`;
+  await suppressed(
+    fixture(),
+    `Review Tencent Cloud access ${tencentCloudSecretId}`,
+    tencentCloudSecretId,
+  );
+  const obfuscatedTencentCloudSecretId = tencentCloudSecretId.replace(
+    "AKID",
+    "A\u200bKID",
+  );
+  await suppressed(
+    fixture(),
+    `Review Tencent Cloud access ${obfuscatedTencentCloudSecretId}`,
+    obfuscatedTencentCloudSecretId,
+  );
+  const typeformToken = `tfp_${"A1._-=".repeat(9)}A1._-`;
+  await suppressed(
+    fixture(),
+    `Review survey integration ${typeformToken}`,
+    typeformToken,
+  );
+  const obfuscatedTypeformToken = typeformToken.replace("tfp_", "tf\u200bp_");
+  await suppressed(
+    fixture(),
+    `Review survey integration ${obfuscatedTypeformToken}`,
+    obfuscatedTypeformToken,
+  );
+  const stripeProductionKeys = [
+    `sk_prod_${"A1b2".repeat(6)}`,
+    `rk_prod_${"C3d4".repeat(6)}`,
+  ];
+  for (const key of stripeProductionKeys) {
+    await suppressed(fixture(), `Review payment processing ${key}`, key);
+  }
+  const obfuscatedStripeProductionKey = stripeProductionKeys[0]!.replace(
+    "prod",
+    "pr\u200bod",
+  );
+  await suppressed(
+    fixture(),
+    `Review payment processing ${obfuscatedStripeProductionKey}`,
+    obfuscatedStripeProductionKey,
+  );
+  const squareAccessToken = `sq0atp-${"A1_-".repeat(6)}`;
+  const obfuscatedSquareAccessToken = squareAccessToken.replace(
+    "sq0atp-",
+    "sq0\u200batp-",
+  );
+  const legacySquareAccessToken = `EAAA${"B2_c".repeat(6)}`;
+  await suppressed(
+    fixture(),
+    `Review payment integration ${squareAccessToken}`,
+    squareAccessToken,
+  );
+  await suppressed(
+    fixture(),
+    `Review payment integration ${obfuscatedSquareAccessToken}`,
+    obfuscatedSquareAccessToken,
+  );
+  await suppressed(
+    fixture(),
+    `Review payment integration ${legacySquareAccessToken}`,
+    legacySquareAccessToken,
+  );
+  const genericAccessKeyAssignment = `access_key=${"M3n4".repeat(6)}`;
+  await suppressed(
+    fixture(),
+    `Review cloud configuration ${genericAccessKeyAssignment}`,
+    genericAccessKeyAssignment,
+  );
+  for (const label of [
+    "APP_KEY",
+    "AES_KEY",
+    "AES_256_KEY",
+    "AES-256-KEY",
+    "SECRET_KEY_BASE",
+    "ENCRYPTION_KEY",
+    "FERNET_KEY",
+    "HMAC_KEY",
+    "SIGNING_KEY",
+    "JWT_SIGNING_KEY",
+    "TOKEN_SIGNING_KEY",
+    "MASTER_KEY",
+    "SESSION_KEY",
+    "SESSION-KEY",
+    "SESSION KEY",
+    "SESSION",
+    "COOKIE_KEY",
+    "COOKIE-KEY",
+    "COOKIE",
+    "AUTH_KEY",
+    "SECURE_AUTH_KEY",
+    "LOGGED_IN_KEY",
+    "NONCE_KEY",
+    "AUTH_SALT",
+    "SECURE_AUTH_SALT",
+    "LOGGED_IN_SALT",
+    "NONCE_SALT",
+  ]) {
+    const assignment = `${label}=${"K3y4".repeat(8)}`;
+    await suppressed(
+      fixture(),
+      `Review deployment settings ${assignment}`,
+      assignment,
+    );
+  }
 
-	const neonMarker = "[... middle of prompt omitted ...]";
-	const neonRetainedLength = MAX_PROMPT_LENGTH - neonMarker.length - 2;
-	const neonPrefixLength = Math.ceil(neonRetainedLength / 2);
-	const whitespaceObfuscatedNeonKey = `neon_api_key_${"N".repeat(16)} ${"N".repeat(16)}`;
-	const neonTokenStart = neonPrefixLength - 34;
-	const neonPrefix = `${"x".repeat(neonTokenStart - 1)} `;
-	const neonPrompt = `${neonPrefix}${whitespaceObfuscatedNeonKey} ${"y".repeat(
-		3_000 - neonPrefix.length - whitespaceObfuscatedNeonKey.length - 1,
-	)}`;
-	await suppressed(fixture(), neonPrompt, whitespaceObfuscatedNeonKey);
-	const obfuscatedAccessKeyAssignment = genericAccessKeyAssignment.replace("access_key", "access_\u200bkey");
-	await suppressed(fixture(), `Review cloud configuration ${obfuscatedAccessKeyAssignment}`, obfuscatedAccessKeyAssignment);
-	const azureAdClientSecret = `AbC7Q~${"Aa0_-.".repeat(5)}C3`;
-	await suppressed(fixture(), `Review Azure AD app registration ${azureAdClientSecret}`, azureAdClientSecret);
-	const obfuscatedAzureAdClientSecret = azureAdClientSecret.replace("Q~", "Q\u200b~");
-	await suppressed(fixture(), `Review Azure AD app registration ${obfuscatedAzureAdClientSecret}`, obfuscatedAzureAdClientSecret);
-	const awsAlternateAccessKeys = [
-		`A3TA${"B".repeat(16)}`,
-		`ABIA${"C".repeat(16)}`,
-		`ACCA${"D".repeat(16)}`,
-	];
-	for (const awsKey of awsAlternateAccessKeys) {
-		await suppressed(fixture(), `Review AWS temporary access ${awsKey}`, awsKey);
-	}
-	const googleApiKey = `AIza${"A".repeat(35)}`;
-	await suppressed(fixture(), `Review Google API access ${googleApiKey}`, googleApiKey);
-	const googleOAuthAccessToken = `ya29.${"A".repeat(32)}`;
-	await suppressed(fixture(), `Review Google OAuth access ${googleOAuthAccessToken}`, googleOAuthAccessToken);
-	const obfuscatedGoogleOAuthAccessToken = `ya29.${"A".repeat(16)}\u200b${"B".repeat(16)}`;
-	await suppressed(fixture(), `Review Google OAuth access ${obfuscatedGoogleOAuthAccessToken}`, obfuscatedGoogleOAuthAccessToken);
-	const googleOAuthClientSecret = `GOCSPX-${"A".repeat(32)}`;
-	await suppressed(fixture(), `Review Google OAuth client ${googleOAuthClientSecret}`, googleOAuthClientSecret);
-	const obfuscatedGoogleOAuthClientSecret = `GOCSPX-${"A".repeat(16)}\u200b${"B".repeat(16)}`;
-	await suppressed(fixture(), `Review Google OAuth client ${obfuscatedGoogleOAuthClientSecret}`, obfuscatedGoogleOAuthClientSecret);
-	const pineconeApiKey = `pcsk_test1_${"A".repeat(63)}`;
-	await suppressed(fixture(), `Review Pinecone access ${pineconeApiKey}`, pineconeApiKey);
-	const obfuscatedPineconeApiKey = pineconeApiKey.replace("pcsk_", "pc\u200bsk_");
-	await suppressed(
-		fixture(), `Review Pinecone access ${obfuscatedPineconeApiKey}`, obfuscatedPineconeApiKey,
-	);
-	const railwayApiToken = ["a".repeat(8), "b".repeat(4), "c".repeat(4), "d".repeat(4), "e".repeat(12)].join("-");
-	await suppressed(fixture(), `Railway: ${railwayApiToken}`, railwayApiToken);
-	const obfuscatedRailwayApiToken = `${railwayApiToken.slice(0, 16)}\u200b${railwayApiToken.slice(16)}`;
-	await suppressed(
-		fixture(), `Railway: ${obfuscatedRailwayApiToken}`, obfuscatedRailwayApiToken,
-	);
-	const vercelApiToken = "A1b2".repeat(6);
-	await suppressed(fixture(), `Vercel: ${vercelApiToken}`, vercelApiToken);
-	const obfuscatedVercelLabel = "Ver\u200bcel";
-	await suppressed(
-		fixture(), `${obfuscatedVercelLabel}: ${vercelApiToken}`, vercelApiToken,
-	);
-	const promptMarker = "[... middle of prompt omitted ...]";
-	const retainedPromptLength = MAX_PROMPT_LENGTH - promptMarker.length - 2;
-	const prefixLength = Math.ceil(retainedPromptLength / 2);
-	const tokenStart = prefixLength - 10;
-	const truncatedVercelPrompt = `${"x".repeat(tokenStart - 9)} Vercel: ${vercelApiToken} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedVercelPrompt, vercelApiToken);
-	const awsPresignedSignature = "a".repeat(64);
-	const truncatedAwsPresignedUrl = `https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${awsPresignedSignature}`;
-	const awsPresignedUrlStart = prefixLength - 10 - truncatedAwsPresignedUrl.indexOf(awsPresignedSignature);
-	const truncatedAwsPresignedPrompt = `${"x".repeat(awsPresignedUrlStart - 1)} ${truncatedAwsPresignedUrl} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedAwsPresignedPrompt, awsPresignedSignature);
-	const googleSignedSignature = "b".repeat(512);
-	const truncatedGoogleSignedUrl = `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${googleSignedSignature}`;
-	const googleSignedUrlStart = prefixLength - 10 - truncatedGoogleSignedUrl.indexOf(googleSignedSignature);
-	const truncatedGoogleSignedUrlPrompt = `${"x".repeat(googleSignedUrlStart - 1)} ${truncatedGoogleSignedUrl} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedGoogleSignedUrlPrompt, googleSignedSignature);
-	const googleCloudV2Signature = "A".repeat(344);
-	const truncatedGoogleCloudV2Url = `https://storage.googleapis.com/bucket/object?GoogleAccessId=EXAMPLE_ACCESS_ID&Expires=1790000000&Signature=${googleCloudV2Signature}`;
-	const googleCloudV2UrlStart = prefixLength - 10 - truncatedGoogleCloudV2Url.indexOf(googleCloudV2Signature);
-	const truncatedGoogleCloudV2Prompt = `${"x".repeat(googleCloudV2UrlStart - 1)} ${truncatedGoogleCloudV2Url} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedGoogleCloudV2Prompt, googleCloudV2Signature);
-	const awsS3V2Signature = Buffer.alloc(20, 0xfb).toString("base64");
-	const awsS3V2AccessId = `AKIA${"A".repeat(16)}`;
-	const truncatedAwsS3V2Url = `https://s3.amazonaws.com/bucket/object?Signature=${awsS3V2Signature}&AWSAccessKeyId=${awsS3V2AccessId}&Expires=1790000000`;
-	const awsS3V2UrlStart = prefixLength - 10 - truncatedAwsS3V2Url.indexOf(awsS3V2Signature);
-	const truncatedAwsS3V2Prompt = `${"x".repeat(awsS3V2UrlStart - 1)} ${truncatedAwsS3V2Url} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedAwsS3V2Prompt, awsS3V2Signature);
-	const cloudFrontSignature = "A1b_".repeat(24);
-	const truncatedCloudFrontUrl = `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${cloudFrontSignature}&Key-Pair-Id=APKEXAMPLE`;
-	const cloudFrontUrlStart = prefixLength - 10 - truncatedCloudFrontUrl.indexOf(cloudFrontSignature);
-	const truncatedCloudFrontPrompt = `${"x".repeat(cloudFrontUrlStart - 1)} ${truncatedCloudFrontUrl} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedCloudFrontPrompt, cloudFrontSignature);
-	const cloudFrontCookieSignature = "C3d4".repeat(24);
-	const truncatedCloudFrontCookie = `Set-Cookie: CloudFront-Signature=${cloudFrontCookieSignature}; Path=/; Secure; HttpOnly`;
-	const cloudFrontCookieStart = prefixLength - 10 - truncatedCloudFrontCookie.indexOf(cloudFrontCookieSignature);
-	const truncatedCloudFrontCookiePrompt = `${"x".repeat(cloudFrontCookieStart - 1)} ${truncatedCloudFrontCookie} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedCloudFrontCookiePrompt, cloudFrontCookieSignature);
-	const googleCloudCdnSignature = `${"A1b_".repeat(6)}A1b=`;
-	const truncatedGoogleCloudCdnUrl = `https://media.example.com/videos/137138595?Expires=1790000000&KeyName=mySigningKey&Signature=${googleCloudCdnSignature}`;
-	const googleCloudCdnUrlStart = prefixLength - 10 - truncatedGoogleCloudCdnUrl.indexOf(googleCloudCdnSignature);
-	const truncatedGoogleCloudCdnPrompt = `${"x".repeat(googleCloudCdnUrlStart - 1)} ${truncatedGoogleCloudCdnUrl} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedGoogleCloudCdnPrompt, googleCloudCdnSignature);
-	const akamaiEdgeAuthSignature = "d".repeat(64);
-	const truncatedAkamaiEdgeAuthUrl = `https://media.example.com/video.mp4?hdnts=exp=1790000000~acl=/video/*~hmac=${akamaiEdgeAuthSignature}`;
-	const akamaiEdgeAuthUrlStart = prefixLength - 10 - truncatedAkamaiEdgeAuthUrl.indexOf(akamaiEdgeAuthSignature);
-	const truncatedAkamaiEdgeAuthPrompt = `${"x".repeat(akamaiEdgeAuthUrlStart - 1)} ${truncatedAkamaiEdgeAuthUrl} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedAkamaiEdgeAuthPrompt, akamaiEdgeAuthSignature);
-	const baiduBceSignature = "e".repeat(64);
-	const truncatedBaiduBceUrl = `https://bj.bcebos.com/bucket/object?authorization=bce-auth-v1%2FABCDEFGHIJKLMNOPQRST%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${baiduBceSignature}`;
-	const baiduBceUrlStart = prefixLength - 10 - truncatedBaiduBceUrl.indexOf(baiduBceSignature);
-	const truncatedBaiduBcePrompt = `${"x".repeat(baiduBceUrlStart - 1)} ${truncatedBaiduBceUrl} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedBaiduBcePrompt, baiduBceSignature);
-	const openStackSwiftSignature = "f".repeat(40);
-	const truncatedOpenStackSwiftUrl = `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_expires=1790000000&temp_url_sig=${openStackSwiftSignature}`;
-	const openStackSwiftUrlStart = prefixLength - 10 - truncatedOpenStackSwiftUrl.indexOf(openStackSwiftSignature);
-	const truncatedOpenStackSwiftPrompt = `${"x".repeat(openStackSwiftUrlStart - 1)} ${truncatedOpenStackSwiftUrl} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedOpenStackSwiftPrompt, openStackSwiftSignature);
-	const cloudinarySignature = "A1b_2C3d";
-	const cloudinarySignedUrl = `https://res.cloudinary.com/demo/image/authenticated/s--${cloudinarySignature}--/c_fill,w_300,h_250/sample.png`;
-	await suppressed(fixture(), `Review protected media ${cloudinarySignedUrl}`, cloudinarySignature);
-	const imgixSignature = "a".repeat(32);
-	const imgixSignedUrl = `https://assets.imgix.net/examples/bridge.jpg?auto=format&w=200&s=${imgixSignature}`;
-	await suppressed(fixture(), `Review secure image delivery ${imgixSignedUrl}`, imgixSignature);
-	const imageKitSignature = "b".repeat(40);
-	const imageKitSignedUrl = `https://ik.imagekit.io/demo/image.jpg?ik-s=${imageKitSignature}&ik-t=1790000000`;
-	await suppressed(fixture(), `Review secure image delivery ${imageKitSignedUrl}`, imageKitSignature);
-	const nginxSecureLinkSignature = "A1b2C3d4E5f6G7h8I9j0kA";
-	const nginxSecureLinkUrl = `https://downloads.example.test/s/link?md5=${nginxSecureLinkSignature}&expires=1790000000`;
-	await suppressed(fixture(), `Review protected download ${nginxSecureLinkUrl}`, nginxSecureLinkSignature);
-	const dropboxSharedLinkKey = "C".repeat(32);
-	const dropboxSharedLink = `https://www.dropbox.com/scl/fi/example/file.pdf?rlkey=${dropboxSharedLinkKey}&dl=0`;
-	await suppressed(fixture(), `Review shared project document ${dropboxSharedLink}`, dropboxSharedLinkKey);
-	const googleDriveResourceKey = `0-${"D".repeat(28)}`;
-	const googleDriveSharedLink = `https://drive.google.com/file/d/example/view?usp=sharing&resourcekey=${googleDriveResourceKey}`;
-	await suppressed(fixture(), `Review shared project document ${googleDriveSharedLink}`, googleDriveResourceKey);
-	const googleDriveHeaderKey = `0-${"E".repeat(28)}`;
-	const googleDriveResourceKeysHeader = `X-Goog-Drive-Resource-Keys: ${"F".repeat(33)}/${googleDriveHeaderKey}`;
-	await suppressed(fixture(), `Fetch protected Drive file with ${googleDriveResourceKeysHeader}`, googleDriveHeaderKey);
-	const googleDriveResponseKey = `0-${"G".repeat(28)}`;
-	const googleDriveFileResponse = `{"id":"${"H".repeat(33)}","resourceKey":"${googleDriveResponseKey}"}`;
-	await suppressed(fixture(), `Summarize this Drive API response: ${googleDriveFileResponse}`, googleDriveResponseKey);
-	const tencentCosSignature = "a".repeat(40);
-	const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
-	const tencentCosUrlStart = prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
-	const truncatedTencentCosPrompt = `${"x".repeat(tencentCosUrlStart - 1)} ${truncatedTencentCosUrl} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedTencentCosPrompt, tencentCosSignature);
-	const alibabaOssLegacySignature = `${"C".repeat(27)}=`;
-	const truncatedAlibabaOssLegacyUrl = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?OSSAccessKeyId=EXAMPLE_ID&Expires=1790000000&Signature=${alibabaOssLegacySignature}`;
-	const alibabaOssLegacyUrlStart = prefixLength - 10 - truncatedAlibabaOssLegacyUrl.indexOf(alibabaOssLegacySignature);
-	const truncatedAlibabaOssLegacyPrompt = `${"x".repeat(alibabaOssLegacyUrlStart - 1)} ${truncatedAlibabaOssLegacyUrl} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedAlibabaOssLegacyPrompt, alibabaOssLegacySignature);
-	const alibabaOssV4Signature = "d".repeat(64);
-	const truncatedAlibabaOssV4Url = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${alibabaOssV4Signature}`;
-	const alibabaOssV4UrlStart = prefixLength - 10 - truncatedAlibabaOssV4Url.indexOf(alibabaOssV4Signature);
-	const truncatedAlibabaOssV4Prompt = `${"x".repeat(alibabaOssV4UrlStart - 1)} ${truncatedAlibabaOssV4Url} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedAlibabaOssV4Prompt, alibabaOssV4Signature);
-	const oracleParToken = "Ab3_".repeat(16);
-	const truncatedOracleParUrl = `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${oracleParToken}/n/MyNamespace/b/MyParBucket/o/`;
-	const oracleParUrlStart = prefixLength - 10 - truncatedOracleParUrl.indexOf(oracleParToken);
-	const truncatedOracleParPrompt = `${"x".repeat(oracleParUrlStart - 1)} ${truncatedOracleParUrl} ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedOracleParPrompt, oracleParToken);
-	const awsAccessKeyId = `AKIA${"A".repeat(16)}`;
-	const awsAccessKeyStart = prefixLength - 8;
-	const truncatedAwsPrompt = `${"x".repeat(awsAccessKeyStart)}${awsAccessKeyId} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedAwsPrompt, awsAccessKeyId);
-	const truncatedGoogleApiKey = `AIza${"A".repeat(35)}`;
-	const googleApiKeyStart = prefixLength - 8;
-	const truncatedGoogleApiPrompt = `${"x".repeat(googleApiKeyStart - 1)} ${truncatedGoogleApiKey} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedGoogleApiPrompt, truncatedGoogleApiKey);
-	const googleOAuthTokens = [
-		`GOCSPX-${"A1b_-".repeat(7)}`,
-		`1//${"B2c_-".repeat(7)}`,
-		`ya29.${"C3d_-".repeat(7)}`,
-	];
-	for (const googleOAuthToken of googleOAuthTokens) {
-		const tokenStart = prefixLength - 8;
-		const truncatedOAuthPrompt = `${"x".repeat(tokenStart - 1)} ${googleOAuthToken} ${"x".repeat(1_200)}`;
-		await suppressed(fixture(), truncatedOAuthPrompt, googleOAuthToken);
-	}
-	const gitlabPersonalAccessToken = `glpat-${"A1b_-".repeat(6)}`;
-	const gitlabTokenStart = prefixLength - 8;
-	const truncatedGitlabTokenPrompt = `${"x".repeat(gitlabTokenStart - 1)} ${gitlabPersonalAccessToken} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedGitlabTokenPrompt, gitlabPersonalAccessToken);
-	const npmAccessToken = `npm_${"A1b2C".repeat(5)}`;
-	const npmTokenStart = prefixLength - 8;
-	const truncatedNpmTokenPrompt = `${"x".repeat(npmTokenStart - 1)} ${npmAccessToken} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedNpmTokenPrompt, npmAccessToken);
-	const huggingFaceToken = `hf_${"A1b2C".repeat(5)}`;
-	const huggingFaceTokenStart = prefixLength - 8;
-	const truncatedHuggingFacePrompt = `${"x".repeat(huggingFaceTokenStart - 1)} ${huggingFaceToken} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedHuggingFacePrompt, huggingFaceToken);
-	const githubToken = `ghp_${"A".repeat(36)}`;
-	const githubTokenStart = prefixLength - 8;
-	const truncatedGithubPrompt = `${"x".repeat(githubTokenStart)}${githubToken} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedGithubPrompt, githubToken);
-	const bearerToken = "A1b2".repeat(8);
-	const bearerTokenStart = prefixLength - 8;
-	const truncatedBearerPrompt = `${"x".repeat(bearerTokenStart - 7)}Bearer ${bearerToken} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedBearerPrompt, bearerToken);
-	await suppressed(fixture(), `B e a r e r ${bearerToken}`, bearerToken);
-	const authorizationToken = `Authorization: Token ${"A1b2".repeat(6)}`;
-	await suppressed(fixture(), authorizationToken, authorizationToken);
-	const authorizationApiKey = `Authorization: ApiKey ${"C3d4".repeat(6)}`;
-	await suppressed(fixture(), authorizationApiKey, authorizationApiKey);
-	const httpSignature = Buffer.from("A".repeat(32)).toString("base64");
-	const httpSignatureAuthorization = `Authorization: Signature keyId="client-key",algorithm="hmac-sha256",headers="date",signature="${httpSignature}"`;
-	await suppressed(fixture(), httpSignatureAuthorization, httpSignatureAuthorization);
-	const httpMessageSignature = `Signature: sig1=:${httpSignature}:`;
-	await suppressed(fixture(), httpMessageSignature, httpMessageSignature);
-	const awsPresignedUrl = `https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(64)}`;
-	await suppressed(fixture(), awsPresignedUrl, "a".repeat(64));
-	const awsS3V2SignedUrl = `https://s3.amazonaws.com/bucket/object?AWSAccessKeyId=${awsS3V2AccessId}&Expires=1790000000&Signature=${awsS3V2Signature}`;
-	await suppressed(fixture(), awsS3V2SignedUrl, awsS3V2Signature);
-	const googleSignedUrl = `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(512)}`;
-	await suppressed(fixture(), googleSignedUrl, "b".repeat(512));
-	const googleCloudV2SignedUrl = `https://storage.googleapis.com/bucket/object?GoogleAccessId=EXAMPLE_ACCESS_ID&Expires=1790000000&Signature=${googleCloudV2Signature}`;
-	await suppressed(fixture(), googleCloudV2SignedUrl, googleCloudV2Signature);
-	const googleCloudCdnSignedUrl = `https://media.example.com/videos/137138595?Expires=1790000000&KeyName=mySigningKey&Signature=${googleCloudCdnSignature}`;
-	await suppressed(fixture(), googleCloudCdnSignedUrl, googleCloudCdnSignature);
-	const akamaiEdgeAuthUrl = `https://media.example.com/video.mp4?hdnts=exp=1790000000~acl=/video/*~hmac=${akamaiEdgeAuthSignature}`;
-	await suppressed(fixture(), akamaiEdgeAuthUrl, akamaiEdgeAuthSignature);
-	const baiduBceUrl = `https://bj.bcebos.com/bucket/object?authorization=bce-auth-v1%2FABCDEFGHIJKLMNOPQRST%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${baiduBceSignature}`;
-	await suppressed(fixture(), baiduBceUrl, baiduBceSignature);
-	const openStackSwiftUrl = `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_sig=${openStackSwiftSignature}&temp_url_expires=1790000000`;
-	await suppressed(fixture(), openStackSwiftUrl, openStackSwiftSignature);
-	const cloudFrontSignedUrl = `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${cloudFrontSignature}&Key-Pair-Id=APKEXAMPLE`;
-	await suppressed(fixture(), cloudFrontSignedUrl, cloudFrontSignature);
-	await suppressed(
-		fixture(),
-		`https://d111111abcdef8.cloudfront.net/private?Key-Pair-Id=APKEXAMPLE&Signature=${cloudFrontSignature}`,
-		cloudFrontSignature,
-	);
-	await suppressed(
-		fixture(),
-		`Set-Cookie: CloudFront-Signature=${cloudFrontCookieSignature}; Path=/; Secure; HttpOnly`,
-		cloudFrontCookieSignature,
-	);
-	const tencentCosSignedUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-ak=EXAMPLEID&q-signature=${tencentCosSignature}`;
-	await suppressed(fixture(), tencentCosSignedUrl, tencentCosSignature);
-	await suppressed(
-		fixture(),
-		`https://example.cos.ap-guangzhou.myqcloud.com/private?q-signature=${tencentCosSignature}&q-sign-algorithm=sha1`,
-		tencentCosSignature,
-	);
-	const alibabaOssLegacySignedUrl = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?OSSAccessKeyId=EXAMPLE_ID&Expires=1790000000&Signature=${alibabaOssLegacySignature}`;
-	await suppressed(fixture(), alibabaOssLegacySignedUrl, alibabaOssLegacySignature);
-	await suppressed(
-		fixture(),
-		`https://bucket.oss-cn-hangzhou.aliyuncs.com/object?Signature=${alibabaOssLegacySignature}&OSSAccessKeyId=EXAMPLE_ID`,
-		alibabaOssLegacySignature,
-	);
-	const alibabaOssV4SignedUrl = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${alibabaOssV4Signature}`;
-	await suppressed(fixture(), alibabaOssV4SignedUrl, alibabaOssV4Signature);
-	await suppressed(
-		fixture(),
-		`https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature=${alibabaOssV4Signature}&x-oss-signature-version=OSS4-HMAC-SHA256`,
-		alibabaOssV4Signature,
-	);
-	await suppressed(fixture(), `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${oracleParToken}/n/MyNamespace/b/MyParBucket/o/`, oracleParToken);
-	const negotiateAuthorization = `Authorization: Negotiate ${httpSignature}`;
-	await suppressed(fixture(), negotiateAuthorization, negotiateAuthorization);
-	const negotiateChallenge = `WWW-Authenticate: Negotiate ${httpSignature}`;
-	await suppressed(fixture(), negotiateChallenge, negotiateChallenge);
-	const digestAuthorization = `Authorization: Digest username="alice", realm="example", nonce="n", uri="/private", response="${"A1b2".repeat(8)}"`;
-	await suppressed(fixture(), digestAuthorization, digestAuthorization);
-	const rspauthHeader = 'Authentication-Info: rspauth="';
-	const rspauthHash = "C3d4".repeat(8);
-	const authenticationInfo = `${rspauthHeader}${rspauthHash}"`;
-	await suppressed(fixture(), authenticationInfo, authenticationInfo);
-	const rspauthTokenStart = prefixLength - 8;
-	const truncatedRspauthPrompt = `${"x".repeat(rspauthTokenStart - rspauthHeader.length - 1)} ${rspauthHeader}${rspauthHash}" ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedRspauthPrompt, rspauthHash);
-	const setCookieSessionId = `Set-Cookie: JSESSIONID=${"E5f6".repeat(8)}; Path=/; HttpOnly`;
-	await suppressed(fixture(), setCookieSessionId, setCookieSessionId);
-	const appSessionCookie = `Set-Cookie: _my_app_session=${"K9l0".repeat(8)}; Path=/; HttpOnly`;
-	await suppressed(fixture(), appSessionCookie, appSessionCookie);
-	const digestResponse = "A1b2".repeat(8);
-	const digestHeader = 'Authorization: Digest username="alice", response="';
-	const digestTokenStart = prefixLength - 8;
-	const truncatedDigestPrompt = `${"x".repeat(digestTokenStart - digestHeader.length - 1)} ${digestHeader}${digestResponse}" ${"y".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedDigestPrompt, digestResponse);
-	const longBearerToken = "A1b2".repeat(20);
-	const spacedBearerToken = `${longBearerToken.slice(0, 10)} ${longBearerToken.slice(10)}`;
-	const suffixLength = Math.floor(retainedPromptLength / 2);
-	const suffixPromptLength = MAX_PROMPT_LENGTH + 300;
-	const suffixStart = suffixPromptLength - suffixLength;
-	const suffixBearerStart = suffixStart - 5;
-	const spacedBearerPrompt = `${"x".repeat(suffixBearerStart - 7)}Bearer ${spacedBearerToken}`
-		+ "y".repeat(suffixPromptLength - suffixBearerStart - spacedBearerToken.length);
-	await suppressed(fixture(), spacedBearerPrompt, spacedBearerToken);
-	const splitBearerLabel = "Bea rer";
-	const splitBearerLabelStart = suffixStart - 3;
-	const splitBearerLabelPrompt = `${"x".repeat(splitBearerLabelStart)}${splitBearerLabel} ${bearerToken}`
-		+ "y".repeat(suffixPromptLength - splitBearerLabelStart - splitBearerLabel.length - 1 - bearerToken.length);
-	await suppressed(fixture(), splitBearerLabelPrompt, bearerToken);
-	const boundaryEmailAddress = "alice@example.test";
-	const emailStart = prefixLength - 6;
-	const truncatedEmailPrompt = `${"x".repeat(emailStart - 1)} ${boundaryEmailAddress} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedEmailPrompt, boundaryEmailAddress);
-	for (const [label, value] of [
-		[" SSN: ", "000-00-0000"],
-		[" SSN: ", "٠٠٠-٠٠-٠٠٠٠"],
-		[" TIN: ", "000-00-0000"],
-		[" Tax ID No.: ", "000-00-0000"],
-		[" Federal EIN: ", "12-3456789"],
-		[" DOB: ", "2000-02-29"],
-		[" Date of Birth: ", "31.12.1999"],
-		[" IBAN: ", "GB05 TEST 0000 0000 0000 00"],
-		[" ITIN: ", "900-70-0000"],
-		[" NI number: ", "AB 12 34 56 C"],
-		[" Card Number: ", "٠٠٠٠-٠٠٠٠-٠٠٠٠-٠٠٠٠"],
-		[" Phone: ", "000-000-0000"],
-	] as const) {
-		const valueStart = prefixLength - 6;
-		const truncatedPrompt = `${"x".repeat(valueStart - label.length)}${label}${value} ${"x".repeat(1_200)}`;
-		await suppressed(fixture(), truncatedPrompt, value);
-	}
-	const paymentCardLabel = " Card Number: ";
-	const paymentCard = "0000-0000-0000-0000";
-	const paymentCardStart = prefixLength - 8;
-	const truncatedPaymentCardPrompt = `${"x".repeat(paymentCardStart - paymentCardLabel.length)}${paymentCardLabel}${paymentCard} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedPaymentCardPrompt, paymentCard);
-	const cloudflareApiKey = "a1b2".repeat(10);
-	const truncatedCloudflarePrompt = `${"x".repeat(tokenStart - 13)} Cloudflare: ${cloudflareApiKey} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedCloudflarePrompt, cloudflareApiKey);
-	const datadogApiKey = "A1b2".repeat(10);
-	await suppressed(fixture(), `Review the config Datadog: ${datadogApiKey}`, datadogApiKey);
-	const mailgunPrivateApiToken = `key-${"a1b2".repeat(8)}`;
-	await suppressed(fixture(), `Review Mailgun API access: ${mailgunPrivateApiToken}`, mailgunPrivateApiToken);
-	const railwayBoundaryToken = ["a".repeat(8), "b".repeat(4), "c".repeat(4), "d".repeat(4), "e".repeat(12)].join("-");
-	for (const [label, credential] of [
-		[" Datadog: ", datadogApiKey],
-		[" Mailgun: ", mailgunPrivateApiToken],
-		[" Railway: ", railwayBoundaryToken],
-	] as const) {
-		const truncatedPrompt = `${"x".repeat(tokenStart - label.length)}${label}${credential} ${"x".repeat(1_200)}`;
-		await suppressed(fixture(), truncatedPrompt, credential);
-	}
-	const genericAssignedKey = "M3n4".repeat(8);
-	const genericLabel = " access_key: ";
-	const genericBoundaryPrompt = `${"x".repeat(tokenStart - genericLabel.length)}${genericLabel}${genericAssignedKey} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), genericBoundaryPrompt, genericAssignedKey);
-	const dockerAuth = Buffer.from("synthetic-user:synthetic-password").toString("base64");
-	const dockerAuthConfig = `{"auths":{"registry.example.test":{"auth":"${dockerAuth}"}}}`;
-	await suppressed(fixture(), `Review the Docker registry config ${dockerAuthConfig}`, dockerAuthConfig);
-	const obfuscatedDockerAuth = dockerAuthConfig.replace('"auth":', '"au\u200bth":')
-		.replace(dockerAuth, `${dockerAuth.slice(0, 12)}\u0000${dockerAuth.slice(12)}`);
-	await suppressed(fixture(), `Review the Docker registry config ${obfuscatedDockerAuth}`, obfuscatedDockerAuth);
-	const dockerAuthValueOffset = dockerAuthConfig.indexOf(dockerAuth);
-	const dockerAuthStart = prefixLength - 10 - dockerAuthValueOffset;
-	const truncatedDockerAuthPrompt = `${"x".repeat(dockerAuthStart - 1)} ${dockerAuthConfig} ${"x".repeat(1_200)}`;
-	await suppressed(fixture(), truncatedDockerAuthPrompt, dockerAuthConfig);
-	const artifactoryApiKey = `AKCp${"A1b2".repeat(17)}A`;
-	const artifactoryReferenceToken = `cmVmd${"C1d2".repeat(14)}AbC`;
-	await suppressed(fixture(), `Review the artifact repository ${artifactoryApiKey}`, artifactoryApiKey);
-	await suppressed(fixture(), `Review the artifact repository ${artifactoryReferenceToken}`, artifactoryReferenceToken);
-	const flyIoOrgToken = `fo1_${"A1_b".repeat(10)}ABC`;
-	const flyIoMachineTokens = [
-		`fm1a_${"A1b+/".repeat(20)}`,
-		`fm1r_${"B2c+/".repeat(20)}=`,
-		`fm2_${"C3d+/".repeat(20)}===`,
-	];
-	await suppressed(fixture(), `Review Fly.io access ${flyIoOrgToken}`, flyIoOrgToken);
-	for (const flyIoMachineToken of flyIoMachineTokens) {
-		await suppressed(fixture(), `Review Fly.io access ${flyIoMachineToken}`, flyIoMachineToken);
-	}
-	const dynatraceApiToken = `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`;
-	await suppressed(fixture(), `Review Dynatrace access ${dynatraceApiToken}`, dynatraceApiToken);
-	const resendApiKey = `re_${"A1b2".repeat(7)}_C3d4`;
-	await suppressed(fixture(), `Review Resend access ${resendApiKey}`, resendApiKey);
-	const tailscaleKey = `tskey-${"A1b2".repeat(4)}`;
-	await suppressed(fixture(), `Provision Tailscale auth ${tailscaleKey}`, tailscaleKey);
-	const tailscaleAuthKey = `tskey-auth-k${"A1b2".repeat(4)}`;
-	await suppressed(fixture(), `Provision Tailscale auth ${tailscaleAuthKey}`, tailscaleAuthKey);
-	const tailscaleApiKey = `tskey-api-${"C3d4".repeat(4)}`;
-	await suppressed(fixture(), `Provision Tailscale API access ${tailscaleApiKey}`, tailscaleApiKey);
-	const stripeWebhookSecret = `whsec_${"A1b2".repeat(8)}`;
-	await suppressed(fixture(), `Review the callback configuration ${stripeWebhookSecret}`, stripeWebhookSecret);
-	const slackWebhookUrl = `https://hooks.slack.com/services/${"A1b2".repeat(10)}A1b`;
-	await suppressed(fixture(), `Review callback delivery ${slackWebhookUrl}`, slackWebhookUrl);
-	const discordWebhookId = "123456789".repeat(2);
-	const discordWebhookToken = "A1b2".repeat(17);
-	const discordWebhookUrl = `https://discord.com/api/webhooks/${discordWebhookId}/${discordWebhookToken}`;
-	await suppressed(fixture(), `Review Discord delivery ${discordWebhookUrl}`, discordWebhookUrl);
-	const obfuscatedDiscordWebhookUrl = discordWebhookUrl.replace("discord.com", "dis\u200bcord.com");
-	await suppressed(fixture(), `Review Discord delivery ${obfuscatedDiscordWebhookUrl}`, obfuscatedDiscordWebhookUrl);
-	const teamsWebhookGuid = "01234567-89ab-cdef-0123-456789abcdef";
-	const teamsWebhookUrl = `https://tenant.webhook.office.com/webhookb2/${teamsWebhookGuid}@fedcba98-7654-3210-fedc-ba9876543210/IncomingWebhook/${"a1b2c3d4".repeat(4)}/${teamsWebhookGuid}`;
-	await suppressed(fixture(), `Review Teams delivery ${teamsWebhookUrl}`, teamsWebhookUrl);
-	const obfuscatedTeamsWebhookUrl = teamsWebhookUrl.replace("IncomingWebhook", "Incoming\u200bWebhook");
-	await suppressed(fixture(), `Review Teams delivery ${obfuscatedTeamsWebhookUrl}`, obfuscatedTeamsWebhookUrl);
-	const obfuscatedTailscaleKey = `tskey-auth-${"A1b2".repeat(2)}\u200b${"C3d4".repeat(2)}`;
-	await suppressed(fixture(), `Provision Tailscale auth ${obfuscatedTailscaleKey}`, obfuscatedTailscaleKey);
-	const supabaseSecretKey = `sb_secret_${"S".repeat(32)}`;
-	await suppressed(fixture(), `Review the Supabase config ${supabaseSecretKey}`, supabaseSecretKey);
-	const neonApiKey = `neon_api_key_${"N".repeat(32)}`;
-	await suppressed(fixture(), `Review the Neon config ${neonApiKey}`, neonApiKey);
-	const vaultServiceToken = `hvs.${"V".repeat(24)}`;
-	const vaultBatchToken = `hvb.${"B".repeat(24)}`;
-	await suppressed(fixture(), `Review Vault access ${vaultServiceToken}`, vaultServiceToken);
-	const sentryUserToken = `sntryu_${"a".repeat(64)}`;
-	await suppressed(fixture(), `Review Sentry access ${sentryUserToken}`, sentryUserToken);
-	const sentryOrgToken = `sntrys_eyJpYXQiO${"a".repeat(20)}LCJyZWdpb25fdXJs${"b".repeat(20)}_${"C".repeat(43)}`;
-	await suppressed(fixture(), `Review Sentry organization access ${sentryOrgToken}`, sentryOrgToken);
-	const telegramBotToken = `123456789:A${"a".repeat(34)}`;
-	await suppressed(fixture(), `Test the handler with generated identifier ${telegramBotToken}`, telegramBotToken);
-	const brevoApiToken = `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}`;
-	await suppressed(fixture(), `Review the mail integration with ${brevoApiToken}`, brevoApiToken);
-	const atlassianApiToken = "ATATT3" + "a".repeat(183) + "_-=";
-	await suppressed(fixture(), `Review the integration with ${atlassianApiToken}`, atlassianApiToken);
-	const terraformCloudToken = `${"T".repeat(14)}.atlasv1.${"a".repeat(57)}_-=`;
-	await suppressed(fixture(), `Review Terraform access ${terraformCloudToken}`, terraformCloudToken);
-	const shopifyTokens = ["shpat_", "shpca_", "shppa_", "shpss_"].map((prefix) => `${prefix}${"a".repeat(32)}`);
-	for (const token of shopifyTokens) {
-		await suppressed(fixture(), `Review Shopify access ${token}`, token);
-	}
-	const shippoTokens = ["live", "test"].map((mode) => `shippo_${mode}_${"a".repeat(40)}`);
-	for (const token of shippoTokens) {
-		await suppressed(fixture(), `Review Shippo access ${token}`, token);
-	}
-	const planetscaleTokens = ["tkn", "oauth"].flatMap((kind) => [
-		`pscale_${kind}_${"A1_bc.-=".repeat(4)}`,
-		`pscale_${kind}_${"B".repeat(64)}`,
-	]);
-	for (const token of planetscaleTokens) {
-		await suppressed(fixture(), `Review PlanetScale access ${token}`, token);
-	}
-	const postmanToken = ["PMAK-", "a".repeat(24), "-", "b".repeat(34)].join("");
-	await suppressed(fixture(), `Review Postman access ${postmanToken}`, postmanToken);
-	const pulumiToken = `pul-${"a".repeat(40)}`;
-	await suppressed(fixture(), `Review Pulumi access ${pulumiToken}`, pulumiToken);
-	const prefectToken = `pnu_${"A1b2".repeat(9)}`;
-	await suppressed(fixture(), `Review Prefect access ${prefectToken}`, prefectToken);
-	const octopusApiKey = `API-${"A1B2".repeat(6)}A1`;
-	await suppressed(fixture(), `Review Octopus access ${octopusApiKey}`, octopusApiKey);
-	const sourcegraphToken = `sgp_${"a".repeat(40)}`;
-	const sourcegraphSegmentedToken = `sgp_${"b".repeat(16)}_${"c".repeat(40)}`;
-	const sourcegraphLocalToken = `sgp_local_${"d".repeat(40)}`;
-	await suppressed(fixture(), `Review Sourcegraph access ${sourcegraphToken}`, sourcegraphToken);
-	await suppressed(fixture(), `Review Sourcegraph access ${sourcegraphSegmentedToken}`, sourcegraphSegmentedToken);
-	await suppressed(fixture(), `Review Sourcegraph access ${sourcegraphLocalToken}`, sourcegraphLocalToken);
-	const labeledCredential = `client_secret=${"C".repeat(24)}`;
-	await suppressed(fixture(), `Build the OAuth flow with ${labeledCredential}`, labeledCredential);
-	const shortPassword = `password=${"S".repeat(12)}`;
-	await suppressed(fixture(), `Review the configuration ${shortPassword}`, shortPassword);
-	const quotedPasswordPhrase = `password: "secret phrase"`;
-	const inlinePasswordPhrase = `password=secret phrase`;
-	const plainPassphrase = `passphrase: silver owl`;
-	const foldedPlainPassword = `password: secret\n  phrase`;
-	const punctuatedPassword = `password=secret phrase, keep this private`;
-	const punctuatedColonPassword = `password=secret phrase: keep this private`;
-	const punctuatedPassphrase = `passphrase: silver owl; do not copy it`;
-	const punctuatedFoldedPassword = `password: secret\n  phrase, keep this private`;
-	await suppressed(fixture(), `Review the configuration ${quotedPasswordPhrase}`, quotedPasswordPhrase);
-	await suppressed(fixture(), `Review the configuration ${inlinePasswordPhrase}`, inlinePasswordPhrase);
-	await suppressed(fixture(), `Review the configuration ${plainPassphrase}`, plainPassphrase);
-	await suppressed(fixture(), `Review the configuration ${foldedPlainPassword}`, foldedPlainPassword);
-	await suppressed(fixture(), `Review the configuration ${punctuatedPassword}`, punctuatedPassword);
-	await suppressed(fixture(), `Review the configuration ${punctuatedColonPassword}`, punctuatedColonPassword);
-	await suppressed(fixture(), `Review the configuration ${punctuatedPassphrase}`, punctuatedPassphrase);
-	await suppressed(fixture(), `Review the configuration ${punctuatedFoldedPassword}`, punctuatedFoldedPassword);
-	const passwordBlock = `password: |-\n  ${"P".repeat(12)}`;
-	await suppressed(fixture(), `Review the configuration ${passwordBlock}`, passwordBlock);
-	const multiwordPasswordBlock = `password: |-\n  secret phrase`;
-	const foldedPassphraseBlock = `passphrase: &words >-\n  moonlight\n  meadow`;
-	await suppressed(fixture(), `Review the configuration ${multiwordPasswordBlock}`, multiwordPasswordBlock);
-	await suppressed(fixture(), `Review the configuration ${foldedPassphraseBlock}`, foldedPassphraseBlock);
-	const taggedPasswordBlock = `password: !!str |-\n  ${"P".repeat(12)}`;
-	const anchoredTokenBlock = `token: &task-token >-\n  ${"T".repeat(24)}`;
-	await suppressed(fixture(), `Review the configuration ${taggedPasswordBlock}`, taggedPasswordBlock);
-	await suppressed(fixture(), `Review the configuration ${anchoredTokenBlock}`, anchoredTokenBlock);
-	const placeholderThenSecretBlocks = [
-		"password: |-\n  example",
-		`token: >-\n  ${"T".repeat(24)}`,
-	].join("\n");
-	await suppressed(
-		fixture(), `Review the configuration ${placeholderThenSecretBlocks}`, placeholderThenSecretBlocks,
-	);
-	const awsSecretAccessKey = `AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`;
-	await suppressed(fixture(), `Review the deployment config ${awsSecretAccessKey}`, awsSecretAccessKey);
-	const awsBlockSecretAccessKey = `AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`;
-	await suppressed(fixture(), `Review the deployment config ${awsBlockSecretAccessKey}`, awsBlockSecretAccessKey);
-	const azureAccountKey = `AccountKey=${"A".repeat(86)}==`;
-	await suppressed(fixture(), `Review the storage connection ${azureAccountKey}`, azureAccountKey);
-	const kubeconfigClientKeyData = `client-key-data: ${"A".repeat(44)}`;
-	await suppressed(
-		fixture(), `Review the Kubernetes config ${kubeconfigClientKeyData}`, kubeconfigClientKeyData,
-	);
-	const kubeconfigBlockClientKeyData = `client-key-data: |-\n  ${"A".repeat(10)}\n  ${"A".repeat(10)}\n  ${"A".repeat(44)}`;
-	await suppressed(
-		fixture(), `Review the Kubernetes config ${kubeconfigBlockClientKeyData}`, kubeconfigBlockClientKeyData,
-	);
-	const wireGuardPresharedKey = `PresharedKey=${"A".repeat(43)}=`;
-	await suppressed(
-		fixture(), `Review the WireGuard configuration ${wireGuardPresharedKey}`, wireGuardPresharedKey,
-	);
-	const basicAuthorization = basicAuthorizationHeader("Authorization", `u:${"p".repeat(20)}`);
-	const proxyBasicAuthorization = basicAuthorizationHeader("Proxy-Authorization", `p:${"w".repeat(20)}`);
-	const shortBasicAuthorization = basicAuthorizationHeader("Authorization", "u:p");
-	const shortProxyAuthorization = basicAuthorizationHeader("Proxy-Authorization", "p:w");
-	const basicAuthorizationBlock = `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`;
-	const taggedBasicAuthorizationBlock = `Authorization: !!str |-\n  Basic ${Buffer.from("u:p").toString("base64")}`;
-	const proxyBasicAuthorizationBlock = `Proxy-Authorization: >-\n  Basic\n  ${Buffer.from("p:w").toString("base64")}`;
-	const anchoredProxyBasicAuthorizationBlock = `Proxy-Authorization: &proxy-auth >-\n  Basic\n  ${Buffer.from("p:w").toString("base64")}`;
-	const placeholderThenBasicBlocks = [
-		"Authorization: |-\n  Basic example",
-		proxyBasicAuthorizationBlock,
-	].join("\n");
-	await suppressed(fixture(), `Review the request headers ${basicAuthorization}`, basicAuthorization);
-	await suppressed(fixture(), `Review the proxy headers ${proxyBasicAuthorization}`, proxyBasicAuthorization);
-	await suppressed(fixture(), `Review the short request headers ${shortBasicAuthorization}`, shortBasicAuthorization);
-	await suppressed(fixture(), `Review the short proxy headers ${shortProxyAuthorization}`, shortProxyAuthorization);
-	await suppressed(fixture(), `Review the request headers ${basicAuthorizationBlock}`, basicAuthorizationBlock);
-	await suppressed(fixture(), `Review the request headers ${taggedBasicAuthorizationBlock}`, taggedBasicAuthorizationBlock);
-	await suppressed(fixture(), `Review the proxy headers ${proxyBasicAuthorizationBlock}`, proxyBasicAuthorizationBlock);
-	await suppressed(
-		fixture(), `Review the proxy headers ${anchoredProxyBasicAuthorizationBlock}`, anchoredProxyBasicAuthorizationBlock,
-	);
-	await suppressed(fixture(), `Review the auth headers ${placeholderThenBasicBlocks}`, placeholderThenBasicBlocks);
-	const obfuscatedPassword = `passphrase=${"P".repeat(5)}\u200b${"P".repeat(5)}`;
-	await suppressed(fixture(), `Review the configuration ${obfuscatedPassword}`, obfuscatedPassword);
+  const neonMarker = "[... middle of prompt omitted ...]";
+  const neonRetainedLength = MAX_PROMPT_LENGTH - neonMarker.length - 2;
+  const neonPrefixLength = Math.ceil(neonRetainedLength / 2);
+  const whitespaceObfuscatedNeonKey = `neon_api_key_${"N".repeat(16)} ${"N".repeat(16)}`;
+  const neonTokenStart = neonPrefixLength - 34;
+  const neonPrefix = `${"x".repeat(neonTokenStart - 1)} `;
+  const neonPrompt = `${neonPrefix}${whitespaceObfuscatedNeonKey} ${"y".repeat(
+    3_000 - neonPrefix.length - whitespaceObfuscatedNeonKey.length - 1,
+  )}`;
+  await suppressed(fixture(), neonPrompt, whitespaceObfuscatedNeonKey);
+  const obfuscatedAccessKeyAssignment = genericAccessKeyAssignment.replace(
+    "access_key",
+    "access_\u200bkey",
+  );
+  await suppressed(
+    fixture(),
+    `Review cloud configuration ${obfuscatedAccessKeyAssignment}`,
+    obfuscatedAccessKeyAssignment,
+  );
+  const azureAdClientSecret = `AbC7Q~${"Aa0_-.".repeat(5)}C3`;
+  await suppressed(
+    fixture(),
+    `Review Azure AD app registration ${azureAdClientSecret}`,
+    azureAdClientSecret,
+  );
+  const obfuscatedAzureAdClientSecret = azureAdClientSecret.replace(
+    "Q~",
+    "Q\u200b~",
+  );
+  await suppressed(
+    fixture(),
+    `Review Azure AD app registration ${obfuscatedAzureAdClientSecret}`,
+    obfuscatedAzureAdClientSecret,
+  );
+  const awsAlternateAccessKeys = [
+    `A3TA${"B".repeat(16)}`,
+    `ABIA${"C".repeat(16)}`,
+    `ACCA${"D".repeat(16)}`,
+  ];
+  for (const awsKey of awsAlternateAccessKeys) {
+    await suppressed(
+      fixture(),
+      `Review AWS temporary access ${awsKey}`,
+      awsKey,
+    );
+  }
+  const googleApiKey = `AIza${"A".repeat(35)}`;
+  await suppressed(
+    fixture(),
+    `Review Google API access ${googleApiKey}`,
+    googleApiKey,
+  );
+  const googleOAuthAccessToken = `ya29.${"A".repeat(32)}`;
+  await suppressed(
+    fixture(),
+    `Review Google OAuth access ${googleOAuthAccessToken}`,
+    googleOAuthAccessToken,
+  );
+  const obfuscatedGoogleOAuthAccessToken = `ya29.${"A".repeat(16)}\u200b${"B".repeat(16)}`;
+  await suppressed(
+    fixture(),
+    `Review Google OAuth access ${obfuscatedGoogleOAuthAccessToken}`,
+    obfuscatedGoogleOAuthAccessToken,
+  );
+  const googleOAuthClientSecret = `GOCSPX-${"A".repeat(32)}`;
+  await suppressed(
+    fixture(),
+    `Review Google OAuth client ${googleOAuthClientSecret}`,
+    googleOAuthClientSecret,
+  );
+  const obfuscatedGoogleOAuthClientSecret = `GOCSPX-${"A".repeat(16)}\u200b${"B".repeat(16)}`;
+  await suppressed(
+    fixture(),
+    `Review Google OAuth client ${obfuscatedGoogleOAuthClientSecret}`,
+    obfuscatedGoogleOAuthClientSecret,
+  );
+  const pineconeApiKey = `pcsk_test1_${"A".repeat(63)}`;
+  await suppressed(
+    fixture(),
+    `Review Pinecone access ${pineconeApiKey}`,
+    pineconeApiKey,
+  );
+  const obfuscatedPineconeApiKey = pineconeApiKey.replace(
+    "pcsk_",
+    "pc\u200bsk_",
+  );
+  await suppressed(
+    fixture(),
+    `Review Pinecone access ${obfuscatedPineconeApiKey}`,
+    obfuscatedPineconeApiKey,
+  );
+  const railwayApiToken = [
+    "a".repeat(8),
+    "b".repeat(4),
+    "c".repeat(4),
+    "d".repeat(4),
+    "e".repeat(12),
+  ].join("-");
+  await suppressed(fixture(), `Railway: ${railwayApiToken}`, railwayApiToken);
+  const obfuscatedRailwayApiToken = `${railwayApiToken.slice(0, 16)}\u200b${railwayApiToken.slice(16)}`;
+  await suppressed(
+    fixture(),
+    `Railway: ${obfuscatedRailwayApiToken}`,
+    obfuscatedRailwayApiToken,
+  );
+  const vercelApiToken = "A1b2".repeat(6);
+  await suppressed(fixture(), `Vercel: ${vercelApiToken}`, vercelApiToken);
+  const obfuscatedVercelLabel = "Ver\u200bcel";
+  await suppressed(
+    fixture(),
+    `${obfuscatedVercelLabel}: ${vercelApiToken}`,
+    vercelApiToken,
+  );
+  const promptMarker = "[... middle of prompt omitted ...]";
+  const retainedPromptLength = MAX_PROMPT_LENGTH - promptMarker.length - 2;
+  const prefixLength = Math.ceil(retainedPromptLength / 2);
+  const tokenStart = prefixLength - 10;
+  const truncatedVercelPrompt = `${"x".repeat(tokenStart - 9)} Vercel: ${vercelApiToken} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedVercelPrompt, vercelApiToken);
+  const awsPresignedSignature = "a".repeat(64);
+  const truncatedAwsPresignedUrl = `https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${awsPresignedSignature}`;
+  const awsPresignedUrlStart =
+    prefixLength - 10 - truncatedAwsPresignedUrl.indexOf(awsPresignedSignature);
+  const truncatedAwsPresignedPrompt = `${"x".repeat(awsPresignedUrlStart - 1)} ${truncatedAwsPresignedUrl} ${"y".repeat(1_200)}`;
+  await suppressed(
+    fixture(),
+    truncatedAwsPresignedPrompt,
+    awsPresignedSignature,
+  );
+  const googleSignedSignature = "b".repeat(512);
+  const truncatedGoogleSignedUrl = `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${googleSignedSignature}`;
+  const googleSignedUrlStart =
+    prefixLength - 10 - truncatedGoogleSignedUrl.indexOf(googleSignedSignature);
+  const truncatedGoogleSignedUrlPrompt = `${"x".repeat(googleSignedUrlStart - 1)} ${truncatedGoogleSignedUrl} ${"y".repeat(1_200)}`;
+  await suppressed(
+    fixture(),
+    truncatedGoogleSignedUrlPrompt,
+    googleSignedSignature,
+  );
+  const googleCloudV2Signature = "A".repeat(344);
+  const truncatedGoogleCloudV2Url = `https://storage.googleapis.com/bucket/object?GoogleAccessId=EXAMPLE_ACCESS_ID&Expires=1790000000&Signature=${googleCloudV2Signature}`;
+  const googleCloudV2UrlStart =
+    prefixLength -
+    10 -
+    truncatedGoogleCloudV2Url.indexOf(googleCloudV2Signature);
+  const truncatedGoogleCloudV2Prompt = `${"x".repeat(googleCloudV2UrlStart - 1)} ${truncatedGoogleCloudV2Url} ${"y".repeat(1_200)}`;
+  await suppressed(
+    fixture(),
+    truncatedGoogleCloudV2Prompt,
+    googleCloudV2Signature,
+  );
+  const awsS3V2Signature = Buffer.alloc(20, 0xfb).toString("base64");
+  const awsS3V2AccessId = `AKIA${"A".repeat(16)}`;
+  const truncatedAwsS3V2Url = `https://s3.amazonaws.com/bucket/object?Signature=${awsS3V2Signature}&AWSAccessKeyId=${awsS3V2AccessId}&Expires=1790000000`;
+  const awsS3V2UrlStart =
+    prefixLength - 10 - truncatedAwsS3V2Url.indexOf(awsS3V2Signature);
+  const truncatedAwsS3V2Prompt = `${"x".repeat(awsS3V2UrlStart - 1)} ${truncatedAwsS3V2Url} ${"y".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedAwsS3V2Prompt, awsS3V2Signature);
+  const cloudFrontSignature = "A1b_".repeat(24);
+  const truncatedCloudFrontUrl = `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${cloudFrontSignature}&Key-Pair-Id=APKEXAMPLE`;
+  const cloudFrontUrlStart =
+    prefixLength - 10 - truncatedCloudFrontUrl.indexOf(cloudFrontSignature);
+  const truncatedCloudFrontPrompt = `${"x".repeat(cloudFrontUrlStart - 1)} ${truncatedCloudFrontUrl} ${"y".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedCloudFrontPrompt, cloudFrontSignature);
+  const cloudFrontCookieSignature = "C3d4".repeat(24);
+  const truncatedCloudFrontCookie = `Set-Cookie: CloudFront-Signature=${cloudFrontCookieSignature}; Path=/; Secure; HttpOnly`;
+  const cloudFrontCookieStart =
+    prefixLength -
+    10 -
+    truncatedCloudFrontCookie.indexOf(cloudFrontCookieSignature);
+  const truncatedCloudFrontCookiePrompt = `${"x".repeat(cloudFrontCookieStart - 1)} ${truncatedCloudFrontCookie} ${"y".repeat(1_200)}`;
+  await suppressed(
+    fixture(),
+    truncatedCloudFrontCookiePrompt,
+    cloudFrontCookieSignature,
+  );
+  const googleCloudCdnSignature = `${"A1b_".repeat(6)}A1b=`;
+  const truncatedGoogleCloudCdnUrl = `https://media.example.com/videos/137138595?Expires=1790000000&KeyName=mySigningKey&Signature=${googleCloudCdnSignature}`;
+  const googleCloudCdnUrlStart =
+    prefixLength -
+    10 -
+    truncatedGoogleCloudCdnUrl.indexOf(googleCloudCdnSignature);
+  const truncatedGoogleCloudCdnPrompt = `${"x".repeat(googleCloudCdnUrlStart - 1)} ${truncatedGoogleCloudCdnUrl} ${"y".repeat(1_200)}`;
+  await suppressed(
+    fixture(),
+    truncatedGoogleCloudCdnPrompt,
+    googleCloudCdnSignature,
+  );
+  const akamaiEdgeAuthSignature = "d".repeat(64);
+  const truncatedAkamaiEdgeAuthUrl = `https://media.example.com/video.mp4?hdnts=exp=1790000000~acl=/video/*~hmac=${akamaiEdgeAuthSignature}`;
+  const akamaiEdgeAuthUrlStart =
+    prefixLength -
+    10 -
+    truncatedAkamaiEdgeAuthUrl.indexOf(akamaiEdgeAuthSignature);
+  const truncatedAkamaiEdgeAuthPrompt = `${"x".repeat(akamaiEdgeAuthUrlStart - 1)} ${truncatedAkamaiEdgeAuthUrl} ${"y".repeat(1_200)}`;
+  await suppressed(
+    fixture(),
+    truncatedAkamaiEdgeAuthPrompt,
+    akamaiEdgeAuthSignature,
+  );
+  const baiduBceSignature = "e".repeat(64);
+  const truncatedBaiduBceUrl = `https://bj.bcebos.com/bucket/object?authorization=bce-auth-v1%2FABCDEFGHIJKLMNOPQRST%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${baiduBceSignature}`;
+  const baiduBceUrlStart =
+    prefixLength - 10 - truncatedBaiduBceUrl.indexOf(baiduBceSignature);
+  const truncatedBaiduBcePrompt = `${"x".repeat(baiduBceUrlStart - 1)} ${truncatedBaiduBceUrl} ${"y".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedBaiduBcePrompt, baiduBceSignature);
+  const openStackSwiftSignature = "f".repeat(40);
+  const truncatedOpenStackSwiftUrl = `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_expires=1790000000&temp_url_sig=${openStackSwiftSignature}`;
+  const openStackSwiftUrlStart =
+    prefixLength -
+    10 -
+    truncatedOpenStackSwiftUrl.indexOf(openStackSwiftSignature);
+  const truncatedOpenStackSwiftPrompt = `${"x".repeat(openStackSwiftUrlStart - 1)} ${truncatedOpenStackSwiftUrl} ${"y".repeat(1_200)}`;
+  await suppressed(
+    fixture(),
+    truncatedOpenStackSwiftPrompt,
+    openStackSwiftSignature,
+  );
+  const cloudinarySignature = "A1b_2C3d";
+  const cloudinarySignedUrl = `https://res.cloudinary.com/demo/image/authenticated/s--${cloudinarySignature}--/c_fill,w_300,h_250/sample.png`;
+  await suppressed(
+    fixture(),
+    `Review protected media ${cloudinarySignedUrl}`,
+    cloudinarySignature,
+  );
+  const imgixSignature = "a".repeat(32);
+  const imgixSignedUrl = `https://assets.imgix.net/examples/bridge.jpg?auto=format&w=200&s=${imgixSignature}`;
+  await suppressed(
+    fixture(),
+    `Review secure image delivery ${imgixSignedUrl}`,
+    imgixSignature,
+  );
+  const imageKitSignature = "b".repeat(40);
+  const imageKitSignedUrl = `https://ik.imagekit.io/demo/image.jpg?ik-s=${imageKitSignature}&ik-t=1790000000`;
+  await suppressed(
+    fixture(),
+    `Review secure image delivery ${imageKitSignedUrl}`,
+    imageKitSignature,
+  );
+  const nginxSecureLinkSignature = "A1b2C3d4E5f6G7h8I9j0kA";
+  const nginxSecureLinkUrl = `https://downloads.example.test/s/link?md5=${nginxSecureLinkSignature}&expires=1790000000`;
+  await suppressed(
+    fixture(),
+    `Review protected download ${nginxSecureLinkUrl}`,
+    nginxSecureLinkSignature,
+  );
+  const dropboxSharedLinkKey = "C".repeat(32);
+  const dropboxSharedLink = `https://www.dropbox.com/scl/fi/example/file.pdf?rlkey=${dropboxSharedLinkKey}&dl=0`;
+  await suppressed(
+    fixture(),
+    `Review shared project document ${dropboxSharedLink}`,
+    dropboxSharedLinkKey,
+  );
+  const googleDriveResourceKey = `0-${"D".repeat(28)}`;
+  const googleDriveSharedLink = `https://drive.google.com/file/d/example/view?usp=sharing&resourcekey=${googleDriveResourceKey}`;
+  await suppressed(
+    fixture(),
+    `Review shared project document ${googleDriveSharedLink}`,
+    googleDriveResourceKey,
+  );
+  const googleDriveHeaderKey = `0-${"E".repeat(28)}`;
+  const googleDriveResourceKeysHeader = `X-Goog-Drive-Resource-Keys: ${"F".repeat(33)}/${googleDriveHeaderKey}`;
+  await suppressed(
+    fixture(),
+    `Fetch protected Drive file with ${googleDriveResourceKeysHeader}`,
+    googleDriveHeaderKey,
+  );
+  const googleDriveResponseKey = `0-${"G".repeat(28)}`;
+  const googleDriveFileResponse = `{"id":"${"H".repeat(33)}","resourceKey":"${googleDriveResponseKey}"}`;
+  await suppressed(
+    fixture(),
+    `Summarize this Drive API response: ${googleDriveFileResponse}`,
+    googleDriveResponseKey,
+  );
+  const tencentCosSignature = "a".repeat(40);
+  const truncatedTencentCosUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-signature=${tencentCosSignature}`;
+  const tencentCosUrlStart =
+    prefixLength - 10 - truncatedTencentCosUrl.indexOf(tencentCosSignature);
+  const truncatedTencentCosPrompt = `${"x".repeat(tencentCosUrlStart - 1)} ${truncatedTencentCosUrl} ${"y".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedTencentCosPrompt, tencentCosSignature);
+  const alibabaOssLegacySignature = `${"C".repeat(27)}=`;
+  const truncatedAlibabaOssLegacyUrl = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?OSSAccessKeyId=EXAMPLE_ID&Expires=1790000000&Signature=${alibabaOssLegacySignature}`;
+  const alibabaOssLegacyUrlStart =
+    prefixLength -
+    10 -
+    truncatedAlibabaOssLegacyUrl.indexOf(alibabaOssLegacySignature);
+  const truncatedAlibabaOssLegacyPrompt = `${"x".repeat(alibabaOssLegacyUrlStart - 1)} ${truncatedAlibabaOssLegacyUrl} ${"y".repeat(1_200)}`;
+  await suppressed(
+    fixture(),
+    truncatedAlibabaOssLegacyPrompt,
+    alibabaOssLegacySignature,
+  );
+  const alibabaOssV4Signature = "d".repeat(64);
+  const truncatedAlibabaOssV4Url = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${alibabaOssV4Signature}`;
+  const alibabaOssV4UrlStart =
+    prefixLength - 10 - truncatedAlibabaOssV4Url.indexOf(alibabaOssV4Signature);
+  const truncatedAlibabaOssV4Prompt = `${"x".repeat(alibabaOssV4UrlStart - 1)} ${truncatedAlibabaOssV4Url} ${"y".repeat(1_200)}`;
+  await suppressed(
+    fixture(),
+    truncatedAlibabaOssV4Prompt,
+    alibabaOssV4Signature,
+  );
+  const oracleParToken = "Ab3_".repeat(16);
+  const truncatedOracleParUrl = `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${oracleParToken}/n/MyNamespace/b/MyParBucket/o/`;
+  const oracleParUrlStart =
+    prefixLength - 10 - truncatedOracleParUrl.indexOf(oracleParToken);
+  const truncatedOracleParPrompt = `${"x".repeat(oracleParUrlStart - 1)} ${truncatedOracleParUrl} ${"y".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedOracleParPrompt, oracleParToken);
+  const awsAccessKeyId = `AKIA${"A".repeat(16)}`;
+  const awsAccessKeyStart = prefixLength - 8;
+  const truncatedAwsPrompt = `${"x".repeat(awsAccessKeyStart)}${awsAccessKeyId} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedAwsPrompt, awsAccessKeyId);
+  const truncatedGoogleApiKey = `AIza${"A".repeat(35)}`;
+  const googleApiKeyStart = prefixLength - 8;
+  const truncatedGoogleApiPrompt = `${"x".repeat(googleApiKeyStart - 1)} ${truncatedGoogleApiKey} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedGoogleApiPrompt, truncatedGoogleApiKey);
+  const googleOAuthTokens = [
+    `GOCSPX-${"A1b_-".repeat(7)}`,
+    `1//${"B2c_-".repeat(7)}`,
+    `ya29.${"C3d_-".repeat(7)}`,
+  ];
+  for (const googleOAuthToken of googleOAuthTokens) {
+    const tokenStart = prefixLength - 8;
+    const truncatedOAuthPrompt = `${"x".repeat(tokenStart - 1)} ${googleOAuthToken} ${"x".repeat(1_200)}`;
+    await suppressed(fixture(), truncatedOAuthPrompt, googleOAuthToken);
+  }
+  const gitlabPersonalAccessToken = `glpat-${"A1b_-".repeat(6)}`;
+  const gitlabTokenStart = prefixLength - 8;
+  const truncatedGitlabTokenPrompt = `${"x".repeat(gitlabTokenStart - 1)} ${gitlabPersonalAccessToken} ${"x".repeat(1_200)}`;
+  await suppressed(
+    fixture(),
+    truncatedGitlabTokenPrompt,
+    gitlabPersonalAccessToken,
+  );
+  const npmAccessToken = `npm_${"A1b2C".repeat(5)}`;
+  const npmTokenStart = prefixLength - 8;
+  const truncatedNpmTokenPrompt = `${"x".repeat(npmTokenStart - 1)} ${npmAccessToken} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedNpmTokenPrompt, npmAccessToken);
+  const huggingFaceToken = `hf_${"A1b2C".repeat(5)}`;
+  const huggingFaceTokenStart = prefixLength - 8;
+  const truncatedHuggingFacePrompt = `${"x".repeat(huggingFaceTokenStart - 1)} ${huggingFaceToken} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedHuggingFacePrompt, huggingFaceToken);
+  const githubToken = `ghp_${"A".repeat(36)}`;
+  const githubTokenStart = prefixLength - 8;
+  const truncatedGithubPrompt = `${"x".repeat(githubTokenStart)}${githubToken} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedGithubPrompt, githubToken);
+  const bearerToken = "A1b2".repeat(8);
+  const bearerTokenStart = prefixLength - 8;
+  const truncatedBearerPrompt = `${"x".repeat(bearerTokenStart - 7)}Bearer ${bearerToken} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedBearerPrompt, bearerToken);
+  await suppressed(fixture(), `B e a r e r ${bearerToken}`, bearerToken);
+  const authorizationToken = `Authorization: Token ${"A1b2".repeat(6)}`;
+  await suppressed(fixture(), authorizationToken, authorizationToken);
+  const authorizationApiKey = `Authorization: ApiKey ${"C3d4".repeat(6)}`;
+  await suppressed(fixture(), authorizationApiKey, authorizationApiKey);
+  const httpSignature = Buffer.from("A".repeat(32)).toString("base64");
+  const httpSignatureAuthorization = `Authorization: Signature keyId="client-key",algorithm="hmac-sha256",headers="date",signature="${httpSignature}"`;
+  await suppressed(
+    fixture(),
+    httpSignatureAuthorization,
+    httpSignatureAuthorization,
+  );
+  const httpMessageSignature = `Signature: sig1=:${httpSignature}:`;
+  await suppressed(fixture(), httpMessageSignature, httpMessageSignature);
+  const awsPresignedUrl = `https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(64)}`;
+  await suppressed(fixture(), awsPresignedUrl, "a".repeat(64));
+  const awsS3V2SignedUrl = `https://s3.amazonaws.com/bucket/object?AWSAccessKeyId=${awsS3V2AccessId}&Expires=1790000000&Signature=${awsS3V2Signature}`;
+  await suppressed(fixture(), awsS3V2SignedUrl, awsS3V2Signature);
+  const googleSignedUrl = `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(512)}`;
+  await suppressed(fixture(), googleSignedUrl, "b".repeat(512));
+  const googleCloudV2SignedUrl = `https://storage.googleapis.com/bucket/object?GoogleAccessId=EXAMPLE_ACCESS_ID&Expires=1790000000&Signature=${googleCloudV2Signature}`;
+  await suppressed(fixture(), googleCloudV2SignedUrl, googleCloudV2Signature);
+  const googleCloudCdnSignedUrl = `https://media.example.com/videos/137138595?Expires=1790000000&KeyName=mySigningKey&Signature=${googleCloudCdnSignature}`;
+  await suppressed(fixture(), googleCloudCdnSignedUrl, googleCloudCdnSignature);
+  const akamaiEdgeAuthUrl = `https://media.example.com/video.mp4?hdnts=exp=1790000000~acl=/video/*~hmac=${akamaiEdgeAuthSignature}`;
+  await suppressed(fixture(), akamaiEdgeAuthUrl, akamaiEdgeAuthSignature);
+  const baiduBceUrl = `https://bj.bcebos.com/bucket/object?authorization=bce-auth-v1%2FABCDEFGHIJKLMNOPQRST%2F2026-06-13T12%3A00%3A00Z%2F1800%2Fhost%2F${baiduBceSignature}`;
+  await suppressed(fixture(), baiduBceUrl, baiduBceSignature);
+  const openStackSwiftUrl = `https://swift.example/v1/AUTH_test/images/photo.png?temp_url_sig=${openStackSwiftSignature}&temp_url_expires=1790000000`;
+  await suppressed(fixture(), openStackSwiftUrl, openStackSwiftSignature);
+  const cloudFrontSignedUrl = `https://d111111abcdef8.cloudfront.net/private?Expires=1790000000&Signature=${cloudFrontSignature}&Key-Pair-Id=APKEXAMPLE`;
+  await suppressed(fixture(), cloudFrontSignedUrl, cloudFrontSignature);
+  await suppressed(
+    fixture(),
+    `https://d111111abcdef8.cloudfront.net/private?Key-Pair-Id=APKEXAMPLE&Signature=${cloudFrontSignature}`,
+    cloudFrontSignature,
+  );
+  await suppressed(
+    fixture(),
+    `Set-Cookie: CloudFront-Signature=${cloudFrontCookieSignature}; Path=/; Secure; HttpOnly`,
+    cloudFrontCookieSignature,
+  );
+  const tencentCosSignedUrl = `https://example.cos.ap-guangzhou.myqcloud.com/private?q-sign-algorithm=sha1&q-ak=EXAMPLEID&q-signature=${tencentCosSignature}`;
+  await suppressed(fixture(), tencentCosSignedUrl, tencentCosSignature);
+  await suppressed(
+    fixture(),
+    `https://example.cos.ap-guangzhou.myqcloud.com/private?q-signature=${tencentCosSignature}&q-sign-algorithm=sha1`,
+    tencentCosSignature,
+  );
+  const alibabaOssLegacySignedUrl = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?OSSAccessKeyId=EXAMPLE_ID&Expires=1790000000&Signature=${alibabaOssLegacySignature}`;
+  await suppressed(
+    fixture(),
+    alibabaOssLegacySignedUrl,
+    alibabaOssLegacySignature,
+  );
+  await suppressed(
+    fixture(),
+    `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?Signature=${alibabaOssLegacySignature}&OSSAccessKeyId=EXAMPLE_ID`,
+    alibabaOssLegacySignature,
+  );
+  const alibabaOssV4SignedUrl = `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature-version=OSS4-HMAC-SHA256&x-oss-signature=${alibabaOssV4Signature}`;
+  await suppressed(fixture(), alibabaOssV4SignedUrl, alibabaOssV4Signature);
+  await suppressed(
+    fixture(),
+    `https://bucket.oss-cn-hangzhou.aliyuncs.com/object?x-oss-signature=${alibabaOssV4Signature}&x-oss-signature-version=OSS4-HMAC-SHA256`,
+    alibabaOssV4Signature,
+  );
+  await suppressed(
+    fixture(),
+    `https://objectstorage.us-phoenix-1.oraclecloud.com/p/${oracleParToken}/n/MyNamespace/b/MyParBucket/o/`,
+    oracleParToken,
+  );
+  const negotiateAuthorization = `Authorization: Negotiate ${httpSignature}`;
+  await suppressed(fixture(), negotiateAuthorization, negotiateAuthorization);
+  const negotiateChallenge = `WWW-Authenticate: Negotiate ${httpSignature}`;
+  await suppressed(fixture(), negotiateChallenge, negotiateChallenge);
+  const digestAuthorization = `Authorization: Digest username="alice", realm="example", nonce="n", uri="/private", response="${"A1b2".repeat(8)}"`;
+  await suppressed(fixture(), digestAuthorization, digestAuthorization);
+  const rspauthHeader = 'Authentication-Info: rspauth="';
+  const rspauthHash = "C3d4".repeat(8);
+  const authenticationInfo = `${rspauthHeader}${rspauthHash}"`;
+  await suppressed(fixture(), authenticationInfo, authenticationInfo);
+  const rspauthTokenStart = prefixLength - 8;
+  const truncatedRspauthPrompt = `${"x".repeat(rspauthTokenStart - rspauthHeader.length - 1)} ${rspauthHeader}${rspauthHash}" ${"y".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedRspauthPrompt, rspauthHash);
+  const setCookieSessionId = `Set-Cookie: JSESSIONID=${"E5f6".repeat(8)}; Path=/; HttpOnly`;
+  await suppressed(fixture(), setCookieSessionId, setCookieSessionId);
+  const appSessionCookie = `Set-Cookie: _my_app_session=${"K9l0".repeat(8)}; Path=/; HttpOnly`;
+  await suppressed(fixture(), appSessionCookie, appSessionCookie);
+  const digestResponse = "A1b2".repeat(8);
+  const digestHeader = 'Authorization: Digest username="alice", response="';
+  const digestTokenStart = prefixLength - 8;
+  const truncatedDigestPrompt = `${"x".repeat(digestTokenStart - digestHeader.length - 1)} ${digestHeader}${digestResponse}" ${"y".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedDigestPrompt, digestResponse);
+  const longBearerToken = "A1b2".repeat(20);
+  const spacedBearerToken = `${longBearerToken.slice(0, 10)} ${longBearerToken.slice(10)}`;
+  const suffixLength = Math.floor(retainedPromptLength / 2);
+  const suffixPromptLength = MAX_PROMPT_LENGTH + 300;
+  const suffixStart = suffixPromptLength - suffixLength;
+  const suffixBearerStart = suffixStart - 5;
+  const spacedBearerPrompt =
+    `${"x".repeat(suffixBearerStart - 7)}Bearer ${spacedBearerToken}` +
+    "y".repeat(
+      suffixPromptLength - suffixBearerStart - spacedBearerToken.length,
+    );
+  await suppressed(fixture(), spacedBearerPrompt, spacedBearerToken);
+  const splitBearerLabel = "Bea rer";
+  const splitBearerLabelStart = suffixStart - 3;
+  const splitBearerLabelPrompt =
+    `${"x".repeat(splitBearerLabelStart)}${splitBearerLabel} ${bearerToken}` +
+    "y".repeat(
+      suffixPromptLength -
+        splitBearerLabelStart -
+        splitBearerLabel.length -
+        1 -
+        bearerToken.length,
+    );
+  await suppressed(fixture(), splitBearerLabelPrompt, bearerToken);
+  const boundaryEmailAddress = "alice@example.test";
+  const emailStart = prefixLength - 6;
+  const truncatedEmailPrompt = `${"x".repeat(emailStart - 1)} ${boundaryEmailAddress} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedEmailPrompt, boundaryEmailAddress);
+  for (const [label, value] of [
+    [" SSN: ", "000-00-0000"],
+    [" SSN: ", "٠٠٠-٠٠-٠٠٠٠"],
+    [" TIN: ", "000-00-0000"],
+    [" Tax ID No.: ", "000-00-0000"],
+    [" Federal EIN: ", "12-3456789"],
+    [" DOB: ", "2000-02-29"],
+    [" Date of Birth: ", "31.12.1999"],
+    [" IBAN: ", "GB05 TEST 0000 0000 0000 00"],
+    [" ITIN: ", "900-70-0000"],
+    [" NI number: ", "AB 12 34 56 C"],
+    [" Card Number: ", "٠٠٠٠-٠٠٠٠-٠٠٠٠-٠٠٠٠"],
+    [" Phone: ", "000-000-0000"],
+  ] as const) {
+    const valueStart = prefixLength - 6;
+    const truncatedPrompt = `${"x".repeat(valueStart - label.length)}${label}${value} ${"x".repeat(1_200)}`;
+    await suppressed(fixture(), truncatedPrompt, value);
+  }
+  const paymentCardLabel = " Card Number: ";
+  const paymentCard = "0000-0000-0000-0000";
+  const paymentCardStart = prefixLength - 8;
+  const truncatedPaymentCardPrompt = `${"x".repeat(paymentCardStart - paymentCardLabel.length)}${paymentCardLabel}${paymentCard} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedPaymentCardPrompt, paymentCard);
+  const cloudflareApiKey = "a1b2".repeat(10);
+  const truncatedCloudflarePrompt = `${"x".repeat(tokenStart - 13)} Cloudflare: ${cloudflareApiKey} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedCloudflarePrompt, cloudflareApiKey);
+  const datadogApiKey = "A1b2".repeat(10);
+  await suppressed(
+    fixture(),
+    `Review the config Datadog: ${datadogApiKey}`,
+    datadogApiKey,
+  );
+  const mailgunPrivateApiToken = `key-${"a1b2".repeat(8)}`;
+  await suppressed(
+    fixture(),
+    `Review Mailgun API access: ${mailgunPrivateApiToken}`,
+    mailgunPrivateApiToken,
+  );
+  const railwayBoundaryToken = [
+    "a".repeat(8),
+    "b".repeat(4),
+    "c".repeat(4),
+    "d".repeat(4),
+    "e".repeat(12),
+  ].join("-");
+  for (const [label, credential] of [
+    [" Datadog: ", datadogApiKey],
+    [" Mailgun: ", mailgunPrivateApiToken],
+    [" Railway: ", railwayBoundaryToken],
+  ] as const) {
+    const truncatedPrompt = `${"x".repeat(tokenStart - label.length)}${label}${credential} ${"x".repeat(1_200)}`;
+    await suppressed(fixture(), truncatedPrompt, credential);
+  }
+  const genericAssignedKey = "M3n4".repeat(8);
+  const genericLabel = " access_key: ";
+  const genericBoundaryPrompt = `${"x".repeat(tokenStart - genericLabel.length)}${genericLabel}${genericAssignedKey} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), genericBoundaryPrompt, genericAssignedKey);
+  const dockerAuth = Buffer.from("synthetic-user:synthetic-password").toString(
+    "base64",
+  );
+  const dockerAuthConfig = `{"auths":{"registry.example.test":{"auth":"${dockerAuth}"}}}`;
+  await suppressed(
+    fixture(),
+    `Review the Docker registry config ${dockerAuthConfig}`,
+    dockerAuthConfig,
+  );
+  const obfuscatedDockerAuth = dockerAuthConfig
+    .replace('"auth":', '"au\u200bth":')
+    .replace(
+      dockerAuth,
+      `${dockerAuth.slice(0, 12)}\u0000${dockerAuth.slice(12)}`,
+    );
+  await suppressed(
+    fixture(),
+    `Review the Docker registry config ${obfuscatedDockerAuth}`,
+    obfuscatedDockerAuth,
+  );
+  const dockerAuthValueOffset = dockerAuthConfig.indexOf(dockerAuth);
+  const dockerAuthStart = prefixLength - 10 - dockerAuthValueOffset;
+  const truncatedDockerAuthPrompt = `${"x".repeat(dockerAuthStart - 1)} ${dockerAuthConfig} ${"x".repeat(1_200)}`;
+  await suppressed(fixture(), truncatedDockerAuthPrompt, dockerAuthConfig);
+  const artifactoryApiKey = `AKCp${"A1b2".repeat(17)}A`;
+  const artifactoryReferenceToken = `cmVmd${"C1d2".repeat(14)}AbC`;
+  await suppressed(
+    fixture(),
+    `Review the artifact repository ${artifactoryApiKey}`,
+    artifactoryApiKey,
+  );
+  await suppressed(
+    fixture(),
+    `Review the artifact repository ${artifactoryReferenceToken}`,
+    artifactoryReferenceToken,
+  );
+  const flyIoOrgToken = `fo1_${"A1_b".repeat(10)}ABC`;
+  const flyIoMachineTokens = [
+    `fm1a_${"A1b+/".repeat(20)}`,
+    `fm1r_${"B2c+/".repeat(20)}=`,
+    `fm2_${"C3d+/".repeat(20)}===`,
+  ];
+  await suppressed(
+    fixture(),
+    `Review Fly.io access ${flyIoOrgToken}`,
+    flyIoOrgToken,
+  );
+  for (const flyIoMachineToken of flyIoMachineTokens) {
+    await suppressed(
+      fixture(),
+      `Review Fly.io access ${flyIoMachineToken}`,
+      flyIoMachineToken,
+    );
+  }
+  const dynatraceApiToken = `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`;
+  await suppressed(
+    fixture(),
+    `Review Dynatrace access ${dynatraceApiToken}`,
+    dynatraceApiToken,
+  );
+  const resendApiKey = `re_${"A1b2".repeat(7)}_C3d4`;
+  await suppressed(
+    fixture(),
+    `Review Resend access ${resendApiKey}`,
+    resendApiKey,
+  );
+  const tailscaleKey = `tskey-${"A1b2".repeat(4)}`;
+  await suppressed(
+    fixture(),
+    `Provision Tailscale auth ${tailscaleKey}`,
+    tailscaleKey,
+  );
+  const tailscaleAuthKey = `tskey-auth-k${"A1b2".repeat(4)}`;
+  await suppressed(
+    fixture(),
+    `Provision Tailscale auth ${tailscaleAuthKey}`,
+    tailscaleAuthKey,
+  );
+  const tailscaleApiKey = `tskey-api-${"C3d4".repeat(4)}`;
+  await suppressed(
+    fixture(),
+    `Provision Tailscale API access ${tailscaleApiKey}`,
+    tailscaleApiKey,
+  );
+  const stripeWebhookSecret = `whsec_${"A1b2".repeat(8)}`;
+  await suppressed(
+    fixture(),
+    `Review the callback configuration ${stripeWebhookSecret}`,
+    stripeWebhookSecret,
+  );
+  const slackWebhookUrl = `https://hooks.slack.com/services/${"A1b2".repeat(10)}A1b`;
+  await suppressed(
+    fixture(),
+    `Review callback delivery ${slackWebhookUrl}`,
+    slackWebhookUrl,
+  );
+  const discordWebhookId = "123456789".repeat(2);
+  const discordWebhookToken = "A1b2".repeat(17);
+  const discordWebhookUrl = `https://discord.com/api/webhooks/${discordWebhookId}/${discordWebhookToken}`;
+  await suppressed(
+    fixture(),
+    `Review Discord delivery ${discordWebhookUrl}`,
+    discordWebhookUrl,
+  );
+  const obfuscatedDiscordWebhookUrl = discordWebhookUrl.replace(
+    "discord.com",
+    "dis\u200bcord.com",
+  );
+  await suppressed(
+    fixture(),
+    `Review Discord delivery ${obfuscatedDiscordWebhookUrl}`,
+    obfuscatedDiscordWebhookUrl,
+  );
+  const teamsWebhookGuid = "01234567-89ab-cdef-0123-456789abcdef";
+  const teamsWebhookUrl = `https://tenant.webhook.office.com/webhookb2/${teamsWebhookGuid}@fedcba98-7654-3210-fedc-ba9876543210/IncomingWebhook/${"a1b2c3d4".repeat(4)}/${teamsWebhookGuid}`;
+  await suppressed(
+    fixture(),
+    `Review Teams delivery ${teamsWebhookUrl}`,
+    teamsWebhookUrl,
+  );
+  const obfuscatedTeamsWebhookUrl = teamsWebhookUrl.replace(
+    "IncomingWebhook",
+    "Incoming\u200bWebhook",
+  );
+  await suppressed(
+    fixture(),
+    `Review Teams delivery ${obfuscatedTeamsWebhookUrl}`,
+    obfuscatedTeamsWebhookUrl,
+  );
+  const obfuscatedTailscaleKey = `tskey-auth-${"A1b2".repeat(2)}\u200b${"C3d4".repeat(2)}`;
+  await suppressed(
+    fixture(),
+    `Provision Tailscale auth ${obfuscatedTailscaleKey}`,
+    obfuscatedTailscaleKey,
+  );
+  const supabaseSecretKey = `sb_secret_${"S".repeat(32)}`;
+  await suppressed(
+    fixture(),
+    `Review the Supabase config ${supabaseSecretKey}`,
+    supabaseSecretKey,
+  );
+  const neonApiKey = `neon_api_key_${"N".repeat(32)}`;
+  await suppressed(
+    fixture(),
+    `Review the Neon config ${neonApiKey}`,
+    neonApiKey,
+  );
+  const vaultServiceToken = `hvs.${"V".repeat(24)}`;
+  const vaultBatchToken = `hvb.${"B".repeat(24)}`;
+  await suppressed(
+    fixture(),
+    `Review Vault access ${vaultServiceToken}`,
+    vaultServiceToken,
+  );
+  const sentryUserToken = `sntryu_${"a".repeat(64)}`;
+  await suppressed(
+    fixture(),
+    `Review Sentry access ${sentryUserToken}`,
+    sentryUserToken,
+  );
+  const sentryOrgToken = `sntrys_eyJpYXQiO${"a".repeat(20)}LCJyZWdpb25fdXJs${"b".repeat(20)}_${"C".repeat(43)}`;
+  await suppressed(
+    fixture(),
+    `Review Sentry organization access ${sentryOrgToken}`,
+    sentryOrgToken,
+  );
+  const telegramBotToken = `123456789:A${"a".repeat(34)}`;
+  await suppressed(
+    fixture(),
+    `Test the handler with generated identifier ${telegramBotToken}`,
+    telegramBotToken,
+  );
+  const brevoApiToken = `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}`;
+  await suppressed(
+    fixture(),
+    `Review the mail integration with ${brevoApiToken}`,
+    brevoApiToken,
+  );
+  const atlassianApiToken = "ATATT3" + "a".repeat(183) + "_-=";
+  await suppressed(
+    fixture(),
+    `Review the integration with ${atlassianApiToken}`,
+    atlassianApiToken,
+  );
+  const terraformCloudToken = `${"T".repeat(14)}.atlasv1.${"a".repeat(57)}_-=`;
+  await suppressed(
+    fixture(),
+    `Review Terraform access ${terraformCloudToken}`,
+    terraformCloudToken,
+  );
+  const shopifyTokens = ["shpat_", "shpca_", "shppa_", "shpss_"].map(
+    (prefix) => `${prefix}${"a".repeat(32)}`,
+  );
+  for (const token of shopifyTokens) {
+    await suppressed(fixture(), `Review Shopify access ${token}`, token);
+  }
+  const shippoTokens = ["live", "test"].map(
+    (mode) => `shippo_${mode}_${"a".repeat(40)}`,
+  );
+  for (const token of shippoTokens) {
+    await suppressed(fixture(), `Review Shippo access ${token}`, token);
+  }
+  const planetscaleTokens = ["tkn", "oauth"].flatMap((kind) => [
+    `pscale_${kind}_${"A1_bc.-=".repeat(4)}`,
+    `pscale_${kind}_${"B".repeat(64)}`,
+  ]);
+  for (const token of planetscaleTokens) {
+    await suppressed(fixture(), `Review PlanetScale access ${token}`, token);
+  }
+  const postmanToken = ["PMAK-", "a".repeat(24), "-", "b".repeat(34)].join("");
+  await suppressed(
+    fixture(),
+    `Review Postman access ${postmanToken}`,
+    postmanToken,
+  );
+  const pulumiToken = `pul-${"a".repeat(40)}`;
+  await suppressed(
+    fixture(),
+    `Review Pulumi access ${pulumiToken}`,
+    pulumiToken,
+  );
+  const prefectToken = `pnu_${"A1b2".repeat(9)}`;
+  await suppressed(
+    fixture(),
+    `Review Prefect access ${prefectToken}`,
+    prefectToken,
+  );
+  const octopusApiKey = `API-${"A1B2".repeat(6)}A1`;
+  await suppressed(
+    fixture(),
+    `Review Octopus access ${octopusApiKey}`,
+    octopusApiKey,
+  );
+  const sourcegraphToken = `sgp_${"a".repeat(40)}`;
+  const sourcegraphSegmentedToken = `sgp_${"b".repeat(16)}_${"c".repeat(40)}`;
+  const sourcegraphLocalToken = `sgp_local_${"d".repeat(40)}`;
+  await suppressed(
+    fixture(),
+    `Review Sourcegraph access ${sourcegraphToken}`,
+    sourcegraphToken,
+  );
+  await suppressed(
+    fixture(),
+    `Review Sourcegraph access ${sourcegraphSegmentedToken}`,
+    sourcegraphSegmentedToken,
+  );
+  await suppressed(
+    fixture(),
+    `Review Sourcegraph access ${sourcegraphLocalToken}`,
+    sourcegraphLocalToken,
+  );
+  const labeledCredential = `client_secret=${"C".repeat(24)}`;
+  await suppressed(
+    fixture(),
+    `Build the OAuth flow with ${labeledCredential}`,
+    labeledCredential,
+  );
+  const shortPassword = `password=${"S".repeat(12)}`;
+  await suppressed(
+    fixture(),
+    `Review the configuration ${shortPassword}`,
+    shortPassword,
+  );
+  const quotedPasswordPhrase = `password: "secret phrase"`;
+  const inlinePasswordPhrase = `password=secret phrase`;
+  const plainPassphrase = `passphrase: silver owl`;
+  const foldedPlainPassword = `password: secret\n  phrase`;
+  const punctuatedPassword = `password=secret phrase, keep this private`;
+  const punctuatedColonPassword = `password=secret phrase: keep this private`;
+  const punctuatedPassphrase = `passphrase: silver owl; do not copy it`;
+  const punctuatedFoldedPassword = `password: secret\n  phrase, keep this private`;
+  await suppressed(
+    fixture(),
+    `Review the configuration ${quotedPasswordPhrase}`,
+    quotedPasswordPhrase,
+  );
+  await suppressed(
+    fixture(),
+    `Review the configuration ${inlinePasswordPhrase}`,
+    inlinePasswordPhrase,
+  );
+  await suppressed(
+    fixture(),
+    `Review the configuration ${plainPassphrase}`,
+    plainPassphrase,
+  );
+  await suppressed(
+    fixture(),
+    `Review the configuration ${foldedPlainPassword}`,
+    foldedPlainPassword,
+  );
+  await suppressed(
+    fixture(),
+    `Review the configuration ${punctuatedPassword}`,
+    punctuatedPassword,
+  );
+  await suppressed(
+    fixture(),
+    `Review the configuration ${punctuatedColonPassword}`,
+    punctuatedColonPassword,
+  );
+  await suppressed(
+    fixture(),
+    `Review the configuration ${punctuatedPassphrase}`,
+    punctuatedPassphrase,
+  );
+  await suppressed(
+    fixture(),
+    `Review the configuration ${punctuatedFoldedPassword}`,
+    punctuatedFoldedPassword,
+  );
+  const passwordBlock = `password: |-\n  ${"P".repeat(12)}`;
+  await suppressed(
+    fixture(),
+    `Review the configuration ${passwordBlock}`,
+    passwordBlock,
+  );
+  const multiwordPasswordBlock = `password: |-\n  secret phrase`;
+  const foldedPassphraseBlock = `passphrase: &words >-\n  moonlight\n  meadow`;
+  await suppressed(
+    fixture(),
+    `Review the configuration ${multiwordPasswordBlock}`,
+    multiwordPasswordBlock,
+  );
+  await suppressed(
+    fixture(),
+    `Review the configuration ${foldedPassphraseBlock}`,
+    foldedPassphraseBlock,
+  );
+  const taggedPasswordBlock = `password: !!str |-\n  ${"P".repeat(12)}`;
+  const anchoredTokenBlock = `token: &task-token >-\n  ${"T".repeat(24)}`;
+  await suppressed(
+    fixture(),
+    `Review the configuration ${taggedPasswordBlock}`,
+    taggedPasswordBlock,
+  );
+  await suppressed(
+    fixture(),
+    `Review the configuration ${anchoredTokenBlock}`,
+    anchoredTokenBlock,
+  );
+  const placeholderThenSecretBlocks = [
+    "password: |-\n  example",
+    `token: >-\n  ${"T".repeat(24)}`,
+  ].join("\n");
+  await suppressed(
+    fixture(),
+    `Review the configuration ${placeholderThenSecretBlocks}`,
+    placeholderThenSecretBlocks,
+  );
+  const awsSecretAccessKey = `AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`;
+  await suppressed(
+    fixture(),
+    `Review the deployment config ${awsSecretAccessKey}`,
+    awsSecretAccessKey,
+  );
+  const awsBlockSecretAccessKey = `AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`;
+  await suppressed(
+    fixture(),
+    `Review the deployment config ${awsBlockSecretAccessKey}`,
+    awsBlockSecretAccessKey,
+  );
+  const azureAccountKey = `AccountKey=${"A".repeat(86)}==`;
+  await suppressed(
+    fixture(),
+    `Review the storage connection ${azureAccountKey}`,
+    azureAccountKey,
+  );
+  const kubeconfigClientKeyData = `client-key-data: ${"A".repeat(44)}`;
+  await suppressed(
+    fixture(),
+    `Review the Kubernetes config ${kubeconfigClientKeyData}`,
+    kubeconfigClientKeyData,
+  );
+  const kubeconfigBlockClientKeyData = `client-key-data: |-\n  ${"A".repeat(10)}\n  ${"A".repeat(10)}\n  ${"A".repeat(44)}`;
+  await suppressed(
+    fixture(),
+    `Review the Kubernetes config ${kubeconfigBlockClientKeyData}`,
+    kubeconfigBlockClientKeyData,
+  );
+  const wireGuardPresharedKey = `PresharedKey=${"A".repeat(43)}=`;
+  await suppressed(
+    fixture(),
+    `Review the WireGuard configuration ${wireGuardPresharedKey}`,
+    wireGuardPresharedKey,
+  );
+  const basicAuthorization = basicAuthorizationHeader(
+    "Authorization",
+    `u:${"p".repeat(20)}`,
+  );
+  const proxyBasicAuthorization = basicAuthorizationHeader(
+    "Proxy-Authorization",
+    `p:${"w".repeat(20)}`,
+  );
+  const shortBasicAuthorization = basicAuthorizationHeader(
+    "Authorization",
+    "u:p",
+  );
+  const shortProxyAuthorization = basicAuthorizationHeader(
+    "Proxy-Authorization",
+    "p:w",
+  );
+  const basicAuthorizationBlock = `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`;
+  const taggedBasicAuthorizationBlock = `Authorization: !!str |-\n  Basic ${Buffer.from("u:p").toString("base64")}`;
+  const proxyBasicAuthorizationBlock = `Proxy-Authorization: >-\n  Basic\n  ${Buffer.from("p:w").toString("base64")}`;
+  const anchoredProxyBasicAuthorizationBlock = `Proxy-Authorization: &proxy-auth >-\n  Basic\n  ${Buffer.from("p:w").toString("base64")}`;
+  const placeholderThenBasicBlocks = [
+    "Authorization: |-\n  Basic example",
+    proxyBasicAuthorizationBlock,
+  ].join("\n");
+  await suppressed(
+    fixture(),
+    `Review the request headers ${basicAuthorization}`,
+    basicAuthorization,
+  );
+  await suppressed(
+    fixture(),
+    `Review the proxy headers ${proxyBasicAuthorization}`,
+    proxyBasicAuthorization,
+  );
+  await suppressed(
+    fixture(),
+    `Review the short request headers ${shortBasicAuthorization}`,
+    shortBasicAuthorization,
+  );
+  await suppressed(
+    fixture(),
+    `Review the short proxy headers ${shortProxyAuthorization}`,
+    shortProxyAuthorization,
+  );
+  await suppressed(
+    fixture(),
+    `Review the request headers ${basicAuthorizationBlock}`,
+    basicAuthorizationBlock,
+  );
+  await suppressed(
+    fixture(),
+    `Review the request headers ${taggedBasicAuthorizationBlock}`,
+    taggedBasicAuthorizationBlock,
+  );
+  await suppressed(
+    fixture(),
+    `Review the proxy headers ${proxyBasicAuthorizationBlock}`,
+    proxyBasicAuthorizationBlock,
+  );
+  await suppressed(
+    fixture(),
+    `Review the proxy headers ${anchoredProxyBasicAuthorizationBlock}`,
+    anchoredProxyBasicAuthorizationBlock,
+  );
+  await suppressed(
+    fixture(),
+    `Review the auth headers ${placeholderThenBasicBlocks}`,
+    placeholderThenBasicBlocks,
+  );
+  const obfuscatedPassword = `passphrase=${"P".repeat(5)}\u200b${"P".repeat(5)}`;
+  await suppressed(
+    fixture(),
+    `Review the configuration ${obfuscatedPassword}`,
+    obfuscatedPassword,
+  );
 
-	const emailAddress = "customer@example.test";
-	await suppressed(fixture(), `Update the notification flow for ${emailAddress}`, emailAddress);
-	const obfuscatedEmailAddress = "customer@\u200bexample.test";
-	await suppressed(fixture(), `Update the notification flow for ${obfuscatedEmailAddress}`, obfuscatedEmailAddress);
+  const emailAddress = "customer@example.test";
+  await suppressed(
+    fixture(),
+    `Update the notification flow for ${emailAddress}`,
+    emailAddress,
+  );
+  const obfuscatedEmailAddress = "customer@\u200bexample.test";
+  await suppressed(
+    fixture(),
+    `Update the notification flow for ${obfuscatedEmailAddress}`,
+    obfuscatedEmailAddress,
+  );
 
-	const labeledSsn = "ssn=000-00-0000";
-	await suppressed(fixture(), `Validate the imported record ${labeledSsn}`, labeledSsn);
-	const labeledPhone = "phone=0000000";
-	await suppressed(fixture(), `Validate the imported record ${labeledPhone}`, labeledPhone);
-	const labeledCard = "card number=0000000000000000";
-	await suppressed(fixture(), `Validate the imported record ${labeledCard}`, labeledCard);
+  const labeledSsn = "ssn=000-00-0000";
+  await suppressed(
+    fixture(),
+    `Validate the imported record ${labeledSsn}`,
+    labeledSsn,
+  );
+  const labeledPhone = "phone=0000000";
+  await suppressed(
+    fixture(),
+    `Validate the imported record ${labeledPhone}`,
+    labeledPhone,
+  );
+  const labeledCard = "card number=0000000000000000";
+  await suppressed(
+    fixture(),
+    `Validate the imported record ${labeledCard}`,
+    labeledCard,
+  );
 
-	const npmrcAuth = npmrcAuthSetting("fixture-user:fixture-password");
-	await suppressed(fixture(), `Review npm config ${npmrcAuth}`, npmrcAuth);
-	const obfuscatedNpmrcAuth = npmrcAuth.replace("_auth", "_au\u200bth");
-	await suppressed(fixture(), `Review npm config ${obfuscatedNpmrcAuth}`, obfuscatedNpmrcAuth);
-	const authValueOffset = npmrcAuth.indexOf("=") + 1;
-	const authValueStart = prefixLength - 10;
-	const authPrefix = `${"x".repeat(authValueStart - authValueOffset - 1)} `;
-	const boundaryNpmrcAuth = `${authPrefix}${npmrcAuth} ${"y".repeat(3_000 - authPrefix.length - npmrcAuth.length - 1)}`;
-	await suppressed(fixture(), boundaryNpmrcAuth, npmrcAuth);
-	const npmrcPassword = npmrcPasswordSetting("pw1");
-	await suppressed(fixture(), `Review npm config ${npmrcPassword}`, npmrcPassword);
-	const obfuscatedNpmrcPassword = npmrcPassword.replace("_password", "_pass\u200bword");
-	await suppressed(fixture(), `Review npm config ${obfuscatedNpmrcPassword}`, obfuscatedNpmrcPassword);
-	for (const { value, tokenOffset } of [
-		{ value: npmrcPassword, tokenOffset: npmrcPassword.indexOf("=") + 1 },
-		{ value: obfuscatedNpmrcPassword, tokenOffset: obfuscatedNpmrcPassword.indexOf("=") + 1 },
-		{ value: shortBasicAuthorization, tokenOffset: "Authorization: Basic ".length },
-		{ value: shortProxyAuthorization, tokenOffset: "Proxy-Authorization: Basic ".length },
-		{ value: basicAuthorizationBlock, tokenOffset: basicAuthorizationBlock.indexOf("Basic ") + "Basic ".length },
-		{ value: proxyBasicAuthorizationBlock, tokenOffset: proxyBasicAuthorizationBlock.indexOf(Buffer.from("p:w").toString("base64")) },
-	]) {
-		const tokenStart = prefixLength - 2;
-		const prefix = `${"x".repeat(tokenStart - tokenOffset - 1)} `;
-		const separator = "\n";
-		const prompt = `${prefix}${value}${separator}${"y".repeat(3_000 - prefix.length - value.length - separator.length)}`;
-		await suppressed(fixture(), prompt, value);
-	}
+  const npmrcAuth = npmrcAuthSetting("fixture-user:fixture-password");
+  await suppressed(fixture(), `Review npm config ${npmrcAuth}`, npmrcAuth);
+  const obfuscatedNpmrcAuth = npmrcAuth.replace("_auth", "_au\u200bth");
+  await suppressed(
+    fixture(),
+    `Review npm config ${obfuscatedNpmrcAuth}`,
+    obfuscatedNpmrcAuth,
+  );
+  const authValueOffset = npmrcAuth.indexOf("=") + 1;
+  const authValueStart = prefixLength - 10;
+  const authPrefix = `${"x".repeat(authValueStart - authValueOffset - 1)} `;
+  const boundaryNpmrcAuth = `${authPrefix}${npmrcAuth} ${"y".repeat(3_000 - authPrefix.length - npmrcAuth.length - 1)}`;
+  await suppressed(fixture(), boundaryNpmrcAuth, npmrcAuth);
+  const npmrcPassword = npmrcPasswordSetting("pw1");
+  await suppressed(
+    fixture(),
+    `Review npm config ${npmrcPassword}`,
+    npmrcPassword,
+  );
+  const obfuscatedNpmrcPassword = npmrcPassword.replace(
+    "_password",
+    "_pass\u200bword",
+  );
+  await suppressed(
+    fixture(),
+    `Review npm config ${obfuscatedNpmrcPassword}`,
+    obfuscatedNpmrcPassword,
+  );
+  for (const { value, tokenOffset } of [
+    { value: npmrcPassword, tokenOffset: npmrcPassword.indexOf("=") + 1 },
+    {
+      value: obfuscatedNpmrcPassword,
+      tokenOffset: obfuscatedNpmrcPassword.indexOf("=") + 1,
+    },
+    {
+      value: shortBasicAuthorization,
+      tokenOffset: "Authorization: Basic ".length,
+    },
+    {
+      value: shortProxyAuthorization,
+      tokenOffset: "Proxy-Authorization: Basic ".length,
+    },
+    {
+      value: basicAuthorizationBlock,
+      tokenOffset: basicAuthorizationBlock.indexOf("Basic ") + "Basic ".length,
+    },
+    {
+      value: proxyBasicAuthorizationBlock,
+      tokenOffset: proxyBasicAuthorizationBlock.indexOf(
+        Buffer.from("p:w").toString("base64"),
+      ),
+    },
+  ]) {
+    const tokenStart = prefixLength - 2;
+    const prefix = `${"x".repeat(tokenStart - tokenOffset - 1)} `;
+    const separator = "\n";
+    const prompt = `${prefix}${value}${separator}${"y".repeat(3_000 - prefix.length - value.length - separator.length)}`;
+    await suppressed(fixture(), prompt, value);
+  }
 
-	const databaseUrl = "postgres://test-user:example-only-password@db.example.test/app";
-	await suppressed(fixture(), `Review the database connection ${databaseUrl}`, databaseUrl);
-	const redisUrlWithoutUsername = "redis://:example-only-password@localhost:6379/0";
-	await suppressed(
-		fixture(), `Review the database connection ${redisUrlWithoutUsername}`, redisUrlWithoutUsername,
-	);
-	const obfuscatedUrl = "postgres://test-user:example-only-\u200bpassword@db.example.test/app";
-	await suppressed(fixture(), `Review the database connection ${obfuscatedUrl}`, obfuscatedUrl);
-	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
-	await suppressed(fixture(), `Review the storage download ${azureSasUrl}`, azureSasUrl);
-	const reversedAzureSasUrl = `https://storage.example.test/blob?sig=${"A".repeat(43)}=&sv=2023-11-03&sp=r`;
-	await suppressed(fixture(), `Review the storage download ${reversedAzureSasUrl}`, reversedAzureSasUrl);
+  const databaseUrl =
+    "postgres://test-user:example-only-password@db.example.test/app";
+  await suppressed(
+    fixture(),
+    `Review the database connection ${databaseUrl}`,
+    databaseUrl,
+  );
+  const redisUrlWithoutUsername =
+    "redis://:example-only-password@localhost:6379/0";
+  await suppressed(
+    fixture(),
+    `Review the database connection ${redisUrlWithoutUsername}`,
+    redisUrlWithoutUsername,
+  );
+  const obfuscatedUrl =
+    "postgres://test-user:example-only-\u200bpassword@db.example.test/app";
+  await suppressed(
+    fixture(),
+    `Review the database connection ${obfuscatedUrl}`,
+    obfuscatedUrl,
+  );
+  const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
+  await suppressed(
+    fixture(),
+    `Review the storage download ${azureSasUrl}`,
+    azureSasUrl,
+  );
+  const reversedAzureSasUrl = `https://storage.example.test/blob?sig=${"A".repeat(43)}=&sv=2023-11-03&sp=r`;
+  await suppressed(
+    fixture(),
+    `Review the storage download ${reversedAzureSasUrl}`,
+    reversedAzureSasUrl,
+  );
 
-	const versionWithoutSignature = fixture([Promise.resolve(response("review storage"))]);
-	versionWithoutSignature.input("Review https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r");
-	await settle();
-	expect(versionWithoutSignature.requests).toHaveLength(1);
-	expect(versionWithoutSignature.warnings).toEqual([]);
-	const shortSasSignature = fixture([Promise.resolve(response("review storage"))]);
-	shortSasSignature.input("Review https://storage.example.test/blob?sv=2023-11-03&sig=short-signature");
-	await settle();
-	expect(shortSasSignature.requests).toHaveLength(1);
-	expect(shortSasSignature.warnings).toEqual([]);
+  const versionWithoutSignature = fixture([
+    Promise.resolve(response("review storage")),
+  ]);
+  versionWithoutSignature.input(
+    "Review https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r",
+  );
+  await settle();
+  expect(versionWithoutSignature.requests).toHaveLength(1);
+  expect(versionWithoutSignature.warnings).toEqual([]);
+  const shortSasSignature = fixture([
+    Promise.resolve(response("review storage")),
+  ]);
+  shortSasSignature.input(
+    "Review https://storage.example.test/blob?sv=2023-11-03&sig=short-signature",
+  );
+  await settle();
+  expect(shortSasSignature.requests).toHaveLength(1);
+  expect(shortSasSignature.warnings).toEqual([]);
 
-	const history = fixture();
-	history.messages.push({ role: "assistant", content: [{ type: "text", text: `The test fixture includes ${token}` }] });
-	await suppressed(history, "Continue the task");
-	const historyWithGoogleApiKey = fixture();
-	historyWithGoogleApiKey.messages.push({ role: "assistant", content: [{ type: "text", text: `Google API key: ${googleApiKey}` }] });
-	await suppressed(historyWithGoogleApiKey, "Continue the task", googleApiKey);
-	const historyWithDatadogApiKey = fixture();
-	historyWithDatadogApiKey.messages.push({ role: "assistant", content: [{ type: "text", text: `Datadog: ${datadogApiKey}` }] });
-	await suppressed(historyWithDatadogApiKey, "Continue the task", datadogApiKey);
-	const historyWithMailgunToken = fixture();
-	historyWithMailgunToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Mailgun API key: ${mailgunPrivateApiToken}` }] });
-	await suppressed(historyWithMailgunToken, "Continue the task", mailgunPrivateApiToken);
-	const historyWithArtifactoryApiKey = fixture();
-	historyWithArtifactoryApiKey.messages.push({ role: "assistant", content: [{ type: "text", text: artifactoryApiKey }] });
-	await suppressed(historyWithArtifactoryApiKey, "Continue the task", artifactoryApiKey);
-	const historyWithArtifactoryReferenceToken = fixture();
-	historyWithArtifactoryReferenceToken.messages.push({ role: "assistant", content: [{ type: "text", text: artifactoryReferenceToken }] });
-	await suppressed(historyWithArtifactoryReferenceToken, "Continue the task", artifactoryReferenceToken);
-	const historyWithFlyIoOrgToken = fixture();
-	historyWithFlyIoOrgToken.messages.push({ role: "assistant", content: [{ type: "text", text: flyIoOrgToken }] });
-	await suppressed(historyWithFlyIoOrgToken, "Continue the task", flyIoOrgToken);
-	for (const flyIoMachineToken of flyIoMachineTokens) {
-		const historyWithFlyIoMachineToken = fixture();
-		historyWithFlyIoMachineToken.messages.push({ role: "assistant", content: [{ type: "text", text: flyIoMachineToken }] });
-		await suppressed(historyWithFlyIoMachineToken, "Continue the task", flyIoMachineToken);
-	}
-	const historyWithDynatraceToken = fixture();
-	historyWithDynatraceToken.messages.push({ role: "assistant", content: [{ type: "text", text: dynatraceApiToken }] });
-	await suppressed(historyWithDynatraceToken, "Continue the task", dynatraceApiToken);
-	const historyWithResendApiKey = fixture();
-	historyWithResendApiKey.messages.push({ role: "assistant", content: [{ type: "text", text: resendApiKey }] });
-	await suppressed(historyWithResendApiKey, "Continue the task", resendApiKey);
-	const historyWithSupabaseSecret = fixture();
-	historyWithSupabaseSecret.messages.push({ role: "assistant", content: [{ type: "text", text: `Supabase key: ${supabaseSecretKey}` }] });
-	await suppressed(historyWithSupabaseSecret, "Continue the task", supabaseSecretKey);
-	const historyWithNeonKey = fixture();
-	historyWithNeonKey.messages.push({ role: "assistant", content: [{ type: "text", text: `Neon key: ${neonApiKey}` }] });
-	await suppressed(historyWithNeonKey, "Continue the task", neonApiKey);
-	const historyWithVaultToken = fixture();
-	historyWithVaultToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Vault token: ${vaultBatchToken}` }] });
-	await suppressed(historyWithVaultToken, "Continue the task", vaultBatchToken);
-	const historyWithSentryToken = fixture();
-	historyWithSentryToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Sentry token: ${sentryUserToken}` }] });
-	await suppressed(historyWithSentryToken, "Continue the task", sentryUserToken);
-	const historyWithSentryOrgToken = fixture();
-	historyWithSentryOrgToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Sentry organization token: ${sentryOrgToken}` }] });
-	await suppressed(historyWithSentryOrgToken, "Continue the task", sentryOrgToken);
-	const historyWithTelegramToken = fixture();
-	historyWithTelegramToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated identifier: ${telegramBotToken}` }] });
-	await suppressed(historyWithTelegramToken, "Continue the task", telegramBotToken);
-	const historyWithBrevoToken = fixture();
-	historyWithBrevoToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Mail integration key: ${brevoApiToken}` }] });
-	await suppressed(historyWithBrevoToken, "Continue the task", brevoApiToken);
-	const historyWithAtlassianToken = fixture();
-	historyWithAtlassianToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${atlassianApiToken}` }] });
-	await suppressed(historyWithAtlassianToken, "Continue the task", atlassianApiToken);
-	const historyWithTerraformToken = fixture();
-	historyWithTerraformToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${terraformCloudToken}` }] });
-	await suppressed(historyWithTerraformToken, "Continue the task", terraformCloudToken);
-	const historyWithShopifyToken = fixture();
-	historyWithShopifyToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${shopifyTokens[1]!}` }] });
-	await suppressed(historyWithShopifyToken, "Continue the task", shopifyTokens[1]!);
-	const historyWithShippoToken = fixture();
-	historyWithShippoToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${shippoTokens[0]!}` }] });
-	await suppressed(historyWithShippoToken, "Continue the task", shippoTokens[0]!);
-	const historyWithPlanetScaleToken = fixture();
-	historyWithPlanetScaleToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${planetscaleTokens[2]!}` }] });
-	await suppressed(historyWithPlanetScaleToken, "Continue the task", planetscaleTokens[2]!);
-	const historyWithPostmanToken = fixture();
-	historyWithPostmanToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${postmanToken}` }] });
-	await suppressed(historyWithPostmanToken, "Continue the task", postmanToken);
-	const historyWithPulumiToken = fixture();
-	historyWithPulumiToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${pulumiToken}` }] });
-	await suppressed(historyWithPulumiToken, "Continue the task", pulumiToken);
-	const historyWithPrefectToken = fixture();
-	historyWithPrefectToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${prefectToken}` }] });
-	await suppressed(historyWithPrefectToken, "Continue the task", prefectToken);
-	const historyWithOctopusApiKey = fixture();
-	historyWithOctopusApiKey.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${octopusApiKey}` }] });
-	await suppressed(historyWithOctopusApiKey, "Continue the task", octopusApiKey);
-	const historyWithSourcegraphToken = fixture();
-	historyWithSourcegraphToken.messages.push({ role: "assistant", content: [{ type: "text", text: `Generated value: ${sourcegraphSegmentedToken}` }] });
-	await suppressed(historyWithSourcegraphToken, "Continue the task", sourcegraphSegmentedToken);
-	const historyWithEmail = fixture();
-	historyWithEmail.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous contact: ${emailAddress}` }] });
-	await suppressed(historyWithEmail, "Continue the task", emailAddress);
-	const historyWithSsn = fixture();
-	historyWithSsn.messages.push({ role: "assistant", content: [{ type: "text", text: `Previous record: ${labeledSsn}` }] });
-	await suppressed(historyWithSsn, "Continue the task", labeledSsn);
+  const history = fixture();
+  history.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `The test fixture includes ${token}` }],
+  });
+  await suppressed(history, "Continue the task");
+  const historyWithGoogleApiKey = fixture();
+  historyWithGoogleApiKey.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Google API key: ${googleApiKey}` }],
+  });
+  await suppressed(historyWithGoogleApiKey, "Continue the task", googleApiKey);
+  const historyWithDatadogApiKey = fixture();
+  historyWithDatadogApiKey.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Datadog: ${datadogApiKey}` }],
+  });
+  await suppressed(
+    historyWithDatadogApiKey,
+    "Continue the task",
+    datadogApiKey,
+  );
+  const historyWithMailgunToken = fixture();
+  historyWithMailgunToken.messages.push({
+    role: "assistant",
+    content: [
+      { type: "text", text: `Mailgun API key: ${mailgunPrivateApiToken}` },
+    ],
+  });
+  await suppressed(
+    historyWithMailgunToken,
+    "Continue the task",
+    mailgunPrivateApiToken,
+  );
+  const historyWithArtifactoryApiKey = fixture();
+  historyWithArtifactoryApiKey.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: artifactoryApiKey }],
+  });
+  await suppressed(
+    historyWithArtifactoryApiKey,
+    "Continue the task",
+    artifactoryApiKey,
+  );
+  const historyWithArtifactoryReferenceToken = fixture();
+  historyWithArtifactoryReferenceToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: artifactoryReferenceToken }],
+  });
+  await suppressed(
+    historyWithArtifactoryReferenceToken,
+    "Continue the task",
+    artifactoryReferenceToken,
+  );
+  const historyWithFlyIoOrgToken = fixture();
+  historyWithFlyIoOrgToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: flyIoOrgToken }],
+  });
+  await suppressed(
+    historyWithFlyIoOrgToken,
+    "Continue the task",
+    flyIoOrgToken,
+  );
+  for (const flyIoMachineToken of flyIoMachineTokens) {
+    const historyWithFlyIoMachineToken = fixture();
+    historyWithFlyIoMachineToken.messages.push({
+      role: "assistant",
+      content: [{ type: "text", text: flyIoMachineToken }],
+    });
+    await suppressed(
+      historyWithFlyIoMachineToken,
+      "Continue the task",
+      flyIoMachineToken,
+    );
+  }
+  const historyWithDynatraceToken = fixture();
+  historyWithDynatraceToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: dynatraceApiToken }],
+  });
+  await suppressed(
+    historyWithDynatraceToken,
+    "Continue the task",
+    dynatraceApiToken,
+  );
+  const historyWithResendApiKey = fixture();
+  historyWithResendApiKey.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: resendApiKey }],
+  });
+  await suppressed(historyWithResendApiKey, "Continue the task", resendApiKey);
+  const historyWithSupabaseSecret = fixture();
+  historyWithSupabaseSecret.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Supabase key: ${supabaseSecretKey}` }],
+  });
+  await suppressed(
+    historyWithSupabaseSecret,
+    "Continue the task",
+    supabaseSecretKey,
+  );
+  const historyWithNeonKey = fixture();
+  historyWithNeonKey.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Neon key: ${neonApiKey}` }],
+  });
+  await suppressed(historyWithNeonKey, "Continue the task", neonApiKey);
+  const historyWithVaultToken = fixture();
+  historyWithVaultToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Vault token: ${vaultBatchToken}` }],
+  });
+  await suppressed(historyWithVaultToken, "Continue the task", vaultBatchToken);
+  const historyWithSentryToken = fixture();
+  historyWithSentryToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Sentry token: ${sentryUserToken}` }],
+  });
+  await suppressed(
+    historyWithSentryToken,
+    "Continue the task",
+    sentryUserToken,
+  );
+  const historyWithSentryOrgToken = fixture();
+  historyWithSentryOrgToken.messages.push({
+    role: "assistant",
+    content: [
+      { type: "text", text: `Sentry organization token: ${sentryOrgToken}` },
+    ],
+  });
+  await suppressed(
+    historyWithSentryOrgToken,
+    "Continue the task",
+    sentryOrgToken,
+  );
+  const historyWithTelegramToken = fixture();
+  historyWithTelegramToken.messages.push({
+    role: "assistant",
+    content: [
+      { type: "text", text: `Generated identifier: ${telegramBotToken}` },
+    ],
+  });
+  await suppressed(
+    historyWithTelegramToken,
+    "Continue the task",
+    telegramBotToken,
+  );
+  const historyWithBrevoToken = fixture();
+  historyWithBrevoToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Mail integration key: ${brevoApiToken}` }],
+  });
+  await suppressed(historyWithBrevoToken, "Continue the task", brevoApiToken);
+  const historyWithAtlassianToken = fixture();
+  historyWithAtlassianToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Generated value: ${atlassianApiToken}` }],
+  });
+  await suppressed(
+    historyWithAtlassianToken,
+    "Continue the task",
+    atlassianApiToken,
+  );
+  const historyWithTerraformToken = fixture();
+  historyWithTerraformToken.messages.push({
+    role: "assistant",
+    content: [
+      { type: "text", text: `Generated value: ${terraformCloudToken}` },
+    ],
+  });
+  await suppressed(
+    historyWithTerraformToken,
+    "Continue the task",
+    terraformCloudToken,
+  );
+  const historyWithShopifyToken = fixture();
+  historyWithShopifyToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Generated value: ${shopifyTokens[1]!}` }],
+  });
+  await suppressed(
+    historyWithShopifyToken,
+    "Continue the task",
+    shopifyTokens[1]!,
+  );
+  const historyWithShippoToken = fixture();
+  historyWithShippoToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Generated value: ${shippoTokens[0]!}` }],
+  });
+  await suppressed(
+    historyWithShippoToken,
+    "Continue the task",
+    shippoTokens[0]!,
+  );
+  const historyWithPlanetScaleToken = fixture();
+  historyWithPlanetScaleToken.messages.push({
+    role: "assistant",
+    content: [
+      { type: "text", text: `Generated value: ${planetscaleTokens[2]!}` },
+    ],
+  });
+  await suppressed(
+    historyWithPlanetScaleToken,
+    "Continue the task",
+    planetscaleTokens[2]!,
+  );
+  const historyWithPostmanToken = fixture();
+  historyWithPostmanToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Generated value: ${postmanToken}` }],
+  });
+  await suppressed(historyWithPostmanToken, "Continue the task", postmanToken);
+  const historyWithPulumiToken = fixture();
+  historyWithPulumiToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Generated value: ${pulumiToken}` }],
+  });
+  await suppressed(historyWithPulumiToken, "Continue the task", pulumiToken);
+  const historyWithPrefectToken = fixture();
+  historyWithPrefectToken.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Generated value: ${prefectToken}` }],
+  });
+  await suppressed(historyWithPrefectToken, "Continue the task", prefectToken);
+  const historyWithOctopusApiKey = fixture();
+  historyWithOctopusApiKey.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Generated value: ${octopusApiKey}` }],
+  });
+  await suppressed(
+    historyWithOctopusApiKey,
+    "Continue the task",
+    octopusApiKey,
+  );
+  const historyWithSourcegraphToken = fixture();
+  historyWithSourcegraphToken.messages.push({
+    role: "assistant",
+    content: [
+      { type: "text", text: `Generated value: ${sourcegraphSegmentedToken}` },
+    ],
+  });
+  await suppressed(
+    historyWithSourcegraphToken,
+    "Continue the task",
+    sourcegraphSegmentedToken,
+  );
+  const historyWithEmail = fixture();
+  historyWithEmail.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Previous contact: ${emailAddress}` }],
+  });
+  await suppressed(historyWithEmail, "Continue the task", emailAddress);
+  const historyWithSsn = fixture();
+  historyWithSsn.messages.push({
+    role: "assistant",
+    content: [{ type: "text", text: `Previous record: ${labeledSsn}` }],
+  });
+  await suppressed(historyWithSsn, "Continue the task", labeledSsn);
 
-	const obfuscated = `ghp_${"A".repeat(10)}\u200b${"A".repeat(10)}`;
-	await suppressed(fixture(), `Review ${obfuscated}`);
+  const obfuscated = `ghp_${"A".repeat(10)}\u200b${"A".repeat(10)}`;
+  await suppressed(fixture(), `Review ${obfuscated}`);
 
-	const compatibilityToken = [...token]
-		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
-	await suppressed(fixture(), `Review ${compatibilityToken}`);
+  const compatibilityToken = [...token]
+    .map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0))
+    .join("");
+  await suppressed(fixture(), `Review ${compatibilityToken}`);
 
-	const nearMiss = fixture([Promise.resolve(response("fix auth tests"))]);
-	nearMiss.input(`Review ghp_${"A".repeat(19)}`);
-	await settle();
-	expect(nearMiss.requests).toHaveLength(1);
-	expect(nearMiss.state.title).toBe("fix auth tests");
-	expect(nearMiss.warnings).toEqual([]);
+  const nearMiss = fixture([Promise.resolve(response("fix auth tests"))]);
+  nearMiss.input(`Review ghp_${"A".repeat(19)}`);
+  await settle();
+  expect(nearMiss.requests).toHaveLength(1);
+  expect(nearMiss.state.title).toBe("fix auth tests");
+  expect(nearMiss.warnings).toEqual([]);
 
-	const npmrcAuthWithoutPassword = npmrcAuthSetting("fixture-without-separator");
-	expect(hasSensitiveNamingContext(npmrcAuthWithoutPassword)).toBe(false);
-	expect(hasSensitiveOutput(npmrcAuthWithoutPassword)).toBe(false);
-	const npmrcPasswordPlaceholder = npmrcPasswordSetting("example");
-	expect(hasSensitiveNamingContext(npmrcPasswordPlaceholder)).toBe(false);
-	expect(hasSensitiveOutput(npmrcPasswordPlaceholder)).toBe(false);
-	const obfuscatedNpmrcPasswordPlaceholder = npmrcPasswordPlaceholder.replace("_password", "_pass\u200bword");
-	expect(hasSensitiveNamingContext(obfuscatedNpmrcPasswordPlaceholder)).toBe(false);
-	expect(hasSensitiveOutput(obfuscatedNpmrcPasswordPlaceholder)).toBe(false);
+  const npmrcAuthWithoutPassword = npmrcAuthSetting(
+    "fixture-without-separator",
+  );
+  expect(hasSensitiveNamingContext(npmrcAuthWithoutPassword)).toBe(false);
+  expect(hasSensitiveOutput(npmrcAuthWithoutPassword)).toBe(false);
+  const npmrcPasswordPlaceholder = npmrcPasswordSetting("example");
+  expect(hasSensitiveNamingContext(npmrcPasswordPlaceholder)).toBe(false);
+  expect(hasSensitiveOutput(npmrcPasswordPlaceholder)).toBe(false);
+  const obfuscatedNpmrcPasswordPlaceholder = npmrcPasswordPlaceholder.replace(
+    "_password",
+    "_pass\u200bword",
+  );
+  expect(hasSensitiveNamingContext(obfuscatedNpmrcPasswordPlaceholder)).toBe(
+    false,
+  );
+  expect(hasSensitiveOutput(obfuscatedNpmrcPasswordPlaceholder)).toBe(false);
 
-	const uriWithoutPassword = fixture([Promise.resolve(response("review database"))]);
-	uriWithoutPassword.input("Review postgres://test-user@localhost/app");
-	await settle();
-	expect(uriWithoutPassword.requests).toHaveLength(1);
-	expect(uriWithoutPassword.state.title).toBe("review database");
-	expect(uriWithoutPassword.warnings).toEqual([]);
+  const uriWithoutPassword = fixture([
+    Promise.resolve(response("review database")),
+  ]);
+  uriWithoutPassword.input("Review postgres://test-user@localhost/app");
+  await settle();
+  expect(uriWithoutPassword.requests).toHaveLength(1);
+  expect(uriWithoutPassword.state.title).toBe("review database");
+  expect(uriWithoutPassword.warnings).toEqual([]);
 
-	for (const uri of ["redis://@localhost:6379/0", "redis://:@localhost:6379/0"]) {
-		expect(hasSensitiveNamingContext(uri)).toBe(false);
-		expect(hasSensitiveOutput(uri)).toBe(false);
-	}
+  for (const uri of [
+    "redis://@localhost:6379/0",
+    "redis://:@localhost:6379/0",
+  ]) {
+    expect(hasSensitiveNamingContext(uri)).toBe(false);
+    expect(hasSensitiveOutput(uri)).toBe(false);
+  }
 
-	const unlabeledNumbers = fixture([Promise.resolve(response("review record"))]);
-	unlabeledNumbers.input("Review record 000-00-0000 and 0000000");
-	await settle();
-	expect(unlabeledNumbers.requests).toHaveLength(1);
-	expect(unlabeledNumbers.state.title).toBe("review record");
-	expect(unlabeledNumbers.warnings).toEqual([]);
+  const unlabeledNumbers = fixture([
+    Promise.resolve(response("review record")),
+  ]);
+  unlabeledNumbers.input("Review record 000-00-0000 and 0000000");
+  await settle();
+  expect(unlabeledNumbers.requests).toHaveLength(1);
+  expect(unlabeledNumbers.state.title).toBe("review record");
+  expect(unlabeledNumbers.warnings).toEqual([]);
 
-	const placeholderCredentials = fixture([Promise.resolve(response("review docs"))]);
-	placeholderCredentials.input([
-		"Review docs with password=placeholder, passphrase=example, token: placeholder, //registry.npmjs.org/:_auth=placeholder, //registry.npmjs.org/:_password=placeholder,",
-		"AWS_SECRET_ACCESS_KEY=example, AccountKey=example, PresharedKey=example,",
-		"client-key-data: example, Authorization: Basic example,",
-		`password: "example value", passphrase: example value, password: example\n  value`,
-		"password=example phrase, continue; password=example phrase: continue; passphrase: placeholder phrase; continue",
-		"\nAuthorization: |-\n  Basic example\n",
-		"\nAuthorization: !!str |-\n  Basic example\n",
-		"\nProxy-Authorization: >-\n  Basic example\n",
-		"\nProxy-Authorization: &proxy-auth >-\n  Basic example\n",
-		"\nclient-key-data: |-\n  example\n",
-		"\npassword: |-\n  example\n",
-		"\npassword: |-\n  example value\n",
-		"\npassphrase: &phrase >-\n  your password\n",
-		"\ntoken: |-\n  example\n",
-		`Authorization: Basic ${"A".repeat(20)}`,
-	].join(" "));
-	await settle();
-	expect(placeholderCredentials.requests).toHaveLength(1);
-	expect(placeholderCredentials.state.title).toBe("review docs");
-	expect(placeholderCredentials.warnings).toEqual([]);
+  const placeholderCredentials = fixture([
+    Promise.resolve(response("review docs")),
+  ]);
+  placeholderCredentials.input(
+    [
+      "Review docs with password=placeholder, passphrase=example, token: placeholder, //registry.npmjs.org/:_auth=placeholder, //registry.npmjs.org/:_password=placeholder,",
+      "AWS_SECRET_ACCESS_KEY=example, AccountKey=example, PresharedKey=example,",
+      "client-key-data: example, Authorization: Basic example,",
+      `password: "example value", passphrase: example value, password: example\n  value`,
+      "password=example phrase, continue; password=example phrase: continue; passphrase: placeholder phrase; continue",
+      "\nAuthorization: |-\n  Basic example\n",
+      "\nAuthorization: !!str |-\n  Basic example\n",
+      "\nProxy-Authorization: >-\n  Basic example\n",
+      "\nProxy-Authorization: &proxy-auth >-\n  Basic example\n",
+      "\nclient-key-data: |-\n  example\n",
+      "\npassword: |-\n  example\n",
+      "\npassword: |-\n  example value\n",
+      "\npassphrase: &phrase >-\n  your password\n",
+      "\ntoken: |-\n  example\n",
+      `Authorization: Basic ${"A".repeat(20)}`,
+    ].join(" "),
+  );
+  await settle();
+  expect(placeholderCredentials.requests).toHaveLength(1);
+  expect(placeholderCredentials.state.title).toBe("review docs");
+  expect(placeholderCredentials.warnings).toEqual([]);
 });
 
 test("a boundary-detected credential bypasses unchanged-context deduplication", async () => {
-	const token = "A1b2".repeat(6);
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 300;
-	const suffix = "y".repeat(suffixLength);
-	const prefix = `${"x".repeat(prefixLength - 19)} Vercel: ${token.slice(0, 10)}`;
-	const middleLength = promptLength - prefix.length - suffix.length;
-	const safePrompt = `${prefix}.${"m".repeat(middleLength - 1)}${suffix}`;
-	const sensitivePrompt = `${prefix}${token.slice(10)} ${"m".repeat(middleLength - token.slice(10).length - 1)}${suffix}`;
-	const f = fixture();
+  const token = "A1b2".repeat(6);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 300;
+  const suffix = "y".repeat(suffixLength);
+  const prefix = `${"x".repeat(prefixLength - 19)} Vercel: ${token.slice(0, 10)}`;
+  const middleLength = promptLength - prefix.length - suffix.length;
+  const safePrompt = `${prefix}.${"m".repeat(middleLength - 1)}${suffix}`;
+  const sensitivePrompt = `${prefix}${token.slice(10)} ${"m".repeat(middleLength - token.slice(10).length - 1)}${suffix}`;
+  const f = fixture();
 
-	f.input(safePrompt);
-	await settle();
-	expect(f.requests).toHaveLength(1);
-	expect(f.warnings).toEqual([]);
+  f.input(safePrompt);
+  await settle();
+  expect(f.requests).toHaveLength(1);
+  expect(f.warnings).toEqual([]);
 
-	f.input(sensitivePrompt);
-	await settle();
-	expect(f.requests).toHaveLength(1);
-	expect(f.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(f.warnings.join(" ")).not.toContain(token);
+  f.input(sensitivePrompt);
+  await settle();
+  expect(f.requests).toHaveLength(1);
+  expect(f.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(f.warnings.join(" ")).not.toContain(token);
 });
 
 test("repeated prompt-boundary scans reuse regexes without retaining match state", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `sk-proj-${"f".repeat(32)}`;
-	const prompt = `${"x".repeat(prefixLength - 11)} ${token} ${"y".repeat(1_200)}`;
-	const context = buildNamingRequestContext([], prompt);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `sk-proj-${"f".repeat(32)}`;
+  const prompt = `${"x".repeat(prefixLength - 11)} ${token} ${"y".repeat(1_200)}`;
+  const context = buildNamingRequestContext([], prompt);
 
-	expect(context.hasSensitiveBoundary()).toBe(true);
-	expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(context.hasSensitiveBoundary()).toBe(true);
+  expect(context.hasSensitiveBoundary()).toBe(true);
 });
 
 test("Terraform Cloud API tokens crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
-	const promptLength = 3_000;
-	const tokens = [
-		`${"T".repeat(14)}.atlasv1.${"a".repeat(60)}`,
-		`${"Q".repeat(14)}.ATLASV1.${"B".repeat(67)}_-=`,
-		`${"R".repeat(14)}.atla\u200bsv1.${"c".repeat(60)}`,
-	];
-	const makePrompt = (token: string, tokenStart: number) => {
-		const prefix = `${"x".repeat(tokenStart - 1)} `;
-		const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
-		expect(prompt).toHaveLength(promptLength);
-		return prompt;
-	};
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+  const promptLength = 3_000;
+  const tokens = [
+    `${"T".repeat(14)}.atlasv1.${"a".repeat(60)}`,
+    `${"Q".repeat(14)}.ATLASV1.${"B".repeat(67)}_-=`,
+    `${"R".repeat(14)}.atla\u200bsv1.${"c".repeat(60)}`,
+  ];
+  const makePrompt = (token: string, tokenStart: number) => {
+    const prefix = `${"x".repeat(tokenStart - 1)} `;
+    const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+    expect(prompt).toHaveLength(promptLength);
+    return prompt;
+  };
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const token of tokens) {
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const f = fixture();
-			const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const token of tokens) {
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const f = fixture();
+      const find = spyOn(f.ctx.modelRegistry, "find");
 
-			f.input(makePrompt(token, tokenStart));
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(f.requests).toHaveLength(0);
-			expect(f.state.title).toBe("existing task");
-			expect(f.warnings).toEqual([warning]);
-			expect(f.warnings.join(" ")).not.toContain(token);
-		}
-	}
+      f.input(makePrompt(token, tokenStart));
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(f.requests).toHaveLength(0);
+      expect(f.state.title).toBe("existing task");
+      expect(f.warnings).toEqual([warning]);
+      expect(f.warnings.join(" ")).not.toContain(token);
+    }
+  }
 });
 
 test("Terraform Cloud boundary checks preserve token-length and version requirements", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
-	const nearMisses = [
-		`${"T".repeat(14)}.atlasv1.${"a".repeat(59)}`,
-		`${"T".repeat(14)}.atlasv1.${"a".repeat(71)}`,
-		`${"T".repeat(14)}.atlasv2.${"a".repeat(60)}`,
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+  const nearMisses = [
+    `${"T".repeat(14)}.atlasv1.${"a".repeat(59)}`,
+    `${"T".repeat(14)}.atlasv1.${"a".repeat(71)}`,
+    `${"T".repeat(14)}.atlasv2.${"a".repeat(60)}`,
+  ];
 
-	for (const token of nearMisses) {
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${token} ${"y".repeat(3_000 - prefix.length - token.length - 1)}`;
-			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  for (const token of nearMisses) {
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${token} ${"y".repeat(3_000 - prefix.length - token.length - 1)}`;
+      expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+        false,
+      );
+    }
+  }
 });
 
 test("Sourcegraph, PlanetScale, and Databricks tokens crossing either retained boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
-	const promptLength = 3_000;
-	const tokens = [
-		`sgp_${"a".repeat(40)}`,
-		`sgp_${"b".repeat(16)}_${"c".repeat(40)}`,
-		`sgp_local_${"d".repeat(40)}`,
-		`pscale_tkn_${"A1_bc.-=".repeat(4)}`,
-		`pscale_oauth_${"B".repeat(64)}`,
-		`dapi${"e".repeat(32)}`,
-		`dapi${"f".repeat(32)}-2`,
-	];
-	const candidates = tokens.flatMap((token) => [
-		token,
-		`${token.slice(0, 10)}\u0000${token.slice(10)}`,
-	]);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+  const promptLength = 3_000;
+  const tokens = [
+    `sgp_${"a".repeat(40)}`,
+    `sgp_${"b".repeat(16)}_${"c".repeat(40)}`,
+    `sgp_local_${"d".repeat(40)}`,
+    `pscale_tkn_${"A1_bc.-=".repeat(4)}`,
+    `pscale_oauth_${"B".repeat(64)}`,
+    `dapi${"e".repeat(32)}`,
+    `dapi${"f".repeat(32)}-2`,
+  ];
+  const candidates = tokens.flatMap((token) => [
+    token,
+    `${token.slice(0, 10)}\u0000${token.slice(10)}`,
+  ]);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const token of candidates) {
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const f = fixture();
-			const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const token of candidates) {
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      const f = fixture();
+      const find = spyOn(f.ctx.modelRegistry, "find");
 
-			f.input(prompt);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(f.requests).toHaveLength(0);
-			expect(f.state.title).toBe("existing task");
-			expect(f.warnings).toEqual([warning]);
-			expect(f.warnings.join(" ")).not.toContain(token);
-		}
-	}
+      f.input(prompt);
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(f.requests).toHaveLength(0);
+      expect(f.state.title).toBe("existing task");
+      expect(f.warnings).toEqual([warning]);
+      expect(f.warnings.join(" ")).not.toContain(token);
+    }
+  }
 });
 
 test("fixed-format token boundary checks preserve Sourcegraph, PlanetScale, and Databricks near-misses", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
-	const nearMisses = [
-		`sgp_${"a".repeat(39)}`,
-		`sgp_${"a".repeat(41)}`,
-		`sgp_${"g".repeat(40)}`,
-		`pscale_tkn_${"A".repeat(31)}`,
-		`pscale_oauth_${"B".repeat(65)}`,
-		`pscale_bad_${"C".repeat(40)}`,
-		`dapi${"a".repeat(31)}`,
-		`dapi${"a".repeat(33)}`,
-		`dapi${"g".repeat(32)}`,
-		`dapi${"a".repeat(32)}-22`,
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+  const nearMisses = [
+    `sgp_${"a".repeat(39)}`,
+    `sgp_${"a".repeat(41)}`,
+    `sgp_${"g".repeat(40)}`,
+    `pscale_tkn_${"A".repeat(31)}`,
+    `pscale_oauth_${"B".repeat(65)}`,
+    `pscale_bad_${"C".repeat(40)}`,
+    `dapi${"a".repeat(31)}`,
+    `dapi${"a".repeat(33)}`,
+    `dapi${"g".repeat(32)}`,
+    `dapi${"a".repeat(32)}-22`,
+  ];
 
-	for (const token of nearMisses) {
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${token} ${"y".repeat(3_000 - prefix.length - token.length - 1)}`;
-			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  for (const token of nearMisses) {
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${token} ${"y".repeat(3_000 - prefix.length - token.length - 1)}`;
+      expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+        false,
+      );
+    }
+  }
 });
 
 test("1Password, Cloudflare, Adobe, SendGrid, Brevo, and Twilio credentials cross retained prompt boundaries safely", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
-	const promptLength = 3_000;
-	const five = "C".repeat(5);
-	const onePasswordKeys = [
-		["A3", "A".repeat(6), "B".repeat(11), five, five, five].join("-"),
-		["A3", "A".repeat(6), "D".repeat(6), "E".repeat(5), five, five, five].join("-"),
-	];
-	const cloudflareOriginKey = `v1.0-${"a".repeat(24)}-${"b".repeat(146)}`;
-	const adobeSecret = `p8e-${"A1b2".repeat(8)}`;
-	const sendGridKey = `SG.${"a".repeat(66)}`;
-	const brevoKey = `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}`;
-	const twilioKey = `SK${"a1".repeat(16)}`;
-	const tokens = [
-		...onePasswordKeys, cloudflareOriginKey, adobeSecret, sendGridKey, brevoKey, twilioKey,
-	];
-	const candidates = tokens.flatMap((token) => [
-		token,
-		`${token.slice(0, 10)}\u0000${token.slice(10)}`,
-	]);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+  const promptLength = 3_000;
+  const five = "C".repeat(5);
+  const onePasswordKeys = [
+    ["A3", "A".repeat(6), "B".repeat(11), five, five, five].join("-"),
+    ["A3", "A".repeat(6), "D".repeat(6), "E".repeat(5), five, five, five].join(
+      "-",
+    ),
+  ];
+  const cloudflareOriginKey = `v1.0-${"a".repeat(24)}-${"b".repeat(146)}`;
+  const adobeSecret = `p8e-${"A1b2".repeat(8)}`;
+  const sendGridKey = `SG.${"a".repeat(66)}`;
+  const brevoKey = `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}`;
+  const twilioKey = `SK${"a1".repeat(16)}`;
+  const tokens = [
+    ...onePasswordKeys,
+    cloudflareOriginKey,
+    adobeSecret,
+    sendGridKey,
+    brevoKey,
+    twilioKey,
+  ];
+  const candidates = tokens.flatMap((token) => [
+    token,
+    `${token.slice(0, 10)}\u0000${token.slice(10)}`,
+  ]);
 
-	for (const token of candidates) {
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(true);
-		}
-	}
+  for (const token of candidates) {
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+        true,
+      );
+    }
+  }
 });
 
 test("boundary screening preserves exact fixed-credential formats and near-misses", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixStart = 3_000 - Math.floor(retainedLength / 2);
-	const five = "C".repeat(5);
-	const onePasswordSix = "A".repeat(6);
-	const onePasswordEleven = "B".repeat(11);
-	const cloudflareFirst = "a".repeat(24);
-	const cloudflareSecond = "b".repeat(146);
-	const adobeBody = "A1b2".repeat(8);
-	const nearMisses = [
-		`v1.0-${"a".repeat(23)}-${cloudflareSecond}`,
-		`v1.0-${cloudflareFirst}-${"b".repeat(145)}`,
-		`v1.1-${cloudflareFirst}-${cloudflareSecond}`,
-		["A3", "A".repeat(5), onePasswordEleven, five, five, five].join("-"),
-		["A3", onePasswordSix, "B".repeat(10), five, five, five].join("-"),
-		["A3", onePasswordSix, onePasswordEleven, five, five].join("-"),
-		`p8e-${adobeBody.slice(0, 31)}`,
-		`p8f-${adobeBody}`,
-		`SG.${"a".repeat(65)}`,
-		`SX.${"a".repeat(66)}`,
-		`xkeysib-${"a".repeat(63)}-${"B".repeat(16)}`,
-		`xkeysib-${"a".repeat(64)}-${"B".repeat(17)}`,
-		`SK${"a".repeat(31)}`,
-		`SK${"g".repeat(32)}`,
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+  const five = "C".repeat(5);
+  const onePasswordSix = "A".repeat(6);
+  const onePasswordEleven = "B".repeat(11);
+  const cloudflareFirst = "a".repeat(24);
+  const cloudflareSecond = "b".repeat(146);
+  const adobeBody = "A1b2".repeat(8);
+  const nearMisses = [
+    `v1.0-${"a".repeat(23)}-${cloudflareSecond}`,
+    `v1.0-${cloudflareFirst}-${"b".repeat(145)}`,
+    `v1.1-${cloudflareFirst}-${cloudflareSecond}`,
+    ["A3", "A".repeat(5), onePasswordEleven, five, five, five].join("-"),
+    ["A3", onePasswordSix, "B".repeat(10), five, five, five].join("-"),
+    ["A3", onePasswordSix, onePasswordEleven, five, five].join("-"),
+    `p8e-${adobeBody.slice(0, 31)}`,
+    `p8f-${adobeBody}`,
+    `SG.${"a".repeat(65)}`,
+    `SX.${"a".repeat(66)}`,
+    `xkeysib-${"a".repeat(63)}-${"B".repeat(16)}`,
+    `xkeysib-${"a".repeat(64)}-${"B".repeat(17)}`,
+    `SK${"a".repeat(31)}`,
+    `SK${"g".repeat(32)}`,
+  ];
 
-	for (const token of nearMisses) {
-		for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${token} ${"y".repeat(3_000 - prefix.length - token.length - 1)}`;
-			expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  for (const token of nearMisses) {
+    for (const tokenStart of [prefixLength - 10, suffixStart - 10]) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${token} ${"y".repeat(3_000 - prefix.length - token.length - 1)}`;
+      expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+        false,
+      );
+    }
+  }
 });
 
 test("fixed-format tokens crossing prompt truncation skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = [
-		`rubygems_${"a".repeat(48)}`,
-		`CLOJARS_${"A".repeat(60)}`,
-		`tfp_${"A".repeat(59)}`,
-		`eyJ${"a".repeat(12)}.${"b".repeat(12)}.${"c".repeat(12)}`,
-		`pypi-AgEIcHlwaS5vcmc${"A".repeat(70)}`,
-		`pypi-AgENdGVzdC5weXBpLm9yZw${"b".repeat(70)}`,
-		`pyp\u200bi-AgEIcHlwaS5vcmc${"c".repeat(70)}`,
-		`EZAK${"D".repeat(54)}`,
-		`EZ\u200bTK${"E".repeat(54)}`,
-		`fm1a_${"A1b+/".repeat(20)}`,
-		`fm1\u200br_${"B2c+/".repeat(20)}===`,
-		`re_${"C3d4".repeat(8)}`,
-		`r\u200be_${"D5e6".repeat(8)}`,
-		`tskey-${"E7f8".repeat(4)}`,
-		`tskey-auth-${"G9h0".repeat(4)}`,
-		`tskey-cl\u200bient-${"I1j2".repeat(4)}`,
-		`EAAA${"K3l4-".repeat(4)}K3`,
-		`sq0atp-${"M5n6_".repeat(4)}M5`,
-		`sq0\u200batp-${"O7p8-".repeat(4)}O7`,
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = [
+    `rubygems_${"a".repeat(48)}`,
+    `CLOJARS_${"A".repeat(60)}`,
+    `tfp_${"A".repeat(59)}`,
+    `eyJ${"a".repeat(12)}.${"b".repeat(12)}.${"c".repeat(12)}`,
+    `pypi-AgEIcHlwaS5vcmc${"A".repeat(70)}`,
+    `pypi-AgENdGVzdC5weXBpLm9yZw${"b".repeat(70)}`,
+    `pyp\u200bi-AgEIcHlwaS5vcmc${"c".repeat(70)}`,
+    `EZAK${"D".repeat(54)}`,
+    `EZ\u200bTK${"E".repeat(54)}`,
+    `fm1a_${"A1b+/".repeat(20)}`,
+    `fm1\u200br_${"B2c+/".repeat(20)}===`,
+    `re_${"C3d4".repeat(8)}`,
+    `r\u200be_${"D5e6".repeat(8)}`,
+    `tskey-${"E7f8".repeat(4)}`,
+    `tskey-auth-${"G9h0".repeat(4)}`,
+    `tskey-cl\u200bient-${"I1j2".repeat(4)}`,
+    `EAAA${"K3l4-".repeat(4)}K3`,
+    `sq0atp-${"M5n6_".repeat(4)}M5`,
+    `sq0\u200batp-${"O7p8-".repeat(4)}O7`,
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const token of tokens) {
-		const tokenStart = prefixLength - 10;
-		const prefixBoundaryPrompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_200)}`;
-		const suffixStart = 3_000 - Math.floor(retainedLength / 2);
-		const suffixPrefixLength = suffixStart - 11;
-		const suffixBoundaryPrompt = `${"x".repeat(suffixPrefixLength)} ${token} ${"y".repeat(3_000 - suffixPrefixLength - token.length - 2)}`;
+  for (const token of tokens) {
+    const tokenStart = prefixLength - 10;
+    const prefixBoundaryPrompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_200)}`;
+    const suffixStart = 3_000 - Math.floor(retainedLength / 2);
+    const suffixPrefixLength = suffixStart - 11;
+    const suffixBoundaryPrompt = `${"x".repeat(suffixPrefixLength)} ${token} ${"y".repeat(3_000 - suffixPrefixLength - token.length - 2)}`;
 
-		for (const prompt of [prefixBoundaryPrompt, suffixBoundaryPrompt]) {
-			const f = fixture();
-			const find = spyOn(f.ctx.modelRegistry, "find");
+    for (const prompt of [prefixBoundaryPrompt, suffixBoundaryPrompt]) {
+      const f = fixture();
+      const find = spyOn(f.ctx.modelRegistry, "find");
 
-			f.input(prompt);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(f.requests).toHaveLength(0);
-			expect(f.state.title).toBe("existing task");
-			expect(f.warnings).toEqual([warning]);
-			expect(f.warnings.join(" ")).not.toContain(token);
-		}
-	}
+      f.input(prompt);
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(f.requests).toHaveLength(0);
+      expect(f.state.title).toBe("existing task");
+      expect(f.warnings).toEqual([warning]);
+      expect(f.warnings.join(" ")).not.toContain(token);
+    }
+  }
 });
 
 test("boundary scans preserve minimum lengths for other supported token formats", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const nearMisses = [
-		`EZAK${"A".repeat(53)}`,
-		`fm1a_${"A".repeat(99)}`,
-		`re_${"A".repeat(31)}`,
-		`tskey-${"A".repeat(15)}`,
-		`EAAA${"A".repeat(21)}`,
-		`sq0atp-${"A".repeat(21)}`,
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const nearMisses = [
+    `EZAK${"A".repeat(53)}`,
+    `fm1a_${"A".repeat(99)}`,
+    `re_${"A".repeat(31)}`,
+    `tskey-${"A".repeat(15)}`,
+    `EAAA${"A".repeat(21)}`,
+    `sq0atp-${"A".repeat(21)}`,
+  ];
 
-	for (const value of nearMisses) {
-		const tokenStart = prefixLength - 10;
-		const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-	}
+  for (const value of nearMisses) {
+    const tokenStart = prefixLength - 10;
+    const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"y".repeat(1_200)}`;
+    expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+      false,
+    );
+  }
 });
 
 test("whitespace-free token boundaries do not extend short near-misses with prose", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixBoundary = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixBoundary = promptLength - Math.floor(retainedLength / 2);
-	const five = "C".repeat(5);
-	const rep = (characters: string, length: number) =>
-		characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
-	const labeledCredential = (label: string, token: string) => {
-		const prefix = `${label}: `;
-		return { value: `${prefix}${token}`, captureOffset: prefix.length, controlOffset: prefix.length + 5 };
-	};
-	const slackWebhookPrefix = "https://hooks.slack.com/services/";
-	const slackLegacyWebhookPrefix = "https://hooks.slack.com/services/T12345678/B12345678/";
-	const discordWebhookPrefix = `https://discord.com/api/webhooks/${"1".repeat(18)}/`;
-	type BoundaryToken = {
-		value: string;
-		captureOffset?: number;
-		controlOffset?: number;
-		nearMissProseCharacter?: string;
-	};
-	const tokens: BoundaryToken[] = [
-		{ value: `NRAK-${"A".repeat(27)}` },
-		labeledCredential("Cloudflare", "a".repeat(40)),
-		labeledCredential("Cloudflare global", "a".repeat(37)),
-		labeledCredential("Datadog", "A".repeat(40)),
-		labeledCredential("Mailgun", `key-${"a".repeat(32)}`),
-		labeledCredential("Vercel", "A".repeat(24)),
-		labeledCredential("Railway", "12345678-1234-1234-1234-123456789012"),
-		{ value: `AKCp${"A".repeat(69)}` },
-		{ value: `cmVmd${"A".repeat(59)}` },
-		{ value: `fo1_${"A".repeat(43)}` },
-		{ value: `ABIA${"A".repeat(16)}`, nearMissProseCharacter: "A" },
-		{ value: `AIza${"A".repeat(35)}` },
-		{ value: `GOCSPX-${"A".repeat(20)}` },
-		{ value: `1//${"A".repeat(20)}` },
-		{ value: `ya29.${"A".repeat(20)}` },
-		{ value: `r8_${"A".repeat(37)}` },
-		{ value: `pcsk_${"A".repeat(5)}_${"A".repeat(63)}` },
-		{ value: `neon_api_key_${"A".repeat(32)}` },
-		{ value: `dt0c01.${"A".repeat(24)}.${"A".repeat(64)}` },
-		{ value: `glc_${"a".repeat(32)}` },
-		{ value: `sntrys_eyJpYXQiO${"A".repeat(10)}LCJyZWdpb25fdXJs${"A".repeat(10)}_${"A".repeat(43)}` },
-		{ value: `4b1d${"A1b2".repeat(9)}A1` },
-		{ value: `AbC7Q~${"A".repeat(31)}` },
-		{ value: `LTAI${"A1b2".repeat(5)}` },
-		{ value: `AKID${"A1b2".repeat(8)}` },
-		{ value: `HRKU-AA${"A1_b".repeat(14)}AB` },
-		{ value: `lsv2_pt_${"a1b2".repeat(8)}_c3d4a1b2c3` },
-		{ value: `LSV2_SK_${"a1b2".repeat(8)}_c3d4a1b2c3` },
-		{ value: `${slackWebhookPrefix}${"A".repeat(43)}`, captureOffset: slackWebhookPrefix.length, controlOffset: slackWebhookPrefix.length + 5 },
-		{ value: `${slackLegacyWebhookPrefix}${"A".repeat(24)}`, captureOffset: slackLegacyWebhookPrefix.length, controlOffset: slackLegacyWebhookPrefix.length + 5 },
-		{ value: `${discordWebhookPrefix}${"A".repeat(68)}`, captureOffset: discordWebhookPrefix.length, controlOffset: discordWebhookPrefix.length + 5 },
-		{ value: `API-${"A".repeat(26)}`, nearMissProseCharacter: "A" },
-		{ value: `csk_${"B".repeat(48)}` },
-		{ value: `jina_${"T".repeat(60)}` },
-		{ value: `ops_eyJ${"A".repeat(250)}` },
-		{ value: `lin_api_${"a".repeat(40)}` },
-		{ value: `pat${"A".repeat(14)}.${"a".repeat(64)}` },
-		{ value: `${"a".repeat(75)}AZDO${"a".repeat(5)}` },
-		{ value: `dop_v1_${"a".repeat(64)}` },
-		{ value: `pul-${"a".repeat(40)}` },
-		{ value: `tskey-${"A".repeat(16)}` },
-		{ value: `sq0atp-${"A".repeat(22)}` },
-		{ value: `${"T".repeat(14)}.atlasv1.${"a".repeat(60)}` },
-		{ value: `sgp_${"a".repeat(40)}` },
-		{ value: `dapi${"a".repeat(32)}` },
-		{ value: `dckr_pat_${"A".repeat(27)}` },
-		{ value: `dckr_oat_${"B".repeat(32)}` },
-		{ value: ["A3", "A".repeat(6), "B".repeat(11), five, five, five].join("-") },
-		{ value: `v1.0-${"a".repeat(24)}-${"b".repeat(146)}` },
-		{ value: `p8e-${"A1b2".repeat(8)}` },
-		{ value: `SG.${"a".repeat(66)}` },
-		{ value: `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}` },
-		{ value: `SK${"a1".repeat(16)}` },
-		{ value: `rubygems_${"a".repeat(48)}` },
-		{ value: `CLOJARS_${"A".repeat(60)}` },
-		{ value: `tfp_${"A".repeat(59)}` },
-		{ value: `EZAK${"D".repeat(54)}` },
-		{ value: `fm1a_${"A1b+/".repeat(20)}` },
-		{ value: `whsec_${"F7g8".repeat(6)}` },
-		{ value: `${"A1b_".repeat(6)}.cD9_-Z.${"QwErTy9_-".repeat(3)}` },
-		{ value: `mfa.${"a1B_".repeat(21)}` },
-		{ value: `123456789:A${"a".repeat(34)}`, captureOffset: 10, controlOffset: 11 },
-		{ value: `hvs.${"V".repeat(24)}` },
-		{ value: `hvb.${"B".repeat(24)}` },
-		{ value: `ntn_${"1".repeat(11)}${"a".repeat(35)}` },
-		{ value: `sb_secret_${"S".repeat(32)}` },
-		{ value: `ATATT3${"a".repeat(183)}_-=` },
-		{ value: `shpat_${"a".repeat(32)}` },
-		{ value: `shippo_live_${"a".repeat(40)}` },
-		{ value: `PMAK-${"a".repeat(24)}-${"b".repeat(34)}` },
-		{ value: `pnu_${"A1b2".repeat(9)}` },
-		{ value: `eyJrIjoi${"A".repeat(70)}` },
-		{ value: `glsa_${rep("aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x", 32)}_A1B2C3D4` },
-		{ value: `dp.pt.${"A".repeat(43)}` },
-		{ value: `sntryu_${"a".repeat(64)}` },
-	];
-	const makePrompt = (token: string, tokenStart: number, proseCharacter = "a") => {
-		const prefix = `${"x".repeat(tokenStart - 1)} `;
-		const prompt = `${prefix}${token} ${proseCharacter} ${"z".repeat(promptLength - prefix.length - token.length - 3)}`;
-		expect(prompt).toHaveLength(promptLength);
-		return prompt;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixBoundary = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixBoundary = promptLength - Math.floor(retainedLength / 2);
+  const five = "C".repeat(5);
+  const rep = (characters: string, length: number) =>
+    characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
+  const labeledCredential = (label: string, token: string) => {
+    const prefix = `${label}: `;
+    return {
+      value: `${prefix}${token}`,
+      captureOffset: prefix.length,
+      controlOffset: prefix.length + 5,
+    };
+  };
+  const slackWebhookPrefix = "https://hooks.slack.com/services/";
+  const slackLegacyWebhookPrefix =
+    "https://hooks.slack.com/services/T12345678/B12345678/";
+  const discordWebhookPrefix = `https://discord.com/api/webhooks/${"1".repeat(18)}/`;
+  type BoundaryToken = {
+    value: string;
+    captureOffset?: number;
+    controlOffset?: number;
+    nearMissProseCharacter?: string;
+  };
+  const tokens: BoundaryToken[] = [
+    { value: `NRAK-${"A".repeat(27)}` },
+    labeledCredential("Cloudflare", "a".repeat(40)),
+    labeledCredential("Cloudflare global", "a".repeat(37)),
+    labeledCredential("Datadog", "A".repeat(40)),
+    labeledCredential("Mailgun", `key-${"a".repeat(32)}`),
+    labeledCredential("Vercel", "A".repeat(24)),
+    labeledCredential("Railway", "12345678-1234-1234-1234-123456789012"),
+    { value: `AKCp${"A".repeat(69)}` },
+    { value: `cmVmd${"A".repeat(59)}` },
+    { value: `fo1_${"A".repeat(43)}` },
+    { value: `ABIA${"A".repeat(16)}`, nearMissProseCharacter: "A" },
+    { value: `AIza${"A".repeat(35)}` },
+    { value: `GOCSPX-${"A".repeat(20)}` },
+    { value: `1//${"A".repeat(20)}` },
+    { value: `ya29.${"A".repeat(20)}` },
+    { value: `r8_${"A".repeat(37)}` },
+    { value: `pcsk_${"A".repeat(5)}_${"A".repeat(63)}` },
+    { value: `neon_api_key_${"A".repeat(32)}` },
+    { value: `dt0c01.${"A".repeat(24)}.${"A".repeat(64)}` },
+    { value: `glc_${"a".repeat(32)}` },
+    {
+      value: `sntrys_eyJpYXQiO${"A".repeat(10)}LCJyZWdpb25fdXJs${"A".repeat(10)}_${"A".repeat(43)}`,
+    },
+    { value: `4b1d${"A1b2".repeat(9)}A1` },
+    { value: `AbC7Q~${"A".repeat(31)}` },
+    { value: `LTAI${"A1b2".repeat(5)}` },
+    { value: `AKID${"A1b2".repeat(8)}` },
+    { value: `HRKU-AA${"A1_b".repeat(14)}AB` },
+    { value: `lsv2_pt_${"a1b2".repeat(8)}_c3d4a1b2c3` },
+    { value: `LSV2_SK_${"a1b2".repeat(8)}_c3d4a1b2c3` },
+    {
+      value: `${slackWebhookPrefix}${"A".repeat(43)}`,
+      captureOffset: slackWebhookPrefix.length,
+      controlOffset: slackWebhookPrefix.length + 5,
+    },
+    {
+      value: `${slackLegacyWebhookPrefix}${"A".repeat(24)}`,
+      captureOffset: slackLegacyWebhookPrefix.length,
+      controlOffset: slackLegacyWebhookPrefix.length + 5,
+    },
+    {
+      value: `${discordWebhookPrefix}${"A".repeat(68)}`,
+      captureOffset: discordWebhookPrefix.length,
+      controlOffset: discordWebhookPrefix.length + 5,
+    },
+    { value: `API-${"A".repeat(26)}`, nearMissProseCharacter: "A" },
+    { value: `csk_${"B".repeat(48)}` },
+    { value: `jina_${"T".repeat(60)}` },
+    { value: `ops_eyJ${"A".repeat(250)}` },
+    { value: `lin_api_${"a".repeat(40)}` },
+    { value: `pat${"A".repeat(14)}.${"a".repeat(64)}` },
+    { value: `${"a".repeat(75)}AZDO${"a".repeat(5)}` },
+    { value: `dop_v1_${"a".repeat(64)}` },
+    { value: `pul-${"a".repeat(40)}` },
+    { value: `tskey-${"A".repeat(16)}` },
+    { value: `sq0atp-${"A".repeat(22)}` },
+    { value: `${"T".repeat(14)}.atlasv1.${"a".repeat(60)}` },
+    { value: `sgp_${"a".repeat(40)}` },
+    { value: `dapi${"a".repeat(32)}` },
+    { value: `dckr_pat_${"A".repeat(27)}` },
+    { value: `dckr_oat_${"B".repeat(32)}` },
+    {
+      value: ["A3", "A".repeat(6), "B".repeat(11), five, five, five].join("-"),
+    },
+    { value: `v1.0-${"a".repeat(24)}-${"b".repeat(146)}` },
+    { value: `p8e-${"A1b2".repeat(8)}` },
+    { value: `SG.${"a".repeat(66)}` },
+    { value: `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}` },
+    { value: `SK${"a1".repeat(16)}` },
+    { value: `rubygems_${"a".repeat(48)}` },
+    { value: `CLOJARS_${"A".repeat(60)}` },
+    { value: `tfp_${"A".repeat(59)}` },
+    { value: `EZAK${"D".repeat(54)}` },
+    { value: `fm1a_${"A1b+/".repeat(20)}` },
+    { value: `whsec_${"F7g8".repeat(6)}` },
+    { value: `${"A1b_".repeat(6)}.cD9_-Z.${"QwErTy9_-".repeat(3)}` },
+    { value: `mfa.${"a1B_".repeat(21)}` },
+    {
+      value: `123456789:A${"a".repeat(34)}`,
+      captureOffset: 10,
+      controlOffset: 11,
+    },
+    { value: `hvs.${"V".repeat(24)}` },
+    { value: `hvb.${"B".repeat(24)}` },
+    { value: `ntn_${"1".repeat(11)}${"a".repeat(35)}` },
+    { value: `sb_secret_${"S".repeat(32)}` },
+    { value: `ATATT3${"a".repeat(183)}_-=` },
+    { value: `shpat_${"a".repeat(32)}` },
+    { value: `shippo_live_${"a".repeat(40)}` },
+    { value: `PMAK-${"a".repeat(24)}-${"b".repeat(34)}` },
+    { value: `pnu_${"A1b2".repeat(9)}` },
+    { value: `eyJrIjoi${"A".repeat(70)}` },
+    { value: `glsa_${rep("aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x", 32)}_A1B2C3D4` },
+    { value: `dp.pt.${"A".repeat(43)}` },
+    { value: `sntryu_${"a".repeat(64)}` },
+  ];
+  const makePrompt = (
+    token: string,
+    tokenStart: number,
+    proseCharacter = "a",
+  ) => {
+    const prefix = `${"x".repeat(tokenStart - 1)} `;
+    const prompt = `${prefix}${token} ${proseCharacter} ${"z".repeat(promptLength - prefix.length - token.length - 3)}`;
+    expect(prompt).toHaveLength(promptLength);
+    return prompt;
+  };
 
-	for (const { value, captureOffset = 0, controlOffset = 5, nearMissProseCharacter = "a" } of tokens) {
-		const nearMiss = value.slice(0, -1);
-		const nearMissStarts = [prefixBoundary - nearMiss.length - 1, suffixBoundary - nearMiss.length];
-		for (const tokenStart of nearMissStarts) {
-			const context = buildNamingRequestContext([], makePrompt(nearMiss, tokenStart, nearMissProseCharacter));
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
+  for (const {
+    value,
+    captureOffset = 0,
+    controlOffset = 5,
+    nearMissProseCharacter = "a",
+  } of tokens) {
+    const nearMiss = value.slice(0, -1);
+    const nearMissStarts = [
+      prefixBoundary - nearMiss.length - 1,
+      suffixBoundary - nearMiss.length,
+    ];
+    for (const tokenStart of nearMissStarts) {
+      const context = buildNamingRequestContext(
+        [],
+        makePrompt(nearMiss, tokenStart, nearMissProseCharacter),
+      );
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
 
-		const controlObfuscated = `${value.slice(0, controlOffset)}\u200b${value.slice(controlOffset)}`;
-		const validStarts = [
-			prefixBoundary - 10 - captureOffset,
-			suffixBoundary - 10 - captureOffset,
-		];
-		for (const tokenStart of validStarts) {
-			expect(buildNamingRequestContext([], makePrompt(value, tokenStart)).hasSensitiveBoundary()).toBe(true);
-			expect(buildNamingRequestContext([], makePrompt(controlObfuscated, tokenStart)).hasSensitiveBoundary()).toBe(true);
-		}
+    const controlObfuscated = `${value.slice(0, controlOffset)}\u200b${value.slice(controlOffset)}`;
+    const validStarts = [
+      prefixBoundary - 10 - captureOffset,
+      suffixBoundary - 10 - captureOffset,
+    ];
+    for (const tokenStart of validStarts) {
+      expect(
+        buildNamingRequestContext(
+          [],
+          makePrompt(value, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(true);
+      expect(
+        buildNamingRequestContext(
+          [],
+          makePrompt(controlObfuscated, tokenStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(true);
+    }
 
-		const splitAt = Math.floor(value.length / 2);
-		const whitespaceSplit = `${value.slice(0, splitAt)} ${value.slice(splitAt)}`;
-		expect(hasSensitiveNamingContext(whitespaceSplit)).toBe(true);
-		expect(hasSensitiveOutput(whitespaceSplit)).toBe(true);
-	}
+    const splitAt = Math.floor(value.length / 2);
+    const whitespaceSplit = `${value.slice(0, splitAt)} ${value.slice(splitAt)}`;
+    expect(hasSensitiveNamingContext(whitespaceSplit)).toBe(true);
+    expect(hasSensitiveOutput(whitespaceSplit)).toBe(true);
+  }
 
-	const nearMiss = tokens[0]!.value.slice(0, -1);
-	const allowed = fixture([Promise.resolve(response("inspect build failures"))]);
-	const allowedFind = spyOn(allowed.ctx.modelRegistry, "find");
-	allowed.input(makePrompt(nearMiss, prefixBoundary - nearMiss.length - 1));
-	await settle();
-	expect(allowedFind).toHaveBeenCalled();
-	expect(allowed.requests).toHaveLength(1);
-	expect(allowed.warnings).toEqual([]);
+  const nearMiss = tokens[0]!.value.slice(0, -1);
+  const allowed = fixture([
+    Promise.resolve(response("inspect build failures")),
+  ]);
+  const allowedFind = spyOn(allowed.ctx.modelRegistry, "find");
+  allowed.input(makePrompt(nearMiss, prefixBoundary - nearMiss.length - 1));
+  await settle();
+  expect(allowedFind).toHaveBeenCalled();
+  expect(allowed.requests).toHaveLength(1);
+  expect(allowed.warnings).toEqual([]);
 });
 
 test("tab and newline prompt-edge whitespace do not extend short synthetic Datadog values", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - suffixLength;
-	const nearMiss = `Datadog: ${"A".repeat(39)}`;
-	const nearMissStarts = [prefixLength - nearMiss.length - 1, suffixStart - nearMiss.length];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - suffixLength;
+  const nearMiss = `Datadog: ${"A".repeat(39)}`;
+  const nearMissStarts = [
+    prefixLength - nearMiss.length - 1,
+    suffixStart - nearMiss.length,
+  ];
 
-	for (const separator of ["\t", "\n"]) {
-		for (const tokenStart of nearMissStarts) {
-			const prefix = `${"x".repeat(tokenStart - 1)} `;
-			const prompt = `${prefix}${nearMiss}${separator}a ${"z".repeat(
-				promptLength - prefix.length - nearMiss.length - separator.length - 2,
-			)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const context = buildNamingRequestContext([], prompt);
-			expect(hasSensitiveNamingContext(context.text)).toBe(false);
-			expect(context.hasSensitiveBoundary()).toBe(false);
-		}
-	}
+  for (const separator of ["\t", "\n"]) {
+    for (const tokenStart of nearMissStarts) {
+      const prefix = `${"x".repeat(tokenStart - 1)} `;
+      const prompt = `${prefix}${nearMiss}${separator}a ${"z".repeat(
+        promptLength - prefix.length - nearMiss.length - separator.length - 2,
+      )}`;
+      expect(prompt).toHaveLength(promptLength);
+      const context = buildNamingRequestContext([], prompt);
+      expect(hasSensitiveNamingContext(context.text)).toBe(false);
+      expect(context.hasSensitiveBoundary()).toBe(false);
+    }
+  }
 });
 
 test("Azure SAS signatures crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - suffixLength;
-	const signature = `${"A1b2".repeat(10)}A1b=`;
-	const urls = [
-		`https://storage.example.test/blob?sv=2023-11-03&sp=r&sig=${signature}&se=2030-01-01`,
-		`https://storage.example.test/blob?sig=${signature}&sv=2023-11-03&sp=r`,
-	];
-	const makePrompt = (url: string, signatureStart: number) => {
-		const urlSignatureStart = url.indexOf(`sig=${signature}`) + "sig=".length;
-		const prefixSize = signatureStart - urlSignatureStart;
-		const prompt = `${"x".repeat(prefixSize)}${url}${"y".repeat(promptLength - prefixSize - url.length)}`;
-		expect(prompt.length).toBe(promptLength);
-		return prompt;
-	};
-	const prompts = urls.flatMap((url) => [
-		makePrompt(url, prefixLength - 10),
-		makePrompt(url, suffixStart - 10),
-	]);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - suffixLength;
+  const signature = `${"A1b2".repeat(10)}A1b=`;
+  const urls = [
+    `https://storage.example.test/blob?sv=2023-11-03&sp=r&sig=${signature}&se=2030-01-01`,
+    `https://storage.example.test/blob?sig=${signature}&sv=2023-11-03&sp=r`,
+  ];
+  const makePrompt = (url: string, signatureStart: number) => {
+    const urlSignatureStart = url.indexOf(`sig=${signature}`) + "sig=".length;
+    const prefixSize = signatureStart - urlSignatureStart;
+    const prompt = `${"x".repeat(prefixSize)}${url}${"y".repeat(promptLength - prefixSize - url.length)}`;
+    expect(prompt.length).toBe(promptLength);
+    return prompt;
+  };
+  const prompts = urls.flatMap((url) => [
+    makePrompt(url, prefixLength - 10),
+    makePrompt(url, suffixStart - 10),
+  ]);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const prompt of prompts) {
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const prompt of prompts) {
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
 
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(signature);
-	}
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(signature);
+  }
 });
 
 test("Azure SAS boundary scans preserve short-signature and invalid-version near-misses", () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const signature = "A".repeat(19);
-	const nearMisses = [
-		`https://storage.example.test/blob?sv=2023-11-03&sig=${signature}&sp=r`,
-		`https://storage.example.test/blob?sig=${signature}&sv=2023-11-03&sp=r`,
-		`https://storage.example.test/blob?sv=not-a-date&sig=${"A".repeat(43)}&sp=r`,
-		`https://storage.example.test/blob?sig=${"A".repeat(43)}&sv=not-a-date&sp=r`,
-	];
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const signature = "A".repeat(19);
+  const nearMisses = [
+    `https://storage.example.test/blob?sv=2023-11-03&sig=${signature}&sp=r`,
+    `https://storage.example.test/blob?sig=${signature}&sv=2023-11-03&sp=r`,
+    `https://storage.example.test/blob?sv=not-a-date&sig=${"A".repeat(43)}&sp=r`,
+    `https://storage.example.test/blob?sig=${"A".repeat(43)}&sv=not-a-date&sp=r`,
+  ];
 
-	for (const url of nearMisses) {
-		const urlSignatureStart = url.indexOf("sig=") + "sig=".length;
-		const prefixSize = prefixLength - 10 - urlSignatureStart;
-		const prompt = `${"x".repeat(prefixSize)}${url}${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(false);
-	}
+  for (const url of nearMisses) {
+    const urlSignatureStart = url.indexOf("sig=") + "sig=".length;
+    const prefixSize = prefixLength - 10 - urlSignatureStart;
+    const prompt = `${"x".repeat(prefixSize)}${url}${"y".repeat(1_200)}`;
+    expect(buildNamingRequestContext([], prompt).hasSensitiveBoundary()).toBe(
+      false,
+    );
+  }
 });
 
 test("provider API tokens crossing prompt truncation skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = [
-		`nvapi-${"A".repeat(40)}`,
-		`csk_${"B".repeat(48)}`,
-		`gsk_${"c".repeat(24)}`,
-		`xai-${"d".repeat(20)}`,
-		`pplx-${"e".repeat(48)}`,
-		`sk-${"m".repeat(32)}`,
-		`rk-${"n".repeat(16)}_stage-1`,
-		`sk-proj-${"f".repeat(32)}`,
-		`sk-ant-${"g".repeat(32)}`,
-		`sk-svcacct-${"h".repeat(32)}`,
-		`sk-or-v1-${"i".repeat(32)}`,
-		`sk_live_${"j".repeat(24)}`,
-		`re_${"A1b2".repeat(7)}_C3d4`,
-		`rk_test_${"K".repeat(24)}`,
-		`tvly-${"q".repeat(32)}`,
-		`tvly-dev-${"r".repeat(32)}`,
-		`tvly-prod-${"s".repeat(32)}`,
-		`jina_${"T".repeat(60)}`,
-		`fc-${"a".repeat(24)}`,
-		`bb_live_${"B".repeat(24)}`,
-		`bb_test_${"C".repeat(24)}`,
-		`nva\u200bpi-${"L".repeat(40)}`,
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = [
+    `nvapi-${"A".repeat(40)}`,
+    `csk_${"B".repeat(48)}`,
+    `gsk_${"c".repeat(24)}`,
+    `xai-${"d".repeat(20)}`,
+    `pplx-${"e".repeat(48)}`,
+    `sk-${"m".repeat(32)}`,
+    `rk-${"n".repeat(16)}_stage-1`,
+    `sk-proj-${"f".repeat(32)}`,
+    `sk-ant-${"g".repeat(32)}`,
+    `sk-svcacct-${"h".repeat(32)}`,
+    `sk-or-v1-${"i".repeat(32)}`,
+    `sk_live_${"j".repeat(24)}`,
+    `re_${"A1b2".repeat(7)}_C3d4`,
+    `rk_test_${"K".repeat(24)}`,
+    `tvly-${"q".repeat(32)}`,
+    `tvly-dev-${"r".repeat(32)}`,
+    `tvly-prod-${"s".repeat(32)}`,
+    `jina_${"T".repeat(60)}`,
+    `fc-${"a".repeat(24)}`,
+    `bb_live_${"B".repeat(24)}`,
+    `bb_test_${"C".repeat(24)}`,
+    `nva\u200bpi-${"L".repeat(40)}`,
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const token of tokens) {
-		const tokenStart = prefixLength - 10;
-		const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_200)}`;
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const token of tokens) {
+    const tokenStart = prefixLength - 10;
+    const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_200)}`;
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
 
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 });
 
 test("Resend boundary checks preserve minimum token lengths at either prompt edge", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const apiKey = `re_${"A1b2".repeat(7)}_C3d4`;
-	const nearMiss = `re_${"A1b2".repeat(7)}_C3`;
-	const tokenStarts = [prefixLength - 10, suffixStart - 10];
-	expect(hasSensitiveNamingContext(`${apiKey.slice(0, 16)} ${apiKey.slice(16)}`)).toBe(true);
-	const makePrompt = (token: string, tokenStart: number) => {
-		const prefix = `${"x".repeat(tokenStart - 1)} `;
-		const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
-		expect(prompt).toHaveLength(promptLength);
-		return prompt;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const apiKey = `re_${"A1b2".repeat(7)}_C3d4`;
+  const nearMiss = `re_${"A1b2".repeat(7)}_C3`;
+  const tokenStarts = [prefixLength - 10, suffixStart - 10];
+  expect(
+    hasSensitiveNamingContext(`${apiKey.slice(0, 16)} ${apiKey.slice(16)}`),
+  ).toBe(true);
+  const makePrompt = (token: string, tokenStart: number) => {
+    const prefix = `${"x".repeat(tokenStart - 1)} `;
+    const prompt = `${prefix}${token} ${"y".repeat(promptLength - prefix.length - token.length - 1)}`;
+    expect(prompt).toHaveLength(promptLength);
+    return prompt;
+  };
 
-	for (const tokenStart of tokenStarts) {
-		const blocked = fixture();
-		const find = spyOn(blocked.ctx.modelRegistry, "find");
-		blocked.input(makePrompt(apiKey, tokenStart));
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(blocked.requests).toHaveLength(0);
-		expect(blocked.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(blocked.warnings.join(" ")).not.toContain(apiKey);
+  for (const tokenStart of tokenStarts) {
+    const blocked = fixture();
+    const find = spyOn(blocked.ctx.modelRegistry, "find");
+    blocked.input(makePrompt(apiKey, tokenStart));
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(blocked.requests).toHaveLength(0);
+    expect(blocked.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(blocked.warnings.join(" ")).not.toContain(apiKey);
 
-		const allowed = fixture([Promise.resolve(response("review email delivery"))]);
-		const allowedFind = spyOn(allowed.ctx.modelRegistry, "find");
-		allowed.input(makePrompt(nearMiss, tokenStart));
-		await settle();
-		expect(allowedFind).toHaveBeenCalled();
-		expect(allowed.requests).toHaveLength(1);
-		expect(allowed.state.title).toBe("review email delivery");
-		expect(allowed.warnings).toEqual([]);
-	}
+    const allowed = fixture([
+      Promise.resolve(response("review email delivery")),
+    ]);
+    const allowedFind = spyOn(allowed.ctx.modelRegistry, "find");
+    allowed.input(makePrompt(nearMiss, tokenStart));
+    await settle();
+    expect(allowedFind).toHaveBeenCalled();
+    expect(allowed.requests).toHaveLength(1);
+    expect(allowed.state.title).toBe("review email delivery");
+    expect(allowed.warnings).toEqual([]);
+  }
 });
 
 test("webhook and Discord auth credentials crossing prompt truncation skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const teamsGuid = "01234567-89ab-cdef-0123-456789abcdef";
-	const teamsOtherGuid = "fedcba98-7654-3210-fedc-ba9876543210";
-	const slackToken = `${"A1b2".repeat(10)}A1b`;
-	const legacySlackToken = "C3d4".repeat(6);
-	const discordToken = "D5e6".repeat(17);
-	const discordAuthToken = `${"A1b_".repeat(6)}.cD9_-Z.${"QwErTy9_-".repeat(3)}`;
-	const discordMfaToken = `mfa.${"a1B_".repeat(21)}`;
-	const teamsToken = "a1b2c3d4".repeat(4);
-	const values = [
-		{ value: `whsec_${"F7g8".repeat(6)}`, secret: `whsec_${"F7g8".repeat(6)}` },
-		{ value: `https://hooks.slack.com/services/${slackToken}`, secret: slackToken },
-		{
-			value: `https://hooks.slack.com/services/T00000000/B11111111/${legacySlackToken}`,
-			secret: legacySlackToken,
-		},
-		{
-			value: `https://discord.com/api/webhooks/123456789012345678/${discordToken}`,
-			secret: discordToken,
-		},
-		{ value: discordAuthToken, secret: discordAuthToken },
-		{ value: discordMfaToken, secret: discordMfaToken },
-		{
-			value: `https://tenant.webhook.office.com/webhookb2/${teamsGuid}@${teamsOtherGuid}/IncomingWebhook/${teamsToken}/${teamsGuid}`,
-			secret: teamsToken,
-		},
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const teamsGuid = "01234567-89ab-cdef-0123-456789abcdef";
+  const teamsOtherGuid = "fedcba98-7654-3210-fedc-ba9876543210";
+  const slackToken = `${"A1b2".repeat(10)}A1b`;
+  const legacySlackToken = "C3d4".repeat(6);
+  const discordToken = "D5e6".repeat(17);
+  const discordAuthToken = `${"A1b_".repeat(6)}.cD9_-Z.${"QwErTy9_-".repeat(3)}`;
+  const discordMfaToken = `mfa.${"a1B_".repeat(21)}`;
+  const teamsToken = "a1b2c3d4".repeat(4);
+  const values = [
+    { value: `whsec_${"F7g8".repeat(6)}`, secret: `whsec_${"F7g8".repeat(6)}` },
+    {
+      value: `https://hooks.slack.com/services/${slackToken}`,
+      secret: slackToken,
+    },
+    {
+      value: `https://hooks.slack.com/services/T00000000/B11111111/${legacySlackToken}`,
+      secret: legacySlackToken,
+    },
+    {
+      value: `https://discord.com/api/webhooks/123456789012345678/${discordToken}`,
+      secret: discordToken,
+    },
+    { value: discordAuthToken, secret: discordAuthToken },
+    { value: discordMfaToken, secret: discordMfaToken },
+    {
+      value: `https://tenant.webhook.office.com/webhookb2/${teamsGuid}@${teamsOtherGuid}/IncomingWebhook/${teamsToken}/${teamsGuid}`,
+      secret: teamsToken,
+    },
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const { value, secret } of values) {
-		const obfuscated = value.replace(secret, `${secret.slice(0, 10)}\u0000${secret.slice(10)}`);
-		for (const candidate of [value, obfuscated]) {
-			const secretStart = prefixLength - 10;
-			const valueStart = secretStart - candidate.indexOf(secret.slice(0, 10));
-			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const f = fixture();
-			const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const { value, secret } of values) {
+    const obfuscated = value.replace(
+      secret,
+      `${secret.slice(0, 10)}\u0000${secret.slice(10)}`,
+    );
+    for (const candidate of [value, obfuscated]) {
+      const secretStart = prefixLength - 10;
+      const valueStart = secretStart - candidate.indexOf(secret.slice(0, 10));
+      const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const f = fixture();
+      const find = spyOn(f.ctx.modelRegistry, "find");
 
-			f.input(prompt);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(f.requests).toHaveLength(0);
-			expect(f.state.title).toBe("existing task");
-			expect(f.warnings).toEqual([warning]);
-			expect(f.warnings.join(" ")).not.toContain(secret);
-			expect(f.warnings.join(" ")).not.toContain(value);
-		}
-	}
+      f.input(prompt);
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(f.requests).toHaveLength(0);
+      expect(f.state.title).toBe("existing task");
+      expect(f.warnings).toEqual([warning]);
+      expect(f.warnings.join(" ")).not.toContain(secret);
+      expect(f.warnings.join(" ")).not.toContain(value);
+    }
+  }
 });
 
 test("platform tokens crossing prompt truncation skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const telegramSecret = `A${"a".repeat(34)}`;
-	const telegramToken = `123456789:${telegramSecret}`;
-	const vaultServiceToken = `hvs.${"V".repeat(24)}`;
-	const vaultBatchToken = `hvb.${"B".repeat(24)}`;
-	const notionToken = `ntn_${"1".repeat(11)}${"a".repeat(35)}`;
-	const supabaseToken = `sb_secret_${"S".repeat(32)}`;
-	const values = [
-		{ value: telegramToken, secret: telegramSecret },
-		{ value: vaultServiceToken, secret: vaultServiceToken },
-		{ value: vaultBatchToken, secret: vaultBatchToken },
-		{ value: notionToken, secret: notionToken },
-		{ value: supabaseToken, secret: supabaseToken },
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const telegramSecret = `A${"a".repeat(34)}`;
+  const telegramToken = `123456789:${telegramSecret}`;
+  const vaultServiceToken = `hvs.${"V".repeat(24)}`;
+  const vaultBatchToken = `hvb.${"B".repeat(24)}`;
+  const notionToken = `ntn_${"1".repeat(11)}${"a".repeat(35)}`;
+  const supabaseToken = `sb_secret_${"S".repeat(32)}`;
+  const values = [
+    { value: telegramToken, secret: telegramSecret },
+    { value: vaultServiceToken, secret: vaultServiceToken },
+    { value: vaultBatchToken, secret: vaultBatchToken },
+    { value: notionToken, secret: notionToken },
+    { value: supabaseToken, secret: supabaseToken },
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const { value, secret } of values) {
-		const obfuscated = value.replace(secret, `${secret.slice(0, 10)}\u0000${secret.slice(10)}`);
-		for (const candidate of [value, obfuscated]) {
-			const valueStart = prefixLength - 10 - candidate.indexOf(secret.slice(0, 10));
-			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const f = fixture();
-			const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const { value, secret } of values) {
+    const obfuscated = value.replace(
+      secret,
+      `${secret.slice(0, 10)}\u0000${secret.slice(10)}`,
+    );
+    for (const candidate of [value, obfuscated]) {
+      const valueStart =
+        prefixLength - 10 - candidate.indexOf(secret.slice(0, 10));
+      const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const f = fixture();
+      const find = spyOn(f.ctx.modelRegistry, "find");
 
-			f.input(prompt);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(f.requests).toHaveLength(0);
-			expect(f.state.title).toBe("existing task");
-			expect(f.warnings).toEqual([warning]);
-			expect(f.warnings.join(" ")).not.toContain(secret);
-			expect(f.warnings.join(" ")).not.toContain(value);
-		}
-	}
+      f.input(prompt);
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(f.requests).toHaveLength(0);
+      expect(f.state.title).toBe("existing task");
+      expect(f.warnings).toEqual([warning]);
+      expect(f.warnings.join(" ")).not.toContain(secret);
+      expect(f.warnings.join(" ")).not.toContain(value);
+    }
+  }
 });
 
 test("deployment and commerce tokens crossing prompt truncation skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const atlassianToken = `ATATT3${"a".repeat(183)}_-=`;
-	const shopifyTokens = ["shpat_", "shpca_", "shppa_", "shpss_"].map((prefix) => `${prefix}${"a".repeat(32)}`);
-	const shippoTokens = ["live", "test"].map((mode) => `shippo_${mode}_${"a".repeat(40)}`);
-	const postmanToken = `PMAK-${"a".repeat(24)}-${"b".repeat(34)}`;
-	const pulumiToken = `pul-${"a".repeat(40)}`;
-	const digitalOceanTokens = ["doo", "dop", "dor"].map((prefix) => `${prefix}_v1_${"a".repeat(64)}`);
-	const prefectToken = `pnu_${"A1b2".repeat(9)}`;
-	const octopusApiKey = `API-${"A1B2".repeat(6)}A1`;
-	const values = [
-		atlassianToken, ...shopifyTokens, ...shippoTokens, postmanToken,
-		pulumiToken, ...digitalOceanTokens, prefectToken, octopusApiKey,
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const atlassianToken = `ATATT3${"a".repeat(183)}_-=`;
+  const shopifyTokens = ["shpat_", "shpca_", "shppa_", "shpss_"].map(
+    (prefix) => `${prefix}${"a".repeat(32)}`,
+  );
+  const shippoTokens = ["live", "test"].map(
+    (mode) => `shippo_${mode}_${"a".repeat(40)}`,
+  );
+  const postmanToken = `PMAK-${"a".repeat(24)}-${"b".repeat(34)}`;
+  const pulumiToken = `pul-${"a".repeat(40)}`;
+  const digitalOceanTokens = ["doo", "dop", "dor"].map(
+    (prefix) => `${prefix}_v1_${"a".repeat(64)}`,
+  );
+  const prefectToken = `pnu_${"A1b2".repeat(9)}`;
+  const octopusApiKey = `API-${"A1B2".repeat(6)}A1`;
+  const values = [
+    atlassianToken,
+    ...shopifyTokens,
+    ...shippoTokens,
+    postmanToken,
+    pulumiToken,
+    ...digitalOceanTokens,
+    prefectToken,
+    octopusApiKey,
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of values) {
-		const obfuscated = value.slice(0, 10) + "\u200b" + value.slice(10);
-		for (const candidate of [value, obfuscated]) {
-			const valueStart = prefixLength - 10;
-			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const f = fixture();
-			const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const value of values) {
+    const obfuscated = value.slice(0, 10) + "\u200b" + value.slice(10);
+    for (const candidate of [value, obfuscated]) {
+      const valueStart = prefixLength - 10;
+      const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const f = fixture();
+      const find = spyOn(f.ctx.modelRegistry, "find");
 
-			f.input(prompt);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(f.requests).toHaveLength(0);
-			expect(f.state.title).toBe("existing task");
-			expect(f.warnings).toEqual([warning]);
-			expect(f.warnings.join(" ")).not.toContain(value);
-		}
-	}
+      f.input(prompt);
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(f.requests).toHaveLength(0);
+      expect(f.state.title).toBe("existing task");
+      expect(f.warnings).toEqual([warning]);
+      expect(f.warnings.join(" ")).not.toContain(value);
+    }
+  }
 });
 
 test("observability tokens crossing prompt truncation skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const grafanaApiKey = `eyJrIjoi${"A".repeat(70)}`;
-	const grafanaCloudToken = `glc_${"A".repeat(400)}`;
-	const serviceBody = "aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x".repeat(2).slice(0, 32);
-	const grafanaServiceToken = `glsa_${serviceBody}_A1B2C3D4`;
-	const dopplerToken = `dp.pt.${"A".repeat(43)}`;
-	const sentryUserToken = `sntryu_${"a".repeat(64)}`;
-	const values = [grafanaApiKey, grafanaCloudToken, grafanaServiceToken, dopplerToken, sentryUserToken];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const grafanaApiKey = `eyJrIjoi${"A".repeat(70)}`;
+  const grafanaCloudToken = `glc_${"A".repeat(400)}`;
+  const serviceBody = "aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x".repeat(2).slice(0, 32);
+  const grafanaServiceToken = `glsa_${serviceBody}_A1B2C3D4`;
+  const dopplerToken = `dp.pt.${"A".repeat(43)}`;
+  const sentryUserToken = `sntryu_${"a".repeat(64)}`;
+  const values = [
+    grafanaApiKey,
+    grafanaCloudToken,
+    grafanaServiceToken,
+    dopplerToken,
+    sentryUserToken,
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of values) {
-		const obfuscated = value.slice(0, 10) + "\u200b" + value.slice(10);
-		for (const candidate of [value, obfuscated]) {
-			const valueStart = prefixLength - 10;
-			const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
-			const f = fixture();
-			const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const value of values) {
+    const obfuscated = value.slice(0, 10) + "\u200b" + value.slice(10);
+    for (const candidate of [value, obfuscated]) {
+      const valueStart = prefixLength - 10;
+      const prompt = `${"x".repeat(valueStart - 1)} ${candidate} ${"y".repeat(1_200)}`;
+      const f = fixture();
+      const find = spyOn(f.ctx.modelRegistry, "find");
 
-			f.input(prompt);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(f.requests).toHaveLength(0);
-			expect(f.state.title).toBe("existing task");
-			expect(f.warnings).toEqual([warning]);
-			expect(f.warnings.join(" ")).not.toContain(value);
-		}
-	}
+      f.input(prompt);
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(f.requests).toHaveLength(0);
+      expect(f.state.title).toBe("existing task");
+      expect(f.warnings).toEqual([warning]);
+      expect(f.warnings.join(" ")).not.toContain(value);
+    }
+  }
 });
 
 test("additional fixed-format tokens crossing prompt truncation skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = [
-		`NRAK-${"A1b2".repeat(6)}abc`,
-		`HRKU-AA${"A1_b".repeat(14)}AB`,
-		`AKCp${"A1b2".repeat(17)}A`,
-		`cmVmd${"C1d2".repeat(14)}AbC`,
-		`dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
-		`fo1_${"A1_b".repeat(10)}ABC`,
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = [
+    `NRAK-${"A1b2".repeat(6)}abc`,
+    `HRKU-AA${"A1_b".repeat(14)}AB`,
+    `AKCp${"A1b2".repeat(17)}A`,
+    `cmVmd${"C1d2".repeat(14)}AbC`,
+    `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
+    `fo1_${"A1_b".repeat(10)}ABC`,
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const token of tokens) {
-		const tokenStart = prefixLength - 10;
-		const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_200)}`;
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const token of tokens) {
+    const tokenStart = prefixLength - 10;
+    const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_200)}`;
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
 
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 });
 
 test("a Docker Hub token crossing prompt truncation is not sent to the naming model", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `dckr_pat_${"A1b2_-".repeat(5).slice(0, 27)}`;
-	const prompt = `${"x".repeat(prefixLength - 9)} ${token} ${"x".repeat(1_200)}`;
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	const f = fixture();
-	const find = spyOn(f.ctx.modelRegistry, "find");
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `dckr_pat_${"A1b2_-".repeat(5).slice(0, 27)}`;
+  const prompt = `${"x".repeat(prefixLength - 9)} ${token} ${"x".repeat(1_200)}`;
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const f = fixture();
+  const find = spyOn(f.ctx.modelRegistry, "find");
 
-	f.input(prompt);
-	await settle();
-	expect(find).not.toHaveBeenCalled();
-	expect(f.requests).toHaveLength(0);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual([warning]);
-	expect(f.warnings.join(" ")).not.toContain(token);
+  f.input(prompt);
+  await settle();
+  expect(find).not.toHaveBeenCalled();
+  expect(f.requests).toHaveLength(0);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toEqual([warning]);
+  expect(f.warnings.join(" ")).not.toContain(token);
 });
 
 test("Azure DevOps PATs and GitLab Runner tokens crossing prompt truncation skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = [
-		`${"a".repeat(75)}AZDO${"B".repeat(5)}`,
-		`glrt-${"A1b2_-".repeat(3)}Z9`,
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = [
+    `${"a".repeat(75)}AZDO${"B".repeat(5)}`,
+    `glrt-${"A1b2_-".repeat(3)}Z9`,
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const token of tokens) {
-		const tokenStart = prefixLength - Math.floor(token.length / 2);
-		const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const token of tokens) {
+    const tokenStart = prefixLength - Math.floor(token.length / 2);
+    const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
 
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 });
 
 test("Azure and cloud access credentials crossing prompt truncation skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = [
-		`AbC7Q~${"Aa0_-.".repeat(6).slice(0, 32)}`,
-		`LTAI${"A1b2".repeat(5)}`,
-		`AKID${"C3d4".repeat(8)}`,
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = [
+    `AbC7Q~${"Aa0_-.".repeat(6).slice(0, 32)}`,
+    `LTAI${"A1b2".repeat(5)}`,
+    `AKID${"C3d4".repeat(8)}`,
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const token of tokens) {
-		const tokenStart = prefixLength - Math.floor(token.length / 2);
-		const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const token of tokens) {
+    const tokenStart = prefixLength - Math.floor(token.length / 2);
+    const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"x".repeat(1_200)}`;
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
 
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 });
 
 test("Airtable and ClickHouse keys crossing prompt truncation skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const tokens = [
-		`pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`,
-		`4b1d${"A1b2".repeat(9)}A1`,
-	];
-	const values = tokens.flatMap((token, index) => [
-		token,
-		index === 0 ? token.replace("pat", "p\u200bat") : token.replace("4b1d", "4b\u200b1d"),
-		`${token.slice(0, 10)}\u0000${token.slice(10)}`,
-	]);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const tokens = [
+    `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`,
+    `4b1d${"A1b2".repeat(9)}A1`,
+  ];
+  const values = tokens.flatMap((token, index) => [
+    token,
+    index === 0
+      ? token.replace("pat", "p\u200bat")
+      : token.replace("4b1d", "4b\u200b1d"),
+    `${token.slice(0, 10)}\u0000${token.slice(10)}`,
+  ]);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of values) {
-		const tokenStart = prefixLength - Math.floor(value.length / 2);
-		const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const value of values) {
+    const tokenStart = prefixLength - Math.floor(value.length / 2);
+    const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
 
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(value);
-	}
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(value);
+  }
 });
 
 test("a Pinecone API key crossing prompt truncation skips model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `pcsk_test1_${"A".repeat(63)}`;
-	const values = [
-		token,
-		token.replace("pcsk_", "pc\u200bsk_"),
-		`${token.slice(0, 20)}\u0000${token.slice(20)}`,
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `pcsk_test1_${"A".repeat(63)}`;
+  const values = [
+    token,
+    token.replace("pcsk_", "pc\u200bsk_"),
+    `${token.slice(0, 20)}\u0000${token.slice(20)}`,
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of values) {
-		const tokenStart = prefixLength - Math.floor(value.length / 2);
-		const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(value);
-	}
+  for (const value of values) {
+    const tokenStart = prefixLength - Math.floor(value.length / 2);
+    const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(value);
+  }
 });
 
 test("a Linear API token crossing prompt truncation skips model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `lin_api_${"A1b2".repeat(10)}`;
-	const values = [
-		token,
-		token.toUpperCase(),
-		token.replace("lin_api_", "lin\u200b_api_"),
-		`${token.slice(0, 20)}\u0000${token.slice(20)}`,
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `lin_api_${"A1b2".repeat(10)}`;
+  const values = [
+    token,
+    token.toUpperCase(),
+    token.replace("lin_api_", "lin\u200b_api_"),
+    `${token.slice(0, 20)}\u0000${token.slice(20)}`,
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of values) {
-		const tokenStart = prefixLength - Math.floor(value.length / 2);
-		const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(value);
-	}
+  for (const value of values) {
+    const tokenStart = prefixLength - Math.floor(value.length / 2);
+    const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(value);
+  }
 });
 
 test("a Neon API key crossing prompt truncation skips model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
-	const values = [
-		token,
-		token.replace("neon_api_key_", "neon_\u200bapi_key_"),
-		`${token.slice(0, 20)}\u0000${token.slice(20)}`,
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
+  const values = [
+    token,
+    token.replace("neon_api_key_", "neon_\u200bapi_key_"),
+    `${token.slice(0, 20)}\u0000${token.slice(20)}`,
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of values) {
-		const tokenStart = prefixLength - Math.floor(value.length / 2);
-		const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(value);
-	}
+  for (const value of values) {
+    const tokenStart = prefixLength - Math.floor(value.length / 2);
+    const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(value);
+  }
 });
 
 test("a control-obfuscated Neon key embedded in prose skips model lookup", async () => {
-	const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
-	const obfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
-	const f = fixture();
-	const find = spyOn(f.ctx.modelRegistry, "find");
-	f.input(`Review Neon access ${obfuscated}`);
-	await settle();
-	expect(find).not.toHaveBeenCalled();
-	expect(f.requests).toHaveLength(0);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(f.warnings.join(" ")).not.toContain(obfuscated);
+  const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
+  const obfuscated = `${token.slice(0, 20)}\u0000${token.slice(20)}`;
+  const f = fixture();
+  const find = spyOn(f.ctx.modelRegistry, "find");
+  f.input(`Review Neon access ${obfuscated}`);
+  await settle();
+  expect(find).not.toHaveBeenCalled();
+  expect(f.requests).toHaveLength(0);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(f.warnings.join(" ")).not.toContain(obfuscated);
 });
 
 test("a whitespace-obfuscated Neon key embedded in prose skips model lookup", async () => {
-	const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
-	const obfuscated = `${token.slice(0, 20)} ${token.slice(20)}`;
-	const f = fixture();
-	const find = spyOn(f.ctx.modelRegistry, "find");
-	f.input(`Review Neon access ${obfuscated} before deployment`);
-	await settle();
-	expect(find).not.toHaveBeenCalled();
-	expect(f.requests).toHaveLength(0);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(f.warnings.join(" ")).not.toContain(obfuscated);
+  const token = `neon_api_key_${"A1_b-".repeat(6)}AB`;
+  const obfuscated = `${token.slice(0, 20)} ${token.slice(20)}`;
+  const f = fixture();
+  const find = spyOn(f.ctx.modelRegistry, "find");
+  f.input(`Review Neon access ${obfuscated} before deployment`);
+  await settle();
+  expect(find).not.toHaveBeenCalled();
+  expect(f.requests).toHaveLength(0);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(f.warnings.join(" ")).not.toContain(obfuscated);
 });
 
 test("a long 1Password token crossing prompt truncation skips model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `ops_eyJ${"Aa0+/".repeat(50)}`;
-	const tokenStart = prefixLength - 20;
-	const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_300)}`;
-	const f = fixture();
-	const find = spyOn(f.ctx.modelRegistry, "find");
-	f.input(prompt);
-	await settle();
-	expect(find).not.toHaveBeenCalled();
-	expect(f.requests).toHaveLength(0);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(f.warnings.join(" ")).not.toContain(token);
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `ops_eyJ${"Aa0+/".repeat(50)}`;
+  const tokenStart = prefixLength - 20;
+  const prompt = `${"x".repeat(tokenStart - 1)} ${token} ${"y".repeat(1_300)}`;
+  const f = fixture();
+  const find = spyOn(f.ctx.modelRegistry, "find");
+  f.input(prompt);
+  await settle();
+  expect(find).not.toHaveBeenCalled();
+  expect(f.requests).toHaveLength(0);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(f.warnings.join(" ")).not.toContain(token);
 });
 
 test("a long variable-length token crossing a retained prompt suffix skips model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const suffixLength = Math.floor(retainedLength / 2);
-	const promptLength = 6_000;
-	const suffixStart = promptLength - suffixLength;
-	const token = `fm2_${"A".repeat(1_100)}`;
-	const tokenStart = suffixStart - 800;
-	const prompt = `${"x".repeat(tokenStart - 1)} ${token}${"x".repeat(promptLength - tokenStart - token.length)}`;
-	const f = fixture();
-	const find = spyOn(f.ctx.modelRegistry, "find");
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const suffixLength = Math.floor(retainedLength / 2);
+  const promptLength = 6_000;
+  const suffixStart = promptLength - suffixLength;
+  const token = `fm2_${"A".repeat(1_100)}`;
+  const tokenStart = suffixStart - 800;
+  const prompt = `${"x".repeat(tokenStart - 1)} ${token}${"x".repeat(promptLength - tokenStart - token.length)}`;
+  const f = fixture();
+  const find = spyOn(f.ctx.modelRegistry, "find");
 
-	f.input(prompt);
-	await settle();
-	expect(find).not.toHaveBeenCalled();
-	expect(f.requests).toHaveLength(0);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(f.warnings.join(" ")).not.toContain(token);
+  f.input(prompt);
+  await settle();
+  expect(find).not.toHaveBeenCalled();
+  expect(f.requests).toHaveLength(0);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(f.warnings.join(" ")).not.toContain(token);
 });
 
 test("a short labeled password crossing prompt truncation skips model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const label = " password: ";
-	const value = "R4nd0mxZ";
-	const valueStart = prefixLength - 3;
-	const prompt = `${"x".repeat(valueStart - label.length)}${label}${value}; ${"y".repeat(1_200)}`;
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	const f = fixture();
-	const find = spyOn(f.ctx.modelRegistry, "find");
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const label = " password: ";
+  const value = "R4nd0mxZ";
+  const valueStart = prefixLength - 3;
+  const prompt = `${"x".repeat(valueStart - label.length)}${label}${value}; ${"y".repeat(1_200)}`;
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const f = fixture();
+  const find = spyOn(f.ctx.modelRegistry, "find");
 
-	f.input(prompt);
-	await settle();
-	expect(find).not.toHaveBeenCalled();
-	expect(f.requests).toHaveLength(0);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual([warning]);
-	expect(f.warnings.join(" ")).not.toContain(value);
+  f.input(prompt);
+  await settle();
+  expect(find).not.toHaveBeenCalled();
+  expect(f.requests).toHaveLength(0);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toEqual([warning]);
+  expect(f.warnings.join(" ")).not.toContain(value);
 });
 
 test("a Replicate API token crossing prompt truncation skips model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `r8_${"A1b2".repeat(9)}A`;
-	const values = [
-		token,
-		token.replace("r8_", "r\u200b8_"),
-		`${token.slice(0, 20)}\u0000${token.slice(20)}`,
-	];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `r8_${"A1b2".repeat(9)}A`;
+  const values = [
+    token,
+    token.replace("r8_", "r\u200b8_"),
+    `${token.slice(0, 20)}\u0000${token.slice(20)}`,
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of values) {
-		const tokenStart = prefixLength - Math.floor(value.length / 2);
-		const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(value);
-	}
+  for (const value of values) {
+    const tokenStart = prefixLength - Math.floor(value.length / 2);
+    const prompt = `${"x".repeat(tokenStart - 1)} ${value} ${"x".repeat(1_200)}`;
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(value);
+  }
 });
 
 test("a Slack API token crossing prompt truncation is not sent to the naming model", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const token = `xoxb-${"A1b2".repeat(8)}`;
-	const prompt = `${"x".repeat(prefixLength - 8)}${token} ${"x".repeat(1_200)}`;
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	const f = fixture();
-	const find = spyOn(f.ctx.modelRegistry, "find");
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const token = `xoxb-${"A1b2".repeat(8)}`;
+  const prompt = `${"x".repeat(prefixLength - 8)}${token} ${"x".repeat(1_200)}`;
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const f = fixture();
+  const find = spyOn(f.ctx.modelRegistry, "find");
 
-	f.input(prompt);
-	await settle();
-	expect(find).not.toHaveBeenCalled();
-	expect(f.requests).toHaveLength(0);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual([warning]);
-	expect(f.warnings.join(" ")).not.toContain(token);
+  f.input(prompt);
+  await settle();
+  expect(find).not.toHaveBeenCalled();
+  expect(f.requests).toHaveLength(0);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toEqual([warning]);
+  expect(f.warnings.join(" ")).not.toContain(token);
 });
 
 test("private-key file markers crossing prompt truncation are not sent to the naming model", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const headers = ["PuTTY-User-Key-File-3:", "---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----"];
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const headers = [
+    "PuTTY-User-Key-File-3:",
+    "---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----",
+  ];
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const header of headers) {
-		const prompt = `${"x".repeat(prefixLength - 8)}${header} ${"x".repeat(1_200)}`;
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
+  for (const header of headers) {
+    const prompt = `${"x".repeat(prefixLength - 8)}${header} ${"x".repeat(1_200)}`;
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
 
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(header);
-	}
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(header);
+  }
 });
 
 test("an age secret identity crossing prompt truncation is not sent to the naming model", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const prefix = ["AGE", "SECRET", "KEY", "1"].join("-");
-	const identity = `${prefix}${"Q".repeat(58)}`;
-	const prompt = `${"x".repeat(prefixLength - 9)} ${identity} ${"x".repeat(1_200)}`;
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	const f = fixture();
-	const find = spyOn(f.ctx.modelRegistry, "find");
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const prefix = ["AGE", "SECRET", "KEY", "1"].join("-");
+  const identity = `${prefix}${"Q".repeat(58)}`;
+  const prompt = `${"x".repeat(prefixLength - 9)} ${identity} ${"x".repeat(1_200)}`;
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const f = fixture();
+  const find = spyOn(f.ctx.modelRegistry, "find");
 
-	f.input(prompt);
-	await settle();
-	expect(find).not.toHaveBeenCalled();
-	expect(f.requests).toHaveLength(0);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual([warning]);
-	expect(f.warnings.join(" ")).not.toContain(identity);
+  f.input(prompt);
+  await settle();
+  expect(find).not.toHaveBeenCalled();
+  expect(f.requests).toHaveLength(0);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toEqual([warning]);
+  expect(f.warnings.join(" ")).not.toContain(identity);
 });
 
 test("safe naming can resume after a credential-looking context is blocked", async () => {
-	const token = ["ghp_", "C".repeat(20)].join("");
-	const f = fixture([Promise.resolve(response("fix auth tests"))]);
-	const find = spyOn(f.ctx.modelRegistry, "find");
-	f.input(`Review ${token}`);
-	await settle();
-	expect(find).not.toHaveBeenCalled();
-	expect(f.requests).toHaveLength(0);
-	expect(f.state.title).toBe("existing task");
+  const token = ["ghp_", "C".repeat(20)].join("");
+  const f = fixture([Promise.resolve(response("fix auth tests"))]);
+  const find = spyOn(f.ctx.modelRegistry, "find");
+  f.input(`Review ${token}`);
+  await settle();
+  expect(find).not.toHaveBeenCalled();
+  expect(f.requests).toHaveLength(0);
+  expect(f.state.title).toBe("existing task");
 
-	f.input("Fix auth tests");
-	await settle();
-	expect(f.requests).toHaveLength(1);
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.warnings).toEqual(["Sensitive-looking task context was not sent to the naming model; the current title was kept."]);
-	expect(f.warnings.join(" ")).not.toContain(token);
+  f.input("Fix auth tests");
+  await settle();
+  expect(f.requests).toHaveLength(1);
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(f.warnings.join(" ")).not.toContain(token);
 });
 
 test("new credential-looking context cancels in-flight naming without sending it", async () => {
-	const result = deferred();
-	const f = fixture([result.promise]);
-	f.input("Fix auth tests");
-	await settle();
-	expect(f.requests).toHaveLength(1);
-	const previousSignal = f.requests[0].options.signal as AbortSignal;
-	const find = spyOn(f.ctx.modelRegistry, "find");
-	const token = ["ghp_", "B".repeat(20)].join("");
-	f.input(`Use ${token} to test the integration`);
-	await settle();
-	expect(previousSignal.aborted).toBe(true);
-	expect(find).not.toHaveBeenCalled();
-	expect(f.requests).toHaveLength(1);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual(["Sensitive-looking task context was not sent to the naming model; the current title was kept."]);
-	expect(f.warnings.join(" ")).not.toContain(token);
-	result.resolve(response("fix auth tests"));
-	await settle();
-	expect(f.state.title).toBe("existing task");
+  const result = deferred();
+  const f = fixture([result.promise]);
+  f.input("Fix auth tests");
+  await settle();
+  expect(f.requests).toHaveLength(1);
+  const previousSignal = f.requests[0].options.signal as AbortSignal;
+  const find = spyOn(f.ctx.modelRegistry, "find");
+  const token = ["ghp_", "B".repeat(20)].join("");
+  f.input(`Use ${token} to test the integration`);
+  await settle();
+  expect(previousSignal.aborted).toBe(true);
+  expect(find).not.toHaveBeenCalled();
+  expect(f.requests).toHaveLength(1);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(f.warnings.join(" ")).not.toContain(token);
+  result.resolve(response("fix auth tests"));
+  await settle();
+  expect(f.state.title).toBe("existing task");
 });
 
 test("legacy Dropbox shared links stay out of naming context and model output", async () => {
-	const id = "a".repeat(15);
-	const link = `https://www.dropbox.com/s/${id}/manual.pdf?dl=0`;
-	const sensitiveContext = fixture();
-	sensitiveContext.input(`Review this Dropbox file: ${link}`);
-	await settle();
-	expect(sensitiveContext.requests).toHaveLength(0);
-	expect(sensitiveContext.state.title).toBe("existing task");
-	expect(sensitiveContext.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(sensitiveContext.warnings.join(" ")).not.toContain(id);
+  const id = "a".repeat(15);
+  const link = `https://www.dropbox.com/s/${id}/manual.pdf?dl=0`;
+  const sensitiveContext = fixture();
+  sensitiveContext.input(`Review this Dropbox file: ${link}`);
+  await settle();
+  expect(sensitiveContext.requests).toHaveLength(0);
+  expect(sensitiveContext.state.title).toBe("existing task");
+  expect(sensitiveContext.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(sensitiveContext.warnings.join(" ")).not.toContain(id);
 
-	const sensitiveOutput = fixture([Promise.resolve(response(link))]);
-	sensitiveOutput.input("Name a task");
-	await settle();
-	expect(sensitiveOutput.requests).toHaveLength(1);
-	expect(sensitiveOutput.state.title).toBe("existing task");
-	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-	expect(sensitiveOutput.warnings.join(" ")).not.toContain(id);
+  const sensitiveOutput = fixture([Promise.resolve(response(link))]);
+  sensitiveOutput.input("Name a task");
+  await settle();
+  expect(sensitiveOutput.requests).toHaveLength(1);
+  expect(sensitiveOutput.state.title).toBe("existing task");
+  expect(
+    sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+  ).toEqual([]);
+  expect(sensitiveOutput.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
+  expect(sensitiveOutput.warnings.join(" ")).not.toContain(id);
 });
 
 test("MEGA share links stay out of naming context and are rejected from model output", async () => {
-	const key = "A".repeat(43);
-	const link = `https://mega.nz/file/abcdefgh#${key}`;
-	const sensitiveContext = fixture();
-	sensitiveContext.input(`Review this file: ${link}`);
-	await settle();
-	expect(sensitiveContext.requests).toHaveLength(0);
-	expect(sensitiveContext.state.title).toBe("existing task");
-	expect(sensitiveContext.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
+  const key = "A".repeat(43);
+  const link = `https://mega.nz/file/abcdefgh#${key}`;
+  const sensitiveContext = fixture();
+  sensitiveContext.input(`Review this file: ${link}`);
+  await settle();
+  expect(sensitiveContext.requests).toHaveLength(0);
+  expect(sensitiveContext.state.title).toBe("existing task");
+  expect(sensitiveContext.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
 
-	const sensitiveOutput = fixture([Promise.resolve(response(link))]);
-	sensitiveOutput.input("Name a task");
-	await settle();
-	expect(sensitiveOutput.requests).toHaveLength(1);
-	expect(sensitiveOutput.state.title).toBe("existing task");
-	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-	expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
+  const sensitiveOutput = fixture([Promise.resolve(response(link))]);
+  sensitiveOutput.input("Name a task");
+  await settle();
+  expect(sensitiveOutput.requests).toHaveLength(1);
+  expect(sensitiveOutput.state.title).toBe("existing task");
+  expect(
+    sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+  ).toEqual([]);
+  expect(sensitiveOutput.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
+  expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
 });
 
 test("Proton Drive share-link passwords stay out of naming context and model output", async () => {
-	const key = "A".repeat(12);
-	const link = `https://drive.proton.me/urls/sharetoken#${key}`;
-	const sensitiveContext = fixture();
-	sensitiveContext.input(`Review this Proton Drive file: ${link}`);
-	await settle();
-	expect(sensitiveContext.requests).toHaveLength(0);
-	expect(sensitiveContext.state.title).toBe("existing task");
-	expect(sensitiveContext.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
+  const key = "A".repeat(12);
+  const link = `https://drive.proton.me/urls/sharetoken#${key}`;
+  const sensitiveContext = fixture();
+  sensitiveContext.input(`Review this Proton Drive file: ${link}`);
+  await settle();
+  expect(sensitiveContext.requests).toHaveLength(0);
+  expect(sensitiveContext.state.title).toBe("existing task");
+  expect(sensitiveContext.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
 
-	const sensitiveOutput = fixture([Promise.resolve(response(link))]);
-	sensitiveOutput.input("Name a task");
-	await settle();
-	expect(sensitiveOutput.requests).toHaveLength(1);
-	expect(sensitiveOutput.state.title).toBe("existing task");
-	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-	expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
+  const sensitiveOutput = fixture([Promise.resolve(response(link))]);
+  sensitiveOutput.input("Name a task");
+  await settle();
+  expect(sensitiveOutput.requests).toHaveLength(1);
+  expect(sensitiveOutput.state.title).toBe("existing task");
+  expect(
+    sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+  ).toEqual([]);
+  expect(sensitiveOutput.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
+  expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
 });
 
 test("OneDrive shared-link auth keys stay out of naming context and model output", async () => {
-	const key = "1201919!12921!1";
-	const link = `https://onedrive.live.com/redir?resid=1231244193912!12&authKey=${key}`;
-	const sensitiveContext = fixture();
-	sensitiveContext.input(`Review this OneDrive file: ${link}`);
-	await settle();
-	expect(sensitiveContext.requests).toHaveLength(0);
-	expect(sensitiveContext.state.title).toBe("existing task");
-	expect(sensitiveContext.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
+  const key = "1201919!12921!1";
+  const link = `https://onedrive.live.com/redir?resid=1231244193912!12&authKey=${key}`;
+  const sensitiveContext = fixture();
+  sensitiveContext.input(`Review this OneDrive file: ${link}`);
+  await settle();
+  expect(sensitiveContext.requests).toHaveLength(0);
+  expect(sensitiveContext.state.title).toBe("existing task");
+  expect(sensitiveContext.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
 
-	const sensitiveOutput = fixture([Promise.resolve(response(link))]);
-	sensitiveOutput.input("Name a task");
-	await settle();
-	expect(sensitiveOutput.requests).toHaveLength(1);
-	expect(sensitiveOutput.state.title).toBe("existing task");
-	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-	expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
+  const sensitiveOutput = fixture([Promise.resolve(response(link))]);
+  sensitiveOutput.input("Name a task");
+  await settle();
+  expect(sensitiveOutput.requests).toHaveLength(1);
+  expect(sensitiveOutput.state.title).toBe("existing task");
+  expect(
+    sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+  ).toEqual([]);
+  expect(sensitiveOutput.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
+  expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
 });
 
 test("Microsoft Graph OneDrive share tokens stay out of naming context and model output", async () => {
-	const token = "A".repeat(48);
-	const link = `https://graph.microsoft.com/v1.0/shares/u!${token}`;
-	const sensitiveContext = fixture();
-	sensitiveContext.input(`Review this OneDrive file: ${link}`);
-	await settle();
-	expect(sensitiveContext.requests).toHaveLength(0);
-	expect(sensitiveContext.state.title).toBe("existing task");
-	expect(sensitiveContext.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(sensitiveContext.warnings.join(" ")).not.toContain(token);
+  const token = "A".repeat(48);
+  const link = `https://graph.microsoft.com/v1.0/shares/u!${token}`;
+  const sensitiveContext = fixture();
+  sensitiveContext.input(`Review this OneDrive file: ${link}`);
+  await settle();
+  expect(sensitiveContext.requests).toHaveLength(0);
+  expect(sensitiveContext.state.title).toBe("existing task");
+  expect(sensitiveContext.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(sensitiveContext.warnings.join(" ")).not.toContain(token);
 
-	const sensitiveOutput = fixture([Promise.resolve(response(link))]);
-	sensitiveOutput.input("Name a task");
-	await settle();
-	expect(sensitiveOutput.requests).toHaveLength(1);
-	expect(sensitiveOutput.state.title).toBe("existing task");
-	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-	expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
+  const sensitiveOutput = fixture([Promise.resolve(response(link))]);
+  sensitiveOutput.input("Name a task");
+  await settle();
+  expect(sensitiveOutput.requests).toHaveLength(1);
+  expect(sensitiveOutput.state.title).toBe("existing task");
+  expect(
+    sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+  ).toEqual([]);
+  expect(sensitiveOutput.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
+  expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
 });
 
 test("OneDrive short links stay out of naming context and model output", async () => {
-	const id = "A".repeat(32);
-	const link = `https://1drv.ms/${id}`;
-	const sensitiveContext = fixture();
-	sensitiveContext.input(`Review this OneDrive file: ${link}`);
-	await settle();
-	expect(sensitiveContext.requests).toHaveLength(0);
-	expect(sensitiveContext.state.title).toBe("existing task");
-	expect(sensitiveContext.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(sensitiveContext.warnings.join(" ")).not.toContain(id);
+  const id = "A".repeat(32);
+  const link = `https://1drv.ms/${id}`;
+  const sensitiveContext = fixture();
+  sensitiveContext.input(`Review this OneDrive file: ${link}`);
+  await settle();
+  expect(sensitiveContext.requests).toHaveLength(0);
+  expect(sensitiveContext.state.title).toBe("existing task");
+  expect(sensitiveContext.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(sensitiveContext.warnings.join(" ")).not.toContain(id);
 
-	const sensitiveOutput = fixture([Promise.resolve(response(link))]);
-	sensitiveOutput.input("Name a task");
-	await settle();
-	expect(sensitiveOutput.requests).toHaveLength(1);
-	expect(sensitiveOutput.state.title).toBe("existing task");
-	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-	expect(sensitiveOutput.warnings.join(" ")).not.toContain(id);
+  const sensitiveOutput = fixture([Promise.resolve(response(link))]);
+  sensitiveOutput.input("Name a task");
+  await settle();
+  expect(sensitiveOutput.requests).toHaveLength(1);
+  expect(sensitiveOutput.state.title).toBe("existing task");
+  expect(
+    sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+  ).toEqual([]);
+  expect(sensitiveOutput.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
+  expect(sensitiveOutput.warnings.join(" ")).not.toContain(id);
 });
 
 test("OneDrive s! share keys stay out of naming context and model output", async () => {
-	const keys = ["A1b2".repeat(7), "ab_CD-".repeat(4)];
-	const links = [
-		`https://1drv.ms/f/s!${keys[0]}?e=example`,
-		`https://1drv.ms/u/s!${keys[1]}`,
-	];
-	for (const [index, url] of links.entries()) {
-		const key = keys[index]!;
-		const sensitiveContext = fixture();
-		sensitiveContext.input(`Review this OneDrive file: ${url}`);
-		await settle();
-		expect(sensitiveContext.requests).toHaveLength(0);
-		expect(sensitiveContext.state.title).toBe("existing task");
-		expect(sensitiveContext.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
+  const keys = ["A1b2".repeat(7), "ab_CD-".repeat(4)];
+  const links = [
+    `https://1drv.ms/f/s!${keys[0]}?e=example`,
+    `https://1drv.ms/u/s!${keys[1]}`,
+  ];
+  for (const [index, url] of links.entries()) {
+    const key = keys[index]!;
+    const sensitiveContext = fixture();
+    sensitiveContext.input(`Review this OneDrive file: ${url}`);
+    await settle();
+    expect(sensitiveContext.requests).toHaveLength(0);
+    expect(sensitiveContext.state.title).toBe("existing task");
+    expect(sensitiveContext.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
 
-		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
-		sensitiveOutput.input("Name a task");
-		await settle();
-		expect(sensitiveOutput.requests).toHaveLength(1);
-		expect(sensitiveOutput.state.title).toBe("existing task");
-		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
-	}
+    const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+    sensitiveOutput.input("Name a task");
+    await settle();
+    expect(sensitiveOutput.requests).toHaveLength(1);
+    expect(sensitiveOutput.state.title).toBe("existing task");
+    expect(
+      sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+    ).toEqual([]);
+    expect(sensitiveOutput.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
+  }
 });
 
 test("WeTransfer short links stay out of naming context and model output", async () => {
-	const links = [
-		{ url: "https://we.tl/t-aB3cD5eF7g", code: "aB3cD5eF7g" },
-		{ url: "https://we.tl/t-0123456789?utm_source=share", code: "0123456789" },
-	];
-	for (const { url, code } of links) {
-		const sensitiveContext = fixture();
-		sensitiveContext.input(`Review this WeTransfer link: ${url}`);
-		await settle();
-		expect(sensitiveContext.requests).toHaveLength(0);
-		expect(sensitiveContext.state.title).toBe("existing task");
-		expect(sensitiveContext.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(sensitiveContext.warnings.join(" ")).not.toContain(code);
+  const links = [
+    { url: "https://we.tl/t-aB3cD5eF7g", code: "aB3cD5eF7g" },
+    { url: "https://we.tl/t-0123456789?utm_source=share", code: "0123456789" },
+  ];
+  for (const { url, code } of links) {
+    const sensitiveContext = fixture();
+    sensitiveContext.input(`Review this WeTransfer link: ${url}`);
+    await settle();
+    expect(sensitiveContext.requests).toHaveLength(0);
+    expect(sensitiveContext.state.title).toBe("existing task");
+    expect(sensitiveContext.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(sensitiveContext.warnings.join(" ")).not.toContain(code);
 
-		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
-		sensitiveOutput.input("Name a task");
-		await settle();
-		expect(sensitiveOutput.requests).toHaveLength(1);
-		expect(sensitiveOutput.state.title).toBe("existing task");
-		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(sensitiveOutput.warnings.join(" ")).not.toContain(code);
-	}
+    const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+    sensitiveOutput.input("Name a task");
+    await settle();
+    expect(sensitiveOutput.requests).toHaveLength(1);
+    expect(sensitiveOutput.state.title).toBe("existing task");
+    expect(
+      sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+    ).toEqual([]);
+    expect(sensitiveOutput.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(sensitiveOutput.warnings.join(" ")).not.toContain(code);
+  }
 });
 
 test("GoFile shared links stay out of naming context and model output", async () => {
-	const links = [
-		{ url: "https://gofile.io/d/SXwLDt", id: "SXwLDt" },
-		{ url: "https://www.gofile.io/d/AbC123?lang=en", id: "AbC123" },
-	];
-	for (const { url, id } of links) {
-		const sensitiveContext = fixture();
-		sensitiveContext.input(`Review this GoFile link: ${url}`);
-		await settle();
-		expect(sensitiveContext.requests).toHaveLength(0);
-		expect(sensitiveContext.state.title).toBe("existing task");
-		expect(sensitiveContext.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(sensitiveContext.warnings.join(" ")).not.toContain(id);
+  const links = [
+    { url: "https://gofile.io/d/SXwLDt", id: "SXwLDt" },
+    { url: "https://www.gofile.io/d/AbC123?lang=en", id: "AbC123" },
+  ];
+  for (const { url, id } of links) {
+    const sensitiveContext = fixture();
+    sensitiveContext.input(`Review this GoFile link: ${url}`);
+    await settle();
+    expect(sensitiveContext.requests).toHaveLength(0);
+    expect(sensitiveContext.state.title).toBe("existing task");
+    expect(sensitiveContext.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(sensitiveContext.warnings.join(" ")).not.toContain(id);
 
-		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
-		sensitiveOutput.input("Name a task");
-		await settle();
-		expect(sensitiveOutput.requests).toHaveLength(1);
-		expect(sensitiveOutput.state.title).toBe("existing task");
-		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(sensitiveOutput.warnings.join(" ")).not.toContain(id);
-	}
+    const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+    sensitiveOutput.input("Name a task");
+    await settle();
+    expect(sensitiveOutput.requests).toHaveLength(1);
+    expect(sensitiveOutput.state.title).toBe("existing task");
+    expect(
+      sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+    ).toEqual([]);
+    expect(sensitiveOutput.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(sensitiveOutput.warnings.join(" ")).not.toContain(id);
+  }
 });
 
 test("Wormhole share keys stay out of naming context and model output", async () => {
-	const keys = [`${"Ab3_-X".repeat(3)}QWER`, `${"A1b2_-".repeat(3)}QWER`];
-	const links = [
-		{ url: `https://wormhole.app/Test42#${keys[0]}`, key: keys[0]! },
-		{ url: `https://www.wormhole.app/Fake99#${keys[1]}`, key: keys[1]! },
-	];
-	for (const { url, key } of links) {
-		const sensitiveContext = fixture();
-		sensitiveContext.input(`Review this Wormhole share: ${url}`);
-		await settle();
-		expect(sensitiveContext.requests).toHaveLength(0);
-		expect(sensitiveContext.state.title).toBe("existing task");
-		expect(sensitiveContext.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
+  const keys = [`${"Ab3_-X".repeat(3)}QWER`, `${"A1b2_-".repeat(3)}QWER`];
+  const links = [
+    { url: `https://wormhole.app/Test42#${keys[0]}`, key: keys[0]! },
+    { url: `https://www.wormhole.app/Fake99#${keys[1]}`, key: keys[1]! },
+  ];
+  for (const { url, key } of links) {
+    const sensitiveContext = fixture();
+    sensitiveContext.input(`Review this Wormhole share: ${url}`);
+    await settle();
+    expect(sensitiveContext.requests).toHaveLength(0);
+    expect(sensitiveContext.state.title).toBe("existing task");
+    expect(sensitiveContext.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(sensitiveContext.warnings.join(" ")).not.toContain(key);
 
-		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
-		sensitiveOutput.input("Name a task");
-		await settle();
-		expect(sensitiveOutput.requests).toHaveLength(1);
-		expect(sensitiveOutput.state.title).toBe("existing task");
-		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
-	}
+    const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+    sensitiveOutput.input("Name a task");
+    await settle();
+    expect(sensitiveOutput.requests).toHaveLength(1);
+    expect(sensitiveOutput.state.title).toBe("existing task");
+    expect(
+      sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+    ).toEqual([]);
+    expect(sensitiveOutput.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(sensitiveOutput.warnings.join(" ")).not.toContain(key);
+  }
 });
 
 test("Discord invite links stay out of naming context and model output", async () => {
-	// These synthetic codes do not grant access to any server.
-	const links = [
-		{ url: "https://discord.gg/SYNTHETIC-ONLY-123", code: "SYNTHETIC-ONLY-123" },
-		{ url: "discord.com/invite/synthetic-discord-code?event=fake", code: "synthetic-discord-code" },
-		{ url: "https://discordapp.com/invite/legacy-synthetic-code", code: "legacy-synthetic-code" },
-	];
-	for (const { url, code } of links) {
-		const sensitiveContext = fixture();
-		sensitiveContext.input(`Review this Discord server invite: ${url}`);
-		await settle();
-		expect(sensitiveContext.requests).toHaveLength(0);
-		expect(sensitiveContext.state.title).toBe("existing task");
-		expect(sensitiveContext.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(sensitiveContext.warnings.join(" ")).not.toContain(code);
+  // These synthetic codes do not grant access to any server.
+  const links = [
+    {
+      url: "https://discord.gg/SYNTHETIC-ONLY-123",
+      code: "SYNTHETIC-ONLY-123",
+    },
+    {
+      url: "discord.com/invite/synthetic-discord-code?event=fake",
+      code: "synthetic-discord-code",
+    },
+    {
+      url: "https://discordapp.com/invite/legacy-synthetic-code",
+      code: "legacy-synthetic-code",
+    },
+  ];
+  for (const { url, code } of links) {
+    const sensitiveContext = fixture();
+    sensitiveContext.input(`Review this Discord server invite: ${url}`);
+    await settle();
+    expect(sensitiveContext.requests).toHaveLength(0);
+    expect(sensitiveContext.state.title).toBe("existing task");
+    expect(sensitiveContext.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(sensitiveContext.warnings.join(" ")).not.toContain(code);
 
-		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
-		sensitiveOutput.input("Name a task");
-		await settle();
-		expect(sensitiveOutput.requests).toHaveLength(1);
-		expect(sensitiveOutput.state.title).toBe("existing task");
-		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(sensitiveOutput.warnings.join(" ")).not.toContain(code);
-	}
+    const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+    sensitiveOutput.input("Name a task");
+    await settle();
+    expect(sensitiveOutput.requests).toHaveLength(1);
+    expect(sensitiveOutput.state.title).toBe("existing task");
+    expect(
+      sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+    ).toEqual([]);
+    expect(sensitiveOutput.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(sensitiveOutput.warnings.join(" ")).not.toContain(code);
+  }
 });
 
 test("Webex meeting passwords stay out of naming context and model output", async () => {
-	// These deliberately synthetic hosts and passwords are not real invitations.
-	const links = [
-		{
-			url: "https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake&pwd=SYNTHETIC-ONLY-123&locale=en",
-			password: "SYNTHETIC-ONLY-123",
-		},
-		{
-			url: "https://meeting.invalid.webex.com/meet/synthetic-user?pwd=TEST+ONLY%2FKEY=",
-			password: "TEST+ONLY%2FKEY=",
-		},
-	];
-	for (const { url, password } of links) {
-		const sensitiveContext = fixture();
-		sensitiveContext.input(`Review this Webex meeting: ${url}`);
-		await settle();
-		expect(sensitiveContext.requests).toHaveLength(0);
-		expect(sensitiveContext.state.title).toBe("existing task");
-		expect(sensitiveContext.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(sensitiveContext.warnings.join(" ")).not.toContain(password);
+  // These deliberately synthetic hosts and passwords are not real invitations.
+  const links = [
+    {
+      url: "https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake&pwd=SYNTHETIC-ONLY-123&locale=en",
+      password: "SYNTHETIC-ONLY-123",
+    },
+    {
+      url: "https://meeting.invalid.webex.com/meet/synthetic-user?pwd=TEST+ONLY%2FKEY=",
+      password: "TEST+ONLY%2FKEY=",
+    },
+  ];
+  for (const { url, password } of links) {
+    const sensitiveContext = fixture();
+    sensitiveContext.input(`Review this Webex meeting: ${url}`);
+    await settle();
+    expect(sensitiveContext.requests).toHaveLength(0);
+    expect(sensitiveContext.state.title).toBe("existing task");
+    expect(sensitiveContext.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(sensitiveContext.warnings.join(" ")).not.toContain(password);
 
-		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
-		sensitiveOutput.input("Name a task");
-		await settle();
-		expect(sensitiveOutput.requests).toHaveLength(1);
-		expect(sensitiveOutput.state.title).toBe("existing task");
-		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(sensitiveOutput.warnings.join(" ")).not.toContain(password);
-	}
+    const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+    sensitiveOutput.input("Name a task");
+    await settle();
+    expect(sensitiveOutput.requests).toHaveLength(1);
+    expect(sensitiveOutput.state.title).toBe("existing task");
+    expect(
+      sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+    ).toEqual([]);
+    expect(sensitiveOutput.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(sensitiveOutput.warnings.join(" ")).not.toContain(password);
+  }
 });
 
 test("Filemail transfer links stay out of naming context and model output", async () => {
-	const links = [
-		{ url: "https://www.filemail.com/d/ifyvssdfbjbnzni", id: "ifyvssdfbjbnzni" },
-		{ url: "https://filemail.com/d/qwertyuiopasdfg?source=chat", id: "qwertyuiopasdfg" },
-	];
-	for (const { url, id } of links) {
-		const sensitiveContext = fixture();
-		sensitiveContext.input(`Review this Filemail transfer: ${url}`);
-		await settle();
-		expect(sensitiveContext.requests).toHaveLength(0);
-		expect(sensitiveContext.state.title).toBe("existing task");
-		expect(sensitiveContext.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(sensitiveContext.warnings.join(" ")).not.toContain(id);
+  const links = [
+    {
+      url: "https://www.filemail.com/d/ifyvssdfbjbnzni",
+      id: "ifyvssdfbjbnzni",
+    },
+    {
+      url: "https://filemail.com/d/qwertyuiopasdfg?source=chat",
+      id: "qwertyuiopasdfg",
+    },
+  ];
+  for (const { url, id } of links) {
+    const sensitiveContext = fixture();
+    sensitiveContext.input(`Review this Filemail transfer: ${url}`);
+    await settle();
+    expect(sensitiveContext.requests).toHaveLength(0);
+    expect(sensitiveContext.state.title).toBe("existing task");
+    expect(sensitiveContext.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(sensitiveContext.warnings.join(" ")).not.toContain(id);
 
-		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
-		sensitiveOutput.input("Name a task");
-		await settle();
-		expect(sensitiveOutput.requests).toHaveLength(1);
-		expect(sensitiveOutput.state.title).toBe("existing task");
-		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(sensitiveOutput.warnings.join(" ")).not.toContain(id);
-	}
+    const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+    sensitiveOutput.input("Name a task");
+    await settle();
+    expect(sensitiveOutput.requests).toHaveLength(1);
+    expect(sensitiveOutput.state.title).toBe("existing task");
+    expect(
+      sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+    ).toEqual([]);
+    expect(sensitiveOutput.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(sensitiveOutput.warnings.join(" ")).not.toContain(id);
+  }
 });
 
 test("SwissTransfer share links stay out of naming context and model output", async () => {
-	const links = [
-		{
-			url: "https://www.swisstransfer.com/d/a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-			uuid: "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-		},
-		{
-			url: "https://swisstransfer.com/de/dl/018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b?lang=fr",
-			uuid: "018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b",
-		},
-		{
-			url: "https://swisstransfer.infomaniak.com/dl/7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70/",
-			uuid: "7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70",
-		},
-	];
-	for (const { url, uuid } of links) {
-		const sensitiveContext = fixture();
-		sensitiveContext.input(`Review this SwissTransfer link: ${url}`);
-		await settle();
-		expect(sensitiveContext.requests).toHaveLength(0);
-		expect(sensitiveContext.state.title).toBe("existing task");
-		expect(sensitiveContext.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(sensitiveContext.warnings.join(" ")).not.toContain(uuid);
+  const links = [
+    {
+      url: "https://www.swisstransfer.com/d/a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      uuid: "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+    },
+    {
+      url: "https://swisstransfer.com/de/dl/018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b?lang=fr",
+      uuid: "018f6c2a-3b4d-7e5f-9a1b-2c3d4e5f6a7b",
+    },
+    {
+      url: "https://swisstransfer.infomaniak.com/dl/7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70/",
+      uuid: "7f3a9c2e-5b1d-4e8a-9c3f-2d6b8a1e4f70",
+    },
+  ];
+  for (const { url, uuid } of links) {
+    const sensitiveContext = fixture();
+    sensitiveContext.input(`Review this SwissTransfer link: ${url}`);
+    await settle();
+    expect(sensitiveContext.requests).toHaveLength(0);
+    expect(sensitiveContext.state.title).toBe("existing task");
+    expect(sensitiveContext.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(sensitiveContext.warnings.join(" ")).not.toContain(uuid);
 
-		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
-		sensitiveOutput.input("Name a task");
-		await settle();
-		expect(sensitiveOutput.requests).toHaveLength(1);
-		expect(sensitiveOutput.state.title).toBe("existing task");
-		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(sensitiveOutput.warnings.join(" ")).not.toContain(uuid);
-	}
+    const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+    sensitiveOutput.input("Name a task");
+    await settle();
+    expect(sensitiveOutput.requests).toHaveLength(1);
+    expect(sensitiveOutput.state.title).toBe("existing task");
+    expect(
+      sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+    ).toEqual([]);
+    expect(sensitiveOutput.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(sensitiveOutput.warnings.join(" ")).not.toContain(uuid);
+  }
 });
 
 test("Box shared-link URLs stay out of naming context and model output", async () => {
-	const sharedLinkId = "a".repeat(20);
-	const link = `https://app.box.com/s/${sharedLinkId}`;
-	const sensitiveContext = fixture();
-	sensitiveContext.input(`Review this Box file: ${link}`);
-	await settle();
-	expect(sensitiveContext.requests).toHaveLength(0);
-	expect(sensitiveContext.state.title).toBe("existing task");
-	expect(sensitiveContext.warnings).toEqual([
-		"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-	]);
-	expect(sensitiveContext.warnings.join(" ")).not.toContain(sharedLinkId);
+  const sharedLinkId = "a".repeat(20);
+  const link = `https://app.box.com/s/${sharedLinkId}`;
+  const sensitiveContext = fixture();
+  sensitiveContext.input(`Review this Box file: ${link}`);
+  await settle();
+  expect(sensitiveContext.requests).toHaveLength(0);
+  expect(sensitiveContext.state.title).toBe("existing task");
+  expect(sensitiveContext.warnings).toEqual([
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+  ]);
+  expect(sensitiveContext.warnings.join(" ")).not.toContain(sharedLinkId);
 
-	const sensitiveOutput = fixture([Promise.resolve(response(link))]);
-	sensitiveOutput.input("Name a task");
-	await settle();
-	expect(sensitiveOutput.requests).toHaveLength(1);
-	expect(sensitiveOutput.state.title).toBe("existing task");
-	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-	expect(sensitiveOutput.warnings.join(" ")).not.toContain(sharedLinkId);
+  const sensitiveOutput = fixture([Promise.resolve(response(link))]);
+  sensitiveOutput.input("Name a task");
+  await settle();
+  expect(sensitiveOutput.requests).toHaveLength(1);
+  expect(sensitiveOutput.state.title).toBe("existing task");
+  expect(
+    sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+  ).toEqual([]);
+  expect(sensitiveOutput.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
+  expect(sensitiveOutput.warnings.join(" ")).not.toContain(sharedLinkId);
 });
 
 test("Apple iCloud shared-album links stay out of naming context and model output", async () => {
-	const links = [
-		{
-			url: `https://www.icloud.com/sharedalbum/#${"A".repeat(14)}`,
-			token: "A".repeat(14),
-		},
-		{
-			url: `https://photos.icloud.com/shared/album/${"B".repeat(16)}`,
-			token: "B".repeat(16),
-		},
-	];
-	for (const { url, token } of links) {
-		const sensitiveContext = fixture();
-		sensitiveContext.input(`Review this iCloud album: ${url}`);
-		await settle();
-		expect(sensitiveContext.requests).toHaveLength(0);
-		expect(sensitiveContext.state.title).toBe("existing task");
-		expect(sensitiveContext.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(sensitiveContext.warnings.join(" ")).not.toContain(token);
+  const links = [
+    {
+      url: `https://www.icloud.com/sharedalbum/#${"A".repeat(14)}`,
+      token: "A".repeat(14),
+    },
+    {
+      url: `https://photos.icloud.com/shared/album/${"B".repeat(16)}`,
+      token: "B".repeat(16),
+    },
+  ];
+  for (const { url, token } of links) {
+    const sensitiveContext = fixture();
+    sensitiveContext.input(`Review this iCloud album: ${url}`);
+    await settle();
+    expect(sensitiveContext.requests).toHaveLength(0);
+    expect(sensitiveContext.state.title).toBe("existing task");
+    expect(sensitiveContext.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(sensitiveContext.warnings.join(" ")).not.toContain(token);
 
-		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
-		sensitiveOutput.input("Name a task");
-		await settle();
-		expect(sensitiveOutput.requests).toHaveLength(1);
-		expect(sensitiveOutput.state.title).toBe("existing task");
-		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
-	}
+    const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+    sensitiveOutput.input("Name a task");
+    await settle();
+    expect(sensitiveOutput.requests).toHaveLength(1);
+    expect(sensitiveOutput.state.title).toBe("existing task");
+    expect(
+      sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+    ).toEqual([]);
+    expect(sensitiveOutput.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
+  }
 });
 
 test("Apple iCloud Photo links stay out of naming context and model output", async () => {
-	const links = [
-		{
-			url: `https://www.icloud.com/photos/#/icloudlinks/${"A".repeat(16)}`,
-			token: "A".repeat(16),
-		},
-		{
-			url: `https://share.icloud.com/photos/${"B".repeat(18)}`,
-			token: "B".repeat(18),
-		},
-	];
-	for (const { url, token } of links) {
-		const sensitiveContext = fixture();
-		sensitiveContext.input(`Review this iCloud photo: ${url}`);
-		await settle();
-		expect(sensitiveContext.requests).toHaveLength(0);
-		expect(sensitiveContext.state.title).toBe("existing task");
-		expect(sensitiveContext.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(sensitiveContext.warnings.join(" ")).not.toContain(token);
+  const links = [
+    {
+      url: `https://www.icloud.com/photos/#/icloudlinks/${"A".repeat(16)}`,
+      token: "A".repeat(16),
+    },
+    {
+      url: `https://share.icloud.com/photos/${"B".repeat(18)}`,
+      token: "B".repeat(18),
+    },
+  ];
+  for (const { url, token } of links) {
+    const sensitiveContext = fixture();
+    sensitiveContext.input(`Review this iCloud photo: ${url}`);
+    await settle();
+    expect(sensitiveContext.requests).toHaveLength(0);
+    expect(sensitiveContext.state.title).toBe("existing task");
+    expect(sensitiveContext.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(sensitiveContext.warnings.join(" ")).not.toContain(token);
 
-		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
-		sensitiveOutput.input("Name a task");
-		await settle();
-		expect(sensitiveOutput.requests).toHaveLength(1);
-		expect(sensitiveOutput.state.title).toBe("existing task");
-		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
-	}
+    const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+    sensitiveOutput.input("Name a task");
+    await settle();
+    expect(sensitiveOutput.requests).toHaveLength(1);
+    expect(sensitiveOutput.state.title).toBe("existing task");
+    expect(
+      sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+    ).toEqual([]);
+    expect(sensitiveOutput.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
+  }
 });
 
 test("pCloud public links stay out of naming context and model output", async () => {
-	const links = [
-		{
-			url: `https://my.pcloud.com/publink/show?code=${"A".repeat(32)}`,
-			token: "A".repeat(32),
-		},
-		{
-			url: `https://u.pcloud.link/publink/show?code=${"B".repeat(32)}`,
-			token: "B".repeat(32),
-		},
-	];
-	for (const { url, token } of links) {
-		const sensitiveContext = fixture();
-		sensitiveContext.input(`Review this pCloud link: ${url}`);
-		await settle();
-		expect(sensitiveContext.requests).toHaveLength(0);
-		expect(sensitiveContext.state.title).toBe("existing task");
-		expect(sensitiveContext.warnings).toEqual([
-			"Sensitive-looking task context was not sent to the naming model; the current title was kept.",
-		]);
-		expect(sensitiveContext.warnings.join(" ")).not.toContain(token);
+  const links = [
+    {
+      url: `https://my.pcloud.com/publink/show?code=${"A".repeat(32)}`,
+      token: "A".repeat(32),
+    },
+    {
+      url: `https://u.pcloud.link/publink/show?code=${"B".repeat(32)}`,
+      token: "B".repeat(32),
+    },
+  ];
+  for (const { url, token } of links) {
+    const sensitiveContext = fixture();
+    sensitiveContext.input(`Review this pCloud link: ${url}`);
+    await settle();
+    expect(sensitiveContext.requests).toHaveLength(0);
+    expect(sensitiveContext.state.title).toBe("existing task");
+    expect(sensitiveContext.warnings).toEqual([
+      "Sensitive-looking task context was not sent to the naming model; the current title was kept.",
+    ]);
+    expect(sensitiveContext.warnings.join(" ")).not.toContain(token);
 
-		const sensitiveOutput = fixture([Promise.resolve(response(url))]);
-		sensitiveOutput.input("Name a task");
-		await settle();
-		expect(sensitiveOutput.requests).toHaveLength(1);
-		expect(sensitiveOutput.state.title).toBe("existing task");
-		expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
-	}
+    const sensitiveOutput = fixture([Promise.resolve(response(url))]);
+    sensitiveOutput.input("Name a task");
+    await settle();
+    expect(sensitiveOutput.requests).toHaveLength(1);
+    expect(sensitiveOutput.state.title).toBe("existing task");
+    expect(
+      sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+    ).toEqual([]);
+    expect(sensitiveOutput.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
+  }
 });
 
 test("credential-shaped model output is rejected without applying or disclosing it", async () => {
-	const githubToken = ["ghp_", "a".repeat(20)].join("");
-	const googleApiKey = `AIza${"A".repeat(35)}`;
-	const datadogApiKey = "A1b2".repeat(10);
-	const dynatraceApiToken = `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`;
-	const resendApiKey = `re_${"A1b2".repeat(7)}_C3d4`;
-	const replicateToken = ["r8_", "M".repeat(37)].join("");
-	const awsKey = ["AKIA", "A".repeat(16)].join("");
-	const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
-	const obfuscatedAirtableToken = airtableToken.replace(".", "\u200b.");
-	const onePasswordToken = `ops_eyJ${"Aa0+/".repeat(50)}`;
-	const obfuscatedOnePasswordToken = onePasswordToken.replace("eyJ", "ey\u200bJ");
-	const clickhouseKey = `4b1d${"A1b2".repeat(9)}A1`;
-	const obfuscatedClickhouseKey = clickhouseKey.replace("4b1d", "4b\u200b1d");
-	const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
-	const azureAdClientSecret = `AbC7Q~${"Aa0_-.".repeat(5)}C3`;
-	const obfuscatedAzureAdClientSecret = azureAdClientSecret.replace("Q~", "Q\u200b~");
-	const compatibilityGithubToken = [...githubToken]
-		.map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0)).join("");
-	const basicAuthHeaders = [
-		basicAuthorizationHeader("Authorization", `u:${"p".repeat(20)}`),
-		basicAuthorizationHeader("Proxy-Authorization", `p:${"w".repeat(20)}`),
-		basicAuthorizationHeader("Authorization", "u:p"),
-		basicAuthorizationHeader("Proxy-Authorization", "p:w"),
-	];
-	const npmrcAuth = npmrcAuthSetting("fixture-user:fixture-password");
-	const obfuscatedNpmrcAuth = npmrcAuth.replace("_auth", "_au\u200bth");
-	const dockerRegistryAuth = `"auth": "${Buffer.from("synthetic-user:synthetic-password").toString("base64")}"`;
-	const obfuscatedDockerRegistryAuth = dockerRegistryAuth.replace("auth", "au\u200bth");
-	const npmrcPassword = npmrcPasswordSetting("pw1");
-	const obfuscatedNpmrcPassword = npmrcPassword.replace("_password", "_pass\u200bword");
-	const discordWebhookId = "123456789".repeat(2);
-	const discordWebhookToken = "A1b2".repeat(17);
-	const discordWebhookUrl = `https://discord.com/api/webhooks/${discordWebhookId}/${discordWebhookToken}`;
-	const teamsWebhookGuid = "01234567-89ab-cdef-0123-456789abcdef";
-	const teamsWebhookUrl = `https://tenant.webhook.office.com/webhookb2/${teamsWebhookGuid}@fedcba98-7654-3210-fedc-ba9876543210/IncomingWebhook/${"a1b2c3d4".repeat(4)}/${teamsWebhookGuid}`;
-	const squareAccessToken = `sq0atp-${"A1_-".repeat(6)}`;
-	const obfuscatedSquareAccessToken = squareAccessToken.replace("sq0atp-", "sq0\u200batp-");
-	const outputs = [
-		`https://hooks.slack.com/services/${"A1b2".repeat(10)}A1b`,
-		`https://hooks.slack.com/workflows/${"A1b2".repeat(5)}\u200b${"C3d4".repeat(5)}C3d`,
-		discordWebhookUrl,
-		discordWebhookUrl.replace(discordWebhookToken, `${discordWebhookToken.slice(0, 34)}\u200b${discordWebhookToken.slice(34)}`),
-		teamsWebhookUrl,
-		teamsWebhookUrl.replace("IncomingWebhook", "Incoming\u200bWebhook"),
-		`whsec_${"A1b2".repeat(8)}`,
-		`whsec_${"A1b2".repeat(4)}\u200b${"C3d4".repeat(4)}`,
-		squareAccessToken,
-		obfuscatedSquareAccessToken,
-		`EAAA${"B2_c".repeat(6)}`,
-		`password=${"S".repeat(12)}`,
-		`session=${"S".repeat(24)}`,
-		`cookie=${"C".repeat(24)}`,
-		`password=secret phrase`,
-		`password: "secret phrase"`,
-		`passphrase: silver owl`,
-		`password: secret\n  phrase`,
-		`password=secret phrase, keep this private`,
-		`password=secret phrase: keep this private`,
-		`passphrase: silver owl; do not copy it`,
-		`password: secret\n  phrase, keep this private`,
-		`password: |-\n  ${"P".repeat(12)}`,
-		`password: |-\n  secret phrase`,
-		`passphrase: &words >-\n  moonlight\n  meadow`,
-		`password: !!str |-\n  ${"P".repeat(12)}`,
-		`token: &task-token >-\n  ${"T".repeat(24)}`,
-		`Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
-		`Authorization: !!str |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
-		`Proxy-Authorization: >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
-		`Proxy-Authorization: &proxy-auth >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
-		[
-			"password: |-\n  example",
-			`token: >-\n  ${"T".repeat(24)}`,
-		].join("\n"),
-		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
-		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
-		`AccountKey=${"A".repeat(86)}==`,
-		`client-key-data: ${"A".repeat(44)}`,
-		`client-key-data: |2-\n  ${"A".repeat(10)}\n  ${"A".repeat(10)}\n  ${"A".repeat(44)}`,
-		`PresharedKey=${"A".repeat(43)}=`,
-		...basicAuthHeaders,
-		azureSasUrl,
-		azureAdClientSecret,
-		obfuscatedAzureAdClientSecret,
-		npmrcAuth,
-		obfuscatedNpmrcAuth,
-		npmrcAuthSetting("u:p"),
-		dockerRegistryAuth,
-		obfuscatedDockerRegistryAuth,
-		npmrcPassword,
-		obfuscatedNpmrcPassword,
-		"postgres://test-user:example-only-password@db.example.test/app",
-		"redis://:example-only-password@localhost:6379/0",
-		["gh", "p_", "a".repeat(36)].join(""),
-		["gsk_", "a".repeat(24)].join(""),
-		["fw_", "A".repeat(40)].join(""),
-		`fixfw-${"B".repeat(40)}`,
-		["fw", "_", "\u200b", "C".repeat(40)].join(""),
-		["fpk_", "D".repeat(40)].join(""),
-		["nvapi-", "I".repeat(40)].join(""),
-		`fixnvapi-${"J".repeat(40)}`,
-		replicateToken,
-		`fix${replicateToken}`,
-		["r8_", "N".repeat(18), "\u200b", "N".repeat(19)].join(""),
-		["R8_", "O".repeat(37)].join(""),
-		["SSN: ", "000", "-", "00", "-", "0000"].join(""),
-		"SSN No.: 000-00-0000",
-		"SSN#: 000-00-0000",
-		"Social Security No.: 000-00-0000",
-		"Social Security #: 000-00-0000",
-		"TIN: 000-00-0000",
-		"Tax ID No.: 000000000",
-		"Taxpayer Identification Number: 000 00 0000",
-		"Taxpayer ID #: 000-00-0000",
-		"EIN: 12-3456789",
-		"FEIN No.: 12-3456789",
-		"Employer Identification Number: 12-3456789",
-		"DOB: 2000-02-29",
-		"Date of Birth: 12/31/1999",
-		"Birth Date=31.12.1999",
-		"DOB#: ２０００-０２-２９",
-		"IBAN: GB05 TEST 0000 0000 0000 00",
-		"International Bank Account Number: DE41SYNTHETIC000000000",
-		["Social Security Number=", "000000000"].join(""),
-		["SSN: 00", "\u200b", "0-00-00", "\u200b", "00"].join(""),
-		["MY_SERVICE_API_KEY=", "S".repeat(24)].join(""),
-		["Access Token : ", "T".repeat(24)].join(""),
-		["client_secret\": \"", "U".repeat(24), "\""].join(""),
-		["private", "\u200b", "_key=", "V".repeat(24)].join(""),
-		["refresh-token = ", "W".repeat(24)].join(""),
-		["nvapi-", "K".repeat(19), "\u200b", "K".repeat(21)].join(""),
-		["NVAPI-", "L".repeat(40)].join(""),
-		["csk_", "E".repeat(48)].join(""),
-		["csk-", "F".repeat(48)].join(""),
-		["CSK_", "G".repeat(48)].join(""),
-		["csk_", "G".repeat(23), "\u200b", "G".repeat(25)].join(""),
-		`fixgsk_${"a".repeat(24)}`,
-		["gsk", " ", "_", "a".repeat(24)].join(""),
-		["xai-", "a".repeat(20)].join(""),
-		`fixxai-${"a".repeat(20)}`,
-		["xai", " ", "-", "a".repeat(20)].join(""),
-		["pplx-", "a".repeat(48)].join(""),
-		`fixpplx-${"a".repeat(48)}`,
-		["pplx-", "a".repeat(24), "\u200b", "a".repeat(24)].join(""),
-		`x${awsKey}`,
-		`${awsKey}_x`,
-		githubToken.toUpperCase(),
-		compatibilityGithubToken,
-		["github", "_pat_", "a".repeat(30)].join(""),
-		["AKIA", "A".repeat(16)].join(""),
-		["ASIA", "A".repeat(16)].join(""),
-		airtableToken,
-		obfuscatedAirtableToken,
-		onePasswordToken,
-		obfuscatedOnePasswordToken,
-		clickhouseKey,
-		obfuscatedClickhouseKey,
-		`LTAI${"A1b2".repeat(5)}`,
-		`LT\u200bAI${"A1b2".repeat(5)}`,
-		`AKID${"A1b2".repeat(8)}`,
-		`A\u200bKID${"A1b2".repeat(8)}`,
-		`access_key=${"M3n4".repeat(6)}`,
-		`access_\u200bkey=${"M3n4".repeat(6)}`,
-		`A3TA${"B".repeat(16)}`,
-		`ABIA${"C".repeat(16)}`,
-		`ACCA${"D".repeat(16)}`,
-		["ABSK", "A".repeat(109)].join(""),
-		["bedrock-api-key-", Buffer.from("bedrock.amazonaws.com").toString("base64")].join(""),
-		["ABSK", "A".repeat(54), "\u200b", "A".repeat(55)].join(""),
-		googleApiKey,
-		`${googleApiKey.slice(0, 20)}\u200b${googleApiKey.slice(20)}`,
-		`Datadog: ${datadogApiKey}`,
-		`Datadog: ${datadogApiKey.slice(0, 20)}\u200b${datadogApiKey.slice(20)}`,
-		dynatraceApiToken,
-		`${dynatraceApiToken.slice(0, 20)}\u200b${dynatraceApiToken.slice(20)}`,
-		resendApiKey,
-		`${resendApiKey.slice(0, 12)}\u200b${resendApiKey.slice(12)}`,
-		`${githubToken}\nfix auth tests`,
-		["sk", "-proj-", "a".repeat(32)].join(""),
-		["sk", "-ant-", "a".repeat(32)].join(""),
-		["sk", "-svcacct-", "a".repeat(32)].join(""),
-		["sk", "-or-v1-", "a".repeat(32)].join(""),
-		`fixsk-or-v1-${"a".repeat(32)}`,
-		["sk-or", " ", "-v1-", "a".repeat(32)].join(""),
-		["sk", "_live_", "a".repeat(24)].join(""),
-		`sk_prod_${"A1b2".repeat(6)}`,
-		`sk_pr\u200bod_${"A1b2".repeat(6)}`,
-		`rk_prod_${"C3d4".repeat(6)}`,
-		`tfp_${"A1._-=".repeat(9)}A1._-`,
-		`tf\u200bp_${"A1._-=".repeat(9)}A1._-`,
-		`fixsk-${"a".repeat(16)}`,
-		`fixrk-${"a".repeat(16)}`,
-		["xoxb-", "a".repeat(24)].join(""),
-		["xoxc-", "a".repeat(24)].join(""),
-		["xoxd-", "a".repeat(24)].join(""),
-		["npm_", "a".repeat(24)].join(""),
-		["glpat-", "a".repeat(24)].join(""),
-		["hf_", "a".repeat(32)].join(""),
-		`hf_${"a".repeat(19)} a`,
-		`hf_${"a".repeat(10)}\u200b${"a".repeat(10)}`,
-		`hf_${"a".repeat(10)}\u0000${"a".repeat(10)}`,
-		["eyJ", "a".repeat(8), ".", "b".repeat(8), ".", "c".repeat(8)].join(""),
-		["Bearer ", "a".repeat(24)].join(""),
-		["Authorization: Token ", "A1b2".repeat(6)].join(""),
-		["Proxy-Authorization: Token ", "C3d4".repeat(6)].join(""),
-		["Authorization: ApiKey ", "E5f6".repeat(6)].join(""),
-		["Proxy-Authorization: API-Key ", "G7h8".repeat(6)].join(""),
-		["Authorization: Signature keyId=client-key,signature=", Buffer.from("A".repeat(32)).toString("base64")].join(""),
-		["Proxy-Authorization: Signature keyId=client-key,signature=", Buffer.from("B".repeat(64)).toString("base64")].join(""),
-		`Signature: sig1=:${Buffer.from("C".repeat(32)).toString("base64")}:`,
-		`Authorization: Negotiate ${Buffer.from("D".repeat(32)).toString("base64")}`,
-		`Proxy-Authorization: NTLM ${Buffer.from("E".repeat(64)).toString("base64")}`,
-		`WWW-Authenticate: Negotiate ${Buffer.from("F".repeat(32)).toString("base64")}`,
-		`Proxy-Authenticate: NTLM ${Buffer.from("G".repeat(64)).toString("base64")}`,
-		`https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(64)}`,
-		`https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(512)}`,
-		["Proxy-Authorization: Digest username=alice, response=", "A1b2".repeat(8)].join(""),
-		["Authentication-Info: rspauth=", "C3d4".repeat(8)].join(""),
-		["Proxy-Authentication-Info: qop=auth, rspauth=", "E5f6".repeat(16)].join(""),
-		["Set-Cookie: JSESSIONID=", "A1b2".repeat(8), "; Path=/; HttpOnly"].join(""),
-		["Set-Cookie: _my_app_session=", "K9l0".repeat(8), "; Path=/; HttpOnly"].join(""),
-		["B e a r e r ", "A1b2".repeat(8)].join(""),
-		["Bearer ", "a".repeat(8), " ", "a".repeat(8)].join(""),
-		["Bearer ", "a".repeat(7), "1 ", "a".repeat(8)].join(""),
-		["-----BEGIN ", "PRIVATE KEY-----"].join(""),
-		["-----BEGIN ", "DSA PRIVATE KEY-----"].join(""),
-		["-----BEGIN ", "ENCRYPTED PRIVATE KEY-----"].join(""),
-		["-----BEGIN PGP ", "PRIVATE KEY BLOCK-----"].join(""),
-		"---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----",
-		"PuTTY-User-Key-File-3: ssh-ed25519",
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(output);
-	}
+  const githubToken = ["ghp_", "a".repeat(20)].join("");
+  const googleApiKey = `AIza${"A".repeat(35)}`;
+  const datadogApiKey = "A1b2".repeat(10);
+  const dynatraceApiToken = `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`;
+  const resendApiKey = `re_${"A1b2".repeat(7)}_C3d4`;
+  const replicateToken = ["r8_", "M".repeat(37)].join("");
+  const awsKey = ["AKIA", "A".repeat(16)].join("");
+  const airtableToken = `pat${"A1b2".repeat(3)}A1.${"a1b2".repeat(16)}`;
+  const obfuscatedAirtableToken = airtableToken.replace(".", "\u200b.");
+  const onePasswordToken = `ops_eyJ${"Aa0+/".repeat(50)}`;
+  const obfuscatedOnePasswordToken = onePasswordToken.replace(
+    "eyJ",
+    "ey\u200bJ",
+  );
+  const clickhouseKey = `4b1d${"A1b2".repeat(9)}A1`;
+  const obfuscatedClickhouseKey = clickhouseKey.replace("4b1d", "4b\u200b1d");
+  const azureSasUrl = `https://storage.example.test/blob?sv=2023-11-03&ss=b&srt=o&sp=r&se=2030-01-01T00%3A00%3A00Z&sig=${"A".repeat(43)}=`;
+  const azureAdClientSecret = `AbC7Q~${"Aa0_-.".repeat(5)}C3`;
+  const obfuscatedAzureAdClientSecret = azureAdClientSecret.replace(
+    "Q~",
+    "Q\u200b~",
+  );
+  const compatibilityGithubToken = [...githubToken]
+    .map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0))
+    .join("");
+  const basicAuthHeaders = [
+    basicAuthorizationHeader("Authorization", `u:${"p".repeat(20)}`),
+    basicAuthorizationHeader("Proxy-Authorization", `p:${"w".repeat(20)}`),
+    basicAuthorizationHeader("Authorization", "u:p"),
+    basicAuthorizationHeader("Proxy-Authorization", "p:w"),
+  ];
+  const npmrcAuth = npmrcAuthSetting("fixture-user:fixture-password");
+  const obfuscatedNpmrcAuth = npmrcAuth.replace("_auth", "_au\u200bth");
+  const dockerRegistryAuth = `"auth": "${Buffer.from("synthetic-user:synthetic-password").toString("base64")}"`;
+  const obfuscatedDockerRegistryAuth = dockerRegistryAuth.replace(
+    "auth",
+    "au\u200bth",
+  );
+  const npmrcPassword = npmrcPasswordSetting("pw1");
+  const obfuscatedNpmrcPassword = npmrcPassword.replace(
+    "_password",
+    "_pass\u200bword",
+  );
+  const discordWebhookId = "123456789".repeat(2);
+  const discordWebhookToken = "A1b2".repeat(17);
+  const discordWebhookUrl = `https://discord.com/api/webhooks/${discordWebhookId}/${discordWebhookToken}`;
+  const teamsWebhookGuid = "01234567-89ab-cdef-0123-456789abcdef";
+  const teamsWebhookUrl = `https://tenant.webhook.office.com/webhookb2/${teamsWebhookGuid}@fedcba98-7654-3210-fedc-ba9876543210/IncomingWebhook/${"a1b2c3d4".repeat(4)}/${teamsWebhookGuid}`;
+  const squareAccessToken = `sq0atp-${"A1_-".repeat(6)}`;
+  const obfuscatedSquareAccessToken = squareAccessToken.replace(
+    "sq0atp-",
+    "sq0\u200batp-",
+  );
+  const outputs = [
+    `https://hooks.slack.com/services/${"A1b2".repeat(10)}A1b`,
+    `https://hooks.slack.com/workflows/${"A1b2".repeat(5)}\u200b${"C3d4".repeat(5)}C3d`,
+    discordWebhookUrl,
+    discordWebhookUrl.replace(
+      discordWebhookToken,
+      `${discordWebhookToken.slice(0, 34)}\u200b${discordWebhookToken.slice(34)}`,
+    ),
+    teamsWebhookUrl,
+    teamsWebhookUrl.replace("IncomingWebhook", "Incoming\u200bWebhook"),
+    `whsec_${"A1b2".repeat(8)}`,
+    `whsec_${"A1b2".repeat(4)}\u200b${"C3d4".repeat(4)}`,
+    squareAccessToken,
+    obfuscatedSquareAccessToken,
+    `EAAA${"B2_c".repeat(6)}`,
+    `password=${"S".repeat(12)}`,
+    `session=${"S".repeat(24)}`,
+    `cookie=${"C".repeat(24)}`,
+    `password=secret phrase`,
+    `password: "secret phrase"`,
+    `passphrase: silver owl`,
+    `password: secret\n  phrase`,
+    `password=secret phrase, keep this private`,
+    `password=secret phrase: keep this private`,
+    `passphrase: silver owl; do not copy it`,
+    `password: secret\n  phrase, keep this private`,
+    `password: |-\n  ${"P".repeat(12)}`,
+    `password: |-\n  secret phrase`,
+    `passphrase: &words >-\n  moonlight\n  meadow`,
+    `password: !!str |-\n  ${"P".repeat(12)}`,
+    `token: &task-token >-\n  ${"T".repeat(24)}`,
+    `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
+    `Authorization: !!str |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
+    `Proxy-Authorization: >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
+    `Proxy-Authorization: &proxy-auth >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
+    ["password: |-\n  example", `token: >-\n  ${"T".repeat(24)}`].join("\n"),
+    `AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
+    `AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
+    `AccountKey=${"A".repeat(86)}==`,
+    `client-key-data: ${"A".repeat(44)}`,
+    `client-key-data: |2-\n  ${"A".repeat(10)}\n  ${"A".repeat(10)}\n  ${"A".repeat(44)}`,
+    `PresharedKey=${"A".repeat(43)}=`,
+    ...basicAuthHeaders,
+    azureSasUrl,
+    azureAdClientSecret,
+    obfuscatedAzureAdClientSecret,
+    npmrcAuth,
+    obfuscatedNpmrcAuth,
+    npmrcAuthSetting("u:p"),
+    dockerRegistryAuth,
+    obfuscatedDockerRegistryAuth,
+    npmrcPassword,
+    obfuscatedNpmrcPassword,
+    "postgres://test-user:example-only-password@db.example.test/app",
+    "redis://:example-only-password@localhost:6379/0",
+    ["gh", "p_", "a".repeat(36)].join(""),
+    ["gsk_", "a".repeat(24)].join(""),
+    ["fw_", "A".repeat(40)].join(""),
+    `fixfw-${"B".repeat(40)}`,
+    ["fw", "_", "\u200b", "C".repeat(40)].join(""),
+    ["fpk_", "D".repeat(40)].join(""),
+    ["nvapi-", "I".repeat(40)].join(""),
+    `fixnvapi-${"J".repeat(40)}`,
+    replicateToken,
+    `fix${replicateToken}`,
+    ["r8_", "N".repeat(18), "\u200b", "N".repeat(19)].join(""),
+    ["R8_", "O".repeat(37)].join(""),
+    ["SSN: ", "000", "-", "00", "-", "0000"].join(""),
+    "SSN No.: 000-00-0000",
+    "SSN#: 000-00-0000",
+    "Social Security No.: 000-00-0000",
+    "Social Security #: 000-00-0000",
+    "TIN: 000-00-0000",
+    "Tax ID No.: 000000000",
+    "Taxpayer Identification Number: 000 00 0000",
+    "Taxpayer ID #: 000-00-0000",
+    "EIN: 12-3456789",
+    "FEIN No.: 12-3456789",
+    "Employer Identification Number: 12-3456789",
+    "DOB: 2000-02-29",
+    "Date of Birth: 12/31/1999",
+    "Birth Date=31.12.1999",
+    "DOB#: ２０００-０２-２９",
+    "IBAN: GB05 TEST 0000 0000 0000 00",
+    "International Bank Account Number: DE41SYNTHETIC000000000",
+    ["Social Security Number=", "000000000"].join(""),
+    ["SSN: 00", "\u200b", "0-00-00", "\u200b", "00"].join(""),
+    ["MY_SERVICE_API_KEY=", "S".repeat(24)].join(""),
+    ["Access Token : ", "T".repeat(24)].join(""),
+    ['client_secret": "', "U".repeat(24), '"'].join(""),
+    ["private", "\u200b", "_key=", "V".repeat(24)].join(""),
+    ["refresh-token = ", "W".repeat(24)].join(""),
+    ["nvapi-", "K".repeat(19), "\u200b", "K".repeat(21)].join(""),
+    ["NVAPI-", "L".repeat(40)].join(""),
+    ["csk_", "E".repeat(48)].join(""),
+    ["csk-", "F".repeat(48)].join(""),
+    ["CSK_", "G".repeat(48)].join(""),
+    ["csk_", "G".repeat(23), "\u200b", "G".repeat(25)].join(""),
+    `fixgsk_${"a".repeat(24)}`,
+    ["gsk", " ", "_", "a".repeat(24)].join(""),
+    ["xai-", "a".repeat(20)].join(""),
+    `fixxai-${"a".repeat(20)}`,
+    ["xai", " ", "-", "a".repeat(20)].join(""),
+    ["pplx-", "a".repeat(48)].join(""),
+    `fixpplx-${"a".repeat(48)}`,
+    ["pplx-", "a".repeat(24), "\u200b", "a".repeat(24)].join(""),
+    `x${awsKey}`,
+    `${awsKey}_x`,
+    githubToken.toUpperCase(),
+    compatibilityGithubToken,
+    ["github", "_pat_", "a".repeat(30)].join(""),
+    ["AKIA", "A".repeat(16)].join(""),
+    ["ASIA", "A".repeat(16)].join(""),
+    airtableToken,
+    obfuscatedAirtableToken,
+    onePasswordToken,
+    obfuscatedOnePasswordToken,
+    clickhouseKey,
+    obfuscatedClickhouseKey,
+    `LTAI${"A1b2".repeat(5)}`,
+    `LT\u200bAI${"A1b2".repeat(5)}`,
+    `AKID${"A1b2".repeat(8)}`,
+    `A\u200bKID${"A1b2".repeat(8)}`,
+    `access_key=${"M3n4".repeat(6)}`,
+    `access_\u200bkey=${"M3n4".repeat(6)}`,
+    `A3TA${"B".repeat(16)}`,
+    `ABIA${"C".repeat(16)}`,
+    `ACCA${"D".repeat(16)}`,
+    ["ABSK", "A".repeat(109)].join(""),
+    [
+      "bedrock-api-key-",
+      Buffer.from("bedrock.amazonaws.com").toString("base64"),
+    ].join(""),
+    ["ABSK", "A".repeat(54), "\u200b", "A".repeat(55)].join(""),
+    googleApiKey,
+    `${googleApiKey.slice(0, 20)}\u200b${googleApiKey.slice(20)}`,
+    `Datadog: ${datadogApiKey}`,
+    `Datadog: ${datadogApiKey.slice(0, 20)}\u200b${datadogApiKey.slice(20)}`,
+    dynatraceApiToken,
+    `${dynatraceApiToken.slice(0, 20)}\u200b${dynatraceApiToken.slice(20)}`,
+    resendApiKey,
+    `${resendApiKey.slice(0, 12)}\u200b${resendApiKey.slice(12)}`,
+    `${githubToken}\nfix auth tests`,
+    ["sk", "-proj-", "a".repeat(32)].join(""),
+    ["sk", "-ant-", "a".repeat(32)].join(""),
+    ["sk", "-svcacct-", "a".repeat(32)].join(""),
+    ["sk", "-or-v1-", "a".repeat(32)].join(""),
+    `fixsk-or-v1-${"a".repeat(32)}`,
+    ["sk-or", " ", "-v1-", "a".repeat(32)].join(""),
+    ["sk", "_live_", "a".repeat(24)].join(""),
+    `sk_prod_${"A1b2".repeat(6)}`,
+    `sk_pr\u200bod_${"A1b2".repeat(6)}`,
+    `rk_prod_${"C3d4".repeat(6)}`,
+    `tfp_${"A1._-=".repeat(9)}A1._-`,
+    `tf\u200bp_${"A1._-=".repeat(9)}A1._-`,
+    `fixsk-${"a".repeat(16)}`,
+    `fixrk-${"a".repeat(16)}`,
+    ["xoxb-", "a".repeat(24)].join(""),
+    ["xoxc-", "a".repeat(24)].join(""),
+    ["xoxd-", "a".repeat(24)].join(""),
+    ["npm_", "a".repeat(24)].join(""),
+    ["glpat-", "a".repeat(24)].join(""),
+    ["hf_", "a".repeat(32)].join(""),
+    `hf_${"a".repeat(19)} a`,
+    `hf_${"a".repeat(10)}\u200b${"a".repeat(10)}`,
+    `hf_${"a".repeat(10)}\u0000${"a".repeat(10)}`,
+    ["eyJ", "a".repeat(8), ".", "b".repeat(8), ".", "c".repeat(8)].join(""),
+    ["Bearer ", "a".repeat(24)].join(""),
+    ["Authorization: Token ", "A1b2".repeat(6)].join(""),
+    ["Proxy-Authorization: Token ", "C3d4".repeat(6)].join(""),
+    ["Authorization: ApiKey ", "E5f6".repeat(6)].join(""),
+    ["Proxy-Authorization: API-Key ", "G7h8".repeat(6)].join(""),
+    [
+      "Authorization: Signature keyId=client-key,signature=",
+      Buffer.from("A".repeat(32)).toString("base64"),
+    ].join(""),
+    [
+      "Proxy-Authorization: Signature keyId=client-key,signature=",
+      Buffer.from("B".repeat(64)).toString("base64"),
+    ].join(""),
+    `Signature: sig1=:${Buffer.from("C".repeat(32)).toString("base64")}:`,
+    `Authorization: Negotiate ${Buffer.from("D".repeat(32)).toString("base64")}`,
+    `Proxy-Authorization: NTLM ${Buffer.from("E".repeat(64)).toString("base64")}`,
+    `WWW-Authenticate: Negotiate ${Buffer.from("F".repeat(32)).toString("base64")}`,
+    `Proxy-Authenticate: NTLM ${Buffer.from("G".repeat(64)).toString("base64")}`,
+    `https://s3.example.test/object?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${"a".repeat(64)}`,
+    `https://storage.googleapis.com/object?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=${"b".repeat(512)}`,
+    [
+      "Proxy-Authorization: Digest username=alice, response=",
+      "A1b2".repeat(8),
+    ].join(""),
+    ["Authentication-Info: rspauth=", "C3d4".repeat(8)].join(""),
+    ["Proxy-Authentication-Info: qop=auth, rspauth=", "E5f6".repeat(16)].join(
+      "",
+    ),
+    ["Set-Cookie: JSESSIONID=", "A1b2".repeat(8), "; Path=/; HttpOnly"].join(
+      "",
+    ),
+    [
+      "Set-Cookie: _my_app_session=",
+      "K9l0".repeat(8),
+      "; Path=/; HttpOnly",
+    ].join(""),
+    ["B e a r e r ", "A1b2".repeat(8)].join(""),
+    ["Bearer ", "a".repeat(8), " ", "a".repeat(8)].join(""),
+    ["Bearer ", "a".repeat(7), "1 ", "a".repeat(8)].join(""),
+    ["-----BEGIN ", "PRIVATE KEY-----"].join(""),
+    ["-----BEGIN ", "DSA PRIVATE KEY-----"].join(""),
+    ["-----BEGIN ", "ENCRYPTED PRIVATE KEY-----"].join(""),
+    ["-----BEGIN PGP ", "PRIVATE KEY BLOCK-----"].join(""),
+    "---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----",
+    "PuTTY-User-Key-File-3: ssh-ed25519",
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(output);
+  }
 
-	const split = ["gh", "p_", "a".repeat(36)];
-	const splitResponse = {
-		...response(""),
-		content: split.map((text, index) => ({
-			type: "text",
-			text,
-			textSignature: JSON.stringify({ v: 1, id: `split-${index}`, phase: "final_answer" }),
-		})),
-	};
-	const f = fixture([Promise.resolve(splitResponse)]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+  const split = ["gh", "p_", "a".repeat(36)];
+  const splitResponse = {
+    ...response(""),
+    content: split.map((text, index) => ({
+      type: "text",
+      text,
+      textSignature: JSON.stringify({
+        v: 1,
+        id: `split-${index}`,
+        phase: "final_answer",
+      }),
+    })),
+  };
+  const f = fixture([Promise.resolve(splitResponse)]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  expect(f.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
 });
 
 test("screens Azure DevOps PAT environment settings without mistaking benign labels for credentials", async () => {
-	const token = "a1b2".repeat(13);
-	const settings = [
-		`AZURE_DEVOPS_EXT_PAT=${token}`,
-		`AZURE_DEVOPS_EXT_PAT=${token.slice(0, 26)}\u200b${token.slice(26)}`,
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const token = "a1b2".repeat(13);
+  const settings = [
+    `AZURE_DEVOPS_EXT_PAT=${token}`,
+    `AZURE_DEVOPS_EXT_PAT=${token.slice(0, 26)}\u200b${token.slice(26)}`,
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const setting of settings) {
-		expect(hasSensitiveNamingContext(setting)).toBe(true);
-		expect(hasSensitiveOutput(setting)).toBe(true);
+  for (const setting of settings) {
+    expect(hasSensitiveNamingContext(setting)).toBe(true);
+    expect(hasSensitiveOutput(setting)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review CI configuration: ${setting}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(token);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review CI configuration: ${setting}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(token);
 
-		const output = fixture([Promise.resolve(response(setting))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(token);
-	}
+    const output = fixture([Promise.resolve(response(setting))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(token);
+  }
 
-	for (const nearMiss of [
-		"AZURE_DEVOPS_EXT_PAT=placeholder",
-		`AZURE_DEVOPS_EXT_PAT=${"a".repeat(19)}`,
-		token,
-		"azure devops pat settings",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "AZURE_DEVOPS_EXT_PAT=placeholder",
+    `AZURE_DEVOPS_EXT_PAT=${"a".repeat(19)}`,
+    token,
+    "azure devops pat settings",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("rejects current-format Azure DevOps PATs without mistaking near-misses for tokens", async () => {
-	const tokenFor = (prefix = "a".repeat(75), marker = "AZDO", suffix = "B".repeat(5)) => `${prefix}${marker}${suffix}`;
-	const token = tokenFor();
-	const obfuscatedToken = `${"a".repeat(75)}AZ\u200bDO${"B".repeat(5)}`;
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const tokenFor = (
+    prefix = "a".repeat(75),
+    marker = "AZDO",
+    suffix = "B".repeat(5),
+  ) => `${prefix}${marker}${suffix}`;
+  const token = tokenFor();
+  const obfuscatedToken = `${"a".repeat(75)}AZ\u200bDO${"B".repeat(5)}`;
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const sensitiveToken of [token, obfuscatedToken]) {
-		expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
-		expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
+  for (const sensitiveToken of [token, obfuscatedToken]) {
+    expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
+    expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review token ${sensitiveToken}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(token);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review token ${sensitiveToken}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(token);
 
-		const output = fixture([Promise.resolve(response(sensitiveToken))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(token);
-	}
+    const output = fixture([Promise.resolve(response(sensitiveToken))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("azure devops tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("azure devops tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("azure devops tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("azure devops tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	for (const nearMiss of [
-		tokenFor("a".repeat(74)),
-		tokenFor("a".repeat(75), "AZDX"),
-		`${token}B`,
-		`x${token}`,
-		`_${token}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    tokenFor("a".repeat(74)),
+    tokenFor("a".repeat(75), "AZDX"),
+    `${token}B`,
+    `x${token}`,
+    `_${token}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("rejects GitLab Runner authentication tokens without mistaking near-misses for tokens", async () => {
-	const tokenBody = `${"A1b2_-".repeat(3)}Z9`;
-	const token = `glrt-${tokenBody}`;
-	const obfuscatedToken = `gl\u200brt-${tokenBody}`;
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const tokenBody = `${"A1b2_-".repeat(3)}Z9`;
+  const token = `glrt-${tokenBody}`;
+  const obfuscatedToken = `gl\u200brt-${tokenBody}`;
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const sensitiveToken of [token, obfuscatedToken]) {
-		expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
-		expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
+  for (const sensitiveToken of [token, obfuscatedToken]) {
+    expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
+    expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review runner ${sensitiveToken}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(token);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review runner ${sensitiveToken}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(token);
 
-		const output = fixture([Promise.resolve(response(sensitiveToken))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(token);
-	}
+    const output = fixture([Promise.resolve(response(sensitiveToken))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(token);
+  }
 
-	for (const nearMiss of [
-		`glrt-${tokenBody.slice(0, -1)}`,
-		`${token}Z`,
-		`glrx-${tokenBody}`,
-		`x${token}`,
-		`_${token}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `glrt-${tokenBody.slice(0, -1)}`,
+    `${token}Z`,
+    `glrx-${tokenBody}`,
+    `x${token}`,
+    `_${token}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("rejects additional GitLab credentials and session cookies without flagging near-misses", async () => {
-	const repeated = (characters: string, length: number) => characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
-	const cases = [
-		{ token: `glcbt-abcde_${repeated("A1b2_-", 20)}`, prefix: "glcbt" },
-		{ token: `gldt-${repeated("A1b2_-", 20)}`, prefix: "gldt-" },
-		{ token: `glffct-${repeated("A1b2_-", 20)}`, prefix: "glffct-" },
-		{ token: `glft-${repeated("A1b2_-", 20)}`, prefix: "glft-" },
-		{ token: `glimt-${repeated("A1b2_-", 25)}`, prefix: "glimt-" },
-		{ token: `glagent-${repeated("A1b2_-", 50)}`, prefix: "glagent-" },
-		{ token: `gloas-${repeated("A1b2_-", 64)}`, prefix: "gloas-" },
-		{ token: `glptt-${"a1b2".repeat(10)}`, prefix: "glptt-" },
-		{ token: `GR1348941${repeated("A1b2_", 20)}`, prefix: "GR1348941" },
-		{ token: `glsoat-${repeated("A1b2_-", 20)}`, prefix: "glsoat-" },
-		{ token: `glrtr-${repeated("A1b2_-", 20)}`, prefix: "glrtr-" },
-		{ token: `_gitlab_session=${"a1b2".repeat(8)}`, prefix: "_gitlab_session" },
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const repeated = (characters: string, length: number) =>
+    characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
+  const cases = [
+    { token: `glcbt-abcde_${repeated("A1b2_-", 20)}`, prefix: "glcbt" },
+    { token: `gldt-${repeated("A1b2_-", 20)}`, prefix: "gldt-" },
+    { token: `glffct-${repeated("A1b2_-", 20)}`, prefix: "glffct-" },
+    { token: `glft-${repeated("A1b2_-", 20)}`, prefix: "glft-" },
+    { token: `glimt-${repeated("A1b2_-", 25)}`, prefix: "glimt-" },
+    { token: `glagent-${repeated("A1b2_-", 50)}`, prefix: "glagent-" },
+    { token: `gloas-${repeated("A1b2_-", 64)}`, prefix: "gloas-" },
+    { token: `glptt-${"a1b2".repeat(10)}`, prefix: "glptt-" },
+    { token: `GR1348941${repeated("A1b2_", 20)}`, prefix: "GR1348941" },
+    { token: `glsoat-${repeated("A1b2_-", 20)}`, prefix: "glsoat-" },
+    { token: `glrtr-${repeated("A1b2_-", 20)}`, prefix: "glrtr-" },
+    { token: `_gitlab_session=${"a1b2".repeat(8)}`, prefix: "_gitlab_session" },
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const { token, prefix } of cases) {
-		const obfuscated = token.replace(prefix, `${prefix.slice(0, Math.floor(prefix.length / 2))}\u200b${prefix.slice(Math.floor(prefix.length / 2))}`);
-		for (const sensitiveToken of [token, obfuscated]) {
-			expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
-			expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
+  for (const { token, prefix } of cases) {
+    const obfuscated = token.replace(
+      prefix,
+      `${prefix.slice(0, Math.floor(prefix.length / 2))}\u200b${prefix.slice(Math.floor(prefix.length / 2))}`,
+    );
+    for (const sensitiveToken of [token, obfuscated]) {
+      expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
+      expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
 
-			const input = fixture();
-			const find = spyOn(input.ctx.modelRegistry, "find");
-			input.input(`Review GitLab credentials ${sensitiveToken}`);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(input.requests).toHaveLength(0);
-			expect(input.warnings).toEqual([contextWarning]);
-			expect(input.warnings.join(" ")).not.toContain(token);
+      const input = fixture();
+      const find = spyOn(input.ctx.modelRegistry, "find");
+      input.input(`Review GitLab credentials ${sensitiveToken}`);
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(input.requests).toHaveLength(0);
+      expect(input.warnings).toEqual([contextWarning]);
+      expect(input.warnings.join(" ")).not.toContain(token);
 
-			const output = fixture([Promise.resolve(response(sensitiveToken))]);
-			output.input("Name a task");
-			await settle();
-			expect(output.state.title).toBe("existing task");
-			expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-			expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-			expect(output.warnings.join(" ")).not.toContain(token);
-		}
+      const output = fixture([Promise.resolve(response(sensitiveToken))]);
+      output.input("Name a task");
+      await settle();
+      expect(output.state.title).toBe("existing task");
+      expect(
+        output.calls.filter((args) => args[0] === "rename-window"),
+      ).toEqual([]);
+      expect(output.warnings).toEqual([
+        "Sensitive-looking naming output was not applied.",
+      ]);
+      expect(output.warnings.join(" ")).not.toContain(token);
+    }
 
-		const nearMisses = prefix === "glrtr-"
-			? [token.slice(0, -1), token.replace(prefix, `${prefix.slice(0, -1)}x`), `x${token}`, `_${token}`, `${prefix}${"a".repeat(301)}`]
-			: [token.slice(0, -1), `${token}x`, token.replace(prefix, `${prefix.slice(0, -1)}x`), `x${token}`, `_${token}`];
-		for (const nearMiss of nearMisses) {
-			expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-			expect(hasSensitiveOutput(nearMiss)).toBe(false);
-		}
-	}
+    const nearMisses =
+      prefix === "glrtr-"
+        ? [
+            token.slice(0, -1),
+            token.replace(prefix, `${prefix.slice(0, -1)}x`),
+            `x${token}`,
+            `_${token}`,
+            `${prefix}${"a".repeat(301)}`,
+          ]
+        : [
+            token.slice(0, -1),
+            `${token}x`,
+            token.replace(prefix, `${prefix.slice(0, -1)}x`),
+            `x${token}`,
+            `_${token}`,
+          ];
+    for (const nearMiss of nearMisses) {
+      expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+      expect(hasSensitiveOutput(nearMiss)).toBe(false);
+    }
+  }
 
-	const safeTitle = fixture([Promise.resolve(response("gitlab ci setup"))]);
-	safeTitle.input("Review GitLab CI job token configuration");
-	await settle();
-	expect(safeTitle.state.title).toBe("gitlab ci setup");
-	expect(safeTitle.warnings).toEqual([]);
+  const safeTitle = fixture([Promise.resolve(response("gitlab ci setup"))]);
+  safeTitle.input("Review GitLab CI job token configuration");
+  await settle();
+  expect(safeTitle.state.title).toBe("gitlab ci setup");
+  expect(safeTitle.warnings).toEqual([]);
 });
 
 test("GitLab boundary scans preserve token minima beside prompt-edge prose", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixBoundary = Math.ceil(retainedLength / 2);
-	const promptLength = 3_000;
-	const suffixBoundary = promptLength - Math.floor(retainedLength / 2);
-	const repeated = (characters: string, length: number) => characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
-	const tokens = [
-		`glrt-${repeated("A1b2_-", 20)}`,
-		`gldt-${repeated("A1b2_-", 20)}`,
-		`glffct-${repeated("A1b2_-", 20)}`,
-		`glft-${repeated("A1b2_-", 20)}`,
-		`glimt-${repeated("A1b2_-", 25)}`,
-		`glagent-${repeated("A1b2_-", 50)}`,
-		`gloas-${repeated("A1b2_-", 64)}`,
-		`glptt-${"a1b2".repeat(10)}`,
-		`GR1348941${repeated("A1b2_", 20)}`,
-		`glsoat-${repeated("A1b2_-", 20)}`,
-		`glrtr-${repeated("A1b2_-", 20)}`,
-		`glcbt-abcde_${repeated("A1b2_-", 20)}`,
-		`_gitlab_session=${"a1b2".repeat(8)}`,
-		`glpat-${repeated("A1b2_-", 20)}`,
-	];
-	const makePrompt = (token: string, tokenStart: number) => {
-		const prefix = `${"x".repeat(tokenStart - 1)} `;
-		const prompt = `${prefix}${token} a ${"z".repeat(promptLength - prefix.length - token.length - 3)}`;
-		expect(prompt).toHaveLength(promptLength);
-		return prompt;
-	};
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixBoundary = Math.ceil(retainedLength / 2);
+  const promptLength = 3_000;
+  const suffixBoundary = promptLength - Math.floor(retainedLength / 2);
+  const repeated = (characters: string, length: number) =>
+    characters.repeat(Math.ceil(length / characters.length)).slice(0, length);
+  const tokens = [
+    `glrt-${repeated("A1b2_-", 20)}`,
+    `gldt-${repeated("A1b2_-", 20)}`,
+    `glffct-${repeated("A1b2_-", 20)}`,
+    `glft-${repeated("A1b2_-", 20)}`,
+    `glimt-${repeated("A1b2_-", 25)}`,
+    `glagent-${repeated("A1b2_-", 50)}`,
+    `gloas-${repeated("A1b2_-", 64)}`,
+    `glptt-${"a1b2".repeat(10)}`,
+    `GR1348941${repeated("A1b2_", 20)}`,
+    `glsoat-${repeated("A1b2_-", 20)}`,
+    `glrtr-${repeated("A1b2_-", 20)}`,
+    `glcbt-abcde_${repeated("A1b2_-", 20)}`,
+    `_gitlab_session=${"a1b2".repeat(8)}`,
+    `glpat-${repeated("A1b2_-", 20)}`,
+  ];
+  const makePrompt = (token: string, tokenStart: number) => {
+    const prefix = `${"x".repeat(tokenStart - 1)} `;
+    const prompt = `${prefix}${token} a ${"z".repeat(promptLength - prefix.length - token.length - 3)}`;
+    expect(prompt).toHaveLength(promptLength);
+    return prompt;
+  };
 
-	for (const token of tokens) {
-		const nearMiss = token.slice(0, -1);
-		const nearMissStarts = [
-			prefixBoundary - nearMiss.length - 1,
-			suffixBoundary - 10,
-			suffixBoundary - nearMiss.length,
-		];
-		for (let edge = 0; edge < nearMissStarts.length; edge++) {
-			const nearMissContext = buildNamingRequestContext([], makePrompt(nearMiss, nearMissStarts[edge]!));
-			expect(hasSensitiveNamingContext(nearMissContext.text)).toBe(false);
-			expect(nearMissContext.hasSensitiveBoundary()).toBe(false);
+  for (const token of tokens) {
+    const nearMiss = token.slice(0, -1);
+    const nearMissStarts = [
+      prefixBoundary - nearMiss.length - 1,
+      suffixBoundary - 10,
+      suffixBoundary - nearMiss.length,
+    ];
+    for (let edge = 0; edge < nearMissStarts.length; edge++) {
+      const nearMissContext = buildNamingRequestContext(
+        [],
+        makePrompt(nearMiss, nearMissStarts[edge]!),
+      );
+      expect(hasSensitiveNamingContext(nearMissContext.text)).toBe(false);
+      expect(nearMissContext.hasSensitiveBoundary()).toBe(false);
 
-			const validStart = edge === 0
-				? prefixBoundary - (token.startsWith("_gitlab_session=") ? 25 : 10)
-				: suffixBoundary - 10;
-			expect(buildNamingRequestContext([], makePrompt(token, validStart)).hasSensitiveBoundary()).toBe(true);
-		}
-	}
+      const validStart =
+        edge === 0
+          ? prefixBoundary - (token.startsWith("_gitlab_session=") ? 25 : 10)
+          : suffixBoundary - 10;
+      expect(
+        buildNamingRequestContext(
+          [],
+          makePrompt(token, validStart),
+        ).hasSensitiveBoundary(),
+      ).toBe(true);
+    }
+  }
 
-	for (const token of tokens) {
-		const splitAt = Math.floor(token.length / 2);
-		const whitespaceSplitToken = `${token.slice(0, splitAt)} ${token.slice(splitAt)}`;
-		expect(hasSensitiveNamingContext(whitespaceSplitToken)).toBe(true);
-		expect(hasSensitiveOutput(whitespaceSplitToken)).toBe(true);
-	}
+  for (const token of tokens) {
+    const splitAt = Math.floor(token.length / 2);
+    const whitespaceSplitToken = `${token.slice(0, splitAt)} ${token.slice(splitAt)}`;
+    expect(hasSensitiveNamingContext(whitespaceSplitToken)).toBe(true);
+    expect(hasSensitiveOutput(whitespaceSplitToken)).toBe(true);
+  }
 
-	const nearMissPrompt = makePrompt(tokens[0]!.slice(0, -1), prefixBoundary - tokens[0]!.length);
-	const allowed = fixture([Promise.resolve(response("review GitLab setup"))]);
-	const allowedFind = spyOn(allowed.ctx.modelRegistry, "find");
-	allowed.input(nearMissPrompt);
-	await settle();
-	expect(allowedFind).toHaveBeenCalled();
-	expect(allowed.requests).toHaveLength(1);
-	expect(allowed.state.title).toBe("review gitlab setup");
-	expect(allowed.warnings).toEqual([]);
+  const nearMissPrompt = makePrompt(
+    tokens[0]!.slice(0, -1),
+    prefixBoundary - tokens[0]!.length,
+  );
+  const allowed = fixture([Promise.resolve(response("review GitLab setup"))]);
+  const allowedFind = spyOn(allowed.ctx.modelRegistry, "find");
+  allowed.input(nearMissPrompt);
+  await settle();
+  expect(allowedFind).toHaveBeenCalled();
+  expect(allowed.requests).toHaveLength(1);
+  expect(allowed.state.title).toBe("review gitlab setup");
+  expect(allowed.warnings).toEqual([]);
 });
 
 test("rejects Docker Hub personal and organization tokens without mistaking near-misses for tokens", async () => {
-	const patBody = "A1b2_-".repeat(5).slice(0, 27);
-	const oatBody = "Q7w8_-".repeat(6).slice(0, 32);
-	const tokens = [
-		{ value: `dckr_pat_${patBody}`, obfuscated: `dckr\u200b_pat_${patBody}` },
-		{ value: `dckr_oat_${oatBody}`, obfuscated: `dckr\u200b_oat_${oatBody}` },
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const patBody = "A1b2_-".repeat(5).slice(0, 27);
+  const oatBody = "Q7w8_-".repeat(6).slice(0, 32);
+  const tokens = [
+    { value: `dckr_pat_${patBody}`, obfuscated: `dckr\u200b_pat_${patBody}` },
+    { value: `dckr_oat_${oatBody}`, obfuscated: `dckr\u200b_oat_${oatBody}` },
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const { value, obfuscated } of tokens) {
-		for (const sensitiveToken of [value, obfuscated]) {
-			expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
-			expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
+  for (const { value, obfuscated } of tokens) {
+    for (const sensitiveToken of [value, obfuscated]) {
+      expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
+      expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
 
-			const input = fixture();
-			const find = spyOn(input.ctx.modelRegistry, "find");
-			input.input(`Review token ${sensitiveToken}`);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(input.requests).toHaveLength(0);
-			expect(input.warnings).toEqual([contextWarning]);
-			expect(input.warnings.join(" ")).not.toContain(value);
+      const input = fixture();
+      const find = spyOn(input.ctx.modelRegistry, "find");
+      input.input(`Review token ${sensitiveToken}`);
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(input.requests).toHaveLength(0);
+      expect(input.warnings).toEqual([contextWarning]);
+      expect(input.warnings.join(" ")).not.toContain(value);
 
-			const output = fixture([Promise.resolve(response(sensitiveToken))]);
-			output.input("Name a task");
-			await settle();
-			expect(output.state.title).toBe("existing task");
-			expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-			expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-			expect(output.warnings.join(" ")).not.toContain(value);
-		}
-	}
+      const output = fixture([Promise.resolve(response(sensitiveToken))]);
+      output.input("Name a task");
+      await settle();
+      expect(output.state.title).toBe("existing task");
+      expect(
+        output.calls.filter((args) => args[0] === "rename-window"),
+      ).toEqual([]);
+      expect(output.warnings).toEqual([
+        "Sensitive-looking naming output was not applied.",
+      ]);
+      expect(output.warnings.join(" ")).not.toContain(value);
+    }
+  }
 
-	for (const nearMiss of [
-		`dckr_pat_${patBody.slice(0, -1)}`,
-		`dckr_pat_${patBody}Z`,
-		`dckr_oat_${oatBody.slice(0, -1)}`,
-		`dckr_oat_${oatBody}Z`,
-		`dckr_pot_${patBody}`,
-		`x${tokens[0].value}`,
-		`_${tokens[1].value}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `dckr_pat_${patBody.slice(0, -1)}`,
+    `dckr_pat_${patBody}Z`,
+    `dckr_oat_${oatBody.slice(0, -1)}`,
+    `dckr_oat_${oatBody}Z`,
+    `dckr_pot_${patBody}`,
+    `x${tokens[0].value}`,
+    `_${tokens[1].value}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("rejects PyPI API tokens without mistaking near-misses for tokens", async () => {
-	const body = ("A1b2_-".repeat(12)).slice(0, 70);
-	const prefixes = ["pypi-AgEIcHlwaS5vcmc", "pypi-AgENdGVzdC5weXBpLm9yZw"];
-	const tokens = prefixes.map((prefix) => `${prefix}${body}`);
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const body = "A1b2_-".repeat(12).slice(0, 70);
+  const prefixes = ["pypi-AgEIcHlwaS5vcmc", "pypi-AgENdGVzdC5weXBpLm9yZw"];
+  const tokens = prefixes.map((prefix) => `${prefix}${body}`);
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of tokens) {
-		const obfuscated = value.replace("pypi-", "pyp\u200bi-");
-		for (const sensitiveToken of [value, obfuscated]) {
-			expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
-			expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
+  for (const value of tokens) {
+    const obfuscated = value.replace("pypi-", "pyp\u200bi-");
+    for (const sensitiveToken of [value, obfuscated]) {
+      expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
+      expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
 
-			const input = fixture();
-			const find = spyOn(input.ctx.modelRegistry, "find");
-			input.input(`Review package publishing ${sensitiveToken}`);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(input.requests).toHaveLength(0);
-			expect(input.warnings).toEqual([contextWarning]);
-			expect(input.warnings.join(" ")).not.toContain(value);
+      const input = fixture();
+      const find = spyOn(input.ctx.modelRegistry, "find");
+      input.input(`Review package publishing ${sensitiveToken}`);
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(input.requests).toHaveLength(0);
+      expect(input.warnings).toEqual([contextWarning]);
+      expect(input.warnings.join(" ")).not.toContain(value);
 
-			const output = fixture([Promise.resolve(response(sensitiveToken))]);
-			output.input("Name a task");
-			await settle();
-			expect(output.state.title).toBe("existing task");
-			expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-			expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-			expect(output.warnings.join(" ")).not.toContain(value);
-		}
-	}
+      const output = fixture([Promise.resolve(response(sensitiveToken))]);
+      output.input("Name a task");
+      await settle();
+      expect(output.state.title).toBe("existing task");
+      expect(
+        output.calls.filter((args) => args[0] === "rename-window"),
+      ).toEqual([]);
+      expect(output.warnings).toEqual([
+        "Sensitive-looking naming output was not applied.",
+      ]);
+      expect(output.warnings.join(" ")).not.toContain(value);
+    }
+  }
 
-	for (const nearMiss of [
-		`${prefixes[0]}${body.slice(0, 49)}`,
-		`pypx-${body}`,
-		`x${tokens[0]}`,
-		`_${tokens[1]}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `${prefixes[0]}${body.slice(0, 49)}`,
+    `pypx-${body}`,
+    `x${tokens[0]}`,
+    `_${tokens[1]}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens RubyGems API tokens in naming context and model output without mistaking near-misses", async () => {
-	const token = `rubygems_${"a1b2".repeat(12)}`;
-	const obfuscatedTokens = [
-		token.replace("rubygems_", "rubygems\u200b_"),
-		`${token.slice(0, 30)}\u200b${token.slice(30)}`,
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const token = `rubygems_${"a1b2".repeat(12)}`;
+  const obfuscatedTokens = [
+    token.replace("rubygems_", "rubygems\u200b_"),
+    `${token.slice(0, 30)}\u200b${token.slice(30)}`,
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of [token, ...obfuscatedTokens]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  for (const value of [token, ...obfuscatedTokens]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review Ruby package publishing ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.state.title).toBe("existing task");
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(token);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review Ruby package publishing ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.state.title).toBe("existing task");
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(token);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(token);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("rubygems build tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("rubygems build tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("rubygems build tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("rubygems build tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	for (const nearMiss of [
-		`rubygems_${"a1b2".repeat(11)}a1b`,
-		`${token}f`,
-		`x${token}`,
-		`_${token}`,
-		`rubygems_${"g".repeat(48)}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `rubygems_${"a1b2".repeat(11)}a1b`,
+    `${token}f`,
+    `x${token}`,
+    `_${token}`,
+    `rubygems_${"g".repeat(48)}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens New Relic user API keys in naming context and model output without mistaking near-misses", async () => {
-	const token = `NRAK-${"A1b2".repeat(6)}abc`;
-	const obfuscatedTokens = [
-		token.toLowerCase(),
-		token.replace("NRAK-", "NRAK\u200b-"),
-		`${token.slice(0, 18)}\u200b${token.slice(18)}`,
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const token = `NRAK-${"A1b2".repeat(6)}abc`;
+  const obfuscatedTokens = [
+    token.toLowerCase(),
+    token.replace("NRAK-", "NRAK\u200b-"),
+    `${token.slice(0, 18)}\u200b${token.slice(18)}`,
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of [token, ...obfuscatedTokens]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  for (const value of [token, ...obfuscatedTokens]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review monitoring credentials ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.state.title).toBe("existing task");
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(token);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review monitoring credentials ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.state.title).toBe("existing task");
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(token);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(token);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("new relic monitoring"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("new relic monitoring");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("new relic monitoring")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("new relic monitoring");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	for (const nearMiss of [
-		token.slice(0, -1),
-		`${token}x`,
-		`NRAJ-${token.slice(5)}`,
-		`x${token}`,
-		`_${token}`,
-		`-${token}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    token.slice(0, -1),
+    `${token}x`,
+    `NRAJ-${token.slice(5)}`,
+    `x${token}`,
+    `_${token}`,
+    `-${token}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Heroku API tokens in naming context and model output without mistaking near-misses", async () => {
-	const token = `HRKU-AA${"A1_b".repeat(14)}AB`;
-	const obfuscatedTokens = [
-		token.replace("HRKU-AA", "HRKU\u200b-AA"),
-		`${token.slice(0, 38)}\u200b${token.slice(38)}`,
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const token = `HRKU-AA${"A1_b".repeat(14)}AB`;
+  const obfuscatedTokens = [
+    token.replace("HRKU-AA", "HRKU\u200b-AA"),
+    `${token.slice(0, 38)}\u200b${token.slice(38)}`,
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of [token, token.toLowerCase(), ...obfuscatedTokens]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  for (const value of [token, token.toLowerCase(), ...obfuscatedTokens]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review Heroku deployment ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.state.title).toBe("existing task");
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(token);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review Heroku deployment ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.state.title).toBe("existing task");
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(token);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(token);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(token);
+  }
 
-	for (const nearMiss of [
-		`HRKU-AA${"A1_b".repeat(14)}`,
-		token.slice(0, -1),
-		`${token}Z`,
-		`x${token}`,
-		`_${token}`,
-		`HRKU-AB${"A1_b".repeat(14)}AB`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `HRKU-AA${"A1_b".repeat(14)}`,
+    token.slice(0, -1),
+    `${token}Z`,
+    `x${token}`,
+    `_${token}`,
+    `HRKU-AB${"A1_b".repeat(14)}AB`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("screens Clojars tokens in naming context and model output without mistaking near-misses", async () => {
-	const token = `CLOJARS_${"A1b2".repeat(15)}`;
-	const obfuscatedTokens = [
-		token.replace("CLOJARS_", "CLOJARS\u200b_"),
-		`${token.slice(0, 38)}\u200b${token.slice(38)}`,
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const token = `CLOJARS_${"A1b2".repeat(15)}`;
+  const obfuscatedTokens = [
+    token.replace("CLOJARS_", "CLOJARS\u200b_"),
+    `${token.slice(0, 38)}\u200b${token.slice(38)}`,
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of [token, ...obfuscatedTokens]) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  for (const value of [token, ...obfuscatedTokens]) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review Clojars publishing ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.state.title).toBe("existing task");
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(token);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review Clojars publishing ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.state.title).toBe("existing task");
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(token);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(token);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(token);
+  }
 
-	for (const nearMiss of [
-		`CLOJARS_${"A1b2".repeat(14)}A1b`,
-		`${token}Z`,
-		`x${token}`,
-		`_${token}`,
-		`CLOJARX_${"A1b2".repeat(15)}`,
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    `CLOJARS_${"A1b2".repeat(14)}A1b`,
+    `${token}Z`,
+    `x${token}`,
+    `_${token}`,
+    `CLOJARX_${"A1b2".repeat(15)}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("rejects labeled Datadog API keys without mistaking near-misses for keys", async () => {
-	const keyValue = "A1b2".repeat(10);
-	const outputs = [
-		`Datadog: ${keyValue}`,
-		`DATADOG_API_KEY=${keyValue}`,
-		`Datadog: ${keyValue.slice(0, 20)}\u200b${keyValue.slice(20)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(keyValue);
-	}
+  const keyValue = "A1b2".repeat(10);
+  const outputs = [
+    `Datadog: ${keyValue}`,
+    `DATADOG_API_KEY=${keyValue}`,
+    `Datadog: ${keyValue.slice(0, 20)}\u200b${keyValue.slice(20)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(keyValue);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("datadog tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("datadog tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([Promise.resolve(response("datadog tests"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("datadog tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`Datadog: ${"A1b2".repeat(9)}A1b`,
-		`Datadog: ${keyValue}A`,
-		`Datadog: ${keyValue}_`,
-		`Datadog: ${keyValue}-`,
-		`datadog ${keyValue}`,
-		keyValue,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("datadog tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("datadog tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `Datadog: ${"A1b2".repeat(9)}A1b`,
+    `Datadog: ${keyValue}A`,
+    `Datadog: ${keyValue}_`,
+    `Datadog: ${keyValue}-`,
+    `datadog ${keyValue}`,
+    keyValue,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("datadog tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("datadog tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects labeled Mailgun private API tokens without mistaking near-misses for tokens", async () => {
-	const token = `key-${"a1b2".repeat(8)}`;
-	const sensitiveOutputs = [
-		`Mailgun: ${token}`,
-		`MAILGUN_API_KEY=${token}`,
-		`mailgun: KEY-${"A1B2".repeat(8)}`,
-		`Mailgun: ${token.slice(0, 20)}\u200b${token.slice(20)}`,
-	];
-	for (const output of sensitiveOutputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = `key-${"a1b2".repeat(8)}`;
+  const sensitiveOutputs = [
+    `Mailgun: ${token}`,
+    `MAILGUN_API_KEY=${token}`,
+    `mailgun: KEY-${"A1B2".repeat(8)}`,
+    `Mailgun: ${token.slice(0, 20)}\u200b${token.slice(20)}`,
+  ];
+  for (const output of sensitiveOutputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("mailgun tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("mailgun tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([Promise.resolve(response("mailgun tests"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("mailgun tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`Mailgun: key-${"a1b2".repeat(7)}a1b`,
-		`Mailgun: ${token}a`,
-		`Mailgun: ${token}_`,
-		`Mailgun: ${token}-`,
-		`Mailgun ${token}`,
-		token,
-		`Mailgun: key-${"g".repeat(32)}`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("mailgun tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("mailgun tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `Mailgun: key-${"a1b2".repeat(7)}a1b`,
+    `Mailgun: ${token}a`,
+    `Mailgun: ${token}_`,
+    `Mailgun: ${token}-`,
+    `Mailgun ${token}`,
+    token,
+    `Mailgun: key-${"g".repeat(32)}`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("mailgun tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("mailgun tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Artifactory tokens without mistaking near-misses for tokens", async () => {
-	const apiKey = `AKCp${"A1b2".repeat(17)}A`;
-	const referenceToken = `cmVmd${"C1d2".repeat(14)}AbC`;
-	const sensitiveOutputs = [
-		apiKey,
-		referenceToken,
-		`${apiKey.slice(0, 24)}\u200b${apiKey.slice(24)}`,
-		`${referenceToken.slice(0, 30)}\u200b${referenceToken.slice(30)}`,
-	];
-	for (const output of sensitiveOutputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(apiKey);
-		expect(f.warnings.join(" ")).not.toContain(referenceToken);
-	}
+  const apiKey = `AKCp${"A1b2".repeat(17)}A`;
+  const referenceToken = `cmVmd${"C1d2".repeat(14)}AbC`;
+  const sensitiveOutputs = [
+    apiKey,
+    referenceToken,
+    `${apiKey.slice(0, 24)}\u200b${apiKey.slice(24)}`,
+    `${referenceToken.slice(0, 30)}\u200b${referenceToken.slice(30)}`,
+  ];
+  for (const output of sensitiveOutputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(apiKey);
+    expect(f.warnings.join(" ")).not.toContain(referenceToken);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("artifactory tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("artifactory tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("artifactory tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("artifactory tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`AKCp${"A1b2".repeat(17)}`,
-		`${apiKey}A`,
-		`x${apiKey}`,
-		`_${apiKey}`,
-		`${apiKey}_`,
-		`cmVmd${"C1d2".repeat(14)}Ab`,
-		`${referenceToken}A`,
-		`x${referenceToken}`,
-		`${referenceToken}_`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("artifactory tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("artifactory tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `AKCp${"A1b2".repeat(17)}`,
+    `${apiKey}A`,
+    `x${apiKey}`,
+    `_${apiKey}`,
+    `${apiKey}_`,
+    `cmVmd${"C1d2".repeat(14)}Ab`,
+    `${referenceToken}A`,
+    `x${referenceToken}`,
+    `${referenceToken}_`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("artifactory tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("artifactory tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Dynatrace API tokens without mistaking near-misses for tokens", async () => {
-	const token = `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`;
-	const sensitiveOutputs = [token, `Dynatrace API token: ${token}`, `${token.slice(0, 34)}\u200b${token.slice(34)}`];
-	for (const output of sensitiveOutputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`;
+  const sensitiveOutputs = [
+    token,
+    `Dynatrace API token: ${token}`,
+    `${token.slice(0, 34)}\u200b${token.slice(34)}`,
+  ];
+  for (const output of sensitiveOutputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("dynatrace tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("dynatrace tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([Promise.resolve(response("dynatrace tests"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("dynatrace tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`dt0c02.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
-		`dt0c01.${"A1b2".repeat(6).slice(1)}.${"C3d4".repeat(16)}`,
-		`dt0c01.${"A1b2".repeat(6)}A.${"C3d4".repeat(16)}`,
-		`dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16).slice(1)}`,
-		`dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}A`,
-		`x${token}`,
-		`_${token}`,
-		`${token}A`,
-		`${token}_`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("dynatrace tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("dynatrace tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `dt0c02.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
+    `dt0c01.${"A1b2".repeat(6).slice(1)}.${"C3d4".repeat(16)}`,
+    `dt0c01.${"A1b2".repeat(6)}A.${"C3d4".repeat(16)}`,
+    `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16).slice(1)}`,
+    `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}A`,
+    `x${token}`,
+    `_${token}`,
+    `${token}A`,
+    `${token}_`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("dynatrace tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("dynatrace tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Resend API keys without mistaking near-misses for keys", async () => {
-	const apiKey = `re_${"A1b2".repeat(7)}_C3d4`;
-	const sensitiveOutputs = [
-		apiKey,
-		`RESEND_API_KEY=${apiKey}`,
-		`${apiKey}.`,
-		`${apiKey}A`,
-		`${apiKey.slice(0, 15)}\u200b${apiKey.slice(15)}`,
-	];
-	for (const output of sensitiveOutputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(apiKey);
-	}
+  const apiKey = `re_${"A1b2".repeat(7)}_C3d4`;
+  const sensitiveOutputs = [
+    apiKey,
+    `RESEND_API_KEY=${apiKey}`,
+    `${apiKey}.`,
+    `${apiKey}A`,
+    `${apiKey.slice(0, 15)}\u200b${apiKey.slice(15)}`,
+  ];
+  for (const output of sensitiveOutputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(apiKey);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("resend tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("resend tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([Promise.resolve(response("resend tests"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("resend tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`re_${"A1b2".repeat(7)}_C3`,
-		`rx_${"A1b2".repeat(7)}_C3d4`,
-		`x${apiKey}`,
-		`_${apiKey}`,
-		`re-${"A1b2".repeat(7)}_C3d4`,
-		`re_${"A1b2".repeat(3)}!${"A1b2".repeat(5)}`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("resend tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("resend tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `re_${"A1b2".repeat(7)}_C3`,
+    `rx_${"A1b2".repeat(7)}_C3d4`,
+    `x${apiKey}`,
+    `_${apiKey}`,
+    `re-${"A1b2".repeat(7)}_C3d4`,
+    `re_${"A1b2".repeat(3)}!${"A1b2".repeat(5)}`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("resend tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("resend tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Fly.io token formats without mistaking near-misses for tokens", async () => {
-	const orgToken = `fo1_${"A1_b".repeat(10)}ABC`;
-	const machineTokens = [
-		`fm1a_${"A1b+/".repeat(20)}`,
-		`fm1r_${"B2c+/".repeat(20)}=`,
-		`fm2_${"C3d+/".repeat(20)}===`,
-	];
-	const sensitiveOutputs = [
-		orgToken,
-		...machineTokens,
-		`${orgToken.slice(0, 22)}\u200b${orgToken.slice(22)}`,
-	];
-	for (const output of sensitiveOutputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(orgToken);
-		for (const machineToken of machineTokens) expect(f.warnings.join(" ")).not.toContain(machineToken);
-	}
+  const orgToken = `fo1_${"A1_b".repeat(10)}ABC`;
+  const machineTokens = [
+    `fm1a_${"A1b+/".repeat(20)}`,
+    `fm1r_${"B2c+/".repeat(20)}=`,
+    `fm2_${"C3d+/".repeat(20)}===`,
+  ];
+  const sensitiveOutputs = [
+    orgToken,
+    ...machineTokens,
+    `${orgToken.slice(0, 22)}\u200b${orgToken.slice(22)}`,
+  ];
+  for (const output of sensitiveOutputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(orgToken);
+    for (const machineToken of machineTokens)
+      expect(f.warnings.join(" ")).not.toContain(machineToken);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("fly.io tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("fly.io tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([Promise.resolve(response("fly.io tests"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("fly.io tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`fo1_${"A1_b".repeat(10)}AB`,
-		`${orgToken}A`,
-		`x${orgToken}`,
-		`${orgToken}_`,
-		`fm1a_${"A1b+/".repeat(19)}xxxx`,
-		`fm1x_${"A1b+/".repeat(20)}`,
-		`fm2_${"A1b+/".repeat(20)}====`,
-		`x${machineTokens[0]}`,
-		`${machineTokens[0]}_`,
-		`${machineTokens[0]}-`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("fly.io tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("fly.io tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `fo1_${"A1_b".repeat(10)}AB`,
+    `${orgToken}A`,
+    `x${orgToken}`,
+    `${orgToken}_`,
+    `fm1a_${"A1b+/".repeat(19)}xxxx`,
+    `fm1x_${"A1b+/".repeat(20)}`,
+    `fm2_${"A1b+/".repeat(20)}====`,
+    `x${machineTokens[0]}`,
+    `${machineTokens[0]}_`,
+    `${machineTokens[0]}-`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("fly.io tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("fly.io tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Pinecone API keys without disclosing them or mistaking near-misses for keys", async () => {
-	const key = `pcsk_test1_${"A".repeat(63)}`;
-	const obfuscatedKey = key.replace("pcsk_", "pc\u200bsk_");
-	for (const output of [key, obfuscatedKey]) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(output);
-	}
+  const key = `pcsk_test1_${"A".repeat(63)}`;
+  const obfuscatedKey = key.replace("pcsk_", "pc\u200bsk_");
+  for (const output of [key, obfuscatedKey]) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(output);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("pinecone index tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("pinecone index tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("pinecone index tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("pinecone index tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`pcsk_id12_${"A".repeat(63)}`,
-		`pcsk_test1_${"A".repeat(62)}`,
-		`x${key}`,
-		`${key}x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("pinecone index tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("pinecone index tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `pcsk_id12_${"A".repeat(63)}`,
+    `pcsk_test1_${"A".repeat(62)}`,
+    `x${key}`,
+    `${key}x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("pinecone index tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("pinecone index tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Google API keys without mistaking near-misses for keys", async () => {
-	const tokenFor = (suffix = "A".repeat(35)) => `AIza${suffix}`;
-	const token = tokenFor("A1_b-".repeat(7));
-	const sensitiveOutput = fixture([Promise.resolve(response(token))]);
-	sensitiveOutput.input("Name a task");
-	await settle();
-	expect(sensitiveOutput.state.title).toBe("existing task");
-	expect(sensitiveOutput.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(sensitiveOutput.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-	expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
+  const tokenFor = (suffix = "A".repeat(35)) => `AIza${suffix}`;
+  const token = tokenFor("A1_b-".repeat(7));
+  const sensitiveOutput = fixture([Promise.resolve(response(token))]);
+  sensitiveOutput.input("Name a task");
+  await settle();
+  expect(sensitiveOutput.state.title).toBe("existing task");
+  expect(
+    sensitiveOutput.calls.filter((args) => args[0] === "rename-window"),
+  ).toEqual([]);
+  expect(sensitiveOutput.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
+  expect(sensitiveOutput.warnings.join(" ")).not.toContain(token);
 
-	const ordinaryTitle = fixture([Promise.resolve(response("google api tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("google api tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("google api tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("google api tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		tokenFor("A".repeat(34)),
-		tokenFor("A".repeat(36)),
-		token.toLowerCase(),
-		`x${token}`,
-		`_${token}`,
-		`${token}A`,
-		`${token}_x`,
-		`${token}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("google api tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("google api tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    tokenFor("A".repeat(34)),
+    tokenFor("A".repeat(36)),
+    token.toLowerCase(),
+    `x${token}`,
+    `_${token}`,
+    `${token}A`,
+    `${token}_x`,
+    `${token}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("google api tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("google api tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Google OAuth client secrets without mistaking near-misses for secrets", async () => {
-	const secretFor = (suffix = "A".repeat(32)) => `GOCSPX-${suffix}`;
-	const secret = secretFor("A1_b-".repeat(6));
-	const obfuscatedSecret = `GOCSPX-${"A".repeat(16)}\u200b${"B".repeat(16)}`;
-	const secretWithContext = `Review Google OAuth client ${obfuscatedSecret}`;
-	expect(hasSensitiveNamingContext(secretWithContext)).toBe(true);
-	expect(hasSensitiveOutput(secretWithContext)).toBe(true);
-	for (const sensitiveSecret of [secret, obfuscatedSecret]) {
-		expect(hasSensitiveNamingContext(sensitiveSecret)).toBe(true);
-		expect(hasSensitiveOutput(sensitiveSecret)).toBe(true);
-		const f = fixture([Promise.resolve(response(sensitiveSecret))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(sensitiveSecret);
-	}
+  const secretFor = (suffix = "A".repeat(32)) => `GOCSPX-${suffix}`;
+  const secret = secretFor("A1_b-".repeat(6));
+  const obfuscatedSecret = `GOCSPX-${"A".repeat(16)}\u200b${"B".repeat(16)}`;
+  const secretWithContext = `Review Google OAuth client ${obfuscatedSecret}`;
+  expect(hasSensitiveNamingContext(secretWithContext)).toBe(true);
+  expect(hasSensitiveOutput(secretWithContext)).toBe(true);
+  for (const sensitiveSecret of [secret, obfuscatedSecret]) {
+    expect(hasSensitiveNamingContext(sensitiveSecret)).toBe(true);
+    expect(hasSensitiveOutput(sensitiveSecret)).toBe(true);
+    const f = fixture([Promise.resolve(response(sensitiveSecret))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(sensitiveSecret);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("google oauth client"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("google oauth client");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("google oauth client")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("google oauth client");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		secretFor("A".repeat(19)),
-		secret.replace("GOCSPX", "GOCSPY"),
-		`x${secret}`,
-		`_${secret}`,
-	];
-	for (const nearMiss of nearMisses) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const nearMisses = [
+    secretFor("A".repeat(19)),
+    secret.replace("GOCSPX", "GOCSPY"),
+    `x${secret}`,
+    `_${secret}`,
+  ];
+  for (const nearMiss of nearMisses) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("rejects Google OAuth access tokens without mistaking near-misses for tokens", async () => {
-	const tokenFor = (suffix = "A".repeat(32)) => `ya29.${suffix}`;
-	const token = tokenFor("A1_b-".repeat(6));
-	const obfuscatedToken = `ya29.${"A".repeat(16)}\u200b${"B".repeat(16)}`;
-	const tokenWithContext = `Review Google OAuth access ${obfuscatedToken}`;
-	expect(hasSensitiveNamingContext(tokenWithContext)).toBe(true);
-	expect(hasSensitiveOutput(tokenWithContext)).toBe(true);
-	for (const sensitiveToken of [token, obfuscatedToken]) {
-		expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
-		expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
-		const f = fixture([Promise.resolve(response(sensitiveToken))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(sensitiveToken);
-	}
+  const tokenFor = (suffix = "A".repeat(32)) => `ya29.${suffix}`;
+  const token = tokenFor("A1_b-".repeat(6));
+  const obfuscatedToken = `ya29.${"A".repeat(16)}\u200b${"B".repeat(16)}`;
+  const tokenWithContext = `Review Google OAuth access ${obfuscatedToken}`;
+  expect(hasSensitiveNamingContext(tokenWithContext)).toBe(true);
+  expect(hasSensitiveOutput(tokenWithContext)).toBe(true);
+  for (const sensitiveToken of [token, obfuscatedToken]) {
+    expect(hasSensitiveNamingContext(sensitiveToken)).toBe(true);
+    expect(hasSensitiveOutput(sensitiveToken)).toBe(true);
+    const f = fixture([Promise.resolve(response(sensitiveToken))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(sensitiveToken);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("google oauth tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("google oauth tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("google oauth tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("google oauth tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		tokenFor("A".repeat(19)),
-		token.replace("ya29", "ya28"),
-		`x${token}`,
-		`_${token}`,
-	];
-	for (const nearMiss of nearMisses) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  const nearMisses = [
+    tokenFor("A".repeat(19)),
+    token.replace("ya29", "ya28"),
+    `x${token}`,
+    `_${token}`,
+  ];
+  for (const nearMiss of nearMisses) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("rejects Google OAuth refresh tokens without mistaking near-misses for tokens", async () => {
-	const tokenFor = (suffix = "A".repeat(32)) => `1//${suffix}`;
-	const token = tokenFor("A1_b-".repeat(6));
-	const obfuscatedToken = `1//${"A".repeat(16)}\u200b${"B".repeat(16)}`;
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const tokenFor = (suffix = "A".repeat(32)) => `1//${suffix}`;
+  const token = tokenFor("A1_b-".repeat(6));
+  const obfuscatedToken = `1//${"A".repeat(16)}\u200b${"B".repeat(16)}`;
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const sensitiveToken of [token, obfuscatedToken]) {
-		const context = `Review Google OAuth refresh ${sensitiveToken}`;
-		expect(hasSensitiveNamingContext(context)).toBe(true);
-		expect(hasSensitiveOutput(context)).toBe(true);
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(context);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([warning]);
-		expect(input.warnings.join(" ")).not.toContain(sensitiveToken);
+  for (const sensitiveToken of [token, obfuscatedToken]) {
+    const context = `Review Google OAuth refresh ${sensitiveToken}`;
+    expect(hasSensitiveNamingContext(context)).toBe(true);
+    expect(hasSensitiveOutput(context)).toBe(true);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(context);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([warning]);
+    expect(input.warnings.join(" ")).not.toContain(sensitiveToken);
 
-		const output = fixture([Promise.resolve(response(sensitiveToken))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(sensitiveToken);
-	}
+    const output = fixture([Promise.resolve(response(sensitiveToken))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(sensitiveToken);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("google oauth refresh"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("google oauth refresh");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("google oauth refresh")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("google oauth refresh");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	for (const nearMiss of [tokenFor("A".repeat(19)), token.replace("1//", "2//"), `x${token}`, `_${token}`]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    tokenFor("A".repeat(19)),
+    token.replace("1//", "2//"),
+    `x${token}`,
+    `_${token}`,
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("rejects Databricks access tokens without mistaking near-miss strings for tokens", async () => {
-	const token = ["dapi", "a".repeat(32)].join("");
-	for (const output of [token, `${token}-2`, `rotate-${token}`, token.replace("dapi", "da\u200bpi")]) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = ["dapi", "a".repeat(32)].join("");
+  for (const output of [
+    token,
+    `${token}-2`,
+    `rotate-${token}`,
+    token.replace("dapi", "da\u200bpi"),
+  ]) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("dapi"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("dapi");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("dapi"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("dapi");
+  expect(shortName.warnings).toEqual([]);
 
-	for (const output of [
-		["dapi", "0".repeat(31)].join(""),
-		["dapi", "0".repeat(33)].join(""),
-		["dapi", "g".repeat(32)].join(""),
-		`${token}_x`,
-		`${token}-x`,
-	]) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("databricks token tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("databricks token tests");
-		expect(f.warnings).toEqual([]);
-	}
+  for (const output of [
+    ["dapi", "0".repeat(31)].join(""),
+    ["dapi", "0".repeat(33)].join(""),
+    ["dapi", "g".repeat(32)].join(""),
+    `${token}_x`,
+    `${token}-x`,
+  ]) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("databricks token tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("databricks token tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects DigitalOcean tokens without mistaking near-miss strings for tokens", async () => {
-	const body = "a".repeat(64);
-	const prefixes = ["doo_v1_", "dop_v1_", "dor_v1_"];
-	for (const prefix of prefixes) {
-		const token = `${prefix}${body}`;
-		for (const output of [token, token.toUpperCase(), `rotate-${token}`, token.replace("v1", "v\u200b1")]) {
-			const f = fixture([Promise.resolve(response(output))]);
-			f.input("Name a task");
-			await settle();
-			expect(f.state.title).toBe("existing task");
-			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-			expect(f.warnings.join(" ")).not.toContain(token);
-		}
-	}
+  const body = "a".repeat(64);
+  const prefixes = ["doo_v1_", "dop_v1_", "dor_v1_"];
+  for (const prefix of prefixes) {
+    const token = `${prefix}${body}`;
+    for (const output of [
+      token,
+      token.toUpperCase(),
+      `rotate-${token}`,
+      token.replace("v1", "v\u200b1"),
+    ]) {
+      const f = fixture([Promise.resolve(response(output))]);
+      f.input("Name a task");
+      await settle();
+      expect(f.state.title).toBe("existing task");
+      expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+      expect(f.warnings).toEqual([
+        "Sensitive-looking naming output was not applied.",
+      ]);
+      expect(f.warnings.join(" ")).not.toContain(token);
+    }
+  }
 
-	const shortName = fixture([Promise.resolve(response("dop_v1_setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("dop_v1_setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("dop_v1_setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("dop_v1_setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = prefixes.flatMap((prefix) => [
-		`${prefix}${"a".repeat(63)}`,
-		`${prefix}${"a".repeat(65)}`,
-		`${prefix}${"g".repeat(64)}`,
-	]);
-	const validToken = `${prefixes[1]}${body}`;
-	nearMisses.push(`${validToken}_x`, `${validToken}-x`, `doq_v1_${body}`);
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("digitalocean token tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("digitalocean token tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = prefixes.flatMap((prefix) => [
+    `${prefix}${"a".repeat(63)}`,
+    `${prefix}${"a".repeat(65)}`,
+    `${prefix}${"g".repeat(64)}`,
+  ]);
+  const validToken = `${prefixes[1]}${body}`;
+  nearMisses.push(`${validToken}_x`, `${validToken}-x`, `doq_v1_${body}`);
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("digitalocean token tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("digitalocean token tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Notion API tokens without mistaking near-miss strings for tokens", async () => {
-	const token = ["ntn_", "1".repeat(11), "a".repeat(35)].join("");
-	for (const output of [token, token.toUpperCase(), `configure-${token}`, token.replace("ntn_", "ntn_\u200b")]) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = ["ntn_", "1".repeat(11), "a".repeat(35)].join("");
+  for (const output of [
+    token,
+    token.toUpperCase(),
+    `configure-${token}`,
+    token.replace("ntn_", "ntn_\u200b"),
+  ]) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("ntn_api_setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("ntn_api_setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("ntn_api_setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("ntn_api_setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		["ntn_", "1".repeat(10), "a".repeat(35)].join(""),
-		["ntn_", "1".repeat(12), "a".repeat(35)].join(""),
-		["ntn_", "1".repeat(11), "a".repeat(34)].join(""),
-		["ntn_", "1".repeat(11), "a".repeat(36)].join(""),
-		["ntn_", "a".repeat(46)].join(""),
-		`${token}_x`,
-		`${token}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("notion api tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("notion api tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    ["ntn_", "1".repeat(10), "a".repeat(35)].join(""),
+    ["ntn_", "1".repeat(12), "a".repeat(35)].join(""),
+    ["ntn_", "1".repeat(11), "a".repeat(34)].join(""),
+    ["ntn_", "1".repeat(11), "a".repeat(36)].join(""),
+    ["ntn_", "a".repeat(46)].join(""),
+    `${token}_x`,
+    `${token}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("notion api tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("notion api tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Supabase secret keys without mistaking near-miss strings for keys", async () => {
-	const token = `sb_secret_${"A".repeat(32)}`;
-	const outputs = [
-		token,
-		`configure-${token}`,
-		token.replace("sb_secret_", "sb_se\u200bcret_"),
-		`${token.slice(0, 20)}\u200b${token.slice(20)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = `sb_secret_${"A".repeat(32)}`;
+  const outputs = [
+    token,
+    `configure-${token}`,
+    token.replace("sb_secret_", "sb_se\u200bcret_"),
+    `${token.slice(0, 20)}\u200b${token.slice(20)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("supabase api setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("supabase api setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("supabase api setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("supabase api setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		`sb_secret_${"A".repeat(31)}`,
-		`sb_secret_${"A".repeat(33)}`,
-		`sb_secret_${"A".repeat(32)}x`,
-		`sb_secrex_${"A".repeat(32)}`,
-		`sb_secret_${"A".repeat(31)}.`,
-		`x${token}`,
-		`_${token}`,
-		`${token}_x`,
-		`${token}-x`,
-		`sb_publishable_${"A".repeat(32)}`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("supabase api setup"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("supabase api setup");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `sb_secret_${"A".repeat(31)}`,
+    `sb_secret_${"A".repeat(33)}`,
+    `sb_secret_${"A".repeat(32)}x`,
+    `sb_secrex_${"A".repeat(32)}`,
+    `sb_secret_${"A".repeat(31)}.`,
+    `x${token}`,
+    `_${token}`,
+    `${token}_x`,
+    `${token}-x`,
+    `sb_publishable_${"A".repeat(32)}`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("supabase api setup")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("supabase api setup");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Neon API keys without mistaking near-miss strings for keys", async () => {
-	const token = `neon_api_key_${"N".repeat(32)}`;
-	const outputs = [
-		token,
-		`configure-${token}`,
-		token.replace("neon_api_key_", "neon_api_ke\u200by_"),
-		`${token.slice(0, 22)}\u200b${token.slice(22)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = `neon_api_key_${"N".repeat(32)}`;
+  const outputs = [
+    token,
+    `configure-${token}`,
+    token.replace("neon_api_key_", "neon_api_ke\u200by_"),
+    `${token.slice(0, 22)}\u200b${token.slice(22)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("neon api setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("neon api setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("neon api setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("neon api setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		`neon_api_key_${"N".repeat(31)}`,
-		`neon_api_key_${"N".repeat(33)}`,
-		`neon_api_key_${"N".repeat(32)}x`,
-		`neon_api_keX_${"N".repeat(32)}`,
-		`neon_api_key_${"N".repeat(31)}.`,
-		`x${token}`,
-		`_${token}`,
-		`${token}_x`,
-		`${token}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("neon api setup"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("neon api setup");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `neon_api_key_${"N".repeat(31)}`,
+    `neon_api_key_${"N".repeat(33)}`,
+    `neon_api_key_${"N".repeat(32)}x`,
+    `neon_api_keX_${"N".repeat(32)}`,
+    `neon_api_key_${"N".repeat(31)}.`,
+    `x${token}`,
+    `_${token}`,
+    `${token}_x`,
+    `${token}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("neon api setup")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("neon api setup");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Sentry organization tokens without mistaking near-misses for tokens", async () => {
-	const firstClaim = "eyJpYXQiO";
-	const regionClaim = "LCJyZWdpb25fdXJs";
-	const tokenFor = (first = "a".repeat(20), region = regionClaim, second = "b".repeat(20), suffix = "C".repeat(43)) =>
-		`sntrys_${firstClaim}${first}${region}${second}_${suffix}`;
-	const token = tokenFor();
-	const outputs = [
-		token,
-		tokenFor("a".repeat(20), "InJlZ2lvbl91cmwi"),
-		tokenFor("a".repeat(20), "cmVnaW9uX3VybCI6"),
-		`configure-${token}`,
-		token.replace("sntrys_", "sntry\u200bs_"),
-		token.replace(regionClaim, "LCJyZWdpb25fdXJ\u200bs"),
-		`${token.slice(0, 45)}\u200b${token.slice(45)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const firstClaim = "eyJpYXQiO";
+  const regionClaim = "LCJyZWdpb25fdXJs";
+  const tokenFor = (
+    first = "a".repeat(20),
+    region = regionClaim,
+    second = "b".repeat(20),
+    suffix = "C".repeat(43),
+  ) => `sntrys_${firstClaim}${first}${region}${second}_${suffix}`;
+  const token = tokenFor();
+  const outputs = [
+    token,
+    tokenFor("a".repeat(20), "InJlZ2lvbl91cmwi"),
+    tokenFor("a".repeat(20), "cmVnaW9uX3VybCI6"),
+    `configure-${token}`,
+    token.replace("sntrys_", "sntry\u200bs_"),
+    token.replace(regionClaim, "LCJyZWdpb25fdXJ\u200bs"),
+    `${token.slice(0, 45)}\u200b${token.slice(45)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("sentry org setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("sentry org setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("sentry org setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("sentry org setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		tokenFor("a".repeat(9)),
-		tokenFor("a".repeat(20), "LCJyZWdpb25fdXJs", "b".repeat(9)),
-		tokenFor("a".repeat(20), "LCJyZWdpb25fdXls"),
-		tokenFor("a".repeat(20), regionClaim, "b".repeat(20), "C".repeat(42)),
-		tokenFor("a".repeat(20), regionClaim, "b".repeat(20), "C".repeat(44)),
-		token.replace("sntrys_", "sntryx_"),
-		`x${token}`,
-		`_${token}`,
-		`${token}_x`,
-		`${token}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("sentry org setup"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("sentry org setup");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    tokenFor("a".repeat(9)),
+    tokenFor("a".repeat(20), "LCJyZWdpb25fdXJs", "b".repeat(9)),
+    tokenFor("a".repeat(20), "LCJyZWdpb25fdXls"),
+    tokenFor("a".repeat(20), regionClaim, "b".repeat(20), "C".repeat(42)),
+    tokenFor("a".repeat(20), regionClaim, "b".repeat(20), "C".repeat(44)),
+    token.replace("sntrys_", "sntryx_"),
+    `x${token}`,
+    `_${token}`,
+    `${token}_x`,
+    `${token}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("sentry org setup")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("sentry org setup");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Sentry user access tokens without mistaking near-misses for tokens", async () => {
-	const token = `sntryu_${"a".repeat(64)}`;
-	const outputs = [
-		token,
-		`configure-${token}`,
-		token.replace("sntryu_", "sntry\u200bu_"),
-		`${token.slice(0, 30)}\u200b${token.slice(30)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = `sntryu_${"a".repeat(64)}`;
+  const outputs = [
+    token,
+    `configure-${token}`,
+    token.replace("sntryu_", "sntry\u200bu_"),
+    `${token.slice(0, 30)}\u200b${token.slice(30)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("sentry api setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("sentry api setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("sentry api setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("sentry api setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		`sntryu_${"a".repeat(63)}`,
-		`sntryu_${"a".repeat(65)}`,
-		`sntryu_${"a".repeat(63)}g`,
-		`sntryx_${"a".repeat(64)}`,
-		`x${token}`,
-		`_${token}`,
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("sentry api tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("sentry api tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `sntryu_${"a".repeat(63)}`,
+    `sntryu_${"a".repeat(65)}`,
+    `sntryu_${"a".repeat(63)}g`,
+    `sntryx_${"a".repeat(64)}`,
+    `x${token}`,
+    `_${token}`,
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("sentry api tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("sentry api tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Telegram bot tokens without mistaking near-misses for tokens", async () => {
-	const token = `123456789:A${"a".repeat(34)}`;
-	const outputs = [
-		token,
-		`configure-${token}`,
-		`${token.slice(0, 12)}\u200b${token.slice(12)}`,
-		token.replace(":", ":\u200b"),
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = `123456789:A${"a".repeat(34)}`;
+  const outputs = [
+    token,
+    `configure-${token}`,
+    `${token.slice(0, 12)}\u200b${token.slice(12)}`,
+    token.replace(":", ":\u200b"),
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("telegram bot setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("telegram bot setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("telegram bot setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("telegram bot setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		`1234:A${"a".repeat(34)}`,
-		`1${"2".repeat(16)}:A${"a".repeat(34)}`,
-		`123456789:A${"a".repeat(33)}`,
-		`123456789:A${"a".repeat(35)}`,
-		`123456789:a${"a".repeat(34)}`,
-		`123456789-B${"a".repeat(34)}`,
-		`x${token}`,
-		`_${token}`,
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("telegram bot tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("telegram bot tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `1234:A${"a".repeat(34)}`,
+    `1${"2".repeat(16)}:A${"a".repeat(34)}`,
+    `123456789:A${"a".repeat(33)}`,
+    `123456789:A${"a".repeat(35)}`,
+    `123456789:a${"a".repeat(34)}`,
+    `123456789-B${"a".repeat(34)}`,
+    `x${token}`,
+    `_${token}`,
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("telegram bot tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("telegram bot tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Vault service and batch tokens without mistaking near-misses for tokens", async () => {
-	for (const prefix of ["hvs.", "hvb."]) {
-		const token = `${prefix}${"V".repeat(24)}`;
-		const outputs = [
-			token,
-			`configure-${token}`,
-			token.replace(prefix, `${prefix[0]}\u200b${prefix.slice(1)}`),
-			`${token.slice(0, 11)}\u200b${token.slice(11)}`,
-		];
-		for (const output of outputs) {
-			const f = fixture([Promise.resolve(response(output))]);
-			f.input("Name a task");
-			await settle();
-			expect(f.state.title).toBe("existing task");
-			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-			expect(f.warnings.join(" ")).not.toContain(token);
-		}
+  for (const prefix of ["hvs.", "hvb."]) {
+    const token = `${prefix}${"V".repeat(24)}`;
+    const outputs = [
+      token,
+      `configure-${token}`,
+      token.replace(prefix, `${prefix[0]}\u200b${prefix.slice(1)}`),
+      `${token.slice(0, 11)}\u200b${token.slice(11)}`,
+    ];
+    for (const output of outputs) {
+      const f = fixture([Promise.resolve(response(output))]);
+      f.input("Name a task");
+      await settle();
+      expect(f.state.title).toBe("existing task");
+      expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+      expect(f.warnings).toEqual([
+        "Sensitive-looking naming output was not applied.",
+      ]);
+      expect(f.warnings.join(" ")).not.toContain(token);
+    }
 
-		const nearMisses = [
-			`${prefix}${"V".repeat(23)}`,
-			`${prefix}${"V".repeat(25)}`,
-			`${prefix}${"V".repeat(24)}x`,
-			`${prefix}${"V".repeat(23)}.`,
-			`hvt.${"V".repeat(24)}`,
-			`x${token}`,
-			`_${token}`,
-			`${token}_x`,
-			`${token}-x`,
-		];
-		for (const output of nearMisses) {
-			const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("vault access setup"))]);
-			f.input("Name a task");
-			await settle();
-			expect(f.requests).toHaveLength(2);
-			expect(f.state.title).toBe("vault access setup");
-			expect(f.warnings).toEqual([]);
-		}
-	}
+    const nearMisses = [
+      `${prefix}${"V".repeat(23)}`,
+      `${prefix}${"V".repeat(25)}`,
+      `${prefix}${"V".repeat(24)}x`,
+      `${prefix}${"V".repeat(23)}.`,
+      `hvt.${"V".repeat(24)}`,
+      `x${token}`,
+      `_${token}`,
+      `${token}_x`,
+      `${token}-x`,
+    ];
+    for (const output of nearMisses) {
+      const f = fixture([
+        Promise.resolve(response(output)),
+        Promise.resolve(response("vault access setup")),
+      ]);
+      f.input("Name a task");
+      await settle();
+      expect(f.requests).toHaveLength(2);
+      expect(f.state.title).toBe("vault access setup");
+      expect(f.warnings).toEqual([]);
+    }
+  }
 
-	const shortName = fixture([Promise.resolve(response("vault api setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("vault api setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("vault api setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("vault api setup");
+  expect(shortName.warnings).toEqual([]);
 });
 
 test("rejects Brevo API tokens without mistaking near-misses for tokens", async () => {
-	const token = `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}`;
-	const outputs = [
-		token,
-		token.toUpperCase(),
-		`configure-${token}`,
-		token.replace("xkeysib-", "xkeysib\u200b-"),
-		`${token.slice(0, 40)}\u200b${token.slice(40)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = `xkeysib-${"a".repeat(64)}-${"B".repeat(16)}`;
+  const outputs = [
+    token,
+    token.toUpperCase(),
+    `configure-${token}`,
+    token.replace("xkeysib-", "xkeysib\u200b-"),
+    `${token.slice(0, 40)}\u200b${token.slice(40)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("brevo mail setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("brevo mail setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("brevo mail setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("brevo mail setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		`xkeysib-${"a".repeat(63)}-${"B".repeat(16)}`,
-		`xkeysib-${"a".repeat(65)}-${"B".repeat(16)}`,
-		`xkeysib-${"g".repeat(64)}-${"B".repeat(16)}`,
-		`xkeysib-${"a".repeat(64)}-${"B".repeat(15)}`,
-		`xkeysib-${"a".repeat(64)}-${"B".repeat(17)}`,
-		`xkeysix-${"a".repeat(64)}-${"B".repeat(16)}`,
-		`x${token}`,
-		`_${token}`,
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("brevo mail tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("brevo mail tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `xkeysib-${"a".repeat(63)}-${"B".repeat(16)}`,
+    `xkeysib-${"a".repeat(65)}-${"B".repeat(16)}`,
+    `xkeysib-${"g".repeat(64)}-${"B".repeat(16)}`,
+    `xkeysib-${"a".repeat(64)}-${"B".repeat(15)}`,
+    `xkeysib-${"a".repeat(64)}-${"B".repeat(17)}`,
+    `xkeysix-${"a".repeat(64)}-${"B".repeat(16)}`,
+    `x${token}`,
+    `_${token}`,
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("brevo mail tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("brevo mail tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Atlassian API tokens without mistaking near-misses for tokens", async () => {
-	const token = `ATATT3${"a".repeat(183)}_-=`;
-	const outputs = [
-		token,
-		token.toLowerCase(),
-		`configure-${token}`,
-		token.replace("ATATT3", "ATATT\u200b3"),
-		`${token.slice(0, 50)}\u200b${token.slice(50)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = `ATATT3${"a".repeat(183)}_-=`;
+  const outputs = [
+    token,
+    token.toLowerCase(),
+    `configure-${token}`,
+    token.replace("ATATT3", "ATATT\u200b3"),
+    `${token.slice(0, 50)}\u200b${token.slice(50)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("atlassian api setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("atlassian api setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("atlassian api setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("atlassian api setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		`ATATT3${"a".repeat(182)}_-=`,
-		`ATATT3${"a".repeat(184)}_-=`,
-		`ATATT3${"a".repeat(90)}.${"a".repeat(92)}_-=`,
-		`ATATT2${"a".repeat(183)}_-=`,
-		`x${token}`,
-		`_${token}`,
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-		`${token}=x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("atlassian api tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("atlassian api tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `ATATT3${"a".repeat(182)}_-=`,
+    `ATATT3${"a".repeat(184)}_-=`,
+    `ATATT3${"a".repeat(90)}.${"a".repeat(92)}_-=`,
+    `ATATT2${"a".repeat(183)}_-=`,
+    `x${token}`,
+    `_${token}`,
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+    `${token}=x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("atlassian api tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("atlassian api tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Terraform Cloud API tokens without mistaking near-misses for tokens", async () => {
-	const prefix = "T".repeat(14);
-	const token60 = `${prefix}.atlasv1.${"a".repeat(57)}_-=`;
-	const token70 = `${prefix}.atlasv1.${"b".repeat(67)}_-=`;
-	const mixedCaseToken = `${"q".repeat(14)}.atlasv1.${"A".repeat(60)}`;
-	const tokens = [token60, token70, mixedCaseToken];
-	for (const token of tokens) {
-		const outputs = [
-			token,
-			token.replace(".atlasv1.", ".ATLASV1."),
-			`${token}!`,
-			`deploy-${token}`,
-			token.replace(".atlasv1.", ".atla\u200bsv1."),
-			`${token.slice(0, 24)}\u200b${token.slice(24)}`,
-		];
-		for (const output of outputs) {
-			const f = fixture([Promise.resolve(response(output))]);
-			f.input("Name a task");
-			await settle();
-			expect(f.state.title).toBe("existing task");
-			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-			expect(f.warnings.join(" ")).not.toContain(token);
-		}
-	}
+  const prefix = "T".repeat(14);
+  const token60 = `${prefix}.atlasv1.${"a".repeat(57)}_-=`;
+  const token70 = `${prefix}.atlasv1.${"b".repeat(67)}_-=`;
+  const mixedCaseToken = `${"q".repeat(14)}.atlasv1.${"A".repeat(60)}`;
+  const tokens = [token60, token70, mixedCaseToken];
+  for (const token of tokens) {
+    const outputs = [
+      token,
+      token.replace(".atlasv1.", ".ATLASV1."),
+      `${token}!`,
+      `deploy-${token}`,
+      token.replace(".atlasv1.", ".atla\u200bsv1."),
+      `${token.slice(0, 24)}\u200b${token.slice(24)}`,
+    ];
+    for (const output of outputs) {
+      const f = fixture([Promise.resolve(response(output))]);
+      f.input("Name a task");
+      await settle();
+      expect(f.state.title).toBe("existing task");
+      expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+      expect(f.warnings).toEqual([
+        "Sensitive-looking naming output was not applied.",
+      ]);
+      expect(f.warnings.join(" ")).not.toContain(token);
+    }
+  }
 
-	const shortName = fixture([Promise.resolve(response("terraform cloud setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("terraform cloud setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([
+    Promise.resolve(response("terraform cloud setup")),
+  ]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("terraform cloud setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		`${"a".repeat(13)}.atlasv1.${"c".repeat(60)}`,
-		`${"a".repeat(15)}.atlasv1.${"c".repeat(60)}`,
-		`${prefix}.atlasv1.${"c".repeat(59)}`,
-		`${prefix}.atlasv1.${"c".repeat(71)}`,
-		`${prefix}.atlasv1.${"c".repeat(30)}.${"c".repeat(30)}`,
-		`${prefix}.atlasv2.${"c".repeat(60)}`,
-		`x${token60}`,
-		`_${token60}`,
-		`${token70}x`,
-		`${token70}_x`,
-		`${token70}-x`,
-		`${token70}=x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("terraform cloud tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("terraform cloud tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `${"a".repeat(13)}.atlasv1.${"c".repeat(60)}`,
+    `${"a".repeat(15)}.atlasv1.${"c".repeat(60)}`,
+    `${prefix}.atlasv1.${"c".repeat(59)}`,
+    `${prefix}.atlasv1.${"c".repeat(71)}`,
+    `${prefix}.atlasv1.${"c".repeat(30)}.${"c".repeat(30)}`,
+    `${prefix}.atlasv2.${"c".repeat(60)}`,
+    `x${token60}`,
+    `_${token60}`,
+    `${token70}x`,
+    `${token70}_x`,
+    `${token70}-x`,
+    `${token70}=x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("terraform cloud tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("terraform cloud tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Shopify app tokens without mistaking near-miss strings for tokens", async () => {
-	const prefixes = ["shpat_", "shpca_", "shppa_", "shpss_"];
-	const tokenFor = (prefix: string) => `${prefix}${"a".repeat(32)}`;
-	for (const prefix of prefixes) {
-		const token = tokenFor(prefix);
-		const outputs = [
-			token,
-			token.toUpperCase(),
-			`configure-${token}`,
-			token.replace("shp", "sh\u200bp"),
-			`${token.slice(0, 20)}\u200b${token.slice(20)}`,
-		];
-		for (const output of outputs) {
-			const f = fixture([Promise.resolve(response(output))]);
-			f.input("Name a task");
-			await settle();
-			expect(f.state.title).toBe("existing task");
-			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-			expect(f.warnings.join(" ")).not.toContain(token);
-		}
-	}
+  const prefixes = ["shpat_", "shpca_", "shppa_", "shpss_"];
+  const tokenFor = (prefix: string) => `${prefix}${"a".repeat(32)}`;
+  for (const prefix of prefixes) {
+    const token = tokenFor(prefix);
+    const outputs = [
+      token,
+      token.toUpperCase(),
+      `configure-${token}`,
+      token.replace("shp", "sh\u200bp"),
+      `${token.slice(0, 20)}\u200b${token.slice(20)}`,
+    ];
+    for (const output of outputs) {
+      const f = fixture([Promise.resolve(response(output))]);
+      f.input("Name a task");
+      await settle();
+      expect(f.state.title).toBe("existing task");
+      expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+      expect(f.warnings).toEqual([
+        "Sensitive-looking naming output was not applied.",
+      ]);
+      expect(f.warnings.join(" ")).not.toContain(token);
+    }
+  }
 
-	const shortName = fixture([Promise.resolve(response("shopify app setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("shopify app setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("shopify app setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("shopify app setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = prefixes.flatMap((prefix) => {
-		const token = tokenFor(prefix);
-		return [
-			`${prefix}${"a".repeat(31)}`,
-			`${prefix}${"a".repeat(33)}`,
-			`${prefix}${"g".repeat(32)}`,
-			`${prefix.replace(/.$/u, "x")}${"a".repeat(32)}`,
-			`x${token}`,
-			`_${token}`,
-			`${token}x`,
-			`${token}_x`,
-			`${token}-x`,
-		];
-	});
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("shopify app tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("shopify app tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = prefixes.flatMap((prefix) => {
+    const token = tokenFor(prefix);
+    return [
+      `${prefix}${"a".repeat(31)}`,
+      `${prefix}${"a".repeat(33)}`,
+      `${prefix}${"g".repeat(32)}`,
+      `${prefix.replace(/.$/u, "x")}${"a".repeat(32)}`,
+      `x${token}`,
+      `_${token}`,
+      `${token}x`,
+      `${token}_x`,
+      `${token}-x`,
+    ];
+  });
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("shopify app tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("shopify app tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Shippo API tokens without mistaking near-miss strings for tokens", async () => {
-	const tokenFor = (mode: string, body = "a".repeat(40)) => `shippo_${mode}_${body}`;
-	const tokens = [tokenFor("live"), tokenFor("test")];
-	for (const token of tokens) {
-		const outputs = [
-			token,
-			token.toUpperCase(),
-			`configure-${token}`,
-			token.replace("shippo", "shi\u200bppo"),
-			`${token.slice(0, 24)}\u200b${token.slice(24)}`,
-		];
-		for (const output of outputs) {
-			const f = fixture([Promise.resolve(response(output))]);
-			f.input("Name a task");
-			await settle();
-			expect(f.state.title).toBe("existing task");
-			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-			expect(f.warnings.join(" ")).not.toContain(token);
-		}
-	}
+  const tokenFor = (mode: string, body = "a".repeat(40)) =>
+    `shippo_${mode}_${body}`;
+  const tokens = [tokenFor("live"), tokenFor("test")];
+  for (const token of tokens) {
+    const outputs = [
+      token,
+      token.toUpperCase(),
+      `configure-${token}`,
+      token.replace("shippo", "shi\u200bppo"),
+      `${token.slice(0, 24)}\u200b${token.slice(24)}`,
+    ];
+    for (const output of outputs) {
+      const f = fixture([Promise.resolve(response(output))]);
+      f.input("Name a task");
+      await settle();
+      expect(f.state.title).toBe("existing task");
+      expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+      expect(f.warnings).toEqual([
+        "Sensitive-looking naming output was not applied.",
+      ]);
+      expect(f.warnings.join(" ")).not.toContain(token);
+    }
+  }
 
-	const shortName = fixture([Promise.resolve(response("shippo label setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("shippo label setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("shippo label setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("shippo label setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		tokenFor("live", "a".repeat(39)),
-		tokenFor("test", "a".repeat(41)),
-		tokenFor("live", "g".repeat(40)),
-		tokenFor("sandbox"),
-		`x${tokens[0]}`,
-		`_${tokens[0]}`,
-		`${tokens[0]}x`,
-		`${tokens[0]}_x`,
-		`${tokens[0]}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("shippo label tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("shippo label tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    tokenFor("live", "a".repeat(39)),
+    tokenFor("test", "a".repeat(41)),
+    tokenFor("live", "g".repeat(40)),
+    tokenFor("sandbox"),
+    `x${tokens[0]}`,
+    `_${tokens[0]}`,
+    `${tokens[0]}x`,
+    `${tokens[0]}_x`,
+    `${tokens[0]}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("shippo label tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("shippo label tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects PlanetScale API and OAuth tokens without mistaking near-misses for tokens", async () => {
-	const tokenFor = (kind: string, body: string) => `pscale_${kind}_${body}`;
-	const body32 = "A1_bc.-=".repeat(4);
-	const body64 = "B".repeat(64);
-	const tokens = [tokenFor("tkn", body32), tokenFor("tkn", body64), tokenFor("oauth", body32), tokenFor("oauth", body64)];
-	for (const token of tokens) {
-		const outputs = [
-			token,
-			token.toUpperCase(),
-			`configure-${token}`,
-			token.replace("pscale", "p\u200bscale"),
-			`${token.slice(0, 25)}\u200b${token.slice(25)}`,
-		];
-		for (const output of outputs) {
-			const f = fixture([Promise.resolve(response(output))]);
-			f.input("Name a task");
-			await settle();
-			expect(f.state.title).toBe("existing task");
-			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-			expect(f.warnings.join(" ")).not.toContain(token);
-		}
-	}
+  const tokenFor = (kind: string, body: string) => `pscale_${kind}_${body}`;
+  const body32 = "A1_bc.-=".repeat(4);
+  const body64 = "B".repeat(64);
+  const tokens = [
+    tokenFor("tkn", body32),
+    tokenFor("tkn", body64),
+    tokenFor("oauth", body32),
+    tokenFor("oauth", body64),
+  ];
+  for (const token of tokens) {
+    const outputs = [
+      token,
+      token.toUpperCase(),
+      `configure-${token}`,
+      token.replace("pscale", "p\u200bscale"),
+      `${token.slice(0, 25)}\u200b${token.slice(25)}`,
+    ];
+    for (const output of outputs) {
+      const f = fixture([Promise.resolve(response(output))]);
+      f.input("Name a task");
+      await settle();
+      expect(f.state.title).toBe("existing task");
+      expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+      expect(f.warnings).toEqual([
+        "Sensitive-looking naming output was not applied.",
+      ]);
+      expect(f.warnings.join(" ")).not.toContain(token);
+    }
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("planetscale migration"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("planetscale migration");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("planetscale migration")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("planetscale migration");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		tokenFor("tkn", "A".repeat(31)),
-		tokenFor("oauth", "A".repeat(65)),
-		tokenFor("token", body32),
-		`x${tokens[0]}`,
-		`_${tokens[0]}`,
-		`${tokens[1]}x`,
-		`${tokens[1]}_x`,
-		`${tokens[1]}-x`,
-		`${tokens[1]}.x`,
-		`${tokens[1]}=x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("scale migration tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("scale migration tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    tokenFor("tkn", "A".repeat(31)),
+    tokenFor("oauth", "A".repeat(65)),
+    tokenFor("token", body32),
+    `x${tokens[0]}`,
+    `_${tokens[0]}`,
+    `${tokens[1]}x`,
+    `${tokens[1]}_x`,
+    `${tokens[1]}-x`,
+    `${tokens[1]}.x`,
+    `${tokens[1]}=x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("scale migration tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("scale migration tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Postman API tokens without mistaking near-misses for tokens", async () => {
-	const tokenFor = (first = "a".repeat(24), second = "b".repeat(34)) => `PMAK-${first}-${second}`;
-	const token = tokenFor();
-	const outputs = [
-		token,
-		token.toLowerCase(),
-		token.toUpperCase(),
-		`configure-${token}`,
-		token.replace("PMAK", "PM\u200bAK"),
-		`${token.slice(0, 35)}\u200b${token.slice(35)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const tokenFor = (first = "a".repeat(24), second = "b".repeat(34)) =>
+    `PMAK-${first}-${second}`;
+  const token = tokenFor();
+  const outputs = [
+    token,
+    token.toLowerCase(),
+    token.toUpperCase(),
+    `configure-${token}`,
+    token.replace("PMAK", "PM\u200bAK"),
+    `${token.slice(0, 35)}\u200b${token.slice(35)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("postman auth tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("postman auth tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("postman auth tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("postman auth tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		tokenFor("a".repeat(23)),
-		tokenFor("a".repeat(25)),
-		tokenFor("a".repeat(24), "b".repeat(33)),
-		tokenFor("a".repeat(24), "b".repeat(35)),
-		tokenFor("g".repeat(24)),
-		tokenFor("a".repeat(24), "g".repeat(34)),
-		token.replace("PMAK-", "XMAK-"),
-		token.replace("PMAK-", "PMAK_"),
-		`x${token}`,
-		`_${token}`,
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("postman auth tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("postman auth tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    tokenFor("a".repeat(23)),
+    tokenFor("a".repeat(25)),
+    tokenFor("a".repeat(24), "b".repeat(33)),
+    tokenFor("a".repeat(24), "b".repeat(35)),
+    tokenFor("g".repeat(24)),
+    tokenFor("a".repeat(24), "g".repeat(34)),
+    token.replace("PMAK-", "XMAK-"),
+    token.replace("PMAK-", "PMAK_"),
+    `x${token}`,
+    `_${token}`,
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("postman auth tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("postman auth tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Prefect API tokens without mistaking near-misses for tokens", async () => {
-	const tokenFor = (body = "A1b2".repeat(9)) => `pnu_${body}`;
-	const token = tokenFor();
-	const outputs = [
-		token,
-		token.toUpperCase(),
-		`configure-${token}`,
-		token.replace("pnu", "p\u200bnu"),
-		`${token.slice(0, 18)}\u200b${token.slice(18)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const tokenFor = (body = "A1b2".repeat(9)) => `pnu_${body}`;
+  const token = tokenFor();
+  const outputs = [
+    token,
+    token.toUpperCase(),
+    `configure-${token}`,
+    token.replace("pnu", "p\u200bnu"),
+    `${token.slice(0, 18)}\u200b${token.slice(18)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("prefect deployment tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("prefect deployment tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("prefect deployment tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("prefect deployment tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		tokenFor("A".repeat(35)),
-		tokenFor("A".repeat(37)),
-		tokenFor("A".repeat(35) + "_"),
-		tokenFor("A".repeat(35) + "-"),
-		token.replace("pnu_", "pnu-"),
-		`x${token}`,
-		`_${token}`,
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("prefect deployment tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("prefect deployment tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    tokenFor("A".repeat(35)),
+    tokenFor("A".repeat(37)),
+    tokenFor("A".repeat(35) + "_"),
+    tokenFor("A".repeat(35) + "-"),
+    token.replace("pnu_", "pnu-"),
+    `x${token}`,
+    `_${token}`,
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("prefect deployment tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("prefect deployment tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Octopus Deploy API keys without mistaking near-misses for keys", async () => {
-	const tokenFor = (body = "A1B2".repeat(6) + "A1") => `API-${body}`;
-	const token = tokenFor();
-	const outputs = [
-		token,
-		`configure-${token}`,
-		token.replace("API", "A\u200bPI"),
-		`${token.slice(0, 18)}\u200b${token.slice(18)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const tokenFor = (body = "A1B2".repeat(6) + "A1") => `API-${body}`;
+  const token = tokenFor();
+  const outputs = [
+    token,
+    `configure-${token}`,
+    token.replace("API", "A\u200bPI"),
+    `${token.slice(0, 18)}\u200b${token.slice(18)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("octopus deployment tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("octopus deployment tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("octopus deployment tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("octopus deployment tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		tokenFor("A".repeat(25)),
-		tokenFor("A".repeat(27)),
-		tokenFor("A".repeat(25) + "_"),
-		tokenFor("A".repeat(25) + "-"),
-		token.toLowerCase(),
-		token.replace("API-", "API_"),
-		`x${token}`,
-		`_${token}`,
-		`${token}X`,
-		`${token}_X`,
-		`${token}-X`,
-		`${token}x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("octopus deployment tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("octopus deployment tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    tokenFor("A".repeat(25)),
+    tokenFor("A".repeat(27)),
+    tokenFor("A".repeat(25) + "_"),
+    tokenFor("A".repeat(25) + "-"),
+    token.toLowerCase(),
+    token.replace("API-", "API_"),
+    `x${token}`,
+    `_${token}`,
+    `${token}X`,
+    `${token}_X`,
+    `${token}-X`,
+    `${token}x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("octopus deployment tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("octopus deployment tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Pulumi API tokens without mistaking near-misses for tokens", async () => {
-	const tokenFor = (body = "a".repeat(40)) => `pul-${body}`;
-	const token = tokenFor();
-	const outputs = [
-		token,
-		token.toUpperCase(),
-		`configure-${token}`,
-		token.replace("pul", "p\u200bul"),
-		`${token.slice(0, 18)}\u200b${token.slice(18)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const tokenFor = (body = "a".repeat(40)) => `pul-${body}`;
+  const token = tokenFor();
+  const outputs = [
+    token,
+    token.toUpperCase(),
+    `configure-${token}`,
+    token.replace("pul", "p\u200bul"),
+    `${token.slice(0, 18)}\u200b${token.slice(18)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("pulumi stack tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("pulumi stack tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("pulumi stack tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("pulumi stack tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		tokenFor("a".repeat(39)),
-		tokenFor("a".repeat(41)),
-		tokenFor("g".repeat(40)),
-		token.replace("pul-", "pum-"),
-		`x${token}`,
-		`_${token}`,
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("pulumi stack tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("pulumi stack tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    tokenFor("a".repeat(39)),
+    tokenFor("a".repeat(41)),
+    tokenFor("g".repeat(40)),
+    token.replace("pul-", "pum-"),
+    `x${token}`,
+    `_${token}`,
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("pulumi stack tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("pulumi stack tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Sourcegraph access tokens without mistaking near-miss strings for tokens", async () => {
-	const tokens = [
-		`sgp_${"a".repeat(40)}`,
-		`sgp_${"b".repeat(16)}_${"c".repeat(40)}`,
-		`sgp_local_${"d".repeat(40)}`,
-	];
-	for (const token of tokens) {
-		const outputs = [
-			token,
-			token.toUpperCase(),
-			`configure-${token}`,
-			token.replace("sgp_", "sg\u200bp_"),
-			`${token.slice(0, 12)}\u200b${token.slice(12)}`,
-		];
-		for (const output of outputs) {
-			const f = fixture([Promise.resolve(response(output))]);
-			f.input("Name a task");
-			await settle();
-			expect(f.state.title).toBe("existing task");
-			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-			expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-			expect(f.warnings.join(" ")).not.toContain(token);
-		}
-	}
+  const tokens = [
+    `sgp_${"a".repeat(40)}`,
+    `sgp_${"b".repeat(16)}_${"c".repeat(40)}`,
+    `sgp_local_${"d".repeat(40)}`,
+  ];
+  for (const token of tokens) {
+    const outputs = [
+      token,
+      token.toUpperCase(),
+      `configure-${token}`,
+      token.replace("sgp_", "sg\u200bp_"),
+      `${token.slice(0, 12)}\u200b${token.slice(12)}`,
+    ];
+    for (const output of outputs) {
+      const f = fixture([Promise.resolve(response(output))]);
+      f.input("Name a task");
+      await settle();
+      expect(f.state.title).toBe("existing task");
+      expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+      expect(f.warnings).toEqual([
+        "Sensitive-looking naming output was not applied.",
+      ]);
+      expect(f.warnings.join(" ")).not.toContain(token);
+    }
+  }
 
-	const shortName = fixture([Promise.resolve(response("sourcegraph api setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("sourcegraph api setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([
+    Promise.resolve(response("sourcegraph api setup")),
+  ]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("sourcegraph api setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const token = tokens[0]!;
-	const segmentedToken = tokens[1]!;
-	const localToken = tokens[2]!;
-	const nearMisses = [
-		`sgp_${"a".repeat(39)}`,
-		`sgp_${"a".repeat(41)}`,
-		`sgp_${"g".repeat(40)}`,
-		`sgp_${"a".repeat(15)}_${"b".repeat(40)}`,
-		`sgp_${"a".repeat(17)}_${"b".repeat(40)}`,
-		`sgp_${"a".repeat(16)}_${"b".repeat(39)}`,
-		`sgp_${"a".repeat(16)}_${"b".repeat(41)}`,
-		`sgp_local_${"c".repeat(39)}`,
-		`sgp_local_${"c".repeat(41)}`,
-		`sgp_locax_${"c".repeat(40)}`,
-		`sgr_${"a".repeat(40)}`,
-		`x${token}`,
-		`_${token}`,
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-		`${segmentedToken}x`,
-		`${segmentedToken}_x`,
-		`${localToken}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("sourcegraph api tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("sourcegraph api tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const token = tokens[0]!;
+  const segmentedToken = tokens[1]!;
+  const localToken = tokens[2]!;
+  const nearMisses = [
+    `sgp_${"a".repeat(39)}`,
+    `sgp_${"a".repeat(41)}`,
+    `sgp_${"g".repeat(40)}`,
+    `sgp_${"a".repeat(15)}_${"b".repeat(40)}`,
+    `sgp_${"a".repeat(17)}_${"b".repeat(40)}`,
+    `sgp_${"a".repeat(16)}_${"b".repeat(39)}`,
+    `sgp_${"a".repeat(16)}_${"b".repeat(41)}`,
+    `sgp_local_${"c".repeat(39)}`,
+    `sgp_local_${"c".repeat(41)}`,
+    `sgp_locax_${"c".repeat(40)}`,
+    `sgr_${"a".repeat(40)}`,
+    `x${token}`,
+    `_${token}`,
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+    `${segmentedToken}x`,
+    `${segmentedToken}_x`,
+    `${localToken}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("sourcegraph api tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("sourcegraph api tests");
+    expect(f.warnings).toEqual([]);
+  }
 
-	const commitHash = "a".repeat(40);
-	expect(hasSensitiveNamingContext(`Review commit ${commitHash}`)).toBe(false);
-	expect(hasSensitiveOutput(commitHash)).toBe(false);
+  const commitHash = "a".repeat(40);
+  expect(hasSensitiveNamingContext(`Review commit ${commitHash}`)).toBe(false);
+  expect(hasSensitiveOutput(commitHash)).toBe(false);
 });
 
 test("rejects SendGrid API keys without mistaking near-miss strings for keys", async () => {
-	const token = `SG.${"a".repeat(66)}`;
-	const outputs = [
-		token,
-		token.toLowerCase(),
-		`configure-${token}`,
-		token.replace("SG.", "SG.\u200b"),
-		`${token.slice(0, 33)}\u200b${token.slice(33)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = `SG.${"a".repeat(66)}`;
+  const outputs = [
+    token,
+    token.toLowerCase(),
+    `configure-${token}`,
+    token.replace("SG.", "SG.\u200b"),
+    `${token.slice(0, 33)}\u200b${token.slice(33)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("sg_api_setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("sg_api_setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("sg_api_setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("sg_api_setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		`SG.${"a".repeat(65)}`,
-		`SG.${"a".repeat(67)}`,
-		`SX.${"a".repeat(66)}`,
-		`SG.${"a".repeat(65)}+`,
-		`${token}x`,
-		`${token}_x`,
-		`x${token}`,
-		`_${token}`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("sendgrid api tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("sendgrid api tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `SG.${"a".repeat(65)}`,
+    `SG.${"a".repeat(67)}`,
+    `SX.${"a".repeat(66)}`,
+    `SG.${"a".repeat(65)}+`,
+    `${token}x`,
+    `${token}_x`,
+    `x${token}`,
+    `_${token}`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("sendgrid api tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("sendgrid api tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Linear API tokens without mistaking near-miss strings for tokens", async () => {
-	const token = `lin_api_${"aA09".repeat(10)}`;
-	const outputs = [
-		token,
-		token.toUpperCase(),
-		`configure-${token}`,
-		token.replace("lin_api_", "lin_api_\u200b"),
-		`${token.slice(0, 25)}\u200b${token.slice(25)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = `lin_api_${"aA09".repeat(10)}`;
+  const outputs = [
+    token,
+    token.toUpperCase(),
+    `configure-${token}`,
+    token.replace("lin_api_", "lin_api_\u200b"),
+    `${token.slice(0, 25)}\u200b${token.slice(25)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("lin_api_setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("lin_api_setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("lin_api_setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("lin_api_setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		`lin_api_${"a".repeat(39)}`,
-		`lin_api_${"a".repeat(41)}`,
-		`linx_api_${"a".repeat(40)}`,
-		`lin_api_${"a".repeat(39)}_`,
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-		`x${token}`,
-		`_${token}`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("linear api tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("linear api tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `lin_api_${"a".repeat(39)}`,
+    `lin_api_${"a".repeat(41)}`,
+    `linx_api_${"a".repeat(40)}`,
+    `lin_api_${"a".repeat(39)}_`,
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+    `x${token}`,
+    `_${token}`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("linear api tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("linear api tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Twilio API keys without mistaking near-miss strings for keys", async () => {
-	const token = `SK${"a1".repeat(16)}`;
-	const outputs = [
-		token,
-		token.toLowerCase(),
-		`configure-${token}`,
-		token.replace("SK", "S\u200bK"),
-		`${token.slice(0, 17)}\u200b${token.slice(17)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = `SK${"a1".repeat(16)}`;
+  const outputs = [
+    token,
+    token.toLowerCase(),
+    `configure-${token}`,
+    token.replace("SK", "S\u200bK"),
+    `${token.slice(0, 17)}\u200b${token.slice(17)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const shortName = fixture([Promise.resolve(response("sk_api_setup"))]);
-	shortName.input("Name a task");
-	await settle();
-	expect(shortName.requests).toHaveLength(1);
-	expect(shortName.state.title).toBe("sk_api_setup");
-	expect(shortName.warnings).toEqual([]);
+  const shortName = fixture([Promise.resolve(response("sk_api_setup"))]);
+  shortName.input("Name a task");
+  await settle();
+  expect(shortName.requests).toHaveLength(1);
+  expect(shortName.state.title).toBe("sk_api_setup");
+  expect(shortName.warnings).toEqual([]);
 
-	const nearMisses = [
-		`SK${"a".repeat(31)}`,
-		`SK${"a".repeat(33)}`,
-		`SX${"a".repeat(32)}`,
-		`SK${"g".repeat(32)}`,
-		`${token}x`,
-		`${token}_x`,
-		`x${token}`,
-		`_${token}`,
-		`c${token}`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("twilio api tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("twilio api tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `SK${"a".repeat(31)}`,
+    `SK${"a".repeat(33)}`,
+    `SX${"a".repeat(32)}`,
+    `SK${"g".repeat(32)}`,
+    `${token}x`,
+    `${token}_x`,
+    `x${token}`,
+    `_${token}`,
+    `c${token}`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("twilio api tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("twilio api tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Cloudflare Origin CA keys without mistaking near-miss strings for keys", async () => {
-	const firstSegment = "a".repeat(24);
-	const secondSegment = "b".repeat(146);
-	const token = ["v1.0-", firstSegment, "-", secondSegment].join("");
-	const outputs = [
-		token,
-		token.toUpperCase(),
-		`configure-${token}`,
-		token.replace("v1.0-", "v1.0-\u200b"),
-		`${token.slice(0, 50)}\u200b${token.slice(50)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const firstSegment = "a".repeat(24);
+  const secondSegment = "b".repeat(146);
+  const token = ["v1.0-", firstSegment, "-", secondSegment].join("");
+  const outputs = [
+    token,
+    token.toUpperCase(),
+    `configure-${token}`,
+    token.replace("v1.0-", "v1.0-\u200b"),
+    `${token.slice(0, 50)}\u200b${token.slice(50)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("cloudflare origin tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("cloudflare origin tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("cloudflare origin tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("cloudflare origin tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`v1.0-${"a".repeat(23)}-${secondSegment}`,
-		`v1.0-${"a".repeat(25)}-${secondSegment}`,
-		`v1.0-${firstSegment}-${"b".repeat(145)}`,
-		`v1.0-${firstSegment}-${"b".repeat(147)}`,
-		`v1.0-${"g".repeat(24)}-${secondSegment}`,
-		`v1.0-${firstSegment}-${"g".repeat(146)}`,
-		`v1.1-${firstSegment}-${secondSegment}`,
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-		`x${token}`,
-		`_${token}`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("cloudflare origin tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("cloudflare origin tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `v1.0-${"a".repeat(23)}-${secondSegment}`,
+    `v1.0-${"a".repeat(25)}-${secondSegment}`,
+    `v1.0-${firstSegment}-${"b".repeat(145)}`,
+    `v1.0-${firstSegment}-${"b".repeat(147)}`,
+    `v1.0-${"g".repeat(24)}-${secondSegment}`,
+    `v1.0-${firstSegment}-${"g".repeat(146)}`,
+    `v1.1-${firstSegment}-${secondSegment}`,
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+    `x${token}`,
+    `_${token}`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("cloudflare origin tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("cloudflare origin tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Doppler personal tokens without mistaking near-miss strings for tokens", async () => {
-	const prefix = ["dp", ".", "pt", "."].join("");
-	const token = `${prefix}${"a".repeat(43)}`;
-	const outputs = [
-		token,
-		token.toUpperCase(),
-		`configure-${token}`,
-		token.replace("pt.", "pt.\u200b"),
-		token.replace(prefix, `dp.\u200bpt.`),
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const prefix = ["dp", ".", "pt", "."].join("");
+  const token = `${prefix}${"a".repeat(43)}`;
+  const outputs = [
+    token,
+    token.toUpperCase(),
+    `configure-${token}`,
+    token.replace("pt.", "pt.\u200b"),
+    token.replace(prefix, `dp.\u200bpt.`),
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("doppler client settings"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("doppler client settings");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("doppler client settings")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("doppler client settings");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`${prefix}${"a".repeat(42)}`,
-		`${prefix}${"a".repeat(44)}`,
-		`${prefix}${"a".repeat(42)}!`,
-		`${prefix}${"a".repeat(42)}_`,
-		`${prefix}${"a".repeat(42)}-`,
-		`x${token}`,
-		`_${token}`,
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("doppler client settings"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("doppler client settings");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `${prefix}${"a".repeat(42)}`,
+    `${prefix}${"a".repeat(44)}`,
+    `${prefix}${"a".repeat(42)}!`,
+    `${prefix}${"a".repeat(42)}_`,
+    `${prefix}${"a".repeat(42)}-`,
+    `x${token}`,
+    `_${token}`,
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("doppler client settings")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("doppler client settings");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects 1Password Secret Keys without mistaking near-miss strings for keys", async () => {
-	const six = "A".repeat(6);
-	const eleven = "B".repeat(11);
-	const five = "C".repeat(5);
-	const fiveGroups = ["A3", six, eleven, five, five, five];
-	const token = fiveGroups.join("-");
-	const alternate = ["A3", six, "D".repeat(6), "E".repeat(5), five, five, five].join("-");
-	const outputs = [
-		token,
-		token.toLowerCase(),
-		alternate,
-		`configure-${token}`,
-		token.replace("A3-", "A3-\u200b"),
-		token.replace(six, `${six}\u200b`),
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(output);
-	}
+  const six = "A".repeat(6);
+  const eleven = "B".repeat(11);
+  const five = "C".repeat(5);
+  const fiveGroups = ["A3", six, eleven, five, five, five];
+  const token = fiveGroups.join("-");
+  const alternate = [
+    "A3",
+    six,
+    "D".repeat(6),
+    "E".repeat(5),
+    five,
+    five,
+    five,
+  ].join("-");
+  const outputs = [
+    token,
+    token.toLowerCase(),
+    alternate,
+    `configure-${token}`,
+    token.replace("A3-", "A3-\u200b"),
+    token.replace(six, `${six}\u200b`),
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(output);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("1password vault"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("1password vault");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([Promise.resolve(response("1password vault"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("1password vault");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		["A3", "A".repeat(5), eleven, five, five, five].join("-"),
-		["A3", "A".repeat(7), eleven, five, five, five].join("-"),
-		["A3", six, "B".repeat(10), five, five, five].join("-"),
-		["A3", six, "B".repeat(12), five, five, five].join("-"),
-		["A3", six, "D".repeat(6), "E".repeat(4), five, five, five].join("-"),
-		["A3", six, eleven, "C".repeat(4), five, five].join("-"),
-		["B3", six, eleven, five, five, five].join("-"),
-		`${token}x`,
-		`${token}_x`,
-		`${token}-x`,
-		`x${token}`,
-		`_${token}`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("1password vault"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("1password vault");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    ["A3", "A".repeat(5), eleven, five, five, five].join("-"),
+    ["A3", "A".repeat(7), eleven, five, five, five].join("-"),
+    ["A3", six, "B".repeat(10), five, five, five].join("-"),
+    ["A3", six, "B".repeat(12), five, five, five].join("-"),
+    ["A3", six, "D".repeat(6), "E".repeat(4), five, five, five].join("-"),
+    ["A3", six, eleven, "C".repeat(4), five, five].join("-"),
+    ["B3", six, eleven, five, five, five].join("-"),
+    `${token}x`,
+    `${token}_x`,
+    `${token}-x`,
+    `x${token}`,
+    `_${token}`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("1password vault")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("1password vault");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects age secret keys without mistaking near-miss strings for identities", async () => {
-	const prefix = ["AGE", "SECRET", "KEY", "1"].join("-");
-	const payload = "Q".repeat(58);
-	const identity = `${prefix}${payload}`;
-	const outputs = [
-		identity,
-		identity.toLowerCase(),
-		`configure-${identity}`,
-		identity.replace(prefix, `${prefix}\u200b`),
-		`${identity.slice(0, 45)}\u200b${identity.slice(45)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(output);
-	}
+  const prefix = ["AGE", "SECRET", "KEY", "1"].join("-");
+  const payload = "Q".repeat(58);
+  const identity = `${prefix}${payload}`;
+  const outputs = [
+    identity,
+    identity.toLowerCase(),
+    `configure-${identity}`,
+    identity.replace(prefix, `${prefix}\u200b`),
+    `${identity.slice(0, 45)}\u200b${identity.slice(45)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(output);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("age key migration"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("age key migration");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("age key migration")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("age key migration");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`${prefix}${"Q".repeat(57)}`,
-		`${prefix}${"Q".repeat(59)}`,
-		`${prefix}${"I"}${"Q".repeat(57)}`,
-		`${prefix}${"O"}${"Q".repeat(57)}`,
-		`${prefix.slice(0, -1)}2${payload}`,
-		`x${identity}`,
-		`_${identity}`,
-		`${identity}x`,
-		`${identity}_x`,
-		`${identity}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("age key migration"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("age key migration");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `${prefix}${"Q".repeat(57)}`,
+    `${prefix}${"Q".repeat(59)}`,
+    `${prefix}${"I"}${"Q".repeat(57)}`,
+    `${prefix}${"O"}${"Q".repeat(57)}`,
+    `${prefix.slice(0, -1)}2${payload}`,
+    `x${identity}`,
+    `_${identity}`,
+    `${identity}x`,
+    `${identity}_x`,
+    `${identity}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("age key migration")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("age key migration");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Adobe client secrets without mistaking near-miss strings for secrets", async () => {
-	const prefix = ["p8e", "-"].join("");
-	const alphabet = "aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x";
-	const body = alphabet.repeat(2).slice(0, 32);
-	const secret = `${prefix}${body}`;
-	const outputs = [
-		secret,
-		secret.toUpperCase(),
-		`configure-${secret}`,
-		secret.replace(prefix, `${prefix}\u200b`),
-		`${secret.slice(0, 20)}\u200b${secret.slice(20)}`,
-	];
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(output);
-	}
+  const prefix = ["p8e", "-"].join("");
+  const alphabet = "aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x";
+  const body = alphabet.repeat(2).slice(0, 32);
+  const secret = `${prefix}${body}`;
+  const outputs = [
+    secret,
+    secret.toUpperCase(),
+    `configure-${secret}`,
+    secret.replace(prefix, `${prefix}\u200b`),
+    `${secret.slice(0, 20)}\u200b${secret.slice(20)}`,
+  ];
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(output);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("adobe oauth migration"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("adobe oauth migration");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("adobe oauth migration")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("adobe oauth migration");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`${prefix}${body.slice(0, 31)}`,
-		`${prefix}${body}a`,
-		`${prefix}${body.slice(1)}!`,
-		`${prefix}${body.slice(1)}_`,
-		`${["p8f", "-"].join("")}${body}`,
-		`x${secret}`,
-		`_${secret}`,
-		`${secret}x`,
-		`${secret}_x`,
-		`${secret}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("adobe oauth migration"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("adobe oauth migration");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `${prefix}${body.slice(0, 31)}`,
+    `${prefix}${body}a`,
+    `${prefix}${body.slice(1)}!`,
+    `${prefix}${body.slice(1)}_`,
+    `${["p8f", "-"].join("")}${body}`,
+    `x${secret}`,
+    `_${secret}`,
+    `${secret}x`,
+    `${secret}_x`,
+    `${secret}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("adobe oauth migration")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("adobe oauth migration");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects Grafana tokens without mistaking near-miss strings for tokens", async () => {
-	const alphabet = "aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x";
-	const serviceBody = alphabet.repeat(2).slice(0, 32);
-	const apiKey = `eyJrIjoi${alphabet.repeat(3).slice(0, 70)}`;
-	const cloudToken = `glc_${"/+AbC0123".repeat(4)}`;
-	const serviceToken = `glsa_${serviceBody}_A1B2C3D4`;
-	const tokens = [apiKey, cloudToken, serviceToken];
-	const outputs = tokens.flatMap((token) => [
-		token,
-		token.toUpperCase(),
-		`configure-${token}`,
-		`${token.slice(0, 12)}\u200b${token.slice(12)}`,
-	]);
-	for (const output of outputs) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(output);
-	}
+  const alphabet = "aB3cD5eF7gH9jK2mN4pQ6rS8tU1vW0x";
+  const serviceBody = alphabet.repeat(2).slice(0, 32);
+  const apiKey = `eyJrIjoi${alphabet.repeat(3).slice(0, 70)}`;
+  const cloudToken = `glc_${"/+AbC0123".repeat(4)}`;
+  const serviceToken = `glsa_${serviceBody}_A1B2C3D4`;
+  const tokens = [apiKey, cloudToken, serviceToken];
+  const outputs = tokens.flatMap((token) => [
+    token,
+    token.toUpperCase(),
+    `configure-${token}`,
+    `${token.slice(0, 12)}\u200b${token.slice(12)}`,
+  ]);
+  for (const output of outputs) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(output);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("grafana alerts"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("grafana alerts");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([Promise.resolve(response("grafana alerts"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("grafana alerts");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`eyJrIjoi${alphabet.repeat(3).slice(0, 69)}`,
-		`eyJrIjoi${alphabet.repeat(13).slice(0, 401)}`,
-		`${apiKey}====`,
-		`${["eyJrIji", "i"].join("")}${alphabet.repeat(3).slice(0, 70)}`,
-		`glc_${"/+AbC0123".repeat(4).slice(0, 31)}`,
-		`glc_${"/+AbC0123".repeat(45).slice(0, 401)}`,
-		`${cloudToken.slice(0, 18)}?${cloudToken.slice(19)}`,
-		`${["glx", "_"].join("")}${"/+AbC0123".repeat(4)}`,
-		`glsa_${serviceBody.slice(0, 31)}_A1B2C3D4`,
-		`glsa_${serviceBody}_A1B2C3D`,
-		`glsa_${serviceBody}_A1B2C3D4F`,
-		`glsa_${serviceBody}_A1B2C3DG`,
-		`${["glsb", "_"].join("")}${serviceBody}_A1B2C3D4`,
-		`x${apiKey}`,
-		`_${cloudToken}`,
-		`${serviceToken}x`,
-		`${serviceToken}_x`,
-		`${serviceToken}-x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("grafana alerts"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("grafana alerts");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `eyJrIjoi${alphabet.repeat(3).slice(0, 69)}`,
+    `eyJrIjoi${alphabet.repeat(13).slice(0, 401)}`,
+    `${apiKey}====`,
+    `${["eyJrIji", "i"].join("")}${alphabet.repeat(3).slice(0, 70)}`,
+    `glc_${"/+AbC0123".repeat(4).slice(0, 31)}`,
+    `glc_${"/+AbC0123".repeat(45).slice(0, 401)}`,
+    `${cloudToken.slice(0, 18)}?${cloudToken.slice(19)}`,
+    `${["glx", "_"].join("")}${"/+AbC0123".repeat(4)}`,
+    `glsa_${serviceBody.slice(0, 31)}_A1B2C3D4`,
+    `glsa_${serviceBody}_A1B2C3D`,
+    `glsa_${serviceBody}_A1B2C3D4F`,
+    `glsa_${serviceBody}_A1B2C3DG`,
+    `${["glsb", "_"].join("")}${serviceBody}_A1B2C3D4`,
+    `x${apiKey}`,
+    `_${cloudToken}`,
+    `${serviceToken}x`,
+    `${serviceToken}_x`,
+    `${serviceToken}-x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("grafana alerts")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("grafana alerts");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects explicitly labeled Australian TFNs with valid checksums without exposing them", async () => {
-	const identifiers = [
-		"TFN: 806 314 275",
-		"TFN Number=806314275",
-		"TFN No.: 806-314-275",
-		"Tax File Number: 806314275",
-		"Australian Tax File No.: 806314275",
-		"TFN: ٨٠٦٣١٤٢٧٥",
-		"TFN: 806 31\u200b4 275",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "TFN: 806 314 275",
+    "TFN Number=806314275",
+    "TFN No.: 806-314-275",
+    "Tax File Number: 806314275",
+    "Australian Tax File No.: 806314275",
+    "TFN: ٨٠٦٣١٤٢٧٥",
+    "TFN: 806 31\u200b4 275",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the tax record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the tax record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"806314275",
-		"TFN: 806 314 276",
-		"TFN: 000000000",
-		"TFN No. 806314275",
-		"TFN processing",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("tfn parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("tfn parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "806314275",
+    "TFN: 806 314 276",
+    "TFN: 000000000",
+    "TFN No. 806314275",
+    "TFN processing",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("tfn parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("tfn parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("Australian TFNs crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " TFN: ";
-	const value = "806314275";
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const label = " TFN: ";
+  const value = "806314275";
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const valueStart of [prefixLength - 4, suffixStart - 4]) {
-		const before = "x".repeat(valueStart - label.length);
-		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-		expect(prompt).toHaveLength(promptLength);
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(value);
-	}
+  for (const valueStart of [prefixLength - 4, suffixStart - 4]) {
+    const before = "x".repeat(valueStart - label.length);
+    const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+    expect(prompt).toHaveLength(promptLength);
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(value);
+  }
 });
 
 test("rejects explicitly labeled checksum-valid Australian Medicare numbers without exposing them", async () => {
-	const identifiers = [
-		"Medicare Card Number: 5271 84638 4 2",
-		"Medicare Number=5271846384",
-		"Medicare No.: 52718463842",
-		"Medicare Card: 52718\u200b463842",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "Medicare Card Number: 5271 84638 4 2",
+    "Medicare Number=5271846384",
+    "Medicare No.: 52718463842",
+    "Medicare Card: 52718\u200b463842",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the medical record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the medical record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"52718463842",
-		"Medicare: 52718463842",
-		"Medicare Number: 52718463942",
-		"Medicare Card: 12718463442",
-		"Medicare Number: 527184638420",
-		"Medicare number validation",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("medicare parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("medicare parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "52718463842",
+    "Medicare: 52718463842",
+    "Medicare Number: 52718463942",
+    "Medicare Card: 12718463442",
+    "Medicare Number: 527184638420",
+    "Medicare number validation",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("medicare parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("medicare parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("Australian Medicare numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " Medicare Card Number: ";
-	const value = "52718463842";
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const label = " Medicare Card Number: ";
+  const value = "52718463842";
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
-		const before = "x".repeat(valueStart - label.length);
-		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-		expect(prompt).toHaveLength(promptLength);
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(value);
-	}
+  for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
+    const before = "x".repeat(valueStart - label.length);
+    const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+    expect(prompt).toHaveLength(promptLength);
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(value);
+  }
 });
 
 test("rejects explicitly labeled valid New Zealand IRD numbers without exposing them", async () => {
-	const identifiers = [
-		"IRD: 138629473",
-		"IRD Number=138-629-473",
-		"NZ IRD No.: 27-384-919",
-		"New Zealand IRD Number: 100000131",
-		"IRD: ١٣٨٦٢٩٤٧٣",
-		"IRD: 13862\u200b9473",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "IRD: 138629473",
+    "IRD Number=138-629-473",
+    "NZ IRD No.: 27-384-919",
+    "New Zealand IRD Number: 100000131",
+    "IRD: ١٣٨٦٢٩٤٧٣",
+    "IRD: 13862\u200b9473",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the New Zealand tax record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the New Zealand tax record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"138629473",
-		"IRD Number: 138629472",
-		"IRD: 100000130",
-		"IRD: 100010640",
-		"IRD: 01000004",
-		"IRD: 200000005",
-		"IRD No 138629473",
-		"Tax number: 138629473",
-		"IRD number validation",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("ird parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("ird parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "138629473",
+    "IRD Number: 138629472",
+    "IRD: 100000130",
+    "IRD: 100010640",
+    "IRD: 01000004",
+    "IRD: 200000005",
+    "IRD No 138629473",
+    "Tax number: 138629473",
+    "IRD number validation",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("ird parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("ird parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("New Zealand IRD numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " NZ IRD Number: ";
-	const value = "138629473";
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const label = " NZ IRD Number: ";
+  const value = "138629473";
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-		const before = "x".repeat(valueStart - label.length);
-		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-		expect(prompt).toHaveLength(promptLength);
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(value);
-	}
+  for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+    const before = "x".repeat(valueStart - label.length);
+    const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+    expect(prompt).toHaveLength(promptLength);
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(value);
+  }
 });
 
 test("rejects explicitly labeled Verhoeff-valid Aadhaar numbers without exposing them", async () => {
-	const identifiers = [
-		"Aadhaar: 234567890124",
-		"Aadhaar Number=2345 6789 0124",
-		"Aadhaar No.: 2345-6789-0124",
-		"Aadhaar ID: 234567890124",
-		"Aadhaar: ٢٣٤٥٦٧٨٩٠١٢٤",
-		"Aadhaar: 234567\u200b890124",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "Aadhaar: 234567890124",
+    "Aadhaar Number=2345 6789 0124",
+    "Aadhaar No.: 2345-6789-0124",
+    "Aadhaar ID: 234567890124",
+    "Aadhaar: ٢٣٤٥٦٧٨٩٠١٢٤",
+    "Aadhaar: 234567\u200b890124",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the Indian identity record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the Indian identity record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"234567890124",
-		"Aadhaar: 234567890125",
-		"Aadhaar: 123456789010",
-		"Aadhaar: 000000000000",
-		"Aadhaar: 23456789012",
-		"Aadhaar Number 234567890124",
-		"Aadhaar number validation in the task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("aadhaar parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("aadhaar parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "234567890124",
+    "Aadhaar: 234567890125",
+    "Aadhaar: 123456789010",
+    "Aadhaar: 000000000000",
+    "Aadhaar: 23456789012",
+    "Aadhaar Number 234567890124",
+    "Aadhaar number validation in the task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("aadhaar parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("aadhaar parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("Aadhaar numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " Aadhaar Number: ";
-	const value = "234567890124";
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const label = " Aadhaar Number: ";
+  const value = "234567890124";
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
-		const before = "x".repeat(valueStart - label.length);
-		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-		expect(prompt).toHaveLength(promptLength);
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(value);
-	}
+  for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
+    const before = "x".repeat(valueStart - label.length);
+    const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+    expect(prompt).toHaveLength(promptLength);
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(value);
+  }
 });
 
 test("rejects explicitly labeled checksum-valid Chinese resident IDs without exposing them", async () => {
-	const syntheticId = "12999920000101001X";
-	const arabicDigitsId = syntheticId.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	const fullwidthId = syntheticId.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0xff10 + Number(digit)));
-	const identifiers = [
-		`Chinese National ID Number: ${syntheticId}`,
-		"PRC ID No.: 129999199912310026",
-		"Resident Identity Card Number: 129999200402290032",
-		`Chinese Identity Card Number: ${syntheticId.slice(0, -1)}x`,
-		`居民身份证号码：${syntheticId}`,
-		"本人身份证号: 129999199912310026",
-		"中国公民身份号码=129999200402290032",
-		`Chinese National ID Number: ${arabicDigitsId}`,
-		`PRC ID: ${fullwidthId}`,
-		`Resident Identity Card No.: ${syntheticId.slice(0, 8)}\u200b${syntheticId.slice(8)}`,
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const syntheticId = "12999920000101001X";
+  const arabicDigitsId = syntheticId.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  const fullwidthId = syntheticId.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0xff10 + Number(digit)),
+  );
+  const identifiers = [
+    `Chinese National ID Number: ${syntheticId}`,
+    "PRC ID No.: 129999199912310026",
+    "Resident Identity Card Number: 129999200402290032",
+    `Chinese Identity Card Number: ${syntheticId.slice(0, -1)}x`,
+    `居民身份证号码：${syntheticId}`,
+    "本人身份证号: 129999199912310026",
+    "中国公民身份号码=129999200402290032",
+    `Chinese National ID Number: ${arabicDigitsId}`,
+    `PRC ID: ${fullwidthId}`,
+    `Resident Identity Card No.: ${syntheticId.slice(0, 8)}\u200b${syntheticId.slice(8)}`,
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the Chinese identity record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the Chinese identity record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		syntheticId,
-		`ID Number: ${syntheticId}`,
-		`National ID Number: ${syntheticId}`,
-		"Chinese National ID Number: 129999200001010011",
-		"Chinese National ID Number: 129999200002300019",
-		"Chinese National ID Number: 199999200001010012",
-		"Chinese National ID Number: 12999920000101001",
-		"Chinese National ID Number 12999920000101001X",
-		`身份证: ${syntheticId}`,
-		`个人信息: ${syntheticId}`,
-		`身份证号码 ${syntheticId}`,
-		"Chinese national ID number validation",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("Chinese ID card parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("chinese id card parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    syntheticId,
+    `ID Number: ${syntheticId}`,
+    `National ID Number: ${syntheticId}`,
+    "Chinese National ID Number: 129999200001010011",
+    "Chinese National ID Number: 129999200002300019",
+    "Chinese National ID Number: 199999200001010012",
+    "Chinese National ID Number: 12999920000101001",
+    "Chinese National ID Number 12999920000101001X",
+    `身份证: ${syntheticId}`,
+    `个人信息: ${syntheticId}`,
+    `身份证号码 ${syntheticId}`,
+    "Chinese national ID number validation",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("Chinese ID card parser")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("chinese id card parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("Chinese resident ID numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const label of [
-		" Chinese National ID Number: ",
-		" Resident Identity Card Number: ",
-		" 居民身份证号码：",
-		" 本人身份证号: ",
-	]) {
-		for (const value of ["12999920000101001X", "129999199912310026"]) {
-			for (const valueStart of [prefixLength - 5, suffixStart - value.length + 5]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const f = fixture();
-				const find = spyOn(f.ctx.modelRegistry, "find");
-				f.input(prompt);
-				await settle();
-				expect(find).not.toHaveBeenCalled();
-				expect(f.requests).toHaveLength(0);
-				expect(f.state.title).toBe("existing task");
-				expect(f.warnings).toEqual([warning]);
-				expect(f.warnings.join(" ")).not.toContain(value);
-			}
-		}
-	}
+  for (const label of [
+    " Chinese National ID Number: ",
+    " Resident Identity Card Number: ",
+    " 居民身份证号码：",
+    " 本人身份证号: ",
+  ]) {
+    for (const value of ["12999920000101001X", "129999199912310026"]) {
+      for (const valueStart of [
+        prefixLength - 5,
+        suffixStart - value.length + 5,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const f = fixture();
+        const find = spyOn(f.ctx.modelRegistry, "find");
+        f.input(prompt);
+        await settle();
+        expect(find).not.toHaveBeenCalled();
+        expect(f.requests).toHaveLength(0);
+        expect(f.state.title).toBe("existing task");
+        expect(f.warnings).toEqual([warning]);
+        expect(f.warnings.join(" ")).not.toContain(value);
+      }
+    }
+  }
 
-	for (const label of [" Chinese National ID Number: ", " 居民身份证号码："]) {
-		const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}129999200001010011 ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  for (const label of [" Chinese National ID Number: ", " 居民身份证号码："]) {
+    const invalidPrompt = `${"x".repeat(prefixLength - 5 - label.length)}${label}129999200001010011 ${"y".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("rejects explicitly labeled checksum-valid Japanese My Numbers without disclosing them", async () => {
-	const sample = "012345678903";
-	const arabicDigits = sample.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	const fullwidthDigits = sample.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0xff10 + Number(digit)));
-	const identifiers = [
-		`Japanese My Number: ${sample}`,
-		"Japan individual number=314159265352",
-		"Japanese national ID number: 987654321093",
-		`個人番号：${sample}`,
-		"マイナンバー=314159265352",
-		"Japanese My Number: 0123-4567-8903",
-		`Japanese My Number: ${arabicDigits}`,
-		`個人番号：${fullwidthDigits}`,
-		`マイナンバー: ${sample.slice(0, 5)}\u200b${sample.slice(5)}`,
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const sample = "012345678903";
+  const arabicDigits = sample.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  const fullwidthDigits = sample.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0xff10 + Number(digit)),
+  );
+  const identifiers = [
+    `Japanese My Number: ${sample}`,
+    "Japan individual number=314159265352",
+    "Japanese national ID number: 987654321093",
+    `個人番号：${sample}`,
+    "マイナンバー=314159265352",
+    "Japanese My Number: 0123-4567-8903",
+    `Japanese My Number: ${arabicDigits}`,
+    `個人番号：${fullwidthDigits}`,
+    `マイナンバー: ${sample.slice(0, 5)}\u200b${sample.slice(5)}`,
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the Japanese tax form ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the Japanese tax form ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		sample,
-		`ID Number: ${sample}`,
-		`My Number: ${sample}`,
-		"Japanese My Number: 012345678904",
-		"Japanese My Number: 01234567890",
-		"Japanese My Number 012345678903",
-		`個人番号 ${sample}`,
-		"個人番号 validation",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    sample,
+    `ID Number: ${sample}`,
+    `My Number: ${sample}`,
+    "Japanese My Number: 012345678904",
+    "Japanese My Number: 01234567890",
+    "Japanese My Number 012345678903",
+    `個人番号 ${sample}`,
+    "個人番号 validation",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("Japanese My Numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const label of [" Japanese My Number: ", " 個人番号："]) {
-		for (const value of ["012345678903", "0123-4567-8903"]) {
-			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const f = fixture();
-				const find = spyOn(f.ctx.modelRegistry, "find");
-				f.input(prompt);
-				await settle();
-				expect(find).not.toHaveBeenCalled();
-				expect(f.requests).toHaveLength(0);
-				expect(f.state.title).toBe("existing task");
-				expect(f.warnings).toEqual([warning]);
-				expect(f.warnings.join(" ")).not.toContain(value);
-			}
-		}
-	}
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const label of [" Japanese My Number: ", " 個人番号："]) {
+    for (const value of ["012345678903", "0123-4567-8903"]) {
+      for (const valueStart of [
+        prefixLength - 4,
+        suffixStart - value.length + 4,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const f = fixture();
+        const find = spyOn(f.ctx.modelRegistry, "find");
+        f.input(prompt);
+        await settle();
+        expect(find).not.toHaveBeenCalled();
+        expect(f.requests).toHaveLength(0);
+        expect(f.state.title).toBe("existing task");
+        expect(f.warnings).toEqual([warning]);
+        expect(f.warnings.join(" ")).not.toContain(value);
+      }
+    }
+  }
 
-	for (const label of [" Japanese My Number: ", " 個人番号："]) {
-		const invalidPrompt = `${"x".repeat(prefixLength - 4 - label.length)}${label}012345678904 ${"y".repeat(1_200)}`;
-		expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
-	}
+  for (const label of [" Japanese My Number: ", " 個人番号："]) {
+    const invalidPrompt = `${"x".repeat(prefixLength - 4 - label.length)}${label}012345678904 ${"y".repeat(1_200)}`;
+    expect(
+      buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+    ).toBe(false);
+  }
 });
 
 test("rejects explicitly labeled Swedish personal identity numbers without disclosing them", async () => {
-	const shortNumber = "900102-1238";
-	const fullNumber = "19900102-1237";
-	const arabicDigits = shortNumber.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0x0660 + Number(digit)));
-	const fullwidthDigits = fullNumber.replace(/[0-9]/gu, (digit) =>
-		String.fromCodePoint(0xff10 + Number(digit)));
-	const identifiers = [
-		`Swedish personal identity number: ${shortNumber}`,
-		`Sweden personal identification number=${fullNumber}`,
-		`Swedish ID number: ${shortNumber.replace("-", "+")}`,
-		`Personnummer: ${shortNumber}`,
-		"Samordningsnummer: 900162-1235",
-		"Swedish coordination number: 19900162-1234",
-		`Swedish personal ID number: ${arabicDigits}`,
-		`Personnummer: ${fullwidthDigits}`,
-		"Samordningsnummer: 9001\u200b62-1235",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const shortNumber = "900102-1238";
+  const fullNumber = "19900102-1237";
+  const arabicDigits = shortNumber.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0x0660 + Number(digit)),
+  );
+  const fullwidthDigits = fullNumber.replace(/[0-9]/gu, (digit) =>
+    String.fromCodePoint(0xff10 + Number(digit)),
+  );
+  const identifiers = [
+    `Swedish personal identity number: ${shortNumber}`,
+    `Sweden personal identification number=${fullNumber}`,
+    `Swedish ID number: ${shortNumber.replace("-", "+")}`,
+    `Personnummer: ${shortNumber}`,
+    "Samordningsnummer: 900162-1235",
+    "Swedish coordination number: 19900162-1234",
+    `Swedish personal ID number: ${arabicDigits}`,
+    `Personnummer: ${fullwidthDigits}`,
+    "Samordningsnummer: 9001\u200b62-1235",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review a Swedish tax form ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review a Swedish tax form ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		shortNumber,
-		`ID Number: ${shortNumber}`,
-		`Personal identity number: ${shortNumber}`,
-		`Coordination number: ${shortNumber}`,
-		"Swedish personal identity number: 9001021239",
-		"Swedish personal identity number: 199002301232",
-		"Swedish personal identity number: 900102123",
-		"Swedish personal identity number 900102-1238",
-		"Personnummer: 9001-02-1238",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    shortNumber,
+    `ID Number: ${shortNumber}`,
+    `Personal identity number: ${shortNumber}`,
+    `Coordination number: ${shortNumber}`,
+    "Swedish personal identity number: 9001021239",
+    "Swedish personal identity number: 199002301232",
+    "Swedish personal identity number: 900102123",
+    "Swedish personal identity number 900102-1238",
+    "Personnummer: 9001-02-1238",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("Swedish personal identity numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const label of [" Swedish personal identity number: ", " Personnummer: "]) {
-		for (const value of ["900102-1238", "19900102-1237"]) {
-			for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const f = fixture();
-				const find = spyOn(f.ctx.modelRegistry, "find");
-				f.input(prompt);
-				await settle();
-				expect(find).not.toHaveBeenCalled();
-				expect(f.requests).toHaveLength(0);
-				expect(f.state.title).toBe("existing task");
-				expect(f.warnings).toEqual([warning]);
-				expect(f.warnings.join(" ")).not.toContain(value);
-			}
-		}
-	}
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const label of [
+    " Swedish personal identity number: ",
+    " Personnummer: ",
+  ]) {
+    for (const value of ["900102-1238", "19900102-1237"]) {
+      for (const valueStart of [
+        prefixLength - 4,
+        suffixStart - value.length + 4,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const f = fixture();
+        const find = spyOn(f.ctx.modelRegistry, "find");
+        f.input(prompt);
+        await settle();
+        expect(find).not.toHaveBeenCalled();
+        expect(f.requests).toHaveLength(0);
+        expect(f.state.title).toBe("existing task");
+        expect(f.warnings).toEqual([warning]);
+        expect(f.warnings.join(" ")).not.toContain(value);
+      }
+    }
+  }
 
-	const invalidPrompt = `${"x".repeat(prefixLength - 4 - " Swedish personal identity number: ".length)} Swedish personal identity number: 900102-1239 ${"y".repeat(1_200)}`;
-	expect(buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary()).toBe(false);
+  const invalidPrompt = `${"x".repeat(prefixLength - 4 - " Swedish personal identity number: ".length)} Swedish personal identity number: 900102-1239 ${"y".repeat(1_200)}`;
+  expect(
+    buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
+  ).toBe(false);
 });
 
 test("rejects explicitly labeled checksum-valid ABA routing numbers without exposing them", async () => {
-	const identifiers = [
-		"Routing number: 087294619",
-		"ABA routing number=126804371",
-		"Routing Transit Number: 329170640",
-		"Bank Routing Number: 329170640",
-		"Routing #: 329170640",
-		"RTN: 659173045",
-		"ABA RTN: 659173045",
-		"Routing Number: 800000006",
-		"Routing No.: 087-294-619",
-		"Routing number: ٠٨٧٢٩٤٦١٩",
-		"Routing number: 08729\u200b4619",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "Routing number: 087294619",
+    "ABA routing number=126804371",
+    "Routing Transit Number: 329170640",
+    "Bank Routing Number: 329170640",
+    "Routing #: 329170640",
+    "RTN: 659173045",
+    "ABA RTN: 659173045",
+    "Routing Number: 800000006",
+    "Routing No.: 087-294-619",
+    "Routing number: ٠٨٧٢٩٤٦١٩",
+    "Routing number: 08729\u200b4619",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the bank details ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the bank details ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"087294619",
-		"Routing number: 087294618",
-		"Routing number: 139999999",
-		"Routing number: 08729461",
-		"Routing number: 0872946190",
-		"Routing number 087294619",
-		"RTN 087294619",
-		"Routing # 087294619",
-		"Bank number: 087294619",
-		"Routing number validation",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("routing parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("routing parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "087294619",
+    "Routing number: 087294618",
+    "Routing number: 139999999",
+    "Routing number: 08729461",
+    "Routing number: 0872946190",
+    "Routing number 087294619",
+    "RTN 087294619",
+    "Routing # 087294619",
+    "Bank number: 087294619",
+    "Routing number validation",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("routing parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("routing parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("ABA routing numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " ABA routing number: ";
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const label = " ABA routing number: ";
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of ["087294619", "٠٨٧٢٩٤٦١٩"]) {
-		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-			const before = "x".repeat(valueStart - label.length);
-			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const f = fixture();
-			const find = spyOn(f.ctx.modelRegistry, "find");
-			f.input(prompt);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(f.requests).toHaveLength(0);
-			expect(f.state.title).toBe("existing task");
-			expect(f.warnings).toEqual([warning]);
-			expect(f.warnings.join(" ")).not.toContain(value);
-		}
-	}
+  for (const value of ["087294619", "٠٨٧٢٩٤٦١٩"]) {
+    for (const valueStart of [
+      prefixLength - 4,
+      suffixStart - value.length + 4,
+    ]) {
+      const before = "x".repeat(valueStart - label.length);
+      const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      const f = fixture();
+      const find = spyOn(f.ctx.modelRegistry, "find");
+      f.input(prompt);
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(f.requests).toHaveLength(0);
+      expect(f.state.title).toBe("existing task");
+      expect(f.warnings).toEqual([warning]);
+      expect(f.warnings.join(" ")).not.toContain(value);
+    }
+  }
 });
 
 test("rejects explicitly labeled numeric bank-account values without exposing them", async () => {
-	const identifiers = [
-		"Bank Account Number: 4829163705",
-		"bank account no.: 0375918642",
-		"Bank Acct #: 7305-1948-62",
-		"Bank Account=804193762510",
-		"Bank Account Number: ٨٢٠٥١٩٣٧",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "Bank Account Number: 4829163705",
+    "bank account no.: 0375918642",
+    "Bank Acct #: 7305-1948-62",
+    "Bank Account=804193762510",
+    "Bank Account Number: ٨٢٠٥١٩٣٧",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the financial record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the financial record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"4829163705",
-		"Account Number: 4829163705",
-		"Bank Account Number: 12345",
-		"Bank Account Number: 123456789012345678",
-		"Bank Account Number: 12--345678",
-		"Bank Account Number: 12A4567890",
-		"Bank Account Number format",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("bank-account parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("bank-account parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "4829163705",
+    "Account Number: 4829163705",
+    "Bank Account Number: 12345",
+    "Bank Account Number: 123456789012345678",
+    "Bank Account Number: 12--345678",
+    "Bank Account Number: 12A4567890",
+    "Bank Account Number format",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("bank-account parser")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("bank-account parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("bank-account numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const label of [" Bank Account Number: ", " Bank Acct #: "]) {
-		for (const value of ["4829163705", "7305-1948-62"]) {
-			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const f = fixture();
-				const find = spyOn(f.ctx.modelRegistry, "find");
-				f.input(prompt);
-				await settle();
-				expect(find).not.toHaveBeenCalled();
-				expect(f.requests).toHaveLength(0);
-				expect(f.state.title).toBe("existing task");
-				expect(f.warnings).toEqual([warning]);
-				expect(f.warnings.join(" ")).not.toContain(value);
-			}
-		}
-	}
+  for (const label of [" Bank Account Number: ", " Bank Acct #: "]) {
+    for (const value of ["4829163705", "7305-1948-62"]) {
+      for (const valueStart of [
+        prefixLength - 3,
+        suffixStart - value.length + 3,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const f = fixture();
+        const find = spyOn(f.ctx.modelRegistry, "find");
+        f.input(prompt);
+        await settle();
+        expect(find).not.toHaveBeenCalled();
+        expect(f.requests).toHaveLength(0);
+        expect(f.state.title).toBe("existing task");
+        expect(f.warnings).toEqual([warning]);
+        expect(f.warnings.join(" ")).not.toContain(value);
+      }
+    }
+  }
 });
 
 test("rejects explicitly labeled payment-card security codes without exposing them", async () => {
-	const codes = [
-		"CVV: 483",
-		"CVV2 Code: 6190",
-		"CVC=274",
-		"CVC2: 615",
-		"Card CVV: 741",
-		"Credit Card Security Code: 3805",
-		"Card Verification Value: 9304",
-		"Card Verification Code: ٨٢٠",
-		"Card Security Code: １２３４",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const code of codes) {
-		expect(hasSensitiveNamingContext(code)).toBe(true);
-		expect(hasSensitiveOutput(code)).toBe(true);
+  const codes = [
+    "CVV: 483",
+    "CVV2 Code: 6190",
+    "CVC=274",
+    "CVC2: 615",
+    "Card CVV: 741",
+    "Credit Card Security Code: 3805",
+    "Card Verification Value: 9304",
+    "Card Verification Code: ٨٢٠",
+    "Card Security Code: １２３４",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const code of codes) {
+    expect(hasSensitiveNamingContext(code)).toBe(true);
+    expect(hasSensitiveOutput(code)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the card detail ${code}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(code);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the card detail ${code}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(code);
 
-		const output = fixture([Promise.resolve(response(code))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(code);
-	}
+    const output = fixture([Promise.resolve(response(code))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(code);
+  }
 
-	for (const nearMiss of [
-		"483",
-		"Security Code: 483",
-		"Order security code: 483",
-		"CVV: 12",
-		"CVV: 12345",
-		"CVV 483",
-		"CVV is 483",
-		"Card Security Code: 12345",
-		"Card Verification Value: 12",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("CVV parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("cvv parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "483",
+    "Security Code: 483",
+    "Order security code: 483",
+    "CVV: 12",
+    "CVV: 12345",
+    "CVV 483",
+    "CVV is 483",
+    "Card Security Code: 12345",
+    "Card Verification Value: 12",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("CVV parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("cvv parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("payment-card security codes crossing retained prompt boundaries skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const label of [" CVV: ", " Card Security Code: ", " Card Verification Value: "]) {
-		for (const value of ["483", "6190"]) {
-			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const f = fixture();
-				const find = spyOn(f.ctx.modelRegistry, "find");
-				f.input(prompt);
-				await settle();
-				expect(find).not.toHaveBeenCalled();
-				expect(f.requests).toHaveLength(0);
-				expect(f.state.title).toBe("existing task");
-				expect(f.warnings).toEqual([warning]);
-				expect(f.warnings.join(" ")).not.toContain(value);
-			}
-		}
-	}
+  for (const label of [
+    " CVV: ",
+    " Card Security Code: ",
+    " Card Verification Value: ",
+  ]) {
+    for (const value of ["483", "6190"]) {
+      for (const valueStart of [
+        prefixLength - 1,
+        suffixStart - value.length + 1,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const f = fixture();
+        const find = spyOn(f.ctx.modelRegistry, "find");
+        f.input(prompt);
+        await settle();
+        expect(find).not.toHaveBeenCalled();
+        expect(f.requests).toHaveLength(0);
+        expect(f.state.title).toBe("existing task");
+        expect(f.warnings).toEqual([warning]);
+        expect(f.warnings.join(" ")).not.toContain(value);
+      }
+    }
+  }
 });
 
 test("rejects explicitly labeled numeric PINs without exposing them", async () => {
-	const pins = [
-		"PIN: 4827",
-		"PIN Code: 736194",
-		"PIN Number=8026",
-		"PIN No.: 0000",
-		"Card PIN: 7482",
-		"Personal Identification Number: ٣٩٢٨",
-		"PIN: 48\u200b27",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const pin of pins) {
-		expect(hasSensitiveNamingContext(pin)).toBe(true);
-		expect(hasSensitiveOutput(pin)).toBe(true);
+  const pins = [
+    "PIN: 4827",
+    "PIN Code: 736194",
+    "PIN Number=8026",
+    "PIN No.: 0000",
+    "Card PIN: 7482",
+    "Personal Identification Number: ٣٩٢٨",
+    "PIN: 48\u200b27",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const pin of pins) {
+    expect(hasSensitiveNamingContext(pin)).toBe(true);
+    expect(hasSensitiveOutput(pin)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the access setting ${pin}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(pin);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the access setting ${pin}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(pin);
 
-		const output = fixture([Promise.resolve(response(pin))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(pin);
-	}
+    const output = fixture([Promise.resolve(response(pin))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(pin);
+  }
 
-	for (const nearMiss of [
-		"4827",
-		"PIN the task to the front",
-		"pinning: 4827",
-		"PIN: 123",
-		"PIN: 123456789",
-		"PIN: 1234AB",
-		"Personal Identification Number: 123",
-		"Personal Identification Number: 123456789",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("pinning behavior"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("pinning behavior");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "4827",
+    "PIN the task to the front",
+    "pinning: 4827",
+    "PIN: 123",
+    "PIN: 123456789",
+    "PIN: 1234AB",
+    "Personal Identification Number: 123",
+    "Personal Identification Number: 123456789",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("pinning behavior")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("pinning behavior");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("numeric PINs crossing retained prompt boundaries skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const label of [" PIN: ", " Personal Identification Number: "]) {
-		for (const value of ["4827", "736194"]) {
-			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const f = fixture();
-				const find = spyOn(f.ctx.modelRegistry, "find");
-				f.input(prompt);
-				await settle();
-				expect(find).not.toHaveBeenCalled();
-				expect(f.requests).toHaveLength(0);
-				expect(f.state.title).toBe("existing task");
-				expect(f.warnings).toEqual([warning]);
-				expect(f.warnings.join(" ")).not.toContain(value);
-			}
-		}
-	}
+  for (const label of [" PIN: ", " Personal Identification Number: "]) {
+    for (const value of ["4827", "736194"]) {
+      for (const valueStart of [
+        prefixLength - 1,
+        suffixStart - value.length + 1,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const f = fixture();
+        const find = spyOn(f.ctx.modelRegistry, "find");
+        f.input(prompt);
+        await settle();
+        expect(find).not.toHaveBeenCalled();
+        expect(f.requests).toHaveLength(0);
+        expect(f.state.title).toBe("existing task");
+        expect(f.warnings).toEqual([warning]);
+        expect(f.warnings.join(" ")).not.toContain(value);
+      }
+    }
+  }
 });
 
 test("rejects explicitly labeled one-time authentication codes without exposing them", async () => {
-	const codes = [
-		"OTP: 482739",
-		"OTP Code: 736194",
-		"TOTP=8026",
-		"MFA: 184926",
-		"MFA Verification Code: 583017",
-		"2FA Code: 743926",
-		"2FA Verification Code: 2937",
-		"One-Time Password: 740182",
-		"One-time passcode: 684201",
-		"Authenticator Code: ٤٣٢١",
-		"OTP: 48\u200b27",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const code of codes) {
-		expect(hasSensitiveNamingContext(code)).toBe(true);
-		expect(hasSensitiveOutput(code)).toBe(true);
+  const codes = [
+    "OTP: 482739",
+    "OTP Code: 736194",
+    "TOTP=8026",
+    "MFA: 184926",
+    "MFA Verification Code: 583017",
+    "2FA Code: 743926",
+    "2FA Verification Code: 2937",
+    "One-Time Password: 740182",
+    "One-time passcode: 684201",
+    "Authenticator Code: ٤٣٢١",
+    "OTP: 48\u200b27",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const code of codes) {
+    expect(hasSensitiveNamingContext(code)).toBe(true);
+    expect(hasSensitiveOutput(code)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the login setting ${code}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(code);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the login setting ${code}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(code);
 
-		const output = fixture([Promise.resolve(response(code))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(code);
-	}
+    const output = fixture([Promise.resolve(response(code))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(code);
+  }
 
-	for (const nearMiss of [
-		"482739",
-		"Verification Code: 482739",
-		"Security Code: 482739",
-		"Authentication Code: 482739",
-		"OTP is a type of one-time password",
-		"OTP: 123",
-		"OTP: 123456789",
-		"OTP: 1234AB",
-		"One-time password support is enabled",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("verification codes"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("verification codes");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "482739",
+    "Verification Code: 482739",
+    "Security Code: 482739",
+    "Authentication Code: 482739",
+    "OTP is a type of one-time password",
+    "OTP: 123",
+    "OTP: 123456789",
+    "OTP: 1234AB",
+    "One-time password support is enabled",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("verification codes")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("verification codes");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("one-time authentication codes crossing retained prompt boundaries skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const label of [" OTP: ", " MFA Code: ", " One-Time Password: ", " Authenticator Code: "]) {
-		for (const value of ["4827", "736194"]) {
-			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const f = fixture();
-				const find = spyOn(f.ctx.modelRegistry, "find");
-				f.input(prompt);
-				await settle();
-				expect(find).not.toHaveBeenCalled();
-				expect(f.requests).toHaveLength(0);
-				expect(f.state.title).toBe("existing task");
-				expect(f.warnings).toEqual([warning]);
-				expect(f.warnings.join(" ")).not.toContain(value);
-			}
-		}
-	}
+  for (const label of [
+    " OTP: ",
+    " MFA Code: ",
+    " One-Time Password: ",
+    " Authenticator Code: ",
+  ]) {
+    for (const value of ["4827", "736194"]) {
+      for (const valueStart of [
+        prefixLength - 1,
+        suffixStart - value.length + 1,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const f = fixture();
+        const find = spyOn(f.ctx.modelRegistry, "find");
+        f.input(prompt);
+        await settle();
+        expect(find).not.toHaveBeenCalled();
+        expect(f.requests).toHaveLength(0);
+        expect(f.state.title).toBe("existing task");
+        expect(f.warnings).toEqual([warning]);
+        expect(f.warnings.join(" ")).not.toContain(value);
+      }
+    }
+  }
 });
 
 test("rejects explicitly labeled backup and recovery codes without exposing them", async () => {
-	const codes = [
-		"Recovery Code: 482739",
-		"Backup Code: 736194",
-		"Recovery Codes=ABCD-EF12",
-		"Backup Key: K4J7-M3Q9",
-		"MFA Recovery Code: Q8R2-17NX",
-		"Recovery Key: 12345678901234567890123456789012",
-		"Backup Code: 4829\u200b3710",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const code of codes) {
-		expect(hasSensitiveNamingContext(code)).toBe(true);
-		expect(hasSensitiveOutput(code)).toBe(true);
+  const codes = [
+    "Recovery Code: 482739",
+    "Backup Code: 736194",
+    "Recovery Codes=ABCD-EF12",
+    "Backup Key: K4J7-M3Q9",
+    "MFA Recovery Code: Q8R2-17NX",
+    "Recovery Key: 12345678901234567890123456789012",
+    "Backup Code: 4829\u200b3710",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const code of codes) {
+    expect(hasSensitiveNamingContext(code)).toBe(true);
+    expect(hasSensitiveOutput(code)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review account recovery ${code}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(code);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review account recovery ${code}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(code);
 
-		const output = fixture([Promise.resolve(response(code))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(code);
-	}
+    const output = fixture([Promise.resolve(response(code))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(code);
+  }
 
-	for (const nearMiss of [
-		"482739",
-		"Code: 482739",
-		"Key: AB12345",
-		"Recovery Code: ABCDEF",
-		"Backup Code: 12345",
-		"Recovery Code: 123456789012345678901234567890123",
-		"Recovery Code: please reset my account",
-		"I need to understand recovery codes",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("recovery codes"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("recovery codes");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "482739",
+    "Code: 482739",
+    "Key: AB12345",
+    "Recovery Code: ABCDEF",
+    "Backup Code: 12345",
+    "Recovery Code: 123456789012345678901234567890123",
+    "Recovery Code: please reset my account",
+    "I need to understand recovery codes",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("recovery codes"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("recovery codes");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("backup and recovery codes crossing retained prompt boundaries skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const label of [" Recovery Code: ", " Backup Key: "]) {
-		for (const value of ["482739", "ABCD-EF12"]) {
-			for (const valueStart of [prefixLength - 1, suffixStart - value.length + 1]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const f = fixture();
-				const find = spyOn(f.ctx.modelRegistry, "find");
-				f.input(prompt);
-				await settle();
-				expect(find).not.toHaveBeenCalled();
-				expect(f.requests).toHaveLength(0);
-				expect(f.state.title).toBe("existing task");
-				expect(f.warnings).toEqual([warning]);
-				expect(f.warnings.join(" ")).not.toContain(value);
-			}
-		}
-	}
+  for (const label of [" Recovery Code: ", " Backup Key: "]) {
+    for (const value of ["482739", "ABCD-EF12"]) {
+      for (const valueStart of [
+        prefixLength - 1,
+        suffixStart - value.length + 1,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const f = fixture();
+        const find = spyOn(f.ctx.modelRegistry, "find");
+        f.input(prompt);
+        await settle();
+        expect(find).not.toHaveBeenCalled();
+        expect(f.requests).toHaveLength(0);
+        expect(f.state.title).toBe("existing task");
+        expect(f.warnings).toEqual([warning]);
+        expect(f.warnings.join(" ")).not.toContain(value);
+      }
+    }
+  }
 });
 
 test("rejects explicitly labeled passport numbers without exposing them", async () => {
-	const identifiers = [
-		"Passport Number: QX730194",
-		"Passport No.: 59381724",
-		"Passport #: A7B29C41",
-		"Passport ID=K4D8P271",
-		"Passport: U20041986",
-		"Passport Card Number: R8K2M519",
-		"Passport Card No.: 84027195",
-		"Passport Card #: C7N49218",
-		"Passport No.: QX73\u200b0194",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "Passport Number: QX730194",
+    "Passport No.: 59381724",
+    "Passport #: A7B29C41",
+    "Passport ID=K4D8P271",
+    "Passport: U20041986",
+    "Passport Card Number: R8K2M519",
+    "Passport Card No.: 84027195",
+    "Passport Card #: C7N49218",
+    "Passport No.: QX73\u200b0194",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the travel document ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the travel document ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"QX730194",
-		"Passport Number: ABCDEF",
-		"Passport No.: Q1234",
-		"Passport #: QX73019485730",
-		"Passport Number: QX73019-4",
-		"Passport Card Reference: R8K2M519",
-		"Travel Document: QX730194",
-		"Passport number validation",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("passport parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("passport parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "QX730194",
+    "Passport Number: ABCDEF",
+    "Passport No.: Q1234",
+    "Passport #: QX73019485730",
+    "Passport Number: QX73019-4",
+    "Passport Card Reference: R8K2M519",
+    "Travel Document: QX730194",
+    "Passport number validation",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("passport parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("passport parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("passport numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const label of [" Passport No.: ", " Passport Card Number: "]) {
-		for (const value of ["QX730194", "59381724"]) {
-			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const f = fixture();
-				const find = spyOn(f.ctx.modelRegistry, "find");
-				f.input(prompt);
-				await settle();
-				expect(find).not.toHaveBeenCalled();
-				expect(f.requests).toHaveLength(0);
-				expect(f.state.title).toBe("existing task");
-				expect(f.warnings).toEqual([warning]);
-				expect(f.warnings.join(" ")).not.toContain(value);
-			}
-		}
-	}
+  for (const label of [" Passport No.: ", " Passport Card Number: "]) {
+    for (const value of ["QX730194", "59381724"]) {
+      for (const valueStart of [
+        prefixLength - 3,
+        suffixStart - value.length + 3,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const f = fixture();
+        const find = spyOn(f.ctx.modelRegistry, "find");
+        f.input(prompt);
+        await settle();
+        expect(find).not.toHaveBeenCalled();
+        expect(f.requests).toHaveLength(0);
+        expect(f.state.title).toBe("existing task");
+        expect(f.warnings).toEqual([warning]);
+        expect(f.warnings.join(" ")).not.toContain(value);
+      }
+    }
+  }
 });
 
 test("rejects explicitly labeled driver-license numbers without exposing them", async () => {
-	const identifiers = [
-		"Driver's License Number: A1234567",
-		"Driver License No.: D8F4K21",
-		"Driver Licence: 83920145",
-		"Drivers Licence Number: Z4-8K-2J9",
-		"Driving License No.: B7152048",
-		"Driver ID: C7429051",
-		"Driver's ID Number: W3F-57291",
-		"DL Number: X9428576",
-		"Driver License #: 12-345-6789",
-		"Driver ID: C742\u200b9051",
-		"Driver License: １２３４５６",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "Driver's License Number: A1234567",
+    "Driver License No.: D8F4K21",
+    "Driver Licence: 83920145",
+    "Drivers Licence Number: Z4-8K-2J9",
+    "Driving License No.: B7152048",
+    "Driver ID: C7429051",
+    "Driver's ID Number: W3F-57291",
+    "DL Number: X9428576",
+    "Driver License #: 12-345-6789",
+    "Driver ID: C742\u200b9051",
+    "Driver License: １２３４５６",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the driver record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the driver record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"A1234567",
-		"License Number: A1234567",
-		"State ID: C7429051",
-		"Driver License: ABCDEF",
-		"Driver License: 12345",
-		"Driver License: A12345678901234567890",
-		"Driver License: A--123456",
-		"Driver License Reference: A1234567",
-		"Driver license format",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("driver license parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("driver license parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "A1234567",
+    "License Number: A1234567",
+    "State ID: C7429051",
+    "Driver License: ABCDEF",
+    "Driver License: 12345",
+    "Driver License: A12345678901234567890",
+    "Driver License: A--123456",
+    "Driver License Reference: A1234567",
+    "Driver license format",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("driver license parser")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("driver license parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("driver-license numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const label of [" Driver's License No.: ", " DL Number: "]) {
-		for (const value of ["A1234567", "X9-428576"]) {
-			for (const valueStart of [prefixLength - 3, suffixStart - value.length + 3]) {
-				const before = "x".repeat(valueStart - label.length);
-				const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-				expect(prompt).toHaveLength(promptLength);
-				const f = fixture();
-				const find = spyOn(f.ctx.modelRegistry, "find");
-				f.input(prompt);
-				await settle();
-				expect(find).not.toHaveBeenCalled();
-				expect(f.requests).toHaveLength(0);
-				expect(f.state.title).toBe("existing task");
-				expect(f.warnings).toEqual([warning]);
-				expect(f.warnings.join(" ")).not.toContain(value);
-			}
-		}
-	}
+  for (const label of [" Driver's License No.: ", " DL Number: "]) {
+    for (const value of ["A1234567", "X9-428576"]) {
+      for (const valueStart of [
+        prefixLength - 3,
+        suffixStart - value.length + 3,
+      ]) {
+        const before = "x".repeat(valueStart - label.length);
+        const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+        expect(prompt).toHaveLength(promptLength);
+        const f = fixture();
+        const find = spyOn(f.ctx.modelRegistry, "find");
+        f.input(prompt);
+        await settle();
+        expect(find).not.toHaveBeenCalled();
+        expect(f.requests).toHaveLength(0);
+        expect(f.state.title).toBe("existing task");
+        expect(f.warnings).toEqual([warning]);
+        expect(f.warnings.join(" ")).not.toContain(value);
+      }
+    }
+  }
 });
 
 test("rejects explicitly labeled structurally valid Indian PANs without exposing them", async () => {
-	const identifiers = [
-		"PAN: ZZZPZ9876Q",
-		"PAN Number=QQQFQ2345Z",
-		"PAN No.: XXXTZ3141Y",
-		"PAN Card: RRRHR6789M",
-		"Permanent Account Number: LLLAL5432N",
-		"PAN: ZZZPZ٩٨٧٦Q",
-		"PAN: ZZZPZ98\u200b76Q",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "PAN: ZZZPZ9876Q",
+    "PAN Number=QQQFQ2345Z",
+    "PAN No.: XXXTZ3141Y",
+    "PAN Card: RRRHR6789M",
+    "Permanent Account Number: LLLAL5432N",
+    "PAN: ZZZPZ٩٨٧٦Q",
+    "PAN: ZZZPZ98\u200b76Q",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the Indian tax record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the Indian tax record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"ZZZPZ9876Q",
-		"PAN: ZZZXZ9876Q",
-		"PAN: ZZZPZ987Q",
-		"PAN: ZZZPZ98765Q",
-		"PAN Number ZZZPZ9876Q",
-		"PAN: ZZZPZABCDQ",
-		"PAN number validation in the task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("pan parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("pan parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "ZZZPZ9876Q",
+    "PAN: ZZZXZ9876Q",
+    "PAN: ZZZPZ987Q",
+    "PAN: ZZZPZ98765Q",
+    "PAN Number ZZZPZ9876Q",
+    "PAN: ZZZPZABCDQ",
+    "PAN number validation in the task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("pan parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("pan parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("Indian PAN numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " PAN Number: ";
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const label = " PAN Number: ";
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const value of ["ZZZPZ9876Q", "ZZZPZ٩٨٧٦Q"]) {
-		for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-			const before = "x".repeat(valueStart - label.length);
-			const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-			expect(prompt).toHaveLength(promptLength);
-			const f = fixture();
-			const find = spyOn(f.ctx.modelRegistry, "find");
-			f.input(prompt);
-			await settle();
-			expect(find).not.toHaveBeenCalled();
-			expect(f.requests).toHaveLength(0);
-			expect(f.state.title).toBe("existing task");
-			expect(f.warnings).toEqual([warning]);
-			expect(f.warnings.join(" ")).not.toContain(value);
-		}
-	}
+  for (const value of ["ZZZPZ9876Q", "ZZZPZ٩٨٧٦Q"]) {
+    for (const valueStart of [
+      prefixLength - 4,
+      suffixStart - value.length + 4,
+    ]) {
+      const before = "x".repeat(valueStart - label.length);
+      const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+      expect(prompt).toHaveLength(promptLength);
+      const f = fixture();
+      const find = spyOn(f.ctx.modelRegistry, "find");
+      f.input(prompt);
+      await settle();
+      expect(find).not.toHaveBeenCalled();
+      expect(f.requests).toHaveLength(0);
+      expect(f.state.title).toBe("existing task");
+      expect(f.warnings).toEqual([warning]);
+      expect(f.warnings.join(" ")).not.toContain(value);
+    }
+  }
 });
 
 test("rejects explicitly labeled Luhn-valid Canadian SINs without exposing them", async () => {
-	const identifiers = [
-		"SIN: 712-345-677",
-		"SIN Number=712345677",
-		"SIN No.: 712-345-677",
-		"SIN#: 712-345-677",
-		"Social Insurance Number: 712 345 677",
-		"Social Insurance No.: 712 345 677",
-		"SIN: 712.34\u200b5.677",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "SIN: 712-345-677",
+    "SIN Number=712345677",
+    "SIN No.: 712-345-677",
+    "SIN#: 712-345-677",
+    "Social Insurance Number: 712 345 677",
+    "Social Insurance No.: 712 345 677",
+    "SIN: 712.34\u200b5.677",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"712-345-677",
-		"SIN No. 712-345-677",
-		"SIN: 712-345-678",
-		"SIN: 000-000-000",
-		"SIN validation in a task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("SIN parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("sin parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "712-345-677",
+    "SIN No. 712-345-677",
+    "SIN: 712-345-678",
+    "SIN: 000-000-000",
+    "SIN validation in a task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("SIN parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("sin parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("matches exactly the explicitly recognized ITIN group ranges", () => {
-	const validRanges = [[50, 65], [70, 88], [90, 92], [94, 99]] as const;
-	const validGroups = new Set(validRanges.flatMap(([first, last]) =>
-		Array.from({ length: last - first + 1 }, (_, index) => first + index)));
-	for (let group = 0; group <= 99; group++) {
-		const value = `ITIN: 900-${String(group).padStart(2, "0")}-0000`;
-		const expected = validGroups.has(group);
-		expect(hasSensitiveOutput(value)).toBe(expected);
-		expect(hasSensitiveNamingContext(value)).toBe(expected);
-	}
+  const validRanges = [
+    [50, 65],
+    [70, 88],
+    [90, 92],
+    [94, 99],
+  ] as const;
+  const validGroups = new Set(
+    validRanges.flatMap(([first, last]) =>
+      Array.from({ length: last - first + 1 }, (_, index) => first + index),
+    ),
+  );
+  for (let group = 0; group <= 99; group++) {
+    const value = `ITIN: 900-${String(group).padStart(2, "0")}-0000`;
+    const expected = validGroups.has(group);
+    expect(hasSensitiveOutput(value)).toBe(expected);
+    expect(hasSensitiveNamingContext(value)).toBe(expected);
+  }
 });
 
 test("rejects explicitly labeled U.S. ITINs in recognized IRS ranges without exposing them", async () => {
-	const identifiers = [
-		"ITIN: 900-50-0000",
-		"ITIN: 900-65-0000",
-		"ITIN: 900-70-0000",
-		"ITIN number=900700000",
-		"ITIN No.: 900-50-0000",
-		"ITIN#: 900-65-0000",
-		"Individual Taxpayer Identification Number: 900 90 0000",
-		"Individual Taxpayer Identification No.: 900-94-0000",
-		"ITIN: ９００-９４-００００",
-		"I\u200bTIN: 900-99-0000",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "ITIN: 900-50-0000",
+    "ITIN: 900-65-0000",
+    "ITIN: 900-70-0000",
+    "ITIN number=900700000",
+    "ITIN No.: 900-50-0000",
+    "ITIN#: 900-65-0000",
+    "Individual Taxpayer Identification Number: 900 90 0000",
+    "Individual Taxpayer Identification No.: 900-94-0000",
+    "ITIN: ９００-９４-００００",
+    "I\u200bTIN: 900-99-0000",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the tax record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the tax record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"900-70-0000",
-		"ITIN: 800-70-0000",
-		"ITIN: 900-49-0000",
-		"ITIN: 900-66-0000",
-		"ITIN: 900-69-0000",
-		"ITIN: 900-89-0000",
-		"ITIN: 900-93-0000",
-		"ITIN No 900-50-0000",
-		"ITIN: 900-9\u200b3-0000",
-		"ITIN: 900-70-000",
-		"ITIN parsing in a task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const promptMarker = "[... middle of prompt omitted ...]";
-	const retainedPromptLength = MAX_PROMPT_LENGTH - promptMarker.length - 2;
-	const prefixLength = Math.ceil(retainedPromptLength / 2);
-	const itinLabel = " ITIN No.: ";
-	const splitPrompt = (value: string) => {
-		const splitStart = prefixLength - 4;
-		return `${"x".repeat(splitStart - itinLabel.length)}${itinLabel}${value} ${"y".repeat(1_200)}`;
-	};
-	expect(buildNamingRequestContext([], splitPrompt("900-93-0000")).hasSensitiveBoundary()).toBe(false);
-	expect(buildNamingRequestContext([], splitPrompt("900-50-0000")).hasSensitiveBoundary()).toBe(true);
+  for (const nearMiss of [
+    "900-70-0000",
+    "ITIN: 800-70-0000",
+    "ITIN: 900-49-0000",
+    "ITIN: 900-66-0000",
+    "ITIN: 900-69-0000",
+    "ITIN: 900-89-0000",
+    "ITIN: 900-93-0000",
+    "ITIN No 900-50-0000",
+    "ITIN: 900-9\u200b3-0000",
+    "ITIN: 900-70-000",
+    "ITIN parsing in a task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const promptMarker = "[... middle of prompt omitted ...]";
+  const retainedPromptLength = MAX_PROMPT_LENGTH - promptMarker.length - 2;
+  const prefixLength = Math.ceil(retainedPromptLength / 2);
+  const itinLabel = " ITIN No.: ";
+  const splitPrompt = (value: string) => {
+    const splitStart = prefixLength - 4;
+    return `${"x".repeat(splitStart - itinLabel.length)}${itinLabel}${value} ${"y".repeat(1_200)}`;
+  };
+  expect(
+    buildNamingRequestContext(
+      [],
+      splitPrompt("900-93-0000"),
+    ).hasSensitiveBoundary(),
+  ).toBe(false);
+  expect(
+    buildNamingRequestContext(
+      [],
+      splitPrompt("900-50-0000"),
+    ).hasSensitiveBoundary(),
+  ).toBe(true);
 
-	const ordinaryTitle = fixture([Promise.resolve(response("itin parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("itin parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([Promise.resolve(response("itin parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("itin parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("rejects explicitly labeled valid CPF values without exposing them", async () => {
-	const identifiers = [
-		"CPF: 529.982.247-25",
-		"CPF number=52998224725",
-		"CPF No.: 529.982.247-25",
-		"CPF#: 52998224725",
-		"Cadastro de Pessoas Físicas: 529 982 247 25",
-		"CPF: 529.98\u200b2.247-25",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "CPF: 529.982.247-25",
+    "CPF number=52998224725",
+    "CPF No.: 529.982.247-25",
+    "CPF#: 52998224725",
+    "Cadastro de Pessoas Físicas: 529 982 247 25",
+    "CPF: 529.98\u200b2.247-25",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	for (const nearMiss of [
-		"529.982.247-25",
-		"CPF No. 529.982.247-25",
-		"CPF: 529.982.247-24",
-		"CPF: 000.000.000-00",
-		"CPF parsing in a task",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("CPF parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("cpf parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "529.982.247-25",
+    "CPF No. 529.982.247-25",
+    "CPF: 529.982.247-24",
+    "CPF: 000.000.000-00",
+    "CPF parsing in a task",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("CPF parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("cpf parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("rejects explicitly labeled UK National Insurance numbers without blocking near-misses", async () => {
-	const identifiers = [
-		"National Insurance number: AB 12 34 56 C",
-		"National Insurance No=CE123456A",
-		"National Insurance No.: AB 12 34 56 C",
-		"NI number: GW 12-34-56 D",
-		"NI No.: ST 12 34 56 C",
-		"NI#: AB123456B",
-		"NINO#: CE123456A",
-		"NI: ST123456C",
-		"NINO: AB123456B",
-		"NI number: AB ١٢٣٤٥٦A",
-		"National Insurance number: ＡＢ １２ ３４ ５６ Ｃ",
-		"NI number:\u200b AB 12 34 56 C",
-	];
-	const contextWarning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
-	for (const value of identifiers) {
-		expect(hasSensitiveNamingContext(value)).toBe(true);
-		expect(hasSensitiveOutput(value)).toBe(true);
+  const identifiers = [
+    "National Insurance number: AB 12 34 56 C",
+    "National Insurance No=CE123456A",
+    "National Insurance No.: AB 12 34 56 C",
+    "NI number: GW 12-34-56 D",
+    "NI No.: ST 12 34 56 C",
+    "NI#: AB123456B",
+    "NINO#: CE123456A",
+    "NI: ST123456C",
+    "NINO: AB123456B",
+    "NI number: AB ١٢٣٤٥٦A",
+    "National Insurance number: ＡＢ １２ ３４ ５６ Ｃ",
+    "NI number:\u200b AB 12 34 56 C",
+  ];
+  const contextWarning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  for (const value of identifiers) {
+    expect(hasSensitiveNamingContext(value)).toBe(true);
+    expect(hasSensitiveOutput(value)).toBe(true);
 
-		const input = fixture();
-		const find = spyOn(input.ctx.modelRegistry, "find");
-		input.input(`Review the record ${value}`);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(input.requests).toHaveLength(0);
-		expect(input.warnings).toEqual([contextWarning]);
-		expect(input.warnings.join(" ")).not.toContain(value);
+    const input = fixture();
+    const find = spyOn(input.ctx.modelRegistry, "find");
+    input.input(`Review the record ${value}`);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(input.requests).toHaveLength(0);
+    expect(input.warnings).toEqual([contextWarning]);
+    expect(input.warnings.join(" ")).not.toContain(value);
 
-		const output = fixture([Promise.resolve(response(value))]);
-		output.input("Name a task");
-		await settle();
-		expect(output.state.title).toBe("existing task");
-		expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(output.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(output.warnings.join(" ")).not.toContain(value);
-	}
+    const output = fixture([Promise.resolve(response(value))]);
+    output.input("Name a task");
+    await settle();
+    expect(output.state.title).toBe("existing task");
+    expect(output.calls.filter((args) => args[0] === "rename-window")).toEqual(
+      [],
+    );
+    expect(output.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(output.warnings.join(" ")).not.toContain(value);
+  }
 
-	const fragments = ["NI No.: AB 12 34 ", "56 C"];
-	const splitResponse = {
-		...response(""),
-		content: fragments.map((text, index) => ({
-			type: "text",
-			text,
-			textSignature: JSON.stringify({ v: 1, id: `ni-${index}`, phase: "final_answer" }),
-		})),
-	};
-	const split = fixture([Promise.resolve(splitResponse)]);
-	split.input("Name a task");
-	await settle();
-	expect(split.state.title).toBe("existing task");
-	expect(split.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+  const fragments = ["NI No.: AB 12 34 ", "56 C"];
+  const splitResponse = {
+    ...response(""),
+    content: fragments.map((text, index) => ({
+      type: "text",
+      text,
+      textSignature: JSON.stringify({
+        v: 1,
+        id: `ni-${index}`,
+        phase: "final_answer",
+      }),
+    })),
+  };
+  const split = fixture([Promise.resolve(splitResponse)]);
+  split.input("Name a task");
+  await settle();
+  expect(split.state.title).toBe("existing task");
+  expect(split.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
 
-	for (const nearMiss of [
-		"AB123456C",
-		"NI number: DD 12 34 56 C",
-		"NI number: AD 12 34 56 C",
-		"NI number: AQ 12 34 56 C",
-		"NI number: AO 12 34 56 C",
-		"NI number: QA 12 34 56 C",
-		"NI number: AB 12 34 56 E",
-		"NI number: AB 12 34 5 C",
-		"NI number: AB 12 34 567 C",
-		"NI No. AB 12 34 56 C",
-		"National Insurance number parsing",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
-	const ordinaryTitle = fixture([Promise.resolve(response("NI parser"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.state.title).toBe("ni parser");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  for (const nearMiss of [
+    "AB123456C",
+    "NI number: DD 12 34 56 C",
+    "NI number: AD 12 34 56 C",
+    "NI number: AQ 12 34 56 C",
+    "NI number: AO 12 34 56 C",
+    "NI number: QA 12 34 56 C",
+    "NI number: AB 12 34 56 E",
+    "NI number: AB 12 34 5 C",
+    "NI number: AB 12 34 567 C",
+    "NI No. AB 12 34 56 C",
+    "National Insurance number parsing",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
+  const ordinaryTitle = fixture([Promise.resolve(response("NI parser"))]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.state.title).toBe("ni parser");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("UK National Insurance numbers crossing either retained prompt boundary skip model lookup", async () => {
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const promptLength = MAX_PROMPT_LENGTH + 1_000;
-	const suffixStart = promptLength - Math.floor(retainedLength / 2);
-	const label = " NI number: ";
-	const value = "AB 12 34 56 C";
-	const warning = "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const promptLength = MAX_PROMPT_LENGTH + 1_000;
+  const suffixStart = promptLength - Math.floor(retainedLength / 2);
+  const label = " NI number: ";
+  const value = "AB 12 34 56 C";
+  const warning =
+    "Sensitive-looking task context was not sent to the naming model; the current title was kept.";
 
-	for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
-		const before = "x".repeat(valueStart - label.length);
-		const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
-		expect(prompt).toHaveLength(promptLength);
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(true);
+  for (const valueStart of [prefixLength - 4, suffixStart - value.length + 4]) {
+    const before = "x".repeat(valueStart - label.length);
+    const prompt = `${before}${label}${value} ${"y".repeat(promptLength - before.length - label.length - value.length - 1)}`;
+    expect(prompt).toHaveLength(promptLength);
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(true);
 
-		const f = fixture();
-		const find = spyOn(f.ctx.modelRegistry, "find");
-		f.input(prompt);
-		await settle();
-		expect(find).not.toHaveBeenCalled();
-		expect(f.requests).toHaveLength(0);
-		expect(f.state.title).toBe("existing task");
-		expect(f.warnings).toEqual([warning]);
-		expect(f.warnings.join(" ")).not.toContain(value);
-	}
+    const f = fixture();
+    const find = spyOn(f.ctx.modelRegistry, "find");
+    f.input(prompt);
+    await settle();
+    expect(find).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(0);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join(" ")).not.toContain(value);
+  }
 
-	const invalidValue = "DD 12 34 56 C";
-	for (const valueStart of [prefixLength - 4, suffixStart - invalidValue.length + 4]) {
-		const before = "x".repeat(valueStart - label.length);
-		const prompt = `${before}${label}${invalidValue} ${"y".repeat(promptLength - before.length - label.length - invalidValue.length - 1)}`;
-		expect(prompt).toHaveLength(promptLength);
-		const context = buildNamingRequestContext([], prompt);
-		expect(hasSensitiveNamingContext(context.text)).toBe(false);
-		expect(context.hasSensitiveBoundary()).toBe(false);
-	}
+  const invalidValue = "DD 12 34 56 C";
+  for (const valueStart of [
+    prefixLength - 4,
+    suffixStart - invalidValue.length + 4,
+  ]) {
+    const before = "x".repeat(valueStart - label.length);
+    const prompt = `${before}${label}${invalidValue} ${"y".repeat(promptLength - before.length - label.length - invalidValue.length - 1)}`;
+    expect(prompt).toHaveLength(promptLength);
+    const context = buildNamingRequestContext([], prompt);
+    expect(hasSensitiveNamingContext(context.text)).toBe(false);
+    expect(context.hasSensitiveBoundary()).toBe(false);
+  }
 });
 
 test("rejects phone-shaped output only when a phone label is present", async () => {
-	const labeledNumbers = [
-		"Phone: 000-000-0000",
-		"Phone #: 000-000-0000",
-		"Phone No.: 000-000-0000",
-		"Mobile Number=0000000000",
-		"cellular_number: (000) 000-0000",
-		"Telephone: +1 (000) 000-0000",
-		"phone: 0000000",
-		"Phone: ٠٠٠-٠٠٠-٠٠٠٠",
-		"Phone: ０００-０００-００００",
-		"Phone: 000-\u200b000-0000",
-		"Phone:\u200b 000-000-0000",
-	];
-	for (const output of labeledNumbers) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(output);
-	}
+  const labeledNumbers = [
+    "Phone: 000-000-0000",
+    "Phone #: 000-000-0000",
+    "Phone No.: 000-000-0000",
+    "Mobile Number=0000000000",
+    "cellular_number: (000) 000-0000",
+    "Telephone: +1 (000) 000-0000",
+    "phone: 0000000",
+    "Phone: ٠٠٠-٠٠٠-٠٠٠٠",
+    "Phone: ０００-０００-００００",
+    "Phone: 000-\u200b000-0000",
+    "Phone:\u200b 000-000-0000",
+  ];
+  for (const output of labeledNumbers) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(output);
+  }
 
-	for (const nearMiss of [
-		"Phone # 000-000-0000",
-		"Ticket #: 000-000-0000",
-		"000-000-0000",
-	]) {
-		expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
-		expect(hasSensitiveOutput(nearMiss)).toBe(false);
-	}
+  for (const nearMiss of [
+    "Phone # 000-000-0000",
+    "Ticket #: 000-000-0000",
+    "000-000-0000",
+  ]) {
+    expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
+    expect(hasSensitiveOutput(nearMiss)).toBe(false);
+  }
 });
 
 test("rejects Luhn-valid payment-card-shaped output only with an explicit card label", async () => {
-	const labeledNumbers = [
-		"Card Number: 0000 0000 0000 0000",
-		"Card No.: 0000 0000 0000 0000",
-		"Card #: 0000 0000 0000 0000",
-		"Credit Card=0000000000000000",
-		"debit_card_number: 0000-0000-0000-0000",
-		"Payment Card No: 0000 0000 0000 0000",
-		"cc number=0000000000000000",
-		"CCN: 0000000000000000",
-		"CCN: 0000000000000",
-		"CCN: 0000000000000000000",
-		"Card Number: ００００-００００-００００-００００",
-		"Card Number:\u200b 0000-0000-0000-0000",
-		"Card Number: 0000-0000-0000-\u200b0000",
-	];
-	for (const output of labeledNumbers) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(output);
-	}
+  const labeledNumbers = [
+    "Card Number: 0000 0000 0000 0000",
+    "Card No.: 0000 0000 0000 0000",
+    "Card #: 0000 0000 0000 0000",
+    "Credit Card=0000000000000000",
+    "debit_card_number: 0000-0000-0000-0000",
+    "Payment Card No: 0000 0000 0000 0000",
+    "cc number=0000000000000000",
+    "CCN: 0000000000000000",
+    "CCN: 0000000000000",
+    "CCN: 0000000000000000000",
+    "Card Number: ００００-００００-００００-００００",
+    "Card Number:\u200b 0000-0000-0000-0000",
+    "Card Number: 0000-0000-0000-\u200b0000",
+  ];
+  for (const output of labeledNumbers) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(output);
+  }
 
-	const fragments = ["Card Number: 0000-0000-", "0000-0000"];
-	const splitResponse = {
-		...response(""),
-		content: fragments.map((text, index) => ({
-			type: "text",
-			text,
-			textSignature: JSON.stringify({ v: 1, id: `card-${index}`, phase: "final_answer" }),
-		})),
-	};
-	const split = fixture([Promise.resolve(splitResponse)]);
-	split.input("Name a task");
-	await settle();
-	expect(split.state.title).toBe("existing task");
-	expect(split.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
+  const fragments = ["Card Number: 0000-0000-", "0000-0000"];
+  const splitResponse = {
+    ...response(""),
+    content: fragments.map((text, index) => ({
+      type: "text",
+      text,
+      textSignature: JSON.stringify({
+        v: 1,
+        id: `card-${index}`,
+        phase: "final_answer",
+      }),
+    })),
+  };
+  const split = fixture([Promise.resolve(splitResponse)]);
+  split.input("Name a task");
+  await settle();
+  expect(split.state.title).toBe("existing task");
+  expect(split.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
 });
 
 test.each([
-	["short suffix", ["r8_", "P".repeat(36)].join("")],
-	["long suffix", ["r8_", "Q".repeat(38)].join("")],
-	["trailing identifier glue", `${["r8_", "R".repeat(37)].join("")}_x`],
+  ["short suffix", ["r8_", "P".repeat(36)].join("")],
+  ["long suffix", ["r8_", "Q".repeat(38)].join("")],
+  ["trailing identifier glue", `${["r8_", "R".repeat(37)].join("")}_x`],
 ])("does not classify %s as a Replicate API token", async (_shape, output) => {
-	const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("fix auth tests"))]);
-	f.input("Name a task");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.warnings).toEqual([]);
+  const f = fixture([
+    Promise.resolve(response(output)),
+    Promise.resolve(response("fix auth tests")),
+  ]);
+  f.input("Name a task");
+  await settle();
+  expect(f.requests).toHaveLength(2);
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.warnings).toEqual([]);
 });
 
 test("does not join prose after a label into an opaque credential", async () => {
-	const f = fixture([
-		Promise.resolve(response("api key: rotate integration tests after every release")),
-		Promise.resolve(response("fix auth tests")),
-	]);
-	f.input("Name a task");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.warnings).toEqual([]);
+  const f = fixture([
+    Promise.resolve(
+      response("api key: rotate integration tests after every release"),
+    ),
+    Promise.resolve(response("fix auth tests")),
+  ]);
+  f.input("Name a task");
+  await settle();
+  expect(f.requests).toHaveLength(2);
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.warnings).toEqual([]);
 });
 
 test.each([
-	["Pinecone-style prefix", ["p", "csk_", "A".repeat(48)].join("")],
-	["alphanumeric leading glue", `x${["csk-", "B".repeat(48)].join("")}`],
-	["underscore leading glue", `_${["csk_", "C".repeat(48)].join("")}`],
-	["hyphen leading glue", `-${["csk-", "D".repeat(48)].join("")}`],
-	["short body", ["csk_", "E".repeat(47)].join("")],
-	["long body", ["csk-", "F".repeat(49)].join("")],
-	["trailing identifier glue", `${["csk_", "H".repeat(48)].join("")}x`],
+  ["Pinecone-style prefix", ["p", "csk_", "A".repeat(48)].join("")],
+  ["alphanumeric leading glue", `x${["csk-", "B".repeat(48)].join("")}`],
+  ["underscore leading glue", `_${["csk_", "C".repeat(48)].join("")}`],
+  ["hyphen leading glue", `-${["csk-", "D".repeat(48)].join("")}`],
+  ["short body", ["csk_", "E".repeat(47)].join("")],
+  ["long body", ["csk-", "F".repeat(49)].join("")],
+  ["trailing identifier glue", `${["csk_", "H".repeat(48)].join("")}x`],
 ])("does not classify %s as a Cerebras API key", async (_shape, output) => {
-	const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("fix auth tests"))]);
-	f.input("Name a task");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.warnings).toEqual([]);
+  const f = fixture([
+    Promise.resolve(response(output)),
+    Promise.resolve(response("fix auth tests")),
+  ]);
+  f.input("Name a task");
+  await settle();
+  expect(f.requests).toHaveLength(2);
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.warnings).toEqual([]);
 });
 
 test("email-address-like model output is rejected before normalization and not disclosed", async () => {
-	const address = ["person", "@", "example", ".", "invalid"].join("");
-	const internationalizedAddresses = [
-		"δοκιμή@παράδειγμα.δοκιμή",
-		"用户@example.test",
-		"e\u0301@example.test",
-		"𐐀@example.test",
-	];
-	for (const output of [address, `${address}_x`, "person @example.invalid", ...internationalizedAddresses]) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(address);
-		expect(f.warnings.join(" ")).not.toContain(output);
-	}
+  const address = ["person", "@", "example", ".", "invalid"].join("");
+  const internationalizedAddresses = [
+    "δοκιμή@παράδειγμα.δοκιμή",
+    "用户@example.test",
+    "e\u0301@example.test",
+    "𐐀@example.test",
+  ];
+  for (const output of [
+    address,
+    `${address}_x`,
+    "person @example.invalid",
+    ...internationalizedAddresses,
+  ]) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(address);
+    expect(f.warnings.join(" ")).not.toContain(output);
+  }
 
-	const splitAddress = ["pi-tmux", "@", "example", ".", "invalid"].join("");
-	const fragments = ["pi-tmux", "@", "example", ".", "invalid"];
-	const splitResponse = {
-		...response(""),
-		content: fragments.map((text, index) => ({
-			type: "text",
-			text,
-			textSignature: JSON.stringify({ v: 1, id: `email-${index}`, phase: "final_answer" }),
-		})),
-	};
-	const f = fixture([Promise.resolve(splitResponse)]);
-	f.input("Name a task");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-	expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-	expect(f.warnings.join(" ")).not.toContain(splitAddress);
+  const splitAddress = ["pi-tmux", "@", "example", ".", "invalid"].join("");
+  const fragments = ["pi-tmux", "@", "example", ".", "invalid"];
+  const splitResponse = {
+    ...response(""),
+    content: fragments.map((text, index) => ({
+      type: "text",
+      text,
+      textSignature: JSON.stringify({
+        v: 1,
+        id: `email-${index}`,
+        phase: "final_answer",
+      }),
+    })),
+  };
+  const f = fixture([Promise.resolve(splitResponse)]);
+  f.input("Name a task");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  expect(f.warnings).toEqual([
+    "Sensitive-looking naming output was not applied.",
+  ]);
+  expect(f.warnings.join(" ")).not.toContain(splitAddress);
 });
 
 test("sensitive-output email scanning stays bounded on long non-email text", () => {
-	const nonEmail = `http://${"a".repeat(64_000)}`;
-	const startedAt = performance.now();
-	expect(hasSensitiveOutput(nonEmail)).toBe(false);
-	expect(performance.now() - startedAt).toBeLessThan(5_000);
+  const nonEmail = `http://${"a".repeat(64_000)}`;
+  const startedAt = performance.now();
+  expect(hasSensitiveOutput(nonEmail)).toBe(false);
+  expect(performance.now() - startedAt).toBeLessThan(5_000);
 });
 
 test("ordinary security-themed and hyphenated task titles without credential values remain valid", async () => {
-	for (const [title, expected] of [
-		["review bearer auth flow", "review bearer auth flow"],
-		["bearer authentication v2", "bearer authentication v2"],
-		["groq api authentication", "groq api authentication"],
-		["nvidia api keys", "nvidia api keys"],
-		["nvapi-short-token", "nvapi-short-token"],
-		["api key setup", "api key setup"],
-		["access token flow", "access token flow"],
-		["api_key=example", "api_key example"],
-		["password: placeholder", "password placeholder"],
-		["passphrase=example", "passphrase example"],
-		["token: placeholder", "token placeholder"],
-		["token: rotate safely", "token rotate safely"],
-		["ssn parser tests", "ssn parser tests"],
-		["social security format", "social security format"],
-		["ssn: placeholder", "ssn placeholder"],
-		["ticket 000-00-0000", "ticket 000-00-0000"],
-		["ticket 000-000-0000", "ticket 000-000-0000"],
-		["000-000-0000", "000-000-0000"],
-		["headphone: 0000000", "headphone 0000000"],
-		["phone: 000-000", "phone 000-000"],
-		["phone parsing", "phone parsing"],
-		["credit card tests", "credit card tests"],
-		["credit card: placeholder", "credit card placeholder"],
-		["0000 0000 0000 0000", "0000 0000 0000 0000"],
-		["ccn: 0000000000001", "ccn 0000000000001"],
-		["card number: 000000000000", "card number 000000000000"],
-		["ccn: 00000000000000000000", "ccn 00000000000000000000"],
-		["replicate api tests", "replicate api tests"],
-		["r8 token setup", "r8 token setup"],
-		["fireworks api keys", "fireworks api keys"],
-		["fw key setup", "fw key setup"],
-		["fpk file format", "fpk file format"],
-		["xai api integration", "xai api integration"],
-		["pplx-decider-v1", "pplx-decider-v1"],
-		["task-based development", "task-based development"],
-		["task-based-development", "task-based-development"],
-		["work-based-development", "work-based-development"],
-	] as const) {
-		const f = fixture([Promise.resolve(response(title))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.state.title).toBe(expected);
-		expect(f.warnings).toEqual([]);
-	}
+  for (const [title, expected] of [
+    ["review bearer auth flow", "review bearer auth flow"],
+    ["bearer authentication v2", "bearer authentication v2"],
+    ["groq api authentication", "groq api authentication"],
+    ["nvidia api keys", "nvidia api keys"],
+    ["nvapi-short-token", "nvapi-short-token"],
+    ["api key setup", "api key setup"],
+    ["access token flow", "access token flow"],
+    ["api_key=example", "api_key example"],
+    ["password: placeholder", "password placeholder"],
+    ["passphrase=example", "passphrase example"],
+    ["token: placeholder", "token placeholder"],
+    ["token: rotate safely", "token rotate safely"],
+    ["ssn parser tests", "ssn parser tests"],
+    ["social security format", "social security format"],
+    ["ssn: placeholder", "ssn placeholder"],
+    ["ticket 000-00-0000", "ticket 000-00-0000"],
+    ["ticket 000-000-0000", "ticket 000-000-0000"],
+    ["000-000-0000", "000-000-0000"],
+    ["headphone: 0000000", "headphone 0000000"],
+    ["phone: 000-000", "phone 000-000"],
+    ["phone parsing", "phone parsing"],
+    ["credit card tests", "credit card tests"],
+    ["credit card: placeholder", "credit card placeholder"],
+    ["0000 0000 0000 0000", "0000 0000 0000 0000"],
+    ["ccn: 0000000000001", "ccn 0000000000001"],
+    ["card number: 000000000000", "card number 000000000000"],
+    ["ccn: 00000000000000000000", "ccn 00000000000000000000"],
+    ["replicate api tests", "replicate api tests"],
+    ["r8 token setup", "r8 token setup"],
+    ["fireworks api keys", "fireworks api keys"],
+    ["fw key setup", "fw key setup"],
+    ["fpk file format", "fpk file format"],
+    ["xai api integration", "xai api integration"],
+    ["pplx-decider-v1", "pplx-decider-v1"],
+    ["task-based development", "task-based development"],
+    ["task-based-development", "task-based-development"],
+    ["work-based-development", "work-based-development"],
+  ] as const) {
+    const f = fixture([Promise.resolve(response(title))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.state.title).toBe(expected);
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("ready marker fits within 24 cells and title text stays lowercase", () => {
-	expect(formatTitle("FIX API Tests", true)).toBe("* fix api tests");
-	expect(formatTitle("X".repeat(24), true)).toBe("* " + "x".repeat(22));
-	expect(formatTitle("X".repeat(24), false)).toBe("x".repeat(24));
-	expect(formatTitle("", true)).toBe("* pi");
+  expect(formatTitle("FIX API Tests", true)).toBe("* fix api tests");
+  expect(formatTitle("X".repeat(24), true)).toBe("* " + "x".repeat(22));
+  expect(formatTitle("X".repeat(24), false)).toBe("x".repeat(24));
+  expect(formatTitle("", true)).toBe("* pi");
 });
 
 test("window formats contain two sanitized, capped branches", () => {
-	expect(buildWindowTitleFormat("x".repeat(30))).toBe(`#{?${WINDOW_WAITING_FORMAT},* ${"x".repeat(22)},${"x".repeat(24)}}`);
-	expect(buildWindowTitleFormat("#[] ---")).toBe(`#{?${WINDOW_WAITING_FORMAT},* pi,pi}`);
-	expect(buildWindowTitleFormat("Fix café #{session_id}, auth")).not.toContain("#{session_id}");
+  expect(buildWindowTitleFormat("x".repeat(30))).toBe(
+    `#{?${WINDOW_WAITING_FORMAT},* ${"x".repeat(22)},${"x".repeat(24)}}`,
+  );
+  expect(buildWindowTitleFormat("#[] ---")).toBe(
+    `#{?${WINDOW_WAITING_FORMAT},* pi,pi}`,
+  );
+  expect(buildWindowTitleFormat("Fix café #{session_id}, auth")).not.toContain(
+    "#{session_id}",
+  );
 });
 
 test("late model output preserves another pane's waiting marker", async () => {
-	const work = deferred();
-	const f = fixture([work.promise]);
-	f.state.waitingPanes.set("%2", "1");
-	f.input("Task");
-	await settle();
-	expect(f.state.title).toBe("* existing task");
-	work.resolve(response("new task"));
-	await settle();
-	expect(f.state.title).toBe("* new task");
-	expect(f.state.waitingPanes.get("%1")).toBe("0");
-	expect(f.requests).toHaveLength(1);
+  const work = deferred();
+  const f = fixture([work.promise]);
+  f.state.waitingPanes.set("%2", "1");
+  f.input("Task");
+  await settle();
+  expect(f.state.title).toBe("* existing task");
+  work.resolve(response("new task"));
+  await settle();
+  expect(f.state.title).toBe("* new task");
+  expect(f.state.waitingPanes.get("%1")).toBe("0");
+  expect(f.requests).toHaveLength(1);
 });
 
 test("read clears this pane's waiting marker from its window and session without naming", async () => {
-	const f = fixture([]);
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* existing task");
-	expect(f.state.sessionTitle).toBe("* My Session");
+  const f = fixture([]);
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* existing task");
+  expect(f.state.sessionTitle).toBe("* My Session");
 
-	await f.refresh("read");
+  await f.refresh("read");
 
-	expect(f.state.waitingPanes.get("%1")).toBe("0");
-	expect(f.state.activePanes.get("%1")).toBe("1");
-	expect(f.state.title).toBe("existing task");
-	expect(f.state.sessionTitle).toBe("My Session");
-	expect(f.requests).toEqual([]);
-	expect(f.warnings).toEqual([]);
+  expect(f.state.waitingPanes.get("%1")).toBe("0");
+  expect(f.state.activePanes.get("%1")).toBe("1");
+  expect(f.state.title).toBe("existing task");
+  expect(f.state.sessionTitle).toBe("My Session");
+  expect(f.requests).toEqual([]);
+  expect(f.warnings).toEqual([]);
 });
 
 test("read clears this window marker but keeps the session marker for another waiting window", async () => {
-	const f = fixture([]);
-	f.state.waitingPanes.set("%2", "1");
-	f.state.otherWindowPanes.add("%2");
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* existing task");
-	expect(f.state.sessionTitle).toBe("* My Session");
+  const f = fixture([]);
+  f.state.waitingPanes.set("%2", "1");
+  f.state.otherWindowPanes.add("%2");
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* existing task");
+  expect(f.state.sessionTitle).toBe("* My Session");
 
-	await f.refresh("read");
+  await f.refresh("read");
 
-	expect(f.state.waitingPanes.get("%1")).toBe("0");
-	expect(f.state.waitingPanes.get("%2")).toBe("1");
-	expect(f.state.title).toBe("existing task");
-	expect(f.state.sessionTitle).toBe("* My Session");
-	expect(f.requests).toEqual([]);
+  expect(f.state.waitingPanes.get("%1")).toBe("0");
+  expect(f.state.waitingPanes.get("%2")).toBe("1");
+  expect(f.state.title).toBe("existing task");
+  expect(f.state.sessionTitle).toBe("* My Session");
+  expect(f.requests).toEqual([]);
 });
 
 test("read preserves window and session markers while another pane in this window is waiting", async () => {
-	const f = fixture([]);
-	f.state.waitingPanes.set("%2", "1");
-	await f.emit("agent_settled");
+  const f = fixture([]);
+  f.state.waitingPanes.set("%2", "1");
+  await f.emit("agent_settled");
 
-	await f.refresh("read");
+  await f.refresh("read");
 
-	expect(f.state.waitingPanes.get("%1")).toBe("0");
-	expect(f.state.waitingPanes.get("%2")).toBe("1");
-	expect(f.state.title).toBe("* existing task");
-	expect(f.state.sessionTitle).toBe("* My Session");
+  expect(f.state.waitingPanes.get("%1")).toBe("0");
+  expect(f.state.waitingPanes.get("%2")).toBe("1");
+  expect(f.state.title).toBe("* existing task");
+  expect(f.state.sessionTitle).toBe("* My Session");
 });
 
 test("waiting panes in another window mark the session but not this window", async () => {
-	const f = fixture([]);
-	f.state.waitingPanes.set("%2", "1");
-	f.state.otherWindowPanes.add("%2");
-	await f.emit("session_start");
-	expect(f.state.title).toBe("existing task");
-	expect(f.state.sessionTitle).toBe("* My Session");
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* existing task");
-	f.emit("agent_start");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.state.sessionTitle).toBe("* My Session");
+  const f = fixture([]);
+  f.state.waitingPanes.set("%2", "1");
+  f.state.otherWindowPanes.add("%2");
+  await f.emit("session_start");
+  expect(f.state.title).toBe("existing task");
+  expect(f.state.sessionTitle).toBe("* My Session");
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* existing task");
+  f.emit("agent_start");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.state.sessionTitle).toBe("* My Session");
 });
 
 test("only final settlement marks waiting, without another model call", async () => {
-	const f = fixture();
-	f.input("Task");
-	await settle();
-	f.emit("turn_end");
-	f.emit("agent_end");
-	await settle();
-	expect(f.state.title).toBe("fix auth tests");
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* fix auth tests");
-	expect(f.state.sessionTitle).toBe("* My Session");
-	expect(f.requests).toHaveLength(1);
-	const writes = f.calls.filter((args) => args[0] === "rename-window").length;
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* fix auth tests");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toHaveLength(writes);
+  const f = fixture();
+  f.input("Task");
+  await settle();
+  f.emit("turn_end");
+  f.emit("agent_end");
+  await settle();
+  expect(f.state.title).toBe("fix auth tests");
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* fix auth tests");
+  expect(f.state.sessionTitle).toBe("* My Session");
+  expect(f.requests).toHaveLength(1);
+  const writes = f.calls.filter((args) => args[0] === "rename-window").length;
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* fix auth tests");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toHaveLength(
+    writes,
+  );
 });
 
 test("new input clears the marker before its slow summary arrives", async () => {
-	const next = deferred();
-	const f = fixture([Promise.resolve(response("Fix auth tests")), next.promise]);
-	f.input("First task");
-	await settle();
-	await f.emit("agent_settled");
-	f.input("Next task");
-	await settle();
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.state.sessionTitle).toBe("My Session");
-	next.resolve(response("New task"));
-	await settle();
-	expect(f.state.title).toBe("new task");
+  const next = deferred();
+  const f = fixture([
+    Promise.resolve(response("Fix auth tests")),
+    next.promise,
+  ]);
+  f.input("First task");
+  await settle();
+  await f.emit("agent_settled");
+  f.input("Next task");
+  await settle();
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.state.sessionTitle).toBe("My Session");
+  next.resolve(response("New task"));
+  await settle();
+  expect(f.state.title).toBe("new task");
 });
 
 test("internally started work clears the marker without a new naming request", async () => {
-	const f = fixture();
-	f.input("Task");
-	await settle();
-	await f.emit("agent_settled");
-	f.emit("agent_start");
-	await settle();
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.state.sessionTitle).toBe("My Session");
-	expect(f.requests).toHaveLength(1);
+  const f = fixture();
+  f.input("Task");
+  await settle();
+  await f.emit("agent_settled");
+  f.emit("agent_start");
+  await settle();
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.state.sessionTitle).toBe("My Session");
+  expect(f.requests).toHaveLength(1);
 });
 
 test("late naming result retains the settled marker", async () => {
-	const work = deferred();
-	const f = fixture([work.promise]);
-	f.input("Task");
-	// Pi persists the submitted prompt before the run settles.
-	f.messages.push({ role: "user", content: "Task" });
-	await f.emit("agent_settled");
-	expect(f.requests[0].options.signal.aborted).toBe(false);
-	expect(f.requests).toHaveLength(1);
-	expect(f.state.title).toBe("* existing task");
-	work.resolve(response("Fix auth tests"));
-	await settle();
-	expect(f.state.title).toBe("* fix auth tests");
+  const work = deferred();
+  const f = fixture([work.promise]);
+  f.input("Task");
+  // Pi persists the submitted prompt before the run settles.
+  f.messages.push({ role: "user", content: "Task" });
+  await f.emit("agent_settled");
+  expect(f.requests[0].options.signal.aborted).toBe(false);
+  expect(f.requests).toHaveLength(1);
+  expect(f.state.title).toBe("* existing task");
+  work.resolve(response("Fix auth tests"));
+  await settle();
+  expect(f.state.title).toBe("* fix auth tests");
 });
 
 test("waiting status still works when the naming model is unavailable", async () => {
-	const f = fixture();
-	(f.ctx.modelRegistry as any).find = () => undefined;
-	f.input("Task");
-	await settle();
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* existing task");
-	expect(f.requests).toHaveLength(0);
+  const f = fixture();
+  (f.ctx.modelRegistry as any).find = () => undefined;
+  f.input("Task");
+  await settle();
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* existing task");
+  expect(f.requests).toHaveLength(0);
 });
 
 test("naming model failures show a generic warning without disclosing error details", async () => {
-	let rejectWork!: (error: Error) => void;
-	const work = new Promise<ReturnType<typeof response>>((_resolve, reject) => { rejectWork = reject; });
-	const f = fixture([work]);
-	f.input("Task");
-	rejectWork(new Error("Synthetic provider failure detail"));
-	await settle();
+  let rejectWork!: (error: Error) => void;
+  const work = new Promise<ReturnType<typeof response>>((_resolve, reject) => {
+    rejectWork = reject;
+  });
+  const f = fixture([work]);
+  f.input("Task");
+  rejectWork(new Error("Synthetic provider failure detail"));
+  await settle();
 
-	expect(f.requests).toHaveLength(1);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual([
-		"tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.",
-	]);
-	expect(f.warnings.join("\n")).not.toContain("Synthetic provider failure detail");
+  expect(f.requests).toHaveLength(1);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toEqual([
+    "tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.",
+  ]);
+  expect(f.warnings.join("\n")).not.toContain(
+    "Synthetic provider failure detail",
+  );
 });
 
 test("an aborted run is settled and waiting, without implying task success", async () => {
-	const f = fixture([]);
-	await f.handlers.get("agent_settled")!({ type: "agent_settled", aborted: true }, f.ctx);
-	expect(f.state.title).toBe("* existing task");
-	expect(f.state.sessionTitle).toBe("* My Session");
-	expect(f.requests).toHaveLength(0);
+  const f = fixture([]);
+  await f.handlers.get("agent_settled")!(
+    { type: "agent_settled", aborted: true },
+    f.ctx,
+  );
+  expect(f.state.title).toBe("* existing task");
+  expect(f.state.sessionTitle).toBe("* My Session");
+  expect(f.requests).toHaveLength(0);
 });
 
 test("session replacement clears the marker and shutdown resets the title", async () => {
-	for (const event of ["session_start", "session_shutdown"]) {
-		const f = fixture();
-		f.input("Task");
-		await settle();
-		await f.emit("agent_settled");
-		await f.emit(event);
-		expect(f.state.title).toBe(event === "session_shutdown" ? "zsh" : "fix auth tests");
-		expect(f.state.sessionTitle).toBe("My Session");
-		expect(f.state.waitingPanes.get("%1")).toBe("0");
-	}
+  for (const event of ["session_start", "session_shutdown"]) {
+    const f = fixture();
+    f.input("Task");
+    await settle();
+    await f.emit("agent_settled");
+    await f.emit(event);
+    expect(f.state.title).toBe(
+      event === "session_shutdown" ? "zsh" : "fix auth tests",
+    );
+    expect(f.state.sessionTitle).toBe("My Session");
+    expect(f.state.waitingPanes.get("%1")).toBe("0");
+  }
 });
 
 test("reload preserves the task title across fresh extension runtimes, then quit resets it", async () => {
-	for (const waiting of [false, true]) {
-		const f = fixture();
-		f.input("Task");
-		await settle();
-		if (waiting) await f.emit("agent_settled");
-		await f.emit("session_shutdown", "reload");
-		f.load();
-		await f.emit("session_start", "reload");
-		expect(f.state.title).toBe("fix auth tests");
-		expect(f.state.sessionTitle).toBe("My Session");
-		expect(f.calls.filter((args) => args[0] === "rename-window" && args[4] === QUIT_TITLE_FORMAT)).toEqual([]);
-		expect(f.requests).toHaveLength(1);
-		await f.emit("session_shutdown", "quit");
-		expect(f.state.title).toBe("zsh");
-	}
+  for (const waiting of [false, true]) {
+    const f = fixture();
+    f.input("Task");
+    await settle();
+    if (waiting) await f.emit("agent_settled");
+    await f.emit("session_shutdown", "reload");
+    f.load();
+    await f.emit("session_start", "reload");
+    expect(f.state.title).toBe("fix auth tests");
+    expect(f.state.sessionTitle).toBe("My Session");
+    expect(
+      f.calls.filter(
+        (args) => args[0] === "rename-window" && args[4] === QUIT_TITLE_FORMAT,
+      ),
+    ).toEqual([]);
+    expect(f.requests).toHaveLength(1);
+    await f.emit("session_shutdown", "quit");
+    expect(f.state.title).toBe("zsh");
+  }
 });
 
 test("reload cancels pending naming without resetting the existing task title", async () => {
-	const work = deferred();
-	const f = fixture([work.promise]);
-	f.input("Task");
-	await settle();
-	await f.emit("session_shutdown", "reload");
-	expect(f.requests[0].options.signal.aborted).toBe(true);
-	f.load();
-	await f.emit("session_start", "reload");
-	work.resolve(response("Late title"));
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  const work = deferred();
+  const f = fixture([work.promise]);
+  f.input("Task");
+  await settle();
+  await f.emit("session_shutdown", "reload");
+  expect(f.requests[0].options.signal.aborted).toBe(true);
+  f.load();
+  await f.emit("session_start", "reload");
+  work.resolve(response("Late title"));
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 });
 
 test("session replacement teardown preserves the title and clears waiting", async () => {
-	for (const reason of ["new", "resume", "fork"]) {
-		const f = fixture();
-		f.input("Task");
-		await settle();
-		await f.emit("agent_settled");
-		await f.emit("session_shutdown", reason);
-		expect(f.state.title).toBe("fix auth tests");
-		expect(f.state.sessionTitle).toBe("My Session");
-	}
+  for (const reason of ["new", "resume", "fork"]) {
+    const f = fixture();
+    f.input("Task");
+    await settle();
+    await f.emit("agent_settled");
+    await f.emit("session_shutdown", reason);
+    expect(f.state.title).toBe("fix auth tests");
+    expect(f.state.sessionTitle).toBe("My Session");
+  }
 });
 
 test("quitting clears its own marker without resetting a live busy peer's title", async () => {
-	const f = fixture();
-	f.input("Task");
-	await settle();
-	f.state.activePanes.set("%2", "1");
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* fix auth tests");
-	await f.emit("session_shutdown");
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.state.activePanes.get("%1")).toBe("0");
-	expect(f.state.waitingPanes.get("%1")).toBe("0");
-	expect(f.state.sessionTitle).toBe("My Session");
-	f.state.activePanes.set("%2", "0");
-	await f.emit("session_shutdown");
-	expect(f.state.title).toBe("zsh");
+  const f = fixture();
+  f.input("Task");
+  await settle();
+  f.state.activePanes.set("%2", "1");
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* fix auth tests");
+  await f.emit("session_shutdown");
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.state.activePanes.get("%1")).toBe("0");
+  expect(f.state.waitingPanes.get("%1")).toBe("0");
+  expect(f.state.sessionTitle).toBe("My Session");
+  f.state.activePanes.set("%2", "0");
+  await f.emit("session_shutdown");
+  expect(f.state.title).toBe("zsh");
 });
 
 test("active peers in a different window do not prevent quit cleanup", async () => {
-	const f = fixture();
-	f.input("Task");
-	await settle();
-	f.state.activePanes.set("%2", "1");
-	f.state.otherWindowPanes.add("%2");
-	await f.emit("session_shutdown");
-	expect(f.state.title).toBe("zsh");
-	expect(f.state.activePanes.get("%2")).toBe("1");
+  const f = fixture();
+  f.input("Task");
+  await settle();
+  f.state.activePanes.set("%2", "1");
+  f.state.otherWindowPanes.add("%2");
+  await f.emit("session_shutdown");
+  expect(f.state.title).toBe("zsh");
+  expect(f.state.activePanes.get("%2")).toBe("1");
 });
 
 test("reload and session replacement preserve ownership until Pi quits", async () => {
-	for (const reason of ["reload", "new", "resume", "fork"]) {
-		const f = fixture([]);
-		await f.emit("session_start");
-		expect(f.state.activePanes.get("%1")).toBe("1");
-		await f.emit("session_shutdown", reason);
-		expect(f.state.activePanes.get("%1")).toBe("1");
-		f.load();
-		await f.emit("session_start", reason);
-		expect(f.state.activePanes.get("%1")).toBe("1");
-		await f.emit("session_shutdown", "quit");
-		expect(f.state.activePanes.get("%1")).toBe("0");
-	}
+  for (const reason of ["reload", "new", "resume", "fork"]) {
+    const f = fixture([]);
+    await f.emit("session_start");
+    expect(f.state.activePanes.get("%1")).toBe("1");
+    await f.emit("session_shutdown", reason);
+    expect(f.state.activePanes.get("%1")).toBe("1");
+    f.load();
+    await f.emit("session_start", reason);
+    expect(f.state.activePanes.get("%1")).toBe("1");
+    await f.emit("session_shutdown", "quit");
+    expect(f.state.activePanes.get("%1")).toBe("0");
+  }
 });
 
 test("pinning zsh is a task-title update, not quit cleanup", async () => {
-	const f = fixture([]);
-	f.state.activePanes.set("%2", "1");
-	await f.refresh("set zsh");
-	expect(f.state.title).toBe("zsh");
-	expect(f.state.activePanes.get("%1")).toBe("1");
-	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildWindowTitleFormat("zsh")]);
+  const f = fixture([]);
+  f.state.activePanes.set("%2", "1");
+  await f.refresh("set zsh");
+  expect(f.state.title).toBe("zsh");
+  expect(f.state.activePanes.get("%1")).toBe("1");
+  expect(f.calls.at(-1)).toEqual([
+    "rename-window",
+    "-t",
+    "%1",
+    "--",
+    buildWindowTitleFormat("zsh"),
+  ]);
 });
 
 test.each([
-	{ setting: " Fish & Shell ", expected: "fish shell" },
-	{ setting: "!!!", expected: "zsh" },
-	{ setting: "My Very Very Long Window Title", expected: "my very very long" },
-])("quit cleanup uses sanitized PI_TMUX_IDLE_TITLE: %j", async ({ setting, expected }) => {
-	process.env.PI_TMUX_IDLE_TITLE = setting;
-	const f = fixture([]);
-	await f.emit("session_start");
-	await f.emit("session_shutdown", "quit");
-	expect(f.state.title).toBe(expected);
-	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat(expected)]);
-});
+  { setting: " Fish & Shell ", expected: "fish shell" },
+  { setting: "!!!", expected: "zsh" },
+  { setting: "My Very Very Long Window Title", expected: "my very very long" },
+])(
+  "quit cleanup uses sanitized PI_TMUX_IDLE_TITLE: %j",
+  async ({ setting, expected }) => {
+    process.env.PI_TMUX_IDLE_TITLE = setting;
+    const f = fixture([]);
+    await f.emit("session_start");
+    await f.emit("session_shutdown", "quit");
+    expect(f.state.title).toBe(expected);
+    expect(f.calls.at(-1)).toEqual([
+      "rename-window",
+      "-t",
+      "%1",
+      "--",
+      buildQuitTitleFormat(expected),
+    ]);
+  },
+);
 
 test("sensitive-looking idle titles are replaced by zsh before cleanup", async () => {
-	process.env.PI_TMUX_IDLE_TITLE = ["ghp_", "A".repeat(20)].join("");
-	const f = fixture([]);
-	await f.emit("session_start");
-	await f.emit("session_shutdown", "quit");
-	expect(f.state.title).toBe("zsh");
-	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat("zsh")]);
-	expect(f.warnings).toEqual([]);
+  process.env.PI_TMUX_IDLE_TITLE = ["ghp_", "A".repeat(20)].join("");
+  const f = fixture([]);
+  await f.emit("session_start");
+  await f.emit("session_shutdown", "quit");
+  expect(f.state.title).toBe("zsh");
+  expect(f.calls.at(-1)).toEqual([
+    "rename-window",
+    "-t",
+    "%1",
+    "--",
+    buildQuitTitleFormat("zsh"),
+  ]);
+  expect(f.warnings).toEqual([]);
 });
 
 test("oversized idle title settings fall back without screening or disclosure", async () => {
-	process.env.PI_TMUX_IDLE_TITLE = "x".repeat(MAX_TITLE_INPUT_LENGTH + 1);
-	const f = fixture([]);
-	await f.emit("session_start");
-	await f.emit("session_shutdown", "quit");
-	expect(f.state.title).toBe("zsh");
-	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat("zsh")]);
-	expect(f.warnings).toEqual([]);
+  process.env.PI_TMUX_IDLE_TITLE = "x".repeat(MAX_TITLE_INPUT_LENGTH + 1);
+  const f = fixture([]);
+  await f.emit("session_start");
+  await f.emit("session_shutdown", "quit");
+  expect(f.state.title).toBe("zsh");
+  expect(f.calls.at(-1)).toEqual([
+    "rename-window",
+    "-t",
+    "%1",
+    "--",
+    buildQuitTitleFormat("zsh"),
+  ]);
+  expect(f.warnings).toEqual([]);
 });
 
 test("credential-bearing URLs and npm settings in idle titles fall back without disclosure", async () => {
-	for (const idleTitle of [
-		"postgres://test-user:example-only-password@db.example.test/app",
-		"redis://:example-only-password@localhost:6379/0",
-		npmrcPasswordSetting("pw1"),
-	]) {
-		process.env.PI_TMUX_IDLE_TITLE = idleTitle;
-		const f = fixture([]);
-		await f.emit("session_start");
-		await f.emit("session_shutdown", "quit");
-		expect(f.state.title).toBe("zsh");
-		expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat("zsh")]);
-	}
+  for (const idleTitle of [
+    "postgres://test-user:example-only-password@db.example.test/app",
+    "redis://:example-only-password@localhost:6379/0",
+    npmrcPasswordSetting("pw1"),
+  ]) {
+    process.env.PI_TMUX_IDLE_TITLE = idleTitle;
+    const f = fixture([]);
+    await f.emit("session_start");
+    await f.emit("session_shutdown", "quit");
+    expect(f.state.title).toBe("zsh");
+    expect(f.calls.at(-1)).toEqual([
+      "rename-window",
+      "-t",
+      "%1",
+      "--",
+      buildQuitTitleFormat("zsh"),
+    ]);
+  }
 });
 
 test("obfuscated sensitive idle titles also fall back without disclosure", async () => {
-	process.env.PI_TMUX_IDLE_TITLE = `ghp_${"B".repeat(10)}\u200b${"B".repeat(10)}`;
-	const f = fixture([]);
-	await f.emit("session_start");
-	await f.emit("session_shutdown", "quit");
-	expect(f.state.title).toBe("zsh");
-	expect(f.calls.at(-1)).toEqual(["rename-window", "-t", "%1", "--", buildQuitTitleFormat("zsh")]);
+  process.env.PI_TMUX_IDLE_TITLE = `ghp_${"B".repeat(10)}\u200b${"B".repeat(10)}`;
+  const f = fixture([]);
+  await f.emit("session_start");
+  await f.emit("session_shutdown", "quit");
+  expect(f.state.title).toBe("zsh");
+  expect(f.calls.at(-1)).toEqual([
+    "rename-window",
+    "-t",
+    "%1",
+    "--",
+    buildQuitTitleFormat("zsh"),
+  ]);
 });
 
 test("idle title configuration is reread by a fresh extension runtime", async () => {
-	process.env.PI_TMUX_IDLE_TITLE = "Fish Shell";
-	const f = fixture([]);
-	process.env.PI_TMUX_IDLE_TITLE = "Bash Shell";
-	await f.emit("session_start");
-	await f.emit("session_shutdown", "quit");
-	expect(f.state.title).toBe("fish shell");
+  process.env.PI_TMUX_IDLE_TITLE = "Fish Shell";
+  const f = fixture([]);
+  process.env.PI_TMUX_IDLE_TITLE = "Bash Shell";
+  await f.emit("session_start");
+  await f.emit("session_shutdown", "quit");
+  expect(f.state.title).toBe("fish shell");
 
-	f.load();
-	await f.emit("session_start", "reload");
-	await f.emit("session_shutdown", "quit");
-	expect(f.state.title).toBe("bash shell");
+  f.load();
+  await f.emit("session_start", "reload");
+  await f.emit("session_shutdown", "quit");
+  expect(f.state.title).toBe("bash shell");
 });
 
 test("shutdown resets a busy title and repeated cleanup makes no extra writes", async () => {
-	const f = fixture();
-	f.input("Task");
-	await settle();
-	await f.emit("session_shutdown");
-	expect(f.state.title).toBe("zsh");
-	expect(f.calls.at(-1)).toEqual(quitCommand());
-	const writes = f.calls.filter((args) => args[0] === "rename-window").length;
-	await f.emit("session_shutdown");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toHaveLength(writes);
+  const f = fixture();
+  f.input("Task");
+  await settle();
+  await f.emit("session_shutdown");
+  expect(f.state.title).toBe("zsh");
+  expect(f.calls.at(-1)).toEqual(quitCommand());
+  const writes = f.calls.filter((args) => args[0] === "rename-window").length;
+  await f.emit("session_shutdown");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toHaveLength(
+    writes,
+  );
 });
 
 test("shutdown resolves the owning window after a pane move", async () => {
-	const f = fixture();
-	f.input("Task");
-	await settle();
-	f.state.window = "@3";
-	await f.emit("session_shutdown");
-	expect(f.calls.at(-1)).toEqual(quitCommand());
+  const f = fixture();
+  f.input("Task");
+  await settle();
+  f.state.window = "@3";
+  await f.emit("session_shutdown");
+  expect(f.calls.at(-1)).toEqual(quitCommand());
 });
 
 test("shutdown waits for an in-flight marker write before resetting to zsh", async () => {
-	const gate = deferred();
-	const f = fixture(undefined, async (args, _signal, title) => {
-		if (args[0] === "rename-window" && title?.startsWith(READY_PREFIX)) await gate.promise;
-	});
-	f.input("Task");
-	await settle();
-	const completed = f.emit("agent_settled");
-	await settle();
-	const shutdown = f.emit("session_shutdown");
-	gate.resolve(response(""));
-	await completed;
-	await shutdown;
-	expect(f.state.title).toBe("zsh");
-	expect(f.state.windowBaseName).toBe("zsh");
+  const gate = deferred();
+  const f = fixture(undefined, async (args, _signal, title) => {
+    if (args[0] === "rename-window" && title?.startsWith(READY_PREFIX))
+      await gate.promise;
+  });
+  f.input("Task");
+  await settle();
+  const completed = f.emit("agent_settled");
+  await settle();
+  const shutdown = f.emit("session_shutdown");
+  gate.resolve(response(""));
+  await completed;
+  await shutdown;
+  expect(f.state.title).toBe("zsh");
+  expect(f.state.windowBaseName).toBe("zsh");
 });
 
 test("session startup preserves an unmarked custom window name", async () => {
-	const f = fixture();
-	f.state.title = "Custom Manual Name";
-	await f.emit("session_start");
-	expect(f.state.title).toBe("Custom Manual Name");
-	expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  const f = fixture();
+  f.state.title = "Custom Manual Name";
+  await f.emit("session_start");
+  expect(f.state.title).toBe("Custom Manual Name");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
 });
 
 test("waiting markers preserve custom window text when no task title is available", async () => {
-	process.env.PI_TMUX_MODEL = "off";
-	const f = fixture();
-	const customTitle = "Custom Build Server Name Exceeding the 24 Character Task Limit";
-	f.state.title = customTitle;
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe(`${READY_PREFIX}${customTitle}`);
-	expect(f.requests).toHaveLength(0);
-	f.emit("agent_start");
-	await settle();
-	expect(f.state.title).toBe(customTitle);
-	expect(f.warnings).toEqual([]);
+  process.env.PI_TMUX_MODEL = "off";
+  const f = fixture();
+  const customTitle =
+    "Custom Build Server Name Exceeding the 24 Character Task Limit";
+  f.state.title = customTitle;
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe(`${READY_PREFIX}${customTitle}`);
+  expect(f.requests).toHaveLength(0);
+  f.emit("agent_start");
+  await settle();
+  expect(f.state.title).toBe(customTitle);
+  expect(f.warnings).toEqual([]);
 });
 
 test("status updates stay disabled outside interactive tmux", async () => {
-	const f = fixture();
-	for (const mode of ["text", "rpc", "json"]) {
-		(f.ctx as any).mode = mode;
-		f.emit("agent_start");
-		await f.emit("agent_settled");
-		await f.emit("session_shutdown");
-	}
-	(f.ctx as any).mode = "tui";
-	for (const pane of [undefined, "bad-target"]) {
-		if (pane === undefined) delete process.env.TMUX_PANE;
-		else process.env.TMUX_PANE = pane;
-		await f.emit("agent_settled");
-		await f.emit("session_shutdown");
-	}
-	await settle();
-	expect(f.calls).toEqual([]);
+  const f = fixture();
+  for (const mode of ["text", "rpc", "json"]) {
+    (f.ctx as any).mode = mode;
+    f.emit("agent_start");
+    await f.emit("agent_settled");
+    await f.emit("session_shutdown");
+  }
+  (f.ctx as any).mode = "tui";
+  for (const pane of [undefined, "bad-target"]) {
+    if (pane === undefined) delete process.env.TMUX_PANE;
+    else process.env.TMUX_PANE = pane;
+    await f.emit("agent_settled");
+    await f.emit("session_shutdown");
+  }
+  await settle();
+  expect(f.calls).toEqual([]);
 });
 
 test("status updates resolve the window again after a pane move", async () => {
-	const f = fixture();
-	f.input("Task");
-	await settle();
-	f.state.window = "@3";
-	await f.emit("agent_settled");
-	expect(f.calls.filter((args) => args[0] === "rename-window").at(-1)).toEqual(renameCommand("fix auth tests"));
+  const f = fixture();
+  f.input("Task");
+  await settle();
+  f.state.window = "@3";
+  await f.emit("agent_settled");
+  expect(f.calls.filter((args) => args[0] === "rename-window").at(-1)).toEqual(
+    renameCommand("fix auth tests"),
+  );
 });
 
 test("a slow marker write cannot overwrite newer input or its summary", async () => {
-	const gate = deferred();
-	const f = fixture(
-		[Promise.resolve(response("Fix auth tests")), Promise.resolve(response("New task"))],
-		async (args, _signal, title) => { if (args[0] === "rename-window" && title?.startsWith(READY_PREFIX)) await gate.promise; },
-	);
-	f.input("First task");
-	await settle();
-	const completed = f.emit("agent_settled");
-	await settle();
-	f.input("Next task");
-	await settle();
-	gate.resolve(response(""));
-	await completed;
-	await settle();
-	expect(f.state.title).toBe("new task");
-	expect(f.state.sessionTitle).toBe("My Session");
-	expect(f.calls.filter((args) => args[0] === "rename-window").at(-1)).toEqual(renameCommand("new task"));
+  const gate = deferred();
+  const f = fixture(
+    [
+      Promise.resolve(response("Fix auth tests")),
+      Promise.resolve(response("New task")),
+    ],
+    async (args, _signal, title) => {
+      if (args[0] === "rename-window" && title?.startsWith(READY_PREFIX))
+        await gate.promise;
+    },
+  );
+  f.input("First task");
+  await settle();
+  const completed = f.emit("agent_settled");
+  await settle();
+  f.input("Next task");
+  await settle();
+  gate.resolve(response(""));
+  await completed;
+  await settle();
+  expect(f.state.title).toBe("new task");
+  expect(f.state.sessionTitle).toBe("My Session");
+  expect(f.calls.filter((args) => args[0] === "rename-window").at(-1)).toEqual(
+    renameCommand("new task"),
+  );
 });
 
-test.each([1, 2])("new input invalidates a ready update waiting on slow window lookup %i", async (lookupToHold) => {
-	const gate = deferred();
-	const next = deferred();
-	let holdLookup = false;
-	let lookups = 0;
-	const f = fixture(
-		[Promise.resolve(response("Fix auth tests")), next.promise],
-		async (args) => {
-			if (holdLookup && args[0] === "display-message" && ++lookups === lookupToHold) await gate.promise;
-		},
-	);
-	f.input("First task");
-	await settle();
-	holdLookup = true;
-	const completed = f.emit("agent_settled");
-	await settle();
-	f.input("Next task");
-	holdLookup = false;
-	gate.resolve(response(""));
-	await completed;
-	await settle();
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.writes.filter((title) => title.startsWith(READY_PREFIX))).toEqual([]);
-	next.resolve(response("New task"));
-	await settle();
-});
+test.each([1, 2])(
+  "new input invalidates a ready update waiting on slow window lookup %i",
+  async (lookupToHold) => {
+    const gate = deferred();
+    const next = deferred();
+    let holdLookup = false;
+    let lookups = 0;
+    const f = fixture(
+      [Promise.resolve(response("Fix auth tests")), next.promise],
+      async (args) => {
+        if (
+          holdLookup &&
+          args[0] === "display-message" &&
+          ++lookups === lookupToHold
+        )
+          await gate.promise;
+      },
+    );
+    f.input("First task");
+    await settle();
+    holdLookup = true;
+    const completed = f.emit("agent_settled");
+    await settle();
+    f.input("Next task");
+    holdLookup = false;
+    gate.resolve(response(""));
+    await completed;
+    await settle();
+    expect(f.state.title).toBe("fix auth tests");
+    expect(f.writes.filter((title) => title.startsWith(READY_PREFIX))).toEqual(
+      [],
+    );
+    next.resolve(response("New task"));
+    await settle();
+  },
+);
 
 test("session markers preserve manual names without lowercasing or clipping", async () => {
-	const f = fixture();
-	const name = "My Café Session " + "X".repeat(40);
-	f.state.sessionTitle = name;
-	await f.emit("session_start");
-	expect(f.state.sessionTitle).toBe(name);
-	await f.emit("agent_settled");
-	await f.emit("agent_settled");
-	expect(f.state.sessionTitle).toBe(READY_PREFIX + name);
-	f.emit("agent_start");
-	await settle();
-	expect(f.state.sessionTitle).toBe(name);
+  const f = fixture();
+  const name = "My Café Session " + "X".repeat(40);
+  f.state.sessionTitle = name;
+  await f.emit("session_start");
+  expect(f.state.sessionTitle).toBe(name);
+  await f.emit("agent_settled");
+  await f.emit("agent_settled");
+  expect(f.state.sessionTitle).toBe(READY_PREFIX + name);
+  f.emit("agent_start");
+  await settle();
+  expect(f.state.sessionTitle).toBe(name);
 });
 
 test("a busy or exiting pane cannot clear another pane's window or session marker", async () => {
-	const f = fixture();
-	f.state.waitingPanes.set("%2", "1");
-	await f.emit("session_start");
-	expect(f.state.title).toBe("* existing task");
-	expect(f.state.sessionTitle).toBe("* My Session");
-	await f.emit("agent_settled");
-	f.emit("agent_start");
-	await settle();
-	expect(f.state.title).toBe("* existing task");
-	expect(f.state.sessionTitle).toBe("* My Session");
-	await f.emit("session_shutdown");
-	expect(f.state.title).toBe("* existing task");
-	expect(f.state.sessionTitle).toBe("* My Session");
-	f.state.waitingPanes.set("%2", "0");
-	f.emit("agent_start");
-	await settle();
-	expect(f.state.title).toBe("zsh");
-	expect(f.state.sessionTitle).toBe("My Session");
+  const f = fixture();
+  f.state.waitingPanes.set("%2", "1");
+  await f.emit("session_start");
+  expect(f.state.title).toBe("* existing task");
+  expect(f.state.sessionTitle).toBe("* My Session");
+  await f.emit("agent_settled");
+  f.emit("agent_start");
+  await settle();
+  expect(f.state.title).toBe("* existing task");
+  expect(f.state.sessionTitle).toBe("* My Session");
+  await f.emit("session_shutdown");
+  expect(f.state.title).toBe("* existing task");
+  expect(f.state.sessionTitle).toBe("* My Session");
+  f.state.waitingPanes.set("%2", "0");
+  f.emit("agent_start");
+  await settle();
+  expect(f.state.title).toBe("zsh");
+  expect(f.state.sessionTitle).toBe("My Session");
 });
 
 test("status updates target the owning session after a pane move", async () => {
-	const f = fixture();
-	await f.emit("session_start");
-	f.state.session = "$3";
-	f.state.window = "@4";
-	f.state.sessionTitle = "Destination Session";
-	await f.emit("agent_settled");
-	expect(f.state.sessionTitle).toBe("* Destination Session");
-	expect(f.calls.filter((args) => args[0] === "set-option" && args.includes("rename-session")).at(-1)?.[16]).toBe("%1");
+  const f = fixture();
+  await f.emit("session_start");
+  f.state.session = "$3";
+  f.state.window = "@4";
+  f.state.sessionTitle = "Destination Session";
+  await f.emit("agent_settled");
+  expect(f.state.sessionTitle).toBe("* Destination Session");
+  expect(
+    f.calls
+      .filter(
+        (args) => args[0] === "set-option" && args.includes("rename-session"),
+      )
+      .at(-1)?.[16],
+  ).toBe("%1");
 });
 
 test("naming context includes text dialogue and summaries, but not tools, thinking, images, or custom messages", () => {
-	const context = buildNamingContext([
-		{ role: "compactionSummary", summary: "Fix registry routing" },
-		{ role: "user", content: [{ type: "text", text: "Inspect the proxy" }, { type: "image", data: "IMAGE_DATA" }] },
-		{ role: "assistant", content: [
-			{ type: "thinking", thinking: "PRIVATE_THINKING" },
-			{ type: "toolCall", name: "bash", arguments: { command: "PRIVATE_ARGUMENT" } },
-			{ type: "text", text: "The routing needs a fix" },
-		] },
-		{ role: "toolResult", content: [{ type: "text", text: "PRIVATE_TOOL_OUTPUT" }] },
-		{ role: "custom", content: "PRIVATE_CUSTOM_TEXT" },
-		{ role: "bashExecution", output: "PRIVATE_BASH_OUTPUT" },
-		{ role: "system", content: [{ type: "text", text: "PRIVATE_SYSTEM_PROMPT" }] },
-		{ role: "branchSummary", summary: "Proxy check complete" },
-	] as any, "continue");
-	expect(context).toBe([
-		"summary: Fix registry routing", "user: Inspect the proxy",
-		"assistant: The routing needs a fix", "branch summary: Proxy check complete", "user: continue",
-	].join("\n\n"));
+  const context = buildNamingContext(
+    [
+      { role: "compactionSummary", summary: "Fix registry routing" },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Inspect the proxy" },
+          { type: "image", data: "IMAGE_DATA" },
+        ],
+      },
+      {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "PRIVATE_THINKING" },
+          {
+            type: "toolCall",
+            name: "bash",
+            arguments: { command: "PRIVATE_ARGUMENT" },
+          },
+          { type: "text", text: "The routing needs a fix" },
+        ],
+      },
+      {
+        role: "toolResult",
+        content: [{ type: "text", text: "PRIVATE_TOOL_OUTPUT" }],
+      },
+      { role: "custom", content: "PRIVATE_CUSTOM_TEXT" },
+      { role: "bashExecution", output: "PRIVATE_BASH_OUTPUT" },
+      {
+        role: "system",
+        content: [{ type: "text", text: "PRIVATE_SYSTEM_PROMPT" }],
+      },
+      { role: "branchSummary", summary: "Proxy check complete" },
+    ] as any,
+    "continue",
+  );
+  expect(context).toBe(
+    [
+      "summary: Fix registry routing",
+      "user: Inspect the proxy",
+      "assistant: The routing needs a fix",
+      "branch summary: Proxy check complete",
+      "user: continue",
+    ].join("\n\n"),
+  );
 });
 
 test("naming context bounds history and prioritizes recent dialogue and the new prompt", () => {
-	const messages = Array.from({ length: 30 }, (_, i) => ({ role: "user", content: `task-${i}` }));
-	const context = buildNamingContext(messages as any, "continue");
-	expect(context.match(/task-\d+/g)).toHaveLength(MAX_HISTORY_MESSAGES);
-	expect(context).not.toContain("task-21");
-	expect(context).toContain("task-29");
-	expect(context.endsWith("user: continue")).toBe(true);
+  const messages = Array.from({ length: 30 }, (_, i) => ({
+    role: "user",
+    content: `task-${i}`,
+  }));
+  const context = buildNamingContext(messages as any, "continue");
+  expect(context.match(/task-\d+/g)).toHaveLength(MAX_HISTORY_MESSAGES);
+  expect(context).not.toContain("task-21");
+  expect(context).toContain("task-29");
+  expect(context.endsWith("user: continue")).toBe(true);
 
-	const largePrompt = "NEW_PROMPT".repeat(1_000);
-	const large = buildNamingContext([
-		{ role: "compactionSummary", summary: "SUMMARY".repeat(2_000) },
-		...Array.from({ length: 30 }, (_, i) => ({ role: "user", content: `${i}:` + "x".repeat(10_000) })),
-	] as any, largePrompt);
-	const marker = "[... middle of prompt omitted ...]";
-	const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
-	const prefixLength = Math.ceil(retainedLength / 2);
-	const suffixLength = Math.floor(retainedLength / 2);
-	expect(large.length).toBeLessThanOrEqual(MAX_CONTEXT_LENGTH);
-	expect(large).toStartWith("summary: SUMMARY");
-	expect(large).toContain("user: 29:");
-	expect(large.endsWith(
-		`user: ${largePrompt.slice(0, prefixLength)}\n${marker}\n${largePrompt.slice(-suffixLength)}`,
-	)).toBe(true);
+  const largePrompt = "NEW_PROMPT".repeat(1_000);
+  const large = buildNamingContext(
+    [
+      { role: "compactionSummary", summary: "SUMMARY".repeat(2_000) },
+      ...Array.from({ length: 30 }, (_, i) => ({
+        role: "user",
+        content: `${i}:` + "x".repeat(10_000),
+      })),
+    ] as any,
+    largePrompt,
+  );
+  const marker = "[... middle of prompt omitted ...]";
+  const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
+  const prefixLength = Math.ceil(retainedLength / 2);
+  const suffixLength = Math.floor(retainedLength / 2);
+  expect(large.length).toBeLessThanOrEqual(MAX_CONTEXT_LENGTH);
+  expect(large).toStartWith("summary: SUMMARY");
+  expect(large).toContain("user: 29:");
+  expect(
+    large.endsWith(
+      `user: ${largePrompt.slice(0, prefixLength)}\n${marker}\n${largePrompt.slice(-suffixLength)}`,
+    ),
+  ).toBe(true);
 });
 
 test("projection-aware naming context reads the checkpoint summary and skips older history", () => {
-	let readDiscardedRole = false;
-	const discarded = {} as any;
-	Object.defineProperty(discarded, "role", {
-		get() {
-			readDiscardedRole = true;
-			throw new Error("Older messages should not be scanned after the retained window is full");
-		},
-	});
-	const summary = { role: "compactionSummary", summary: "Compacted auth task" };
-	const recent = Array.from({ length: MAX_HISTORY_MESSAGES }, (_, i) => ({ role: "user", content: `recent-${i}` }));
-	const messages = [summary, discarded, ...recent] as any;
-	const projection = {
-		entries: [{ sourceEntry: { type: "compaction" }, messages: [summary] }],
-		messages,
-		thinkingLevel: "off",
-		model: null,
-	} as any;
+  let readDiscardedRole = false;
+  const discarded = {} as any;
+  Object.defineProperty(discarded, "role", {
+    get() {
+      readDiscardedRole = true;
+      throw new Error(
+        "Older messages should not be scanned after the retained window is full",
+      );
+    },
+  });
+  const summary = { role: "compactionSummary", summary: "Compacted auth task" };
+  const recent = Array.from({ length: MAX_HISTORY_MESSAGES }, (_, i) => ({
+    role: "user",
+    content: `recent-${i}`,
+  }));
+  const messages = [summary, discarded, ...recent] as any;
+  const projection = {
+    entries: [{ sourceEntry: { type: "compaction" }, messages: [summary] }],
+    messages,
+    thinkingLevel: "off",
+    model: null,
+  } as any;
 
-	const context = buildNamingContext(projection);
-	expect(context).toBe([
-		"summary: Compacted auth task",
-		...recent.map((message) => `user: ${message.content}`),
-	].join("\n\n"));
-	expect(readDiscardedRole).toBe(false);
+  const context = buildNamingContext(projection);
+  expect(context).toBe(
+    [
+      "summary: Compacted auth task",
+      ...recent.map((message) => `user: ${message.content}`),
+    ].join("\n\n"),
+  );
+  expect(readDiscardedRole).toBe(false);
 });
 
 test("projection naming context bounds scans through long tool-only runs", () => {
-	let readOlderRole = false;
-	const older = {} as any;
-	Object.defineProperty(older, "role", {
-		get() {
-			readOlderRole = true;
-			throw new Error("A tool-heavy history scan should stop at its budget");
-		},
-	});
-	const recent = { role: "user", content: "recent task" };
-	const messages = [older, ...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })), recent];
-	const projection = {
-		entries: [{ sourceEntry: { type: "message" }, messages: [] }],
-		messages,
-		thinkingLevel: "off",
-		model: null,
-	} as any;
+  let readOlderRole = false;
+  const older = {} as any;
+  Object.defineProperty(older, "role", {
+    get() {
+      readOlderRole = true;
+      throw new Error("A tool-heavy history scan should stop at its budget");
+    },
+  });
+  const recent = { role: "user", content: "recent task" };
+  const messages = [
+    older,
+    ...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })),
+    recent,
+  ];
+  const projection = {
+    entries: [{ sourceEntry: { type: "message" }, messages: [] }],
+    messages,
+    thinkingLevel: "off",
+    model: null,
+  } as any;
 
-	expect(buildNamingContext(projection, "continue")).toBe("user: recent task\n\nuser: continue");
-	expect(readOlderRole).toBe(false);
+  expect(buildNamingContext(projection, "continue")).toBe(
+    "user: recent task\n\nuser: continue",
+  );
+  expect(readOlderRole).toBe(false);
 });
 
 test("messages-only naming context still finds compaction summaries in long histories", () => {
-	const messages = [
-		{ role: "compactionSummary", summary: "preserved summary" },
-		...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })),
-		{ role: "user", content: "recent task" },
-	];
+  const messages = [
+    { role: "compactionSummary", summary: "preserved summary" },
+    ...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })),
+    { role: "user", content: "recent task" },
+  ];
 
-	expect(buildNamingContext(messages as any)).toBe("summary: preserved summary\n\nuser: recent task");
+  expect(buildNamingContext(messages as any)).toBe(
+    "summary: preserved summary\n\nuser: recent task",
+  );
 });
 
 test("messages-only scans prefer a recent compaction summary over the initial fallback", () => {
-	const messages = [
-		{ role: "compactionSummary", summary: "older summary" },
-		...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })),
-		{ role: "compactionSummary", summary: "recent summary" },
-		{ role: "user", content: "recent task" },
-	];
+  const messages = [
+    { role: "compactionSummary", summary: "older summary" },
+    ...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })),
+    { role: "compactionSummary", summary: "recent summary" },
+    { role: "user", content: "recent task" },
+  ];
 
-	expect(buildNamingContext(messages as any)).toBe("summary: recent summary\n\nuser: recent task");
+  expect(buildNamingContext(messages as any)).toBe(
+    "summary: recent summary\n\nuser: recent task",
+  );
 });
 
 test("messages-only and legacy projection scans stop at the history budget", () => {
-	let readOldRole = false;
-	const oldMessage = {} as any;
-	Object.defineProperty(oldMessage, "role", {
-		get() {
-			readOldRole = true;
-			throw new Error("Fallback history scans should stop at their budget");
-		},
-	});
-	const messages = [
-		{ role: "toolResult" },
-		oldMessage,
-		...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })),
-		{ role: "user", content: "recent task" },
-	];
+  let readOldRole = false;
+  const oldMessage = {} as any;
+  Object.defineProperty(oldMessage, "role", {
+    get() {
+      readOldRole = true;
+      throw new Error("Fallback history scans should stop at their budget");
+    },
+  });
+  const messages = [
+    { role: "toolResult" },
+    oldMessage,
+    ...Array.from({ length: 5_000 }, () => ({ role: "toolResult" })),
+    { role: "user", content: "recent task" },
+  ];
 
-	expect(buildNamingContext(messages as any)).toBe("user: recent task");
-	expect(buildNamingContext({ messages } as any)).toBe("user: recent task");
-	expect(readOldRole).toBe(false);
+  expect(buildNamingContext(messages as any)).toBe("user: recent task");
+  expect(buildNamingContext({ messages } as any)).toBe("user: recent task");
+  expect(readOldRole).toBe(false);
 });
 
 test("naming context does not read text from history older than its retained window", () => {
-	let readDiscardedContent = false;
-	const discarded = { role: "user" } as any;
-	Object.defineProperty(discarded, "content", {
-		get() {
-			readDiscardedContent = true;
-			throw new Error("Discarded history should not be copied");
-		},
-	});
-	const recent = Array.from({ length: MAX_HISTORY_MESSAGES }, (_, i) => ({
-		role: "user", content: `recent-${i}`,
-	}));
+  let readDiscardedContent = false;
+  const discarded = { role: "user" } as any;
+  Object.defineProperty(discarded, "content", {
+    get() {
+      readDiscardedContent = true;
+      throw new Error("Discarded history should not be copied");
+    },
+  });
+  const recent = Array.from({ length: MAX_HISTORY_MESSAGES }, (_, i) => ({
+    role: "user",
+    content: `recent-${i}`,
+  }));
 
-	const context = buildNamingContext([discarded, ...recent] as any);
-	expect(context).toContain("recent-0");
-	expect(context).toContain(`recent-${MAX_HISTORY_MESSAGES - 1}`);
-	expect(context).not.toContain("Discarded");
-	expect(readDiscardedContent).toBe(false);
+  const context = buildNamingContext([discarded, ...recent] as any);
+  expect(context).toContain("recent-0");
+  expect(context).toContain(`recent-${MAX_HISTORY_MESSAGES - 1}`);
+  expect(context).not.toContain("Discarded");
+  expect(readDiscardedContent).toBe(false);
 });
 
 test("naming context bounds leading-whitespace scans", () => {
-	const context = buildNamingContext([{
-		role: "user",
-		content: " ".repeat(10_000) + "hidden task",
-	}] as any, "continue");
+  const context = buildNamingContext(
+    [
+      {
+        role: "user",
+        content: " ".repeat(10_000) + "hidden task",
+      },
+    ] as any,
+    "continue",
+  );
 
-	expect(context).toBe("user: continue");
+  expect(context).toBe("user: continue");
 });
 
 test("naming context stops after its content-block scan budget", () => {
-	let readExcessBlock = false;
-	const excess = {} as any;
-	Object.defineProperty(excess, "type", {
-		get() {
-			readExcessBlock = true;
-			throw new Error("Content blocks beyond the scan budget should not be read");
-		},
-	});
-	const content = [...Array.from({ length: 128 }, () => ({ type: "image" })), excess];
+  let readExcessBlock = false;
+  const excess = {} as any;
+  Object.defineProperty(excess, "type", {
+    get() {
+      readExcessBlock = true;
+      throw new Error(
+        "Content blocks beyond the scan budget should not be read",
+      );
+    },
+  });
+  const content = [
+    ...Array.from({ length: 128 }, () => ({ type: "image" })),
+    excess,
+  ];
 
-	expect(buildNamingContext([{ role: "user", content }] as any)).toBe("");
-	expect(readExcessBlock).toBe(false);
+  expect(buildNamingContext([{ role: "user", content }] as any)).toBe("");
+  expect(readExcessBlock).toBe(false);
 });
 
 test("naming context stops reading text after its per-entry bound", () => {
-	let readUnneededText = false;
-	const laterBlock = { type: "text" } as any;
-	Object.defineProperty(laterBlock, "text", {
-		get() {
-			readUnneededText = true;
-			throw new Error("Text beyond the bounded prefix should not be read");
-		},
-	});
-	const context = buildNamingContext([{
-		role: "user",
-		content: [{ type: "text", text: "x".repeat(1_001) }, laterBlock],
-	}] as any);
+  let readUnneededText = false;
+  const laterBlock = { type: "text" } as any;
+  Object.defineProperty(laterBlock, "text", {
+    get() {
+      readUnneededText = true;
+      throw new Error("Text beyond the bounded prefix should not be read");
+    },
+  });
+  const context = buildNamingContext([
+    {
+      role: "user",
+      content: [{ type: "text", text: "x".repeat(1_001) }, laterBlock],
+    },
+  ] as any);
 
-	expect(context).toBe("user: " + "x".repeat(1_000));
-	expect(readUnneededText).toBe(false);
+  expect(context).toBe("user: " + "x".repeat(1_000));
+  expect(readUnneededText).toBe(false);
 });
 
 test("naming context stops before later blocks when the exact bound ends in non-whitespace", () => {
-	let readUnneededText = false;
-	const laterBlock = { type: "text" } as any;
-	Object.defineProperty(laterBlock, "text", {
-		get() {
-			readUnneededText = true;
-			throw new Error("Text beyond the bounded prefix should not be read");
-		},
-	});
-	const context = buildNamingContext([{
-		role: "user",
-		content: [{ type: "text", text: "x".repeat(1_000) }, laterBlock],
-	}] as any);
+  let readUnneededText = false;
+  const laterBlock = { type: "text" } as any;
+  Object.defineProperty(laterBlock, "text", {
+    get() {
+      readUnneededText = true;
+      throw new Error("Text beyond the bounded prefix should not be read");
+    },
+  });
+  const context = buildNamingContext([
+    {
+      role: "user",
+      content: [{ type: "text", text: "x".repeat(1_000) }, laterBlock],
+    },
+  ] as any);
 
-	expect(context).toBe("user: " + "x".repeat(1_000));
-	expect(readUnneededText).toBe(false);
+  expect(context).toBe("user: " + "x".repeat(1_000));
+  expect(readUnneededText).toBe(false);
 });
 
 test("naming context stops at a whitespace-ending bound without scanning later blocks", () => {
-	let readUnneededText = false;
-	const laterBlock = { type: "text" } as any;
-	Object.defineProperty(laterBlock, "text", {
-		get() {
-			readUnneededText = true;
-			throw new Error("Text beyond the bounded prefix should not be read");
-		},
-	});
-	const context = buildNamingContext([{
-		role: "user",
-		content: [{ type: "text", text: "x".repeat(999) + " " }, laterBlock],
-	}] as any);
+  let readUnneededText = false;
+  const laterBlock = { type: "text" } as any;
+  Object.defineProperty(laterBlock, "text", {
+    get() {
+      readUnneededText = true;
+      throw new Error("Text beyond the bounded prefix should not be read");
+    },
+  });
+  const context = buildNamingContext([
+    {
+      role: "user",
+      content: [{ type: "text", text: "x".repeat(999) + " " }, laterBlock],
+    },
+  ] as any);
 
-	expect(context).toBe("user: " + "x".repeat(999));
-	expect(readUnneededText).toBe(false);
+  expect(context).toBe("user: " + "x".repeat(999));
+  expect(readUnneededText).toBe(false);
 });
 
 test("naming context does not split Unicode characters at a text limit", () => {
-	let readUnneededText = false;
-	const laterBlock = { type: "text" } as any;
-	Object.defineProperty(laterBlock, "text", {
-		get() {
-			readUnneededText = true;
-			throw new Error("Text beyond the bounded prefix should not be read");
-		},
-	});
-	const context = buildNamingContext([{
-		role: "user",
-		content: [{ type: "text", text: "x".repeat(999) + "😀" }, laterBlock],
-	}] as any);
+  let readUnneededText = false;
+  const laterBlock = { type: "text" } as any;
+  Object.defineProperty(laterBlock, "text", {
+    get() {
+      readUnneededText = true;
+      throw new Error("Text beyond the bounded prefix should not be read");
+    },
+  });
+  const context = buildNamingContext([
+    {
+      role: "user",
+      content: [{ type: "text", text: "x".repeat(999) + "😀" }, laterBlock],
+    },
+  ] as any);
 
-	expect(context).toBe("user: " + "x".repeat(999));
-	expect(readUnneededText).toBe(false);
+  expect(context).toBe("user: " + "x".repeat(999));
+  expect(readUnneededText).toBe(false);
 });
 
 test("bounded naming text preserves Unicode trimming and text-block separators", () => {
-	const context = buildNamingContext([
-		{ role: "compactionSummary", summary: "\u00a0\ufeffDeploy safely\u00a0 " + " ".repeat(1_200) },
-		{ role: "user", content: [{ type: "text", text: "\u00a0Fix" }, { type: "text", text: " auth tests\ufeff\n" }] },
-	] as any, "\ufeffcontinue\u00a0");
+  const context = buildNamingContext(
+    [
+      {
+        role: "compactionSummary",
+        summary: "\u00a0\ufeffDeploy safely\u00a0 " + " ".repeat(1_200),
+      },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "\u00a0Fix" },
+          { type: "text", text: " auth tests\ufeff\n" },
+        ],
+      },
+    ] as any,
+    "\ufeffcontinue\u00a0",
+  );
 
-	expect(context).toBe("summary: Deploy safely\n\nuser: Fix\n auth tests\n\nuser: continue");
+  expect(context).toBe(
+    "summary: Deploy safely\n\nuser: Fix\n auth tests\n\nuser: continue",
+  );
 });
 
 test("Unicode NEL whitespace is ignored at input and trimmed from naming context", async () => {
-	const f = fixture();
-	f.input("\u0085");
-	await settle();
-	expect(f.requests).toEqual([]);
-	expect(f.calls).toEqual([]);
+  const f = fixture();
+  f.input("\u0085");
+  await settle();
+  expect(f.requests).toEqual([]);
+  expect(f.calls).toEqual([]);
 
-	const context = buildNamingContext([
-		{ role: "user", content: "\u0085task\u0085" },
-	] as any, "\u0085continue\u0085");
-	expect(context).toBe("user: task\n\nuser: continue");
+  const context = buildNamingContext(
+    [{ role: "user", content: "\u0085task\u0085" }] as any,
+    "\u0085continue\u0085",
+  );
+  expect(context).toBe("user: task\n\nuser: continue");
 });
 
-test.each(["session_compact", "session_compact_failed"])("compaction clears and restores the idle mark after %s", async (finishEvent) => {
-	process.env.PI_TMUX_MODEL = "off";
-	const f = fixture();
-	await f.emit("agent_settled");
-	await settle();
-	expect(f.state.title).toBe("* existing task");
-	expect(f.state.waitingPanes.get("%1")).toBe("1");
+test.each(["session_compact", "session_compact_failed"])(
+  "compaction clears and restores the idle mark after %s",
+  async (finishEvent) => {
+    process.env.PI_TMUX_MODEL = "off";
+    const f = fixture();
+    await f.emit("agent_settled");
+    await settle();
+    expect(f.state.title).toBe("* existing task");
+    expect(f.state.waitingPanes.get("%1")).toBe("1");
 
-	await f.emit("session_before_compact");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.state.waitingPanes.get("%1")).toBe("0");
+    await f.emit("session_before_compact");
+    await settle();
+    expect(f.state.title).toBe("existing task");
+    expect(f.state.waitingPanes.get("%1")).toBe("0");
 
-	await f.emit(finishEvent);
-	await settle();
-	expect(f.state.title).toBe("* existing task");
-	expect(f.state.waitingPanes.get("%1")).toBe("1");
-	expect(f.warnings).toEqual([]);
-});
+    await f.emit(finishEvent);
+    await settle();
+    expect(f.state.title).toBe("* existing task");
+    expect(f.state.waitingPanes.get("%1")).toBe("1");
+    expect(f.warnings).toEqual([]);
+  },
+);
 
 test("compaction preserves the active status when it started without an idle mark", async () => {
-	process.env.PI_TMUX_MODEL = "off";
-	const f = fixture();
-	await f.emit("agent_start");
-	await settle();
-	await f.emit("session_before_compact");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.state.waitingPanes.get("%1")).toBe("0");
+  process.env.PI_TMUX_MODEL = "off";
+  const f = fixture();
+  await f.emit("agent_start");
+  await settle();
+  await f.emit("session_before_compact");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.state.waitingPanes.get("%1")).toBe("0");
 
-	await f.emit("session_compact");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.state.waitingPanes.get("%1")).toBe("0");
-	expect(f.warnings).toEqual([]);
+  await f.emit("session_compact");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.state.waitingPanes.get("%1")).toBe("0");
+  expect(f.warnings).toEqual([]);
 });
 
 test("empty projected context cancels stale naming without preventing a later request", async () => {
-	for (const event of ["session_compact", "agent_settled"]) {
-		for (const staleResult of [response("Removed task"), response("Synthetic error", "error")]) {
-			const old = deferred();
-			const f = fixture([old.promise, Promise.resolve(response("Fresh task"))]);
-			f.messages.push({ role: "user", content: "Original task" });
-			await f.emit("session_start");
-			// Context edits can omit all dialogue while retaining non-text entries.
-			f.messages.splice(0, f.messages.length, { role: "toolResult", content: [{ type: "text", text: "Excluded output" }] });
-			await f.emit(event);
-			expect(f.requests[0].options.signal.aborted).toBe(true);
-			expect(f.requests).toHaveLength(1);
-			old.resolve(staleResult);
-			await settle();
-			expect(f.state.title).toBe(event === "agent_settled" ? "* existing task" : "existing task");
-			expect(f.warnings).toEqual([]);
-			expect(f.calls.some((args) => args[0] === "rename-window" && args[4].includes("removed"))).toBe(false);
+  for (const event of ["session_compact", "agent_settled"]) {
+    for (const staleResult of [
+      response("Removed task"),
+      response("Synthetic error", "error"),
+    ]) {
+      const old = deferred();
+      const f = fixture([old.promise, Promise.resolve(response("Fresh task"))]);
+      f.messages.push({ role: "user", content: "Original task" });
+      await f.emit("session_start");
+      // Context edits can omit all dialogue while retaining non-text entries.
+      f.messages.splice(0, f.messages.length, {
+        role: "toolResult",
+        content: [{ type: "text", text: "Excluded output" }],
+      });
+      await f.emit(event);
+      expect(f.requests[0].options.signal.aborted).toBe(true);
+      expect(f.requests).toHaveLength(1);
+      old.resolve(staleResult);
+      await settle();
+      expect(f.state.title).toBe(
+        event === "agent_settled" ? "* existing task" : "existing task",
+      );
+      expect(f.warnings).toEqual([]);
+      expect(
+        f.calls.some(
+          (args) => args[0] === "rename-window" && args[4].includes("removed"),
+        ),
+      ).toBe(false);
 
-			// Returning to the original context must not be deduplicated away.
-			f.messages.push({ role: "user", content: "Original task" });
-			await f.emit("session_compact");
-			await settle();
-			expect(f.requests).toHaveLength(2);
-			expect(f.state.title).toBe(event === "agent_settled" ? "* fresh task" : "fresh task");
-		}
-	}
+      // Returning to the original context must not be deduplicated away.
+      f.messages.push({ role: "user", content: "Original task" });
+      await f.emit("session_compact");
+      await settle();
+      expect(f.requests).toHaveLength(2);
+      expect(f.state.title).toBe(
+        event === "agent_settled" ? "* fresh task" : "fresh task",
+      );
+    }
+  }
 });
 
 test("a cancelled naming result that fails during rename is not reused by later status updates", async () => {
-	const gate = deferred();
-	let held = false;
-	const f = fixture([Promise.resolve(response("Removed task"))], async (args) => {
-		if (!held && args[0] === "rename-window") {
-			held = true;
-			await gate.promise;
-			throw new Error("Synthetic stale rename failure");
-		}
-	});
-	f.input("Original task");
-	await settle();
-	expect(held).toBe(true);
+  const gate = deferred();
+  let held = false;
+  const f = fixture(
+    [Promise.resolve(response("Removed task"))],
+    async (args) => {
+      if (!held && args[0] === "rename-window") {
+        held = true;
+        await gate.promise;
+        throw new Error("Synthetic stale rename failure");
+      }
+    },
+  );
+  f.input("Original task");
+  await settle();
+  expect(held).toBe(true);
 
-	f.messages.length = 0;
-	await f.emit("session_compact");
-	gate.resolve(response(""));
-	await settle();
-	await f.emit("agent_start");
-	await settle();
+  f.messages.length = 0;
+  await f.emit("session_compact");
+  gate.resolve(response(""));
+  await settle();
+  await f.emit("agent_start");
+  await settle();
 
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls.filter((args) => args[0] === "rename-window" && args[4].includes("removed task"))).toHaveLength(1);
-	expect(f.warnings).toEqual([]);
+  expect(f.state.title).toBe("existing task");
+  expect(
+    f.calls.filter(
+      (args) => args[0] === "rename-window" && args[4].includes("removed task"),
+    ),
+  ).toHaveLength(1);
+  expect(f.warnings).toEqual([]);
 });
 
-test.each([1, 2])("compaction invalidates a completed naming result at slow title lookup %i", async (lookupToHold) => {
-	for (const empty of [false, true]) {
-		for (const failLookup of [false, true]) {
-			const old = deferred();
-			const next = deferred();
-			const gate = deferred();
-			let holdLookup = false;
-			let lookups = 0;
-			const f = fixture([old.promise, next.promise], async (args) => {
-				if (holdLookup && args[0] === "display-message" && ++lookups === lookupToHold) {
-					await gate.promise;
-					if (failLookup) throw new Error("Synthetic stale lookup failure");
-				}
-			});
-			f.messages.push({ role: "user", content: "Original task" });
-			await f.emit("session_start");
-			holdLookup = true;
-			old.resolve(response("Removed task"));
-			await settle();
-			expect(lookups).toBe(lookupToHold);
-			// The model has completed, but its tmux update is still in flight.
-			f.messages.splice(0, f.messages.length, ...(empty ? [] : [{ role: "user", content: "Fresh task" }]));
-			await f.emit("session_compact");
-			holdLookup = false;
-			gate.resolve(response(""));
-			await settle();
-			expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-			expect(f.state.title).toBe("existing task");
-			expect(f.warnings).toEqual([]);
+test.each([1, 2])(
+  "compaction invalidates a completed naming result at slow title lookup %i",
+  async (lookupToHold) => {
+    for (const empty of [false, true]) {
+      for (const failLookup of [false, true]) {
+        const old = deferred();
+        const next = deferred();
+        const gate = deferred();
+        let holdLookup = false;
+        let lookups = 0;
+        const f = fixture([old.promise, next.promise], async (args) => {
+          if (
+            holdLookup &&
+            args[0] === "display-message" &&
+            ++lookups === lookupToHold
+          ) {
+            await gate.promise;
+            if (failLookup) throw new Error("Synthetic stale lookup failure");
+          }
+        });
+        f.messages.push({ role: "user", content: "Original task" });
+        await f.emit("session_start");
+        holdLookup = true;
+        old.resolve(response("Removed task"));
+        await settle();
+        expect(lookups).toBe(lookupToHold);
+        // The model has completed, but its tmux update is still in flight.
+        f.messages.splice(
+          0,
+          f.messages.length,
+          ...(empty ? [] : [{ role: "user", content: "Fresh task" }]),
+        );
+        await f.emit("session_compact");
+        holdLookup = false;
+        gate.resolve(response(""));
+        await settle();
+        expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual(
+          [],
+        );
+        expect(f.state.title).toBe("existing task");
+        expect(f.warnings).toEqual([]);
 
-			if (empty) {
-				f.messages.push({ role: "user", content: "Fresh task" });
-				await f.emit("session_compact");
-			}
-			next.resolve(response("Fresh task"));
-			await settle();
-			expect(f.state.title).toBe("fresh task");
-			expect(f.warnings).toEqual([]);
-			// Status-only updates must still work after stale naming is discarded.
-			await f.emit("agent_settled");
-			expect(f.state.title).toBe("* fresh task");
-		}
-	}
-});
+        if (empty) {
+          f.messages.push({ role: "user", content: "Fresh task" });
+          await f.emit("session_compact");
+        }
+        next.resolve(response("Fresh task"));
+        await settle();
+        expect(f.state.title).toBe("fresh task");
+        expect(f.warnings).toEqual([]);
+        // Status-only updates must still work after stale naming is discarded.
+        await f.emit("agent_settled");
+        expect(f.state.title).toBe("* fresh task");
+      }
+    }
+  },
+);
 
-test.each([1, 2])("status updates do not resurrect a superseded candidate at slow lookup %i", async (lookupToHold) => {
-	for (const committed of [false, true]) {
-		for (const empty of [false, true]) {
-			const old = deferred();
-			const next = deferred();
-			const gate = deferred();
-			let holdLookup = false;
-			let lookups = 0;
-			const f = fixture([
-				...(committed ? [Promise.resolve(response("Previous task"))] : []), old.promise, next.promise,
-			], async (args) => {
-				if (holdLookup && args[0] === "display-message" && ++lookups === lookupToHold) await gate.promise;
-			});
-			if (committed) {
-				f.input("Previous task");
-				await settle();
-			}
-			const previousTitle = committed ? "previous task" : "existing task";
-			f.messages.push({ role: "user", content: "Original task" });
-			await f.emit("session_compact");
-			holdLookup = true;
-			old.resolve(response("Removed task"));
-			await settle();
-			expect(lookups).toBe(lookupToHold);
-			f.messages.splice(0, f.messages.length, ...(empty ? [] : [{ role: "user", content: "Fresh task" }]));
-			await f.emit("session_compact");
-			holdLookup = false;
-			gate.resolve(response(""));
-			await settle();
-			expect(f.state.title).toBe(previousTitle);
+test.each([1, 2])(
+  "status updates do not resurrect a superseded candidate at slow lookup %i",
+  async (lookupToHold) => {
+    for (const committed of [false, true]) {
+      for (const empty of [false, true]) {
+        const old = deferred();
+        const next = deferred();
+        const gate = deferred();
+        let holdLookup = false;
+        let lookups = 0;
+        const f = fixture(
+          [
+            ...(committed ? [Promise.resolve(response("Previous task"))] : []),
+            old.promise,
+            next.promise,
+          ],
+          async (args) => {
+            if (
+              holdLookup &&
+              args[0] === "display-message" &&
+              ++lookups === lookupToHold
+            )
+              await gate.promise;
+          },
+        );
+        if (committed) {
+          f.input("Previous task");
+          await settle();
+        }
+        const previousTitle = committed ? "previous task" : "existing task";
+        f.messages.push({ role: "user", content: "Original task" });
+        await f.emit("session_compact");
+        holdLookup = true;
+        old.resolve(response("Removed task"));
+        await settle();
+        expect(lookups).toBe(lookupToHold);
+        f.messages.splice(
+          0,
+          f.messages.length,
+          ...(empty ? [] : [{ role: "user", content: "Fresh task" }]),
+        );
+        await f.emit("session_compact");
+        holdLookup = false;
+        gate.resolve(response(""));
+        await settle();
+        expect(f.state.title).toBe(previousTitle);
 
-			// A status-only refresh must retain the applied title, not the discarded candidate.
-			f.emit("agent_start");
-			await settle();
-			expect(f.state.title).toBe(previousTitle);
-			await f.emit("agent_settled");
-			expect(f.state.title).toBe("* " + previousTitle);
-			expect(f.calls.some((args) => args[0] === "rename-window" && args[4].includes("removed"))).toBe(false);
-			if (empty) {
-				f.messages.push({ role: "user", content: "Fresh task" });
-				await f.emit("session_compact");
-			}
-			next.resolve(response("Fresh task"));
-			await settle();
-			expect(f.state.title).toBe("* fresh task");
-			expect(f.warnings).toEqual([]);
-		}
-	}
-});
+        // A status-only refresh must retain the applied title, not the discarded candidate.
+        f.emit("agent_start");
+        await settle();
+        expect(f.state.title).toBe(previousTitle);
+        await f.emit("agent_settled");
+        expect(f.state.title).toBe("* " + previousTitle);
+        expect(
+          f.calls.some(
+            (args) =>
+              args[0] === "rename-window" && args[4].includes("removed"),
+          ),
+        ).toBe(false);
+        if (empty) {
+          f.messages.push({ role: "user", content: "Fresh task" });
+          await f.emit("session_compact");
+        }
+        next.resolve(response("Fresh task"));
+        await settle();
+        expect(f.state.title).toBe("* fresh task");
+        expect(f.warnings).toEqual([]);
+      }
+    }
+  },
+);
 
-test.each([1, 2])("a status revision still adopts a current candidate at slow lookup %i", async (lookupToHold) => {
-	const work = deferred();
-	const gate = deferred();
-	let holdLookup = false;
-	let lookups = 0;
-	const f = fixture([work.promise], async (args) => {
-		if (holdLookup && args[0] === "display-message" && ++lookups === lookupToHold) await gate.promise;
-	});
-	f.messages.push({ role: "user", content: "Current task" });
-	await f.emit("session_start");
-	holdLookup = true;
-	work.resolve(response("Current task"));
-	await settle();
-	expect(lookups).toBe(lookupToHold);
-	f.emit("agent_start");
-	holdLookup = false;
-	gate.resolve(response(""));
-	await settle();
-	expect(f.state.title).toBe("current task");
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* current task");
-	expect(f.requests).toHaveLength(1);
-	expect(f.warnings).toEqual([]);
-});
+test.each([1, 2])(
+  "a status revision still adopts a current candidate at slow lookup %i",
+  async (lookupToHold) => {
+    const work = deferred();
+    const gate = deferred();
+    let holdLookup = false;
+    let lookups = 0;
+    const f = fixture([work.promise], async (args) => {
+      if (
+        holdLookup &&
+        args[0] === "display-message" &&
+        ++lookups === lookupToHold
+      )
+        await gate.promise;
+    });
+    f.messages.push({ role: "user", content: "Current task" });
+    await f.emit("session_start");
+    holdLookup = true;
+    work.resolve(response("Current task"));
+    await settle();
+    expect(lookups).toBe(lookupToHold);
+    f.emit("agent_start");
+    holdLookup = false;
+    gate.resolve(response(""));
+    await settle();
+    expect(f.state.title).toBe("current task");
+    await f.emit("agent_settled");
+    expect(f.state.title).toBe("* current task");
+    expect(f.requests).toHaveLength(1);
+    expect(f.warnings).toEqual([]);
+  },
+);
 
 test("a failed current naming rename remains available for a later sync retry", async () => {
-	let fail = true;
-	const f = fixture([Promise.resolve(response("Current task"))], async (args) => {
-		if (fail && args[0] === "rename-window" && args[4].includes("current task")) {
-			fail = false;
-			throw new Error("Synthetic transient rename failure");
-		}
-	});
-	f.input("Task");
-	await settle();
-	await f.refresh("status");
-	expect(f.notices.at(-1)).toContain("Naming request: ready to apply");
-	await f.refresh("sync");
+  let fail = true;
+  const f = fixture(
+    [Promise.resolve(response("Current task"))],
+    async (args) => {
+      if (
+        fail &&
+        args[0] === "rename-window" &&
+        args[4].includes("current task")
+      ) {
+        fail = false;
+        throw new Error("Synthetic transient rename failure");
+      }
+    },
+  );
+  f.input("Task");
+  await settle();
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Naming request: ready to apply");
+  await f.refresh("sync");
 
-	expect(f.state.title).toBe("current task");
-	expect(f.requests).toHaveLength(1);
-	expect(f.warnings).toHaveLength(1);
+  expect(f.state.title).toBe("current task");
+  expect(f.requests).toHaveLength(1);
+  expect(f.warnings).toHaveLength(1);
 });
 
 test("empty or non-text history does not start a naming request", async () => {
-	expect(buildNamingContext([])).toBe("");
-	expect(buildNamingContext([{ role: "compactionSummary", summary: " " }] as any)).toBe("");
-	const f = fixture();
-	f.messages.push({ role: "assistant", content: [{ type: "toolCall", name: "bash" }] });
-	await f.emit("session_start");
-	await f.emit("agent_settled");
-	expect(f.requests).toHaveLength(0);
+  expect(buildNamingContext([])).toBe("");
+  expect(
+    buildNamingContext([{ role: "compactionSummary", summary: " " }] as any),
+  ).toBe("");
+  const f = fixture();
+  f.messages.push({
+    role: "assistant",
+    content: [{ type: "toolCall", name: "bash" }],
+  });
+  await f.emit("session_start");
+  await f.emit("agent_settled");
+  expect(f.requests).toHaveLength(0);
 });
 
 test("session-projection failures cancel stale naming and allow later retries", async () => {
-	const stale = deferred();
-	const f = fixture([stale.promise, Promise.resolve(response("fresh task"))]);
-	f.messages.push({ role: "user", content: "Original task" });
-	await f.emit("session_start");
-	expect(f.requests).toHaveLength(1);
+  const stale = deferred();
+  const f = fixture([stale.promise, Promise.resolve(response("fresh task"))]);
+  f.messages.push({ role: "user", content: "Original task" });
+  await f.emit("session_start");
+  expect(f.requests).toHaveLength(1);
 
-	const sessionManager = f.ctx.sessionManager as any;
-	sessionManager.buildSessionProjection = () => { throw new Error("Synthetic private projection failure"); };
-	expect(() => f.emit("session_compact")).not.toThrow();
-	expect(f.requests[0].options.signal.aborted).toBe(true);
-	expect(f.warnings).toEqual(["Pi session context could not be read. The tmux title was not updated."]);
-	stale.resolve(response("stale title"));
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings.join("\n")).not.toContain("Synthetic private projection failure");
-	await f.refresh();
-	expect(f.warnings).toHaveLength(2);
-	expect(f.notices).toEqual([]);
+  const sessionManager = f.ctx.sessionManager as any;
+  sessionManager.buildSessionProjection = () => {
+    throw new Error("Synthetic private projection failure");
+  };
+  expect(() => f.emit("session_compact")).not.toThrow();
+  expect(f.requests[0].options.signal.aborted).toBe(true);
+  expect(f.warnings).toEqual([
+    "Pi session context could not be read. The tmux title was not updated.",
+  ]);
+  stale.resolve(response("stale title"));
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings.join("\n")).not.toContain(
+    "Synthetic private projection failure",
+  );
+  await f.refresh();
+  expect(f.warnings).toHaveLength(2);
+  expect(f.notices).toEqual([]);
 
-	sessionManager.buildSessionProjection = () => ({ messages: f.messages });
-	await f.emit("session_compact");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.state.title).toBe("fresh task");
+  sessionManager.buildSessionProjection = () => ({ messages: f.messages });
+  await f.emit("session_compact");
+  await settle();
+  expect(f.requests).toHaveLength(2);
+  expect(f.state.title).toBe("fresh task");
 });
 
 test("brief follow-ups include the active conversation instead of only the new prompt", async () => {
-	const f = fixture();
-	f.messages.push(
-		{ role: "user", content: "Fix authentication tests" },
-		{ role: "assistant", content: [{ type: "text", text: "Should I update the fixtures?" }] },
-	);
-	f.input("yes, do it");
-	await settle();
-	expect(f.requests[0].context.messages[0].content).toBe([
-		"user: Fix authentication tests", "assistant: Should I update the fixtures?", "user: yes, do it",
-	].join("\n\n"));
-	expect(f.requests[0].context.systemPrompt).toContain("Prefer the latest task when the topic changes");
+  const f = fixture();
+  f.messages.push(
+    { role: "user", content: "Fix authentication tests" },
+    {
+      role: "assistant",
+      content: [{ type: "text", text: "Should I update the fixtures?" }],
+    },
+  );
+  f.input("yes, do it");
+  await settle();
+  expect(f.requests[0].context.messages[0].content).toBe(
+    [
+      "user: Fix authentication tests",
+      "assistant: Should I update the fixtures?",
+      "user: yes, do it",
+    ].join("\n\n"),
+  );
+  expect(f.requests[0].context.systemPrompt).toContain(
+    "Prefer the latest task when the topic changes",
+  );
 });
 
 test("startup, resume, fork, and reload name from the active session projection without new input", async () => {
-	for (const reason of ["startup", "resume", "fork", "reload"]) {
-		const f = fixture();
-		f.messages.push({ role: "user", content: "Fix authentication tests" });
-		(f.ctx.sessionManager as any).getEntries = () => { throw new Error("Raw session history must not be read"); };
-		await f.emit("session_start", reason);
-		await settle();
-		expect(f.requests).toHaveLength(1);
-		expect(f.requests[0].context.messages[0].content).toBe("user: Fix authentication tests");
-		expect(f.state.title).toBe("fix auth tests");
-	}
+  for (const reason of ["startup", "resume", "fork", "reload"]) {
+    const f = fixture();
+    f.messages.push({ role: "user", content: "Fix authentication tests" });
+    (f.ctx.sessionManager as any).getEntries = () => {
+      throw new Error("Raw session history must not be read");
+    };
+    await f.emit("session_start", reason);
+    await settle();
+    expect(f.requests).toHaveLength(1);
+    expect(f.requests[0].context.messages[0].content).toBe(
+      "user: Fix authentication tests",
+    );
+    expect(f.state.title).toBe("fix auth tests");
+  }
 });
 
 test("tree navigation cancels an old summary, preserves waiting, and names the newly active branch", async () => {
-	const old = deferred();
-	const f = fixture([old.promise, Promise.resolve(response("registry routing"))]);
-	f.messages.push({ role: "user", content: "Fix authentication tests" });
-	await f.emit("session_start");
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* existing task");
-	f.messages.splice(0, f.messages.length, { role: "user", content: "Fix registry routing" });
-	await f.emit("session_tree");
-	await settle();
-	expect(f.requests[0].options.signal.aborted).toBe(true);
-	expect(f.requests[1].context.messages[0].content).toBe("user: Fix registry routing");
-	old.resolve(response("fix auth tests"));
-	await settle();
-	expect(f.state.title).toBe("* registry routing");
-	expect(f.state.waitingPanes.get("%1")).toBe("1");
-	expect(f.state.sessionTitle).toBe("* My Session");
+  const old = deferred();
+  const f = fixture([
+    old.promise,
+    Promise.resolve(response("registry routing")),
+  ]);
+  f.messages.push({ role: "user", content: "Fix authentication tests" });
+  await f.emit("session_start");
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* existing task");
+  f.messages.splice(0, f.messages.length, {
+    role: "user",
+    content: "Fix registry routing",
+  });
+  await f.emit("session_tree");
+  await settle();
+  expect(f.requests[0].options.signal.aborted).toBe(true);
+  expect(f.requests[1].context.messages[0].content).toBe(
+    "user: Fix registry routing",
+  );
+  old.resolve(response("fix auth tests"));
+  await settle();
+  expect(f.state.title).toBe("* registry routing");
+  expect(f.state.waitingPanes.get("%1")).toBe("1");
+  expect(f.state.sessionTitle).toBe("* My Session");
 });
 
 test("compaction refreshes from the projected summary without resurrecting original messages", async () => {
-	const f = fixture();
-	f.messages.push(
-		{ role: "compactionSummary", summary: "Fix authentication tests; fixtures need updating" },
-		{ role: "user", content: "continue" },
-	);
-	await f.emit("session_compact");
-	await settle();
-	expect(f.requests[0].context.messages[0].content).toBe(
-		"summary: Fix authentication tests; fixtures need updating\n\nuser: continue",
-	);
-	expect(f.state.title).toBe("fix auth tests");
+  const f = fixture();
+  f.messages.push(
+    {
+      role: "compactionSummary",
+      summary: "Fix authentication tests; fixtures need updating",
+    },
+    { role: "user", content: "continue" },
+  );
+  await f.emit("session_compact");
+  await settle();
+  expect(f.requests[0].context.messages[0].content).toBe(
+    "summary: Fix authentication tests; fixtures need updating\n\nuser: continue",
+  );
+  expect(f.state.title).toBe("fix auth tests");
 });
 
 test("settlement refreshes the task from new assistant context while retaining the waiting marker", async () => {
-	const f = fixture([
-		Promise.resolve(response("auth tests")), Promise.resolve(response("auth fixtures")),
-	]);
-	f.input("Fix authentication tests");
-	await settle();
-	f.messages.push(
-		{ role: "user", content: "Fix authentication tests" },
-		{ role: "assistant", content: [{ type: "text", text: "Updated the stale authentication fixtures" }] },
-	);
-	await f.emit("agent_settled");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.requests[1].context.messages[0].content).toContain("assistant: Updated the stale authentication fixtures");
-	expect(f.state.title).toBe("* auth fixtures");
-	expect(f.state.sessionTitle).toBe("* My Session");
-	await f.emit("agent_settled");
-	expect(f.requests).toHaveLength(2);
+  const f = fixture([
+    Promise.resolve(response("auth tests")),
+    Promise.resolve(response("auth fixtures")),
+  ]);
+  f.input("Fix authentication tests");
+  await settle();
+  f.messages.push(
+    { role: "user", content: "Fix authentication tests" },
+    {
+      role: "assistant",
+      content: [
+        { type: "text", text: "Updated the stale authentication fixtures" },
+      ],
+    },
+  );
+  await f.emit("agent_settled");
+  await settle();
+  expect(f.requests).toHaveLength(2);
+  expect(f.requests[1].context.messages[0].content).toContain(
+    "assistant: Updated the stale authentication fixtures",
+  );
+  expect(f.state.title).toBe("* auth fixtures");
+  expect(f.state.sessionTitle).toBe("* My Session");
+  await f.emit("agent_settled");
+  expect(f.requests).toHaveLength(2);
 });
 
 test("persisting the same input and adding only tool work does not repeat a naming request", async () => {
-	const work = deferred();
-	const f = fixture([work.promise]);
-	f.input("Fix authentication tests");
-	f.messages.push(
-		{ role: "user", content: "Fix authentication tests" },
-		{ role: "toolResult", content: [{ type: "text", text: "Tool output" }] },
-	);
-	await f.emit("agent_settled");
-	expect(f.requests).toHaveLength(1);
-	expect(f.requests[0].options.signal.aborted).toBe(false);
-	work.resolve(response("auth tests"));
-	await settle();
-	expect(f.state.title).toBe("* auth tests");
+  const work = deferred();
+  const f = fixture([work.promise]);
+  f.input("Fix authentication tests");
+  f.messages.push(
+    { role: "user", content: "Fix authentication tests" },
+    { role: "toolResult", content: [{ type: "text", text: "Tool output" }] },
+  );
+  await f.emit("agent_settled");
+  expect(f.requests).toHaveLength(1);
+  expect(f.requests[0].options.signal.aborted).toBe(false);
+  work.resolve(response("auth tests"));
+  await settle();
+  expect(f.state.title).toBe("* auth tests");
 });
 
 test("parses naming models and rejects malformed configuration", () => {
-	for (const value of [undefined, "", "  "]) {
-		expect(parseNamingModel(value)).toEqual({ provider: "openai-codex", id: "gpt-6-luna" });
-	}
-	expect(parseNamingModel(" anthropic/claude-sonnet-4-5 ")).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5" });
-	expect(parseNamingModel("openrouter/vendor/model")).toEqual({ provider: "openrouter", id: "vendor/model" });
-	expect(parseNamingModel("custom.provider+region/model")).toEqual({ provider: "custom.provider+region", id: "model" });
-	expect(parseNamingModel(" OFF ")).toBeNull();
-	const longestSetting = `${"p".repeat(254)}/m`;
-	expect(longestSetting).toHaveLength(256);
-	expect(parseNamingModel(longestSetting)).toEqual({ provider: "p".repeat(254), id: "m" });
-	expect(parseNamingModel(`${" ".repeat(1_000)}${longestSetting}${" ".repeat(1_000)}`))
-		.toEqual({ provider: "p".repeat(254), id: "m" });
-	const oversizedSetting = `${"p".repeat(255)}/m`;
-	expect(oversizedSetting).toHaveLength(257);
-	for (const value of ["model", "/model", "provider/", "bad provider/model", "provider/a\nb", oversizedSetting]) {
-		expect(() => parseNamingModel(value)).toThrow();
-	}
+  for (const value of [undefined, "", "  "]) {
+    expect(parseNamingModel(value)).toEqual({
+      provider: "openai-codex",
+      id: "gpt-6-luna",
+    });
+  }
+  expect(parseNamingModel(" anthropic/claude-sonnet-4-5 ")).toEqual({
+    provider: "anthropic",
+    id: "claude-sonnet-4-5",
+  });
+  expect(parseNamingModel("openrouter/vendor/model")).toEqual({
+    provider: "openrouter",
+    id: "vendor/model",
+  });
+  expect(parseNamingModel("custom.provider+region/model")).toEqual({
+    provider: "custom.provider+region",
+    id: "model",
+  });
+  expect(parseNamingModel(" OFF ")).toBeNull();
+  const longestSetting = `${"p".repeat(254)}/m`;
+  expect(longestSetting).toHaveLength(256);
+  expect(parseNamingModel(longestSetting)).toEqual({
+    provider: "p".repeat(254),
+    id: "m",
+  });
+  expect(
+    parseNamingModel(
+      `${" ".repeat(1_000)}${longestSetting}${" ".repeat(1_000)}`,
+    ),
+  ).toEqual({ provider: "p".repeat(254), id: "m" });
+  const oversizedSetting = `${"p".repeat(255)}/m`;
+  expect(oversizedSetting).toHaveLength(257);
+  for (const value of [
+    "model",
+    "/model",
+    "provider/",
+    "bad provider/model",
+    "provider/a\nb",
+    oversizedSetting,
+  ]) {
+    expect(() => parseNamingModel(value)).toThrow();
+  }
 });
 
 test("uses the configured naming model without changing the main model", async () => {
-	process.env.PI_TMUX_MODEL = "openrouter/vendor/model";
-	const f = fixture();
-	f.input("Task");
-	await settle();
-	expect(f.requests[0].model).toEqual({ provider: "openrouter", id: "vendor/model" });
-	expect(f.state.title).toBe("fix auth tests");
+  process.env.PI_TMUX_MODEL = "openrouter/vendor/model";
+  const f = fixture();
+  f.input("Task");
+  await settle();
+  expect(f.requests[0].model).toEqual({
+    provider: "openrouter",
+    id: "vendor/model",
+  });
+  expect(f.state.title).toBe("fix auth tests");
 });
 
 test("model configuration changes take effect only on extension reload", async () => {
-	process.env.PI_TMUX_MODEL = "custom/first";
-	const f = fixture();
-	process.env.PI_TMUX_MODEL = "off";
-	f.input("Task");
-	await settle();
-	expect(f.requests[0].model).toEqual({ provider: "custom", id: "first" });
-	await f.emit("session_shutdown", "reload");
-	f.load();
-	f.messages.push({ role: "user", content: "Task" });
-	await f.emit("session_start", "reload");
-	await f.emit("agent_settled");
-	expect(f.requests).toHaveLength(1);
-	expect(f.state.title).toBe("* fix auth tests");
+  process.env.PI_TMUX_MODEL = "custom/first";
+  const f = fixture();
+  process.env.PI_TMUX_MODEL = "off";
+  f.input("Task");
+  await settle();
+  expect(f.requests[0].model).toEqual({ provider: "custom", id: "first" });
+  await f.emit("session_shutdown", "reload");
+  f.load();
+  f.messages.push({ role: "user", content: "Task" });
+  await f.emit("session_start", "reload");
+  await f.emit("agent_settled");
+  expect(f.requests).toHaveLength(1);
+  expect(f.state.title).toBe("* fix auth tests");
 });
 
 test("unavailable configured models do not fall back to the default", async () => {
-	process.env.PI_TMUX_MODEL = "custom/missing";
-	const f = fixture();
-	const lookups: string[][] = [];
-	(f.ctx.modelRegistry as any).find = (provider: string, id: string) => {
-		lookups.push([provider, id]);
-		return undefined;
-	};
-	f.input("Task");
-	await settle();
-	expect(lookups).toEqual([["custom", "missing"]]);
-	expect(f.requests).toHaveLength(0);
-	expect(f.warnings).toHaveLength(1);
+  process.env.PI_TMUX_MODEL = "custom/missing";
+  const f = fixture();
+  const lookups: string[][] = [];
+  (f.ctx.modelRegistry as any).find = (provider: string, id: string) => {
+    lookups.push([provider, id]);
+    return undefined;
+  };
+  f.input("Task");
+  await settle();
+  expect(lookups).toEqual([["custom", "missing"]]);
+  expect(f.requests).toHaveLength(0);
+  expect(f.warnings).toHaveLength(1);
 });
 
 test("status-only mode makes no model or projection calls and keeps lifecycle markers", async () => {
-	process.env.PI_TMUX_MODEL = "off";
-	const f = fixture();
-	(f.ctx.sessionManager as any).buildSessionProjection = () => { throw new Error("Must not collect naming context"); };
-	await f.emit("session_start");
-	f.input("Task");
-	await f.emit("session_compact");
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* existing task");
-	expect(f.state.sessionTitle).toBe("* My Session");
-	await f.refresh();
-	f.emit("agent_start");
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	await f.emit("session_shutdown");
-	expect(f.state.title).toBe("zsh");
-	expect(f.requests).toHaveLength(0);
-	expect(f.warnings).toHaveLength(0);
-	expect(f.notices.join(" ")).toContain("disabled");
+  process.env.PI_TMUX_MODEL = "off";
+  const f = fixture();
+  (f.ctx.sessionManager as any).buildSessionProjection = () => {
+    throw new Error("Must not collect naming context");
+  };
+  await f.emit("session_start");
+  f.input("Task");
+  await f.emit("session_compact");
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* existing task");
+  expect(f.state.sessionTitle).toBe("* My Session");
+  await f.refresh();
+  f.emit("agent_start");
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  await f.emit("session_shutdown");
+  expect(f.state.title).toBe("zsh");
+  expect(f.requests).toHaveLength(0);
+  expect(f.warnings).toHaveLength(0);
+  expect(f.notices.join(" ")).toContain("disabled");
 });
 
 test("invalid configuration disables naming, warns once, and never echoes its value", async () => {
-	process.env.PI_TMUX_MODEL = "invalid synthetic value";
-	const f = fixture();
-	await f.emit("session_start");
-	f.input("Task");
-	await f.emit("agent_settled");
-	expect(f.requests).toHaveLength(0);
-	expect(f.warnings).toHaveLength(1);
-	expect(f.warnings[0]).toContain("PI_TMUX_MODEL");
-	expect(f.warnings[0]).not.toContain(process.env.PI_TMUX_MODEL);
-	expect(f.state.title).toBe("* existing task");
+  process.env.PI_TMUX_MODEL = "invalid synthetic value";
+  const f = fixture();
+  await f.emit("session_start");
+  f.input("Task");
+  await f.emit("agent_settled");
+  expect(f.requests).toHaveLength(0);
+  expect(f.warnings).toHaveLength(1);
+  expect(f.warnings[0]).toContain("PI_TMUX_MODEL");
+  expect(f.warnings[0]).not.toContain(process.env.PI_TMUX_MODEL);
+  expect(f.state.title).toBe("* existing task");
 });
 
 test.each([
-	{ prefix: "", values: ["read", "status", "sync", "set ", "auto"] },
-	{ prefix: "r", values: ["read"] },
-	{ prefix: "s", values: ["status", "sync", "set "] },
-	{ prefix: "st", values: ["status"] },
-	{ prefix: "sy", values: ["sync"] },
-	{ prefix: "se", values: ["set "] },
-	{ prefix: "a", values: ["auto"] },
-	{ prefix: "set", values: ["set "] },
-	{ prefix: " \ts", values: ["status", "sync", "set "] },
-	{ prefix: " \t", values: ["read", "status", "sync", "set ", "auto"] },
-])("argument completion matches only supported subcommands: %j", ({ prefix, values }) => {
-	const f = fixture();
-	const items = f.complete(prefix);
-	expect(items.map((item: any) => item.value)).toEqual(values);
-	expect(items.every((item: any) => item.label && item.description)).toBe(true);
-	expect(f.calls).toEqual([]);
-	expect(f.requests).toEqual([]);
-});
+  { prefix: "", values: ["read", "status", "sync", "set ", "auto"] },
+  { prefix: "r", values: ["read"] },
+  { prefix: "s", values: ["status", "sync", "set "] },
+  { prefix: "st", values: ["status"] },
+  { prefix: "sy", values: ["sync"] },
+  { prefix: "se", values: ["set "] },
+  { prefix: "a", values: ["auto"] },
+  { prefix: "set", values: ["set "] },
+  { prefix: " \ts", values: ["status", "sync", "set "] },
+  { prefix: " \t", values: ["read", "status", "sync", "set ", "auto"] },
+])(
+  "argument completion matches only supported subcommands: %j",
+  ({ prefix, values }) => {
+    const f = fixture();
+    const items = f.complete(prefix);
+    expect(items.map((item: any) => item.value)).toEqual(values);
+    expect(items.every((item: any) => item.label && item.description)).toBe(
+      true,
+    );
+    expect(f.calls).toEqual([]);
+    expect(f.requests).toEqual([]);
+  },
+);
 
-test.each(["read", "status", "sync", "auto", " \tstatus"])("argument completion leaves exact subcommands runnable: %j", (prefix) => {
-	const f = fixture();
-	expect(f.complete(prefix)).toBeNull();
-	expect(f.calls).toEqual([]);
-	expect(f.requests).toEqual([]);
-});
+test.each(["read", "status", "sync", "auto", " \tstatus"])(
+  "argument completion leaves exact subcommands runnable: %j",
+  (prefix) => {
+    const f = fixture();
+    expect(f.complete(prefix)).toBeNull();
+    expect(f.calls).toEqual([]);
+    expect(f.requests).toEqual([]);
+  },
+);
 
 test("argument completion rejects oversized prefixes before trimming", () => {
-	const f = fixture();
-	expect(f.complete(" ".repeat(MAX_TITLE_INPUT_LENGTH * 2 + 1))).toBeNull();
-	expect(f.calls).toEqual([]);
-	expect(f.requests).toEqual([]);
+  const f = fixture();
+  expect(f.complete(" ".repeat(MAX_TITLE_INPUT_LENGTH * 2 + 1))).toBeNull();
+  expect(f.calls).toEqual([]);
+  expect(f.requests).toEqual([]);
 });
 
-test.each(["unknown", "S", "set ", "set private title", "set\n", "set\tname", "read extra", "status ", "status extra", "sync extra", "auto extra", "set café", "\u001b"])("argument completion leaves free-form titles and invalid prefixes alone: %j", (prefix) => {
-	const f = fixture();
-	expect(f.complete(prefix)).toBeNull();
-	expect(f.calls).toEqual([]);
-	expect(f.requests).toEqual([]);
-});
+test.each([
+  "unknown",
+  "S",
+  "set ",
+  "set private title",
+  "set\n",
+  "set\tname",
+  "read extra",
+  "status ",
+  "status extra",
+  "sync extra",
+  "auto extra",
+  "set café",
+  "\u001b",
+])(
+  "argument completion leaves free-form titles and invalid prefixes alone: %j",
+  (prefix) => {
+    const f = fixture();
+    expect(f.complete(prefix)).toBeNull();
+    expect(f.calls).toEqual([]);
+    expect(f.requests).toEqual([]);
+  },
+);
 
 test("argument completion needs no context, credentials, tmux target, or valid naming config", () => {
-	process.env.PI_TMUX_MODEL = "synthetic invalid configuration";
-	delete process.env.TMUX_PANE;
-	const f = fixture();
-	Object.defineProperty(f.ctx, "sessionManager", { get: () => { throw new Error("Must not access dialogue"); } });
-	Object.defineProperty(f.ctx, "modelRegistry", { get: () => { throw new Error("Must not access models or auth"); } });
-	expect(f.complete("s")).toHaveLength(3);
-	expect(f.complete("set synthetic private title")).toBeNull();
-	expect(f.notices).toEqual([]);
-	expect(f.warnings).toEqual([]);
-	expect(f.calls).toEqual([]);
-	expect(f.requests).toEqual([]);
+  process.env.PI_TMUX_MODEL = "synthetic invalid configuration";
+  delete process.env.TMUX_PANE;
+  const f = fixture();
+  Object.defineProperty(f.ctx, "sessionManager", {
+    get: () => {
+      throw new Error("Must not access dialogue");
+    },
+  });
+  Object.defineProperty(f.ctx, "modelRegistry", {
+    get: () => {
+      throw new Error("Must not access models or auth");
+    },
+  });
+  expect(f.complete("s")).toHaveLength(3);
+  expect(f.complete("set synthetic private title")).toBeNull();
+  expect(f.notices).toEqual([]);
+  expect(f.warnings).toEqual([]);
+  expect(f.calls).toEqual([]);
+  expect(f.requests).toEqual([]);
 });
 
 test("argument completion preserves pending naming and never includes task text", async () => {
-	const work = deferred();
-	const f = fixture([work.promise]);
-	f.input("synthetic private task text");
-	await settle();
-	const before = f.calls.length;
-	expect(JSON.stringify(f.complete())).not.toContain("synthetic private task text");
-	expect(f.calls).toHaveLength(before);
-	expect(f.requests).toHaveLength(1);
-	expect(f.requests[0].options.signal.aborted).toBe(false);
-	work.resolve(response("current task"));
-	await settle();
-	expect(f.state.title).toBe("current task");
+  const work = deferred();
+  const f = fixture([work.promise]);
+  f.input("synthetic private task text");
+  await settle();
+  const before = f.calls.length;
+  expect(JSON.stringify(f.complete())).not.toContain(
+    "synthetic private task text",
+  );
+  expect(f.calls).toHaveLength(before);
+  expect(f.requests).toHaveLength(1);
+  expect(f.requests[0].options.signal.aborted).toBe(false);
+  work.resolve(response("current task"));
+  await settle();
+  expect(f.state.title).toBe("current task");
 });
 
 test("argument completion preserves pins and returns independent suggestion objects", async () => {
-	const f = fixture();
-	await f.refresh("set synthetic private pin");
-	const before = f.calls.length;
-	const items = f.complete();
-	expect(JSON.stringify(items)).not.toContain("synthetic private pin");
-	items[0].value = "corrupted";
-	items[0].description = "corrupted";
-	items.push({ value: "extra", label: "extra" });
-	expect(f.complete().map((item: any) => item.value)).toEqual(["read", "status", "sync", "set ", "auto"]);
-	expect(f.complete().find((item: any) => item.value === "status").description).toBe("Show read-only title diagnostics");
-	expect(f.calls).toHaveLength(before);
-	expect(f.state.title).toBe("synthetic private pin");
-	f.input("another task");
-	await settle();
-	expect(f.requests).toEqual([]);
-	expect(f.state.title).toBe("synthetic private pin");
+  const f = fixture();
+  await f.refresh("set synthetic private pin");
+  const before = f.calls.length;
+  const items = f.complete();
+  expect(JSON.stringify(items)).not.toContain("synthetic private pin");
+  items[0].value = "corrupted";
+  items[0].description = "corrupted";
+  items.push({ value: "extra", label: "extra" });
+  expect(f.complete().map((item: any) => item.value)).toEqual([
+    "read",
+    "status",
+    "sync",
+    "set ",
+    "auto",
+  ]);
+  expect(
+    f.complete().find((item: any) => item.value === "status").description,
+  ).toBe("Show read-only title diagnostics");
+  expect(f.calls).toHaveLength(before);
+  expect(f.state.title).toBe("synthetic private pin");
+  f.input("another task");
+  await settle();
+  expect(f.requests).toEqual([]);
+  expect(f.state.title).toBe("synthetic private pin");
 });
 
 test.each([
-	{ prefix: "r", value: "read", expected: "/tmux-title read" },
-	{ prefix: "st", value: "status", expected: "/tmux-title status" },
-	{ prefix: "sy", value: "sync", expected: "/tmux-title sync" },
-	{ prefix: "se", value: "set ", expected: "/tmux-title set " },
-	{ prefix: "a", value: "auto", expected: "/tmux-title auto" },
-	{ prefix: "  se", value: "set ", expected: "/tmux-title set " },
-])("Pi's completion provider inserts a runnable argument without a literal placeholder: %j", async ({ prefix, value, expected }) => {
-	const f = fixture();
-	const provider = new CombinedAutocompleteProvider([{ name: "tmux-title", getArgumentCompletions: f.complete }], process.cwd());
-	const line = "/tmux-title " + prefix;
-	const suggestions = await provider.getSuggestions([line], 0, line.length, { force: false, signal: new AbortController().signal });
-	expect(suggestions).not.toBeNull();
-	const item = suggestions!.items.find((entry) => entry.value === value)!;
-	const result = provider.applyCompletion([line], 0, line.length, item, suggestions!.prefix);
-	expect(result.lines).toEqual([expected]);
-	expect(result.cursorCol).toBe(expected.length);
-	expect(result.lines[0]).not.toContain("<name>");
-	expect(f.calls).toEqual([]);
-	expect(f.requests).toEqual([]);
-});
+  { prefix: "r", value: "read", expected: "/tmux-title read" },
+  { prefix: "st", value: "status", expected: "/tmux-title status" },
+  { prefix: "sy", value: "sync", expected: "/tmux-title sync" },
+  { prefix: "se", value: "set ", expected: "/tmux-title set " },
+  { prefix: "a", value: "auto", expected: "/tmux-title auto" },
+  { prefix: "  se", value: "set ", expected: "/tmux-title set " },
+])(
+  "Pi's completion provider inserts a runnable argument without a literal placeholder: %j",
+  async ({ prefix, value, expected }) => {
+    const f = fixture();
+    const provider = new CombinedAutocompleteProvider(
+      [{ name: "tmux-title", getArgumentCompletions: f.complete }],
+      process.cwd(),
+    );
+    const line = "/tmux-title " + prefix;
+    const suggestions = await provider.getSuggestions([line], 0, line.length, {
+      force: false,
+      signal: new AbortController().signal,
+    });
+    expect(suggestions).not.toBeNull();
+    const item = suggestions!.items.find((entry) => entry.value === value)!;
+    const result = provider.applyCompletion(
+      [line],
+      0,
+      line.length,
+      item,
+      suggestions!.prefix,
+    );
+    expect(result.lines).toEqual([expected]);
+    expect(result.cursorCol).toBe(expected.length);
+    expect(result.lines[0]).not.toContain("<name>");
+    expect(f.calls).toEqual([]);
+    expect(f.requests).toEqual([]);
+  },
+);
 
 test("Pi's provider does not replace a partially entered manual title", async () => {
-	const f = fixture();
-	const provider = new CombinedAutocompleteProvider([{ name: "tmux-title", getArgumentCompletions: f.complete }], process.cwd());
-	const line = "/tmux-title set a custom title";
-	expect(await provider.getSuggestions([line], 0, line.length, { force: false, signal: new AbortController().signal })).toBeNull();
-	expect(f.calls).toEqual([]);
+  const f = fixture();
+  const provider = new CombinedAutocompleteProvider(
+    [{ name: "tmux-title", getArgumentCompletions: f.complete }],
+    process.cwd(),
+  );
+  const line = "/tmux-title set a custom title";
+  expect(
+    await provider.getSuggestions([line], 0, line.length, {
+      force: false,
+      signal: new AbortController().signal,
+    }),
+  ).toBeNull();
+  expect(f.calls).toEqual([]);
 });
 
 test("manual refresh retries identical failed context and retains waiting status", async () => {
-	const f = fixture([Promise.resolve(response("", "error")), Promise.resolve(response("recovered task"))]);
-	f.messages.push({ role: "user", content: "Task" });
-	await f.emit("session_start");
-	await settle();
-	await f.emit("agent_settled");
-	expect(f.requests).toHaveLength(1);
-	expect(f.warnings).toHaveLength(1);
-	await f.refresh();
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.state.title).toBe("* recovered task");
-	expect(f.state.sessionTitle).toBe("* My Session");
-	await f.emit("agent_settled");
-	expect(f.requests).toHaveLength(2);
+  const f = fixture([
+    Promise.resolve(response("", "error")),
+    Promise.resolve(response("recovered task")),
+  ]);
+  f.messages.push({ role: "user", content: "Task" });
+  await f.emit("session_start");
+  await settle();
+  await f.emit("agent_settled");
+  expect(f.requests).toHaveLength(1);
+  expect(f.warnings).toHaveLength(1);
+  await f.refresh();
+  await settle();
+  expect(f.requests).toHaveLength(2);
+  expect(f.state.title).toBe("* recovered task");
+  expect(f.state.sessionTitle).toBe("* My Session");
+  await f.emit("agent_settled");
+  expect(f.requests).toHaveLength(2);
 });
 
 test("manual refresh cancels pending naming and does not wait for the replacement result", async () => {
-	const old = deferred();
-	const next = deferred();
-	const f = fixture([old.promise, next.promise]);
-	f.messages.push({ role: "user", content: "Task" });
-	await f.emit("session_start");
-	await f.refresh();
-	expect(f.requests).toHaveLength(2);
-	expect(f.requests[0].options.signal.aborted).toBe(true);
-	old.resolve(response("old task"));
-	next.resolve(response("new task"));
-	await settle();
-	expect(f.state.title).toBe("new task");
+  const old = deferred();
+  const next = deferred();
+  const f = fixture([old.promise, next.promise]);
+  f.messages.push({ role: "user", content: "Task" });
+  await f.emit("session_start");
+  await f.refresh();
+  expect(f.requests).toHaveLength(2);
+  expect(f.requests[0].options.signal.aborted).toBe(true);
+  old.resolve(response("old task"));
+  next.resolve(response("new task"));
+  await settle();
+  expect(f.state.title).toBe("new task");
 });
 
-test.each([1, 2])("manual retry discards a completed candidate at slow lookup %i", async (lookup) => {
-	const old = deferred();
-	const next = deferred();
-	const gate = deferred();
-	let hold = false;
-	let lookups = 0;
-	const f = fixture([old.promise, next.promise], async (args) => {
-		if (hold && args[0] === "display-message" && ++lookups === lookup) await gate.promise;
-	});
-	f.messages.push({ role: "user", content: "Task" });
-	await f.emit("session_start");
-	hold = true;
-	old.resolve(response("discarded task"));
-	await settle();
-	await f.refresh();
-	const settled = f.emit("agent_settled");
-	hold = false;
-	gate.resolve(response(""));
-	await settled;
-	expect(f.requests).toHaveLength(2);
-	expect(f.state.title).toBe("* existing task");
-	next.resolve(response("retry task"));
-	await settle();
-	expect(f.state.title).toBe("* retry task");
-	expect(f.calls.filter((args) => args[0] === "rename-window").some((args) => args.at(-1)?.includes("discarded"))).toBe(false);
-});
+test.each([1, 2])(
+  "manual retry discards a completed candidate at slow lookup %i",
+  async (lookup) => {
+    const old = deferred();
+    const next = deferred();
+    const gate = deferred();
+    let hold = false;
+    let lookups = 0;
+    const f = fixture([old.promise, next.promise], async (args) => {
+      if (hold && args[0] === "display-message" && ++lookups === lookup)
+        await gate.promise;
+    });
+    f.messages.push({ role: "user", content: "Task" });
+    await f.emit("session_start");
+    hold = true;
+    old.resolve(response("discarded task"));
+    await settle();
+    await f.refresh();
+    const settled = f.emit("agent_settled");
+    hold = false;
+    gate.resolve(response(""));
+    await settled;
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("* existing task");
+    next.resolve(response("retry task"));
+    await settle();
+    expect(f.state.title).toBe("* retry task");
+    expect(
+      f.calls
+        .filter((args) => args[0] === "rename-window")
+        .some((args) => args.at(-1)?.includes("discarded")),
+    ).toBe(false);
+  },
+);
 
 test("manual refresh rejects arguments, empty context, and noninteractive targets", async () => {
-	const f = fixture();
-	await f.refresh("unexpected args");
-	await f.refresh();
-	f.messages.push({ role: "user", content: "Task" });
-	for (const mode of ["rpc", "json", "text"]) {
-		(f.ctx as any).mode = mode;
-		await f.refresh();
-	}
-	(f.ctx as any).mode = "tui";
-	delete process.env.TMUX_PANE;
-	await f.refresh();
-	await settle();
-	expect(f.requests).toHaveLength(0);
-	expect(f.calls).toHaveLength(0);
+  const f = fixture();
+  await f.refresh("unexpected args");
+  await f.refresh();
+  f.messages.push({ role: "user", content: "Task" });
+  for (const mode of ["rpc", "json", "text"]) {
+    (f.ctx as any).mode = mode;
+    await f.refresh();
+  }
+  (f.ctx as any).mode = "tui";
+  delete process.env.TMUX_PANE;
+  await f.refresh();
+  await settle();
+  expect(f.requests).toHaveLength(0);
+  expect(f.calls).toHaveLength(0);
 });
 
 test("manual refresh with empty context cancels work for removed dialogue", async () => {
-	const work = deferred();
-	const f = fixture([work.promise]);
-	f.messages.push({ role: "user", content: "Task" });
-	await f.emit("session_start");
-	f.messages.length = 0;
-	await f.refresh();
-	expect(f.requests[0].options.signal.aborted).toBe(true);
-	work.resolve(response("removed task"));
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.requests).toHaveLength(1);
-	expect(f.notices.join(" ")).toContain("No text");
+  const work = deferred();
+  const f = fixture([work.promise]);
+  f.messages.push({ role: "user", content: "Task" });
+  await f.emit("session_start");
+  f.messages.length = 0;
+  await f.refresh();
+  expect(f.requests[0].options.signal.aborted).toBe(true);
+  work.resolve(response("removed task"));
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.requests).toHaveLength(1);
+  expect(f.notices.join(" ")).toContain("No text");
 });
 
 test("manual refresh permits a new warning after a previous naming failure", async () => {
-	const f = fixture();
-	(f.ctx.modelRegistry as any).find = () => undefined;
-	f.messages.push({ role: "user", content: "Task" });
-	await f.emit("session_start");
-	await settle();
-	await f.refresh();
-	await settle();
-	expect(f.warnings).toHaveLength(2);
+  const f = fixture();
+  (f.ctx.modelRegistry as any).find = () => undefined;
+  f.messages.push({ role: "user", content: "Task" });
+  await f.emit("session_start");
+  await settle();
+  await f.refresh();
+  await settle();
+  expect(f.warnings).toHaveLength(2);
 });
 
 test("manual titles remain pinned through input, settlement, compaction, and refresh", async () => {
-	const f = fixture([]);
-	await f.refresh('set "Fix café # auth"');
-	(f.ctx.sessionManager as any).buildSessionProjection = () => { throw new Error("Pinned titles must not collect naming context"); };
-	expect(f.state.title).toBe("fix cafe auth");
-	f.input("Another task");
-	await f.emit("agent_settled");
-	await f.emit("session_compact");
-	await f.refresh();
-	expect(f.state.title).toBe("* fix cafe auth");
-	expect(f.requests).toHaveLength(0);
-	expect(f.warnings).toHaveLength(0);
-	f.emit("agent_start");
-	await settle();
-	expect(f.state.title).toBe("fix cafe auth");
+  const f = fixture([]);
+  await f.refresh('set "Fix café # auth"');
+  (f.ctx.sessionManager as any).buildSessionProjection = () => {
+    throw new Error("Pinned titles must not collect naming context");
+  };
+  expect(f.state.title).toBe("fix cafe auth");
+  f.input("Another task");
+  await f.emit("agent_settled");
+  await f.emit("session_compact");
+  await f.refresh();
+  expect(f.state.title).toBe("* fix cafe auth");
+  expect(f.requests).toHaveLength(0);
+  expect(f.warnings).toHaveLength(0);
+  f.emit("agent_start");
+  await settle();
+  expect(f.state.title).toBe("fix cafe auth");
 });
 
 test("pinning a title cancels pending AI work without losing waiting status", async () => {
-	const work = deferred();
-	const f = fixture([work.promise]);
-	f.input("Task");
-	await f.emit("agent_settled");
-	await f.refresh("set -manual title");
-	expect(f.requests[0].options.signal.aborted).toBe(true);
-	work.resolve(response("late ai title"));
-	await settle();
-	expect(f.state.title).toBe("* -manual title");
-	expect(f.state.sessionTitle).toBe("* My Session");
+  const work = deferred();
+  const f = fixture([work.promise]);
+  f.input("Task");
+  await f.emit("agent_settled");
+  await f.refresh("set -manual title");
+  expect(f.requests[0].options.signal.aborted).toBe(true);
+  work.resolve(response("late ai title"));
+  await settle();
+  expect(f.state.title).toBe("* -manual title");
+  expect(f.state.sessionTitle).toBe("* My Session");
 });
 
-test.each([1, 2])("pinning a title discards completed AI output at slow lookup %i", async (lookup) => {
-	const work = deferred();
-	const gate = deferred();
-	let hold = false;
-	let lookups = 0;
-	const f = fixture([work.promise], async (args) => {
-		if (hold && args[0] === "display-message" && ++lookups === lookup) await gate.promise;
-	});
-	f.input("Task");
-	await settle();
-	hold = true;
-	work.resolve(response("discarded ai title"));
-	await settle();
-	const pinned = f.refresh("set manual title");
-	hold = false;
-	gate.resolve(response(""));
-	await pinned;
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* manual title");
-	expect(f.calls.filter((args) => args[0] === "rename-window").some((args) => args.at(-1)?.includes("discarded"))).toBe(false);
-});
+test.each([1, 2])(
+  "pinning a title discards completed AI output at slow lookup %i",
+  async (lookup) => {
+    const work = deferred();
+    const gate = deferred();
+    let hold = false;
+    let lookups = 0;
+    const f = fixture([work.promise], async (args) => {
+      if (hold && args[0] === "display-message" && ++lookups === lookup)
+        await gate.promise;
+    });
+    f.input("Task");
+    await settle();
+    hold = true;
+    work.resolve(response("discarded ai title"));
+    await settle();
+    const pinned = f.refresh("set manual title");
+    hold = false;
+    gate.resolve(response(""));
+    await pinned;
+    await f.emit("agent_settled");
+    expect(f.state.title).toBe("* manual title");
+    expect(
+      f.calls
+        .filter((args) => args[0] === "rename-window")
+        .some((args) => args.at(-1)?.includes("discarded")),
+    ).toBe(false);
+  },
+);
 
 test("auto resumes naming from identical context and preserves waiting status", async () => {
-	const f = fixture([Promise.resolve(response("ai title")), Promise.resolve(response("resumed title"))]);
-	f.messages.push({ role: "user", content: "Task" });
-	await f.emit("session_start");
-	await settle();
-	await f.emit("agent_settled");
-	await f.refresh("set manual title");
-	await f.refresh("auto");
-	await settle();
-	expect(f.requests).toHaveLength(2);
-	expect(f.state.title).toBe("* resumed title");
-	await f.emit("agent_settled");
-	expect(f.requests).toHaveLength(2);
+  const f = fixture([
+    Promise.resolve(response("ai title")),
+    Promise.resolve(response("resumed title")),
+  ]);
+  f.messages.push({ role: "user", content: "Task" });
+  await f.emit("session_start");
+  await settle();
+  await f.emit("agent_settled");
+  await f.refresh("set manual title");
+  await f.refresh("auto");
+  await settle();
+  expect(f.requests).toHaveLength(2);
+  expect(f.state.title).toBe("* resumed title");
+  await f.emit("agent_settled");
+  expect(f.requests).toHaveLength(2);
 });
 
 test("manual titles work with AI disabled, and auto respects that setting", async () => {
-	process.env.PI_TMUX_MODEL = "off";
-	const f = fixture([]);
-	await f.refresh("set " + "X".repeat(30));
-	expect(f.state.title).toBe("x".repeat(24));
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* " + "x".repeat(22));
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("* " + "x".repeat(22));
-	await f.refresh("auto");
-	expect(f.state.title).toBe("* " + "x".repeat(22));
-	expect(f.requests).toHaveLength(0);
-	await f.emit("session_shutdown");
-	expect(f.state.title).toBe("zsh");
+  process.env.PI_TMUX_MODEL = "off";
+  const f = fixture([]);
+  await f.refresh("set " + "X".repeat(30));
+  expect(f.state.title).toBe("x".repeat(24));
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* " + "x".repeat(22));
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("* " + "x".repeat(22));
+  await f.refresh("auto");
+  expect(f.state.title).toBe("* " + "x".repeat(22));
+  expect(f.requests).toHaveLength(0);
+  await f.emit("session_shutdown");
+  expect(f.state.title).toBe("zsh");
 });
 
 test("oversized manual title input is rejected before screening or writes", async () => {
-	const oversizedTitle = "x".repeat(MAX_TITLE_INPUT_LENGTH + 1);
-	const f = fixture();
-	await f.refresh(`set ${oversizedTitle}`);
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls).toEqual([]);
-	expect(f.requests).toEqual([]);
-	expect(f.warnings).toEqual(["Manual title input is too long to check safely; it was not applied."]);
-	expect(f.warnings.join(" ")).not.toContain(oversizedTitle);
+  const oversizedTitle = "x".repeat(MAX_TITLE_INPUT_LENGTH + 1);
+  const f = fixture();
+  await f.refresh(`set ${oversizedTitle}`);
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls).toEqual([]);
+  expect(f.requests).toEqual([]);
+  expect(f.warnings).toEqual([
+    "Manual title input is too long to check safely; it was not applied.",
+  ]);
+  expect(f.warnings.join(" ")).not.toContain(oversizedTitle);
 });
 
 test("very large title command arguments are rejected before parsing or writes", async () => {
-	const oversizedCommand = `set ${"x".repeat(MAX_TITLE_INPUT_LENGTH * 16)}`;
-	const f = fixture();
-	await f.refresh(oversizedCommand);
-	expect(f.state.title).toBe("existing task");
-	expect(f.calls).toEqual([]);
-	expect(f.requests).toEqual([]);
-	expect(f.warnings).toEqual(["Title command input is too long to process safely; it was not applied."]);
-	expect(f.warnings.join(" ")).not.toContain(oversizedCommand);
+  const oversizedCommand = `set ${"x".repeat(MAX_TITLE_INPUT_LENGTH * 16)}`;
+  const f = fixture();
+  await f.refresh(oversizedCommand);
+  expect(f.state.title).toBe("existing task");
+  expect(f.calls).toEqual([]);
+  expect(f.requests).toEqual([]);
+  expect(f.warnings).toEqual([
+    "Title command input is too long to process safely; it was not applied.",
+  ]);
+  expect(f.warnings.join(" ")).not.toContain(oversizedCommand);
 });
 
 test("manual titles reject sensitive text before normalization without disclosing it", async () => {
-	const token = ["ghp_", "A".repeat(20)].join("");
-	const sensitiveTitles = [
-		token,
-		`auth integration ${token}`,
-		`shippo_live_${"a".repeat(40)}`,
-		`shippo_test_${"b".repeat(40)}`,
-		`pscale_tkn_${"C".repeat(32)}`,
-		`pscale_oauth_${"D".repeat(64)}`,
-		`PMAK-${"a".repeat(24)}-${"b".repeat(34)}`,
-		`pul-${"a".repeat(40)}`,
-		`pnu_${"A1b2".repeat(9)}`,
-		`API-${"A1B2".repeat(6)}A1`,
-		`AIza${"A".repeat(35)}`,
-		`Datadog: ${"A1b2".repeat(10)}`,
-		`Mailgun: key-${"a1b2".repeat(8)}`,
-		`AKCp${"A1b2".repeat(17)}A`,
-		`cmVmd${"C1d2".repeat(14)}AbC`,
-		`fo1_${"A1_b".repeat(10)}ABC`,
-		`fm1a_${"A1b+/".repeat(20)}`,
-		`fm1r_${"B2c+/".repeat(20)}=`,
-		`fm2_${"C3d+/".repeat(20)}===`,
-		`dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
-		`re_${"A1b2".repeat(7)}_C3d4`,
-		`client_secret=${"B".repeat(24)}`,
-		`AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
-		"Passport Number: QX730194",
-		"Passport Card Number: R8K2M519",
-		"Driver's License Number: A1234567",
-		"DL Number: X9428576",
-		"Chinese National ID Number: 12999920000101001X",
-		"Resident Identity Card Number: 129999199912310026",
-		"居民身份证号码：12999920000101001X",
-		"公民身份号码: 129999199912310026",
-		"Japanese My Number: 012345678903",
-		"個人番号：314159265352",
-		"Swedish personal identity number: 900102-1238",
-		"Personnummer: 19900102-1237",
-		"Samordningsnummer: 900162-1235",
-		"French NIR: 123456789012311",
-		"Numéro de sécurité sociale français : 123456789012311",
-		"Spanish DNI: 00000000T",
-		"DNI español: 00.000.000-T",
-		"Spanish NIE: X0000000T",
-		"Número de identidad de extranjero: X0000000T",
-		"Bank Account Number: 4829163705",
-		"CVV: 483",
-		"Card Verification Value: 9304",
-		"PIN: 4827",
-		"Personal Identification Number: ٣٩٢٨",
-		"OTP: 482739",
-		"MFA Code: 184926",
-		"Recovery Code: 482739",
-		"Backup Key: K4J7-M3Q9",
-		`AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
-		`AccountKey=${"A".repeat(86)}==`,
-		`client-key-data: ${"A".repeat(44)}`,
-		`client-key-data: |-\n  ${"A".repeat(10)}\n  ${"A".repeat(10)}\n  ${"A".repeat(44)}`,
-		`PresharedKey=${"A".repeat(43)}=`,
-		basicAuthorizationHeader("Authorization", `u:${"p".repeat(20)}`),
-		basicAuthorizationHeader("Proxy-Authorization", `p:${"w".repeat(20)}`),
-		basicAuthorizationHeader("Authorization", "u:p"),
-		basicAuthorizationHeader("Proxy-Authorization", "p:w"),
-		`https://storage.example.test/blob?sv=2023-11-03&sig=${"A".repeat(43)}=`,
-		`password=secret phrase`,
-		`password=secret phrase: keep this private`,
-		`password: "secret phrase"`,
-		`passphrase: silver owl`,
-		`password: secret\n  phrase`,
-		`password=secret phrase, keep this private`,
-		`passphrase: silver owl; do not copy it`,
-		`password: secret\n  phrase, keep this private`,
-		`password: |-\n  ${"P".repeat(12)}`,
-		`password: |-\n  secret phrase`,
-		`passphrase: &words >-\n  moonlight\n  meadow`,
-		`password: !!str |-\n  ${"P".repeat(12)}`,
-		`token: &task-token >-\n  ${"T".repeat(24)}`,
-		`Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
-		`Authorization: !!str |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
-		`Proxy-Authorization: >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
-		`Proxy-Authorization: &proxy-auth >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
-		[
-			"password: |-\n  example",
-			`token: >-\n  ${"T".repeat(24)}`,
-		].join("\n"),
-		`password=${"P".repeat(12)}`,
-		"postgres://test-user:example-only-password@db.example.test/app",
-		`ghp_${"C".repeat(10)}\u200b${"C".repeat(10)}`,
-		"alice@example.com",
-	];
-	for (const title of sensitiveTitles) {
-		const f = fixture();
-		await f.refresh(`set ${title}`);
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.requests).toHaveLength(0);
-		expect(f.warnings).toEqual(["Sensitive-looking manual title was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(title);
-	}
+  const token = ["ghp_", "A".repeat(20)].join("");
+  const sensitiveTitles = [
+    token,
+    `auth integration ${token}`,
+    `shippo_live_${"a".repeat(40)}`,
+    `shippo_test_${"b".repeat(40)}`,
+    `pscale_tkn_${"C".repeat(32)}`,
+    `pscale_oauth_${"D".repeat(64)}`,
+    `PMAK-${"a".repeat(24)}-${"b".repeat(34)}`,
+    `pul-${"a".repeat(40)}`,
+    `pnu_${"A1b2".repeat(9)}`,
+    `API-${"A1B2".repeat(6)}A1`,
+    `AIza${"A".repeat(35)}`,
+    `Datadog: ${"A1b2".repeat(10)}`,
+    `Mailgun: key-${"a1b2".repeat(8)}`,
+    `AKCp${"A1b2".repeat(17)}A`,
+    `cmVmd${"C1d2".repeat(14)}AbC`,
+    `fo1_${"A1_b".repeat(10)}ABC`,
+    `fm1a_${"A1b+/".repeat(20)}`,
+    `fm1r_${"B2c+/".repeat(20)}=`,
+    `fm2_${"C3d+/".repeat(20)}===`,
+    `dt0c01.${"A1b2".repeat(6)}.${"C3d4".repeat(16)}`,
+    `re_${"A1b2".repeat(7)}_C3d4`,
+    `client_secret=${"B".repeat(24)}`,
+    `AWS_SECRET_ACCESS_KEY=${"A".repeat(40)}`,
+    "Passport Number: QX730194",
+    "Passport Card Number: R8K2M519",
+    "Driver's License Number: A1234567",
+    "DL Number: X9428576",
+    "Chinese National ID Number: 12999920000101001X",
+    "Resident Identity Card Number: 129999199912310026",
+    "居民身份证号码：12999920000101001X",
+    "公民身份号码: 129999199912310026",
+    "Japanese My Number: 012345678903",
+    "個人番号：314159265352",
+    "Swedish personal identity number: 900102-1238",
+    "Personnummer: 19900102-1237",
+    "Samordningsnummer: 900162-1235",
+    "French NIR: 123456789012311",
+    "Numéro de sécurité sociale français : 123456789012311",
+    "Spanish DNI: 00000000T",
+    "DNI español: 00.000.000-T",
+    "Spanish NIE: X0000000T",
+    "Número de identidad de extranjero: X0000000T",
+    "Bank Account Number: 4829163705",
+    "CVV: 483",
+    "Card Verification Value: 9304",
+    "PIN: 4827",
+    "Personal Identification Number: ٣٩٢٨",
+    "OTP: 482739",
+    "MFA Code: 184926",
+    "Recovery Code: 482739",
+    "Backup Key: K4J7-M3Q9",
+    `AWS_SECRET_ACCESS_KEY: |-\n  ${"A".repeat(22)}\n  ${"B".repeat(22)}`,
+    `AccountKey=${"A".repeat(86)}==`,
+    `client-key-data: ${"A".repeat(44)}`,
+    `client-key-data: |-\n  ${"A".repeat(10)}\n  ${"A".repeat(10)}\n  ${"A".repeat(44)}`,
+    `PresharedKey=${"A".repeat(43)}=`,
+    basicAuthorizationHeader("Authorization", `u:${"p".repeat(20)}`),
+    basicAuthorizationHeader("Proxy-Authorization", `p:${"w".repeat(20)}`),
+    basicAuthorizationHeader("Authorization", "u:p"),
+    basicAuthorizationHeader("Proxy-Authorization", "p:w"),
+    `https://storage.example.test/blob?sv=2023-11-03&sig=${"A".repeat(43)}=`,
+    `password=secret phrase`,
+    `password=secret phrase: keep this private`,
+    `password: "secret phrase"`,
+    `passphrase: silver owl`,
+    `password: secret\n  phrase`,
+    `password=secret phrase, keep this private`,
+    `passphrase: silver owl; do not copy it`,
+    `password: secret\n  phrase, keep this private`,
+    `password: |-\n  ${"P".repeat(12)}`,
+    `password: |-\n  secret phrase`,
+    `passphrase: &words >-\n  moonlight\n  meadow`,
+    `password: !!str |-\n  ${"P".repeat(12)}`,
+    `token: &task-token >-\n  ${"T".repeat(24)}`,
+    `Authorization: |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
+    `Authorization: !!str |-\n  Basic ${Buffer.from("u:p").toString("base64")}`,
+    `Proxy-Authorization: >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
+    `Proxy-Authorization: &proxy-auth >-\n  Basic ${Buffer.from("p:w").toString("base64")}`,
+    ["password: |-\n  example", `token: >-\n  ${"T".repeat(24)}`].join("\n"),
+    `password=${"P".repeat(12)}`,
+    "postgres://test-user:example-only-password@db.example.test/app",
+    `ghp_${"C".repeat(10)}\u200b${"C".repeat(10)}`,
+    "alice@example.com",
+  ];
+  for (const title of sensitiveTitles) {
+    const f = fixture();
+    await f.refresh(`set ${title}`);
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.requests).toHaveLength(0);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking manual title was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(title);
+  }
 });
 
 test("rejecting a sensitive manual title leaves pending naming intact", async () => {
-	const work = deferred();
-	const f = fixture([work.promise]);
-	f.input("Fix auth tests");
-	await settle();
-	const signal = f.requests[0].options.signal as AbortSignal;
-	const token = ["ghp_", "D".repeat(20)].join("");
-	await f.refresh(`set ${token}`);
-	expect(signal.aborted).toBe(false);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toEqual(["Sensitive-looking manual title was not applied."]);
-	work.resolve(response("fix auth tests"));
-	await settle();
-	expect(f.state.title).toBe("fix auth tests");
+  const work = deferred();
+  const f = fixture([work.promise]);
+  f.input("Fix auth tests");
+  await settle();
+  const signal = f.requests[0].options.signal as AbortSignal;
+  const token = ["ghp_", "D".repeat(20)].join("");
+  await f.refresh(`set ${token}`);
+  expect(signal.aborted).toBe(false);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toEqual([
+    "Sensitive-looking manual title was not applied.",
+  ]);
+  work.resolve(response("fix auth tests"));
+  await settle();
+  expect(f.state.title).toBe("fix auth tests");
 });
 
 test("invalid manual titles do not cancel pending naming or change the window", async () => {
-	const work = deferred();
-	const f = fixture([work.promise]);
-	f.input("Task");
-	await settle();
-	for (const args of ["set", "set ---", "set #[]", "unknown command"]) await f.refresh(args);
-	expect(f.requests[0].options.signal.aborted).toBe(false);
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toHaveLength(4);
-	work.resolve(response("ai title"));
-	await settle();
-	expect(f.state.title).toBe("ai title");
+  const work = deferred();
+  const f = fixture([work.promise]);
+  f.input("Task");
+  await settle();
+  for (const args of ["set", "set ---", "set #[]", "unknown command"])
+    await f.refresh(args);
+  expect(f.requests[0].options.signal.aborted).toBe(false);
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toHaveLength(4);
+  work.resolve(response("ai title"));
+  await settle();
+  expect(f.state.title).toBe("ai title");
 });
 
 test("session replacement, tree navigation, and reload release manual pins", async () => {
-	for (const event of ["session_start", "session_tree"]) {
-		const f = fixture();
-		await f.refresh("set manual title");
-		f.messages.push({ role: "user", content: "Task" });
-		await f.emit(event);
-		await settle();
-		expect(f.state.title).toBe("fix auth tests");
-		expect(f.requests).toHaveLength(1);
-	}
-	const f = fixture();
-	await f.refresh("set manual title");
-	await f.emit("session_shutdown", "reload");
-	f.load();
-	f.messages.push({ role: "user", content: "Task" });
-	await f.emit("session_start", "reload");
-	await settle();
-	expect(f.state.title).toBe("fix auth tests");
+  for (const event of ["session_start", "session_tree"]) {
+    const f = fixture();
+    await f.refresh("set manual title");
+    f.messages.push({ role: "user", content: "Task" });
+    await f.emit(event);
+    await settle();
+    expect(f.state.title).toBe("fix auth tests");
+    expect(f.requests).toHaveLength(1);
+  }
+  const f = fixture();
+  await f.refresh("set manual title");
+  await f.emit("session_shutdown", "reload");
+  f.load();
+  f.messages.push({ role: "user", content: "Task" });
+  await f.emit("session_start", "reload");
+  await settle();
+  expect(f.state.title).toBe("fix auth tests");
 });
 
-test.each(["display-message", "set-option", "rename-window"])("manual title failure at %s does not report success and sync retries the retained pin", async (stage) => {
-	let failed = false;
-	const f = fixture(undefined, async (args) => {
-		if (!failed && args[0] === stage) { failed = true; throw new Error("Synthetic tmux failure"); }
-	});
-	await f.refresh("set retained pin");
-	expect(failed).toBe(true);
-	expect(f.notices).toEqual([]);
-	expect(f.warnings).toHaveLength(1);
-	await f.refresh("status");
-	expect(f.notices.at(-1)).toContain("Title mode: manual");
-	await f.refresh("sync");
-	expect(f.state.title).toBe("retained pin");
-	expect(f.notices.at(-1)).toBe("tmux title and waiting markers synchronized.");
-	expect(f.requests).toEqual([]);
-});
+test.each(["display-message", "set-option", "rename-window"])(
+  "manual title failure at %s does not report success and sync retries the retained pin",
+  async (stage) => {
+    let failed = false;
+    const f = fixture(undefined, async (args) => {
+      if (!failed && args[0] === stage) {
+        failed = true;
+        throw new Error("Synthetic tmux failure");
+      }
+    });
+    await f.refresh("set retained pin");
+    expect(failed).toBe(true);
+    expect(f.notices).toEqual([]);
+    expect(f.warnings).toHaveLength(1);
+    await f.refresh("status");
+    expect(f.notices.at(-1)).toContain("Title mode: manual");
+    await f.refresh("sync");
+    expect(f.state.title).toBe("retained pin");
+    expect(f.notices.at(-1)).toBe(
+      "tmux title and waiting markers synchronized.",
+    );
+    expect(f.requests).toEqual([]);
+  },
+);
 
-test.each(["different title", "same title", "reload"])("superseded manual commands do not send stale confirmations: %s", async (replacement) => {
-	let release!: () => void;
-	const gate = new Promise<void>((resolve) => { release = resolve; });
-	let held = false;
-	const f = fixture(undefined, async (args) => {
-		if (!held && args[0] === "display-message") { held = true; await gate; }
-	});
-	const older = f.refresh("set same title");
-	await settle();
-	const newer = replacement === "reload" ? f.emit("session_shutdown", "reload") : f.refresh("set " + replacement);
-	release();
-	await older;
-	await newer;
-	expect(f.notices).toHaveLength(replacement === "reload" ? 0 : 1);
-	if (replacement !== "reload") expect(f.state.title).toBe(replacement);
-	expect(f.warnings).toEqual([]);
-});
+test.each(["different title", "same title", "reload"])(
+  "superseded manual commands do not send stale confirmations: %s",
+  async (replacement) => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held = false;
+    const f = fixture(undefined, async (args) => {
+      if (!held && args[0] === "display-message") {
+        held = true;
+        await gate;
+      }
+    });
+    const older = f.refresh("set same title");
+    await settle();
+    const newer =
+      replacement === "reload"
+        ? f.emit("session_shutdown", "reload")
+        : f.refresh("set " + replacement);
+    release();
+    await older;
+    await newer;
+    expect(f.notices).toHaveLength(replacement === "reload" ? 0 : 1);
+    if (replacement !== "reload") expect(f.state.title).toBe(replacement);
+    expect(f.warnings).toEqual([]);
+  },
+);
 
 test("manual commands superseded during a rename only confirm the newer pin", async () => {
-	let release!: () => void;
-	const gate = new Promise<void>((resolve) => { release = resolve; });
-	let held = false;
-	const f = fixture(undefined, async (args) => {
-		if (!held && args[0] === "rename-window") { held = true; await gate; }
-	});
-	const older = f.refresh("set first pin");
-	await settle();
-	expect(held).toBe(true);
-	const newer = f.refresh("set second pin");
-	release();
-	await older;
-	await newer;
-	expect(f.writes).toEqual(["first pin", "second pin"]);
-	expect(f.notices).toHaveLength(1);
-	expect(f.state.title).toBe("second pin");
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = false;
+  const f = fixture(undefined, async (args) => {
+    if (!held && args[0] === "rename-window") {
+      held = true;
+      await gate;
+    }
+  });
+  const older = f.refresh("set first pin");
+  await settle();
+  expect(held).toBe(true);
+  const newer = f.refresh("set second pin");
+  release();
+  await older;
+  await newer;
+  expect(f.writes).toEqual(["first pin", "second pin"]);
+  expect(f.notices).toHaveLength(1);
+  expect(f.state.title).toBe("second pin");
 });
 
-test.each(["set", "sync"])("%s confirmation rechecks the revision after the completed update resolves", async (command) => {
-	let statusStarted = false;
-	let racing = false;
-	const f = fixture(undefined, async (args) => {
-		if (!racing || args[0] !== "rename-window") return;
-		// Cross the driver, write, queue catch, and result continuations, then
-		// supersede the completed update before the command can confirm it.
-		const schedule = (remaining: number) => queueMicrotask(() => {
-			if (remaining > 1) schedule(remaining - 1);
-			else { statusStarted = true; void f.emit("agent_start"); }
-		});
-		schedule(5);
-	});
-	if (command === "sync") {
-		await f.refresh("set race pin");
-		f.notices.length = 0;
-		f.calls.length = 0;
-		f.state.title = "external replacement";
-	}
-	racing = true;
-	await f.refresh(command === "set" ? "set race pin" : "sync");
-	await settle();
-	expect(statusStarted).toBe(true);
-	expect(f.state.title).toBe("race pin");
-	expect(f.calls.filter((args) => args[0] === "set-option")).toHaveLength(2);
-	expect(f.notices).toEqual([]);
-});
+test.each(["set", "sync"])(
+  "%s confirmation rechecks the revision after the completed update resolves",
+  async (command) => {
+    let statusStarted = false;
+    let racing = false;
+    const f = fixture(undefined, async (args) => {
+      if (!racing || args[0] !== "rename-window") return;
+      // Cross the driver, write, queue catch, and result continuations, then
+      // supersede the completed update before the command can confirm it.
+      const schedule = (remaining: number) =>
+        queueMicrotask(() => {
+          if (remaining > 1) schedule(remaining - 1);
+          else {
+            statusStarted = true;
+            void f.emit("agent_start");
+          }
+        });
+      schedule(5);
+    });
+    if (command === "sync") {
+      await f.refresh("set race pin");
+      f.notices.length = 0;
+      f.calls.length = 0;
+      f.state.title = "external replacement";
+    }
+    racing = true;
+    await f.refresh(command === "set" ? "set race pin" : "sync");
+    await settle();
+    expect(statusStarted).toBe(true);
+    expect(f.state.title).toBe("race pin");
+    expect(f.calls.filter((args) => args[0] === "set-option")).toHaveLength(2);
+    expect(f.notices).toEqual([]);
+  },
+);
 
-test.each([undefined, "off", "example invalid setting"])("sync makes no model, credential or projection calls: %j", async (setting) => {
-	if (setting === undefined) delete process.env.PI_TMUX_MODEL;
-	else process.env.PI_TMUX_MODEL = setting;
-	const f = fixture();
-	Object.defineProperty(f.ctx, "sessionManager", { get: () => { throw new Error("Must not collect dialogue"); } });
-	Object.defineProperty(f.ctx, "modelRegistry", { get: () => { throw new Error("Must not access auth or models"); } });
-	f.state.title = "Custom Café Title";
-	await f.refresh("sync");
-	expect(f.state.title).toBe("Custom Café Title");
-	expect(f.writes).toEqual([]);
-	expect(f.requests).toEqual([]);
-	expect(f.state.activePanes.get("%1")).toBe("1");
-	expect(f.notices).toEqual(["tmux title and waiting markers synchronized."]);
-	expect(f.warnings).toEqual([]);
-});
+test.each([undefined, "off", "example invalid setting"])(
+  "sync makes no model, credential or projection calls: %j",
+  async (setting) => {
+    if (setting === undefined) delete process.env.PI_TMUX_MODEL;
+    else process.env.PI_TMUX_MODEL = setting;
+    const f = fixture();
+    Object.defineProperty(f.ctx, "sessionManager", {
+      get: () => {
+        throw new Error("Must not collect dialogue");
+      },
+    });
+    Object.defineProperty(f.ctx, "modelRegistry", {
+      get: () => {
+        throw new Error("Must not access auth or models");
+      },
+    });
+    f.state.title = "Custom Café Title";
+    await f.refresh("sync");
+    expect(f.state.title).toBe("Custom Café Title");
+    expect(f.writes).toEqual([]);
+    expect(f.requests).toEqual([]);
+    expect(f.state.activePanes.get("%1")).toBe("1");
+    expect(f.notices).toEqual(["tmux title and waiting markers synchronized."]);
+    expect(f.warnings).toEqual([]);
+  },
+);
 
 test("sync reapplies a pin and preserves local waiting and peer flags", async () => {
-	const f = fixture();
-	await f.refresh("set pinned task");
-	await f.emit("agent_settled");
-	f.state.waitingPanes.set("%2", "1");
-	f.state.waitingPanes.set("%3", "1");
-	f.state.otherWindowPanes.add("%3");
-	f.state.title = "external replacement";
-	await f.refresh("sync");
-	expect(f.state.title).toBe("* pinned task");
-	expect(f.state.waitingPanes).toEqual(new Map([["%1", "1"], ["%2", "1"], ["%3", "1"]]));
-	await f.refresh("status");
-	expect(f.notices.at(-1)).toContain("Title mode: manual");
-	expect(f.notices.at(-1)).toContain("Local waiting: yes");
-	expect(f.requests).toEqual([]);
+  const f = fixture();
+  await f.refresh("set pinned task");
+  await f.emit("agent_settled");
+  f.state.waitingPanes.set("%2", "1");
+  f.state.waitingPanes.set("%3", "1");
+  f.state.otherWindowPanes.add("%3");
+  f.state.title = "external replacement";
+  await f.refresh("sync");
+  expect(f.state.title).toBe("* pinned task");
+  expect(f.state.waitingPanes).toEqual(
+    new Map([
+      ["%1", "1"],
+      ["%2", "1"],
+      ["%3", "1"],
+    ]),
+  );
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Title mode: manual");
+  expect(f.notices.at(-1)).toContain("Local waiting: yes");
+  expect(f.requests).toEqual([]);
 });
 
 test("sync leaves pending naming alive and its later result can update the title", async () => {
-	const work = deferred();
-	const f = fixture([work.promise]);
-	f.input("synthetic task");
-	await settle();
-	await f.refresh("sync");
-	expect(f.requests).toHaveLength(1);
-	expect(f.requests[0].options.signal.aborted).toBe(false);
-	work.resolve(response("late ai title"));
-	await settle();
-	expect(f.state.title).toBe("late ai title");
+  const work = deferred();
+  const f = fixture([work.promise]);
+  f.input("synthetic task");
+  await settle();
+  await f.refresh("sync");
+  expect(f.requests).toHaveLength(1);
+  expect(f.requests[0].options.signal.aborted).toBe(false);
+  work.resolve(response("late ai title"));
+  await settle();
+  expect(f.state.title).toBe("late ai title");
 });
 
 test("sync can apply a completed current candidate without another naming request", async () => {
-	let release!: () => void;
-	const gate = new Promise<void>((resolve) => { release = resolve; });
-	let held = false;
-	const f = fixture(undefined, async (args) => {
-		if (!held && args[0] === "display-message") { held = true; await gate; }
-	});
-	f.input("synthetic task");
-	await settle();
-	const sync = f.refresh("sync");
-	release();
-	await sync;
-	await settle();
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.requests).toHaveLength(1);
-	expect(f.notices).toEqual(["tmux title and waiting markers synchronized."]);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = false;
+  const f = fixture(undefined, async (args) => {
+    if (!held && args[0] === "display-message") {
+      held = true;
+      await gate;
+    }
+  });
+  f.input("synthetic task");
+  await settle();
+  const sync = f.refresh("sync");
+  release();
+  await sync;
+  await settle();
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.requests).toHaveLength(1);
+  expect(f.notices).toEqual(["tmux title and waiting markers synchronized."]);
 });
 
 test("sync failures never report success and explicit repeats can warn again", async () => {
-	const f = fixture(undefined, async () => { throw new Error("Synthetic private error details"); });
-	await f.refresh("sync");
-	await f.refresh("sync");
-	expect(f.notices).toEqual([]);
-	expect(f.warnings).toHaveLength(2);
-	expect(f.warnings.join("\n")).not.toContain("Synthetic private error details");
+  const f = fixture(undefined, async () => {
+    throw new Error("Synthetic private error details");
+  });
+  await f.refresh("sync");
+  await f.refresh("sync");
+  expect(f.notices).toEqual([]);
+  expect(f.warnings).toHaveLength(2);
+  expect(f.warnings.join("\n")).not.toContain(
+    "Synthetic private error details",
+  );
 });
 
-test.each(["new status", "reload"])("superseded sync commands do not confirm stale updates: %s", async (replacement) => {
-	process.env.PI_TMUX_MODEL = "off";
-	let release!: () => void;
-	const gate = new Promise<void>((resolve) => { release = resolve; });
-	let held = false;
-	const f = fixture(undefined, async (args) => {
-		if (!held && args[0] === "set-option") { held = true; await gate; }
-	});
-	const sync = f.refresh("sync");
-	await settle();
-	const next = replacement === "reload" ? f.emit("session_shutdown", "reload") : f.emit("agent_settled");
-	release();
-	await sync;
-	await next;
-	expect(f.notices).toEqual([]);
-	expect(f.warnings).toEqual([]);
-});
+test.each(["new status", "reload"])(
+  "superseded sync commands do not confirm stale updates: %s",
+  async (replacement) => {
+    process.env.PI_TMUX_MODEL = "off";
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held = false;
+    const f = fixture(undefined, async (args) => {
+      if (!held && args[0] === "set-option") {
+        held = true;
+        await gate;
+      }
+    });
+    const sync = f.refresh("sync");
+    await settle();
+    const next =
+      replacement === "reload"
+        ? f.emit("session_shutdown", "reload")
+        : f.emit("agent_settled");
+    release();
+    await sync;
+    await next;
+    expect(f.notices).toEqual([]);
+    expect(f.warnings).toEqual([]);
+  },
+);
 
 test("sync does not report success when continuous moves exhaust its stabilization bound", async () => {
-	let reads = 0;
-	const f = fixture(undefined, async (args) => {
-		if (args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT) f.state.window = `@${++reads}`;
-	});
-	await f.refresh("sync");
-	expect(f.calls.filter((args) => args[0] === "set-option")).toHaveLength(4);
-	expect(f.notices).toEqual([]);
-	expect(f.requests).toEqual([]);
+  let reads = 0;
+  const f = fixture(undefined, async (args) => {
+    if (
+      args[0] === "display-message" &&
+      args[4] === WINDOW_INFO_INTERNAL_FORMAT
+    )
+      f.state.window = `@${++reads}`;
+  });
+  await f.refresh("sync");
+  expect(f.calls.filter((args) => args[0] === "set-option")).toHaveLength(4);
+  expect(f.notices).toEqual([]);
+  expect(f.requests).toEqual([]);
 });
 
 test("sync does not change automatic title mode", async () => {
-	const f = fixture();
-	await f.refresh("sync");
-	f.input("a new task");
-	await settle();
-	expect(f.requests).toHaveLength(1);
-	expect(f.state.title).toBe("fix auth tests");
+  const f = fixture();
+  await f.refresh("sync");
+  f.input("a new task");
+  await settle();
+  expect(f.requests).toHaveLength(1);
+  expect(f.state.title).toBe("fix auth tests");
 });
 
-test.each(["print", "json", "rpc"])("sync cannot write in %s mode", async (mode) => {
-	const f = fixture();
-	(f.ctx as any).mode = mode;
-	await f.refresh("sync");
-	expect(f.calls).toEqual([]);
-	expect(f.requests).toEqual([]);
-});
+test.each(["print", "json", "rpc"])(
+  "sync cannot write in %s mode",
+  async (mode) => {
+    const f = fixture();
+    (f.ctx as any).mode = mode;
+    await f.refresh("sync");
+    expect(f.calls).toEqual([]);
+    expect(f.requests).toEqual([]);
+  },
+);
 
 test("sync rejects invalid targets and trailing arguments but set sync remains a title", async () => {
-	const f = fixture();
-	await f.refresh("sync extra");
-	expect(f.calls).toEqual([]);
-	process.env.TMUX_PANE = "%1; unsafe";
-	await f.refresh("sync");
-	expect(f.calls).toEqual([]);
-	process.env.TMUX_PANE = "%1";
-	await f.refresh("set sync");
-	expect(f.state.title).toBe("sync");
+  const f = fixture();
+  await f.refresh("sync extra");
+  expect(f.calls).toEqual([]);
+  process.env.TMUX_PANE = "%1; unsafe";
+  await f.refresh("sync");
+  expect(f.calls).toEqual([]);
+  process.env.TMUX_PANE = "%1";
+  await f.refresh("set sync");
+  expect(f.state.title).toBe("sync");
 });
 
 test("manual title retries can report a new tmux failure", async () => {
-	const f = fixture([], async () => { throw new Error("Synthetic tmux failure"); });
-	await f.refresh("set first manual title");
-	await f.refresh("set second manual title");
-	expect(f.warnings).toHaveLength(2);
-	expect(f.requests).toHaveLength(0);
+  const f = fixture([], async () => {
+    throw new Error("Synthetic tmux failure");
+  });
+  await f.refresh("set first manual title");
+  await f.refresh("set second manual title");
+  expect(f.warnings).toHaveLength(2);
+  expect(f.requests).toHaveLength(0);
 });
 
 test("manual title commands cannot write to tmux outside interactive mode", async () => {
-	const f = fixture();
-	for (const mode of ["rpc", "json", "text"]) {
-		(f.ctx as any).mode = mode;
-		await f.refresh("set manual title");
-		await f.refresh("auto");
-	}
-	(f.ctx as any).mode = "tui";
-	delete process.env.TMUX_PANE;
-	await f.refresh("set manual title");
-	expect(f.calls).toHaveLength(0);
-	expect(f.requests).toHaveLength(0);
+  const f = fixture();
+  for (const mode of ["rpc", "json", "text"]) {
+    (f.ctx as any).mode = mode;
+    await f.refresh("set manual title");
+    await f.refresh("auto");
+  }
+  (f.ctx as any).mode = "tui";
+  delete process.env.TMUX_PANE;
+  await f.refresh("set manual title");
+  expect(f.calls).toHaveLength(0);
+  expect(f.requests).toHaveLength(0);
 });
 
 test("/quit-pane requests graceful Pi shutdown and defers closing its pane until Pi exits", async () => {
-	const f = fixture();
-	await f.quitPane();
+  const f = fixture();
+  await f.quitPane();
 
-	expect(f.calls[0]).toEqual(["display-message", "-p", "-t", "%1", "#{pid}"]);
-	expect(f.calls[1]?.slice(0, 2)).toEqual(["run-shell", "-b"]);
-	const watcher = f.calls[1]?.[2] ?? "";
-	expect(watcher).toContain(`pi_pid=${process.pid}`);
-	expect(watcher).toContain("pane='%1'");
-	expect(watcher).toContain("server_pid='123'");
-	expect(watcher).toContain('while kill -0 "$pi_pid"');
-	expect(watcher).toContain("sleep 0.1");
-	expect(watcher).toContain("'##{pid}'");
-	expect(watcher).toEndWith('tmux kill-pane -t "$pane"');
-	expect(f.shutdownCalls).toBe(1);
-	expect(f.warnings).toEqual([]);
+  expect(f.calls[0]).toEqual(["display-message", "-p", "-t", "%1", "#{pid}"]);
+  expect(f.calls[1]?.slice(0, 2)).toEqual(["run-shell", "-b"]);
+  const watcher = f.calls[1]?.[2] ?? "";
+  expect(watcher).toContain(`pi_pid=${process.pid}`);
+  expect(watcher).toContain("pane='%1'");
+  expect(watcher).toContain("server_pid='123'");
+  expect(watcher).toContain('while kill -0 "$pi_pid"');
+  expect(watcher).toContain("sleep 0.1");
+  expect(watcher).toContain("'##{pid}'");
+  expect(watcher).toEndWith('tmux kill-pane -t "$pane"');
+  expect(f.shutdownCalls).toBe(1);
+  expect(f.warnings).toEqual([]);
 });
 
 test("/quit-pane leaves Pi running outside interactive tmux", async () => {
-	const f = fixture();
-	(f.ctx as any).mode = "json";
-	await f.quitPane();
-	(f.ctx as any).mode = "tui";
-	process.env.TMUX_PANE = "%1; unsafe";
-	await f.quitPane();
+  const f = fixture();
+  (f.ctx as any).mode = "json";
+  await f.quitPane();
+  (f.ctx as any).mode = "tui";
+  process.env.TMUX_PANE = "%1; unsafe";
+  await f.quitPane();
 
-	expect(f.calls).toEqual([]);
-	expect(f.shutdownCalls).toBe(0);
-	expect(f.warnings).toHaveLength(2);
-	expect(f.warnings.every((warning) => warning.includes("interactive Pi inside tmux"))).toBe(true);
+  expect(f.calls).toEqual([]);
+  expect(f.shutdownCalls).toBe(0);
+  expect(f.warnings).toHaveLength(2);
+  expect(
+    f.warnings.every((warning) =>
+      warning.includes("interactive Pi inside tmux"),
+    ),
+  ).toBe(true);
 });
 
 test("/quit-pane leaves Pi running if tmux cannot schedule pane closure", async () => {
-	const f = fixture([], async (args) => {
-		if (args[0] === "run-shell") throw new Error("Synthetic tmux failure");
-	});
-	await f.quitPane();
+  const f = fixture([], async (args) => {
+    if (args[0] === "run-shell") throw new Error("Synthetic tmux failure");
+  });
+  await f.quitPane();
 
-	expect(f.calls.map((args) => args[0])).toEqual(["display-message", "run-shell"]);
-	expect(f.shutdownCalls).toBe(0);
-	expect(f.warnings).toEqual(["Could not prepare to close the current tmux pane; Pi is still running."]);
+  expect(f.calls.map((args) => args[0])).toEqual([
+    "display-message",
+    "run-shell",
+  ]);
+  expect(f.shutdownCalls).toBe(0);
+  expect(f.warnings).toEqual([
+    "Could not prepare to close the current tmux pane; Pi is still running.",
+  ]);
 });
 
 test.each([
-	{ setting: undefined, expected: "configured" },
-	{ setting: "off", expected: "off" },
-	{ setting: "example invalid configuration", expected: "invalid configuration" },
-	{ setting: "router/vendor/example-model", expected: "configured" },
-])("status is read-only and reports configuration without dialogue or registry access: %j", async ({ setting, expected }) => {
-	if (setting === undefined) delete process.env.PI_TMUX_MODEL;
-	else process.env.PI_TMUX_MODEL = setting;
-	const f = fixture();
-	Object.defineProperty(f.ctx, "sessionManager", { get: () => { throw new Error("Must not collect dialogue"); } });
-	Object.defineProperty(f.ctx, "modelRegistry", { get: () => { throw new Error("Must not access credentials or models"); } });
-	f.state.title = "synthetic private title";
-	f.state.sessionTitle = "synthetic private session name";
-	await f.refresh("status");
-	expect(f.calls).toEqual([["display-message", "-p", "-t", "%1", STATUS_SNAPSHOT_FORMAT]]);
-	expect(f.requests).toEqual([]);
-	expect(f.writes).toEqual([]);
-	expect(f.state.waitingPanes.size).toBe(0);
-	expect(f.state.activePanes.size).toBe(0);
-	expect(f.notices[0]).toContain("AI naming: " + expected);
-	expect(f.notices[0]).toContain("Last naming rejection: none");
-	expect(f.notices[0]).toContain("Targets: pane %1, window @2, session $0");
-	expect(f.notices[0]).toContain("Pending move repairs: windows 0, sessions 0");
-	expect(f.notices[0]).not.toContain(f.state.title);
-	expect(f.notices[0]).not.toContain(f.state.sessionTitle);
-	if (setting && setting !== "off") expect(f.notices[0]).not.toContain(setting);
-	expect(f.warnings).toEqual([]);
-});
+  { setting: undefined, expected: "configured" },
+  { setting: "off", expected: "off" },
+  {
+    setting: "example invalid configuration",
+    expected: "invalid configuration",
+  },
+  { setting: "router/vendor/example-model", expected: "configured" },
+])(
+  "status is read-only and reports configuration without dialogue or registry access: %j",
+  async ({ setting, expected }) => {
+    if (setting === undefined) delete process.env.PI_TMUX_MODEL;
+    else process.env.PI_TMUX_MODEL = setting;
+    const f = fixture();
+    Object.defineProperty(f.ctx, "sessionManager", {
+      get: () => {
+        throw new Error("Must not collect dialogue");
+      },
+    });
+    Object.defineProperty(f.ctx, "modelRegistry", {
+      get: () => {
+        throw new Error("Must not access credentials or models");
+      },
+    });
+    f.state.title = "synthetic private title";
+    f.state.sessionTitle = "synthetic private session name";
+    await f.refresh("status");
+    expect(f.calls).toEqual([
+      ["display-message", "-p", "-t", "%1", STATUS_SNAPSHOT_FORMAT],
+    ]);
+    expect(f.requests).toEqual([]);
+    expect(f.writes).toEqual([]);
+    expect(f.state.waitingPanes.size).toBe(0);
+    expect(f.state.activePanes.size).toBe(0);
+    expect(f.notices[0]).toContain("AI naming: " + expected);
+    expect(f.notices[0]).toContain("Last naming rejection: none");
+    expect(f.notices[0]).toContain("Targets: pane %1, window @2, session $0");
+    expect(f.notices[0]).toContain(
+      "Pending move repairs: windows 0, sessions 0",
+    );
+    expect(f.notices[0]).not.toContain(f.state.title);
+    expect(f.notices[0]).not.toContain(f.state.sessionTitle);
+    if (setting && setting !== "off")
+      expect(f.notices[0]).not.toContain(setting);
+    expect(f.warnings).toEqual([]);
+  },
+);
 
 test.each([
-	{ pane: false, peer: false, elsewhere: false, flags: "pane no, window no, session no" },
-	{ pane: true, peer: false, elsewhere: false, flags: "pane yes, window yes, session yes" },
-	{ pane: false, peer: true, elsewhere: false, flags: "pane no, window yes, session yes" },
-	{ pane: false, peer: false, elsewhere: true, flags: "pane no, window no, session yes" },
-])("status reports server waiting flags separately from local state: %j", async ({ pane, peer, elsewhere, flags }) => {
-	const f = fixture();
-	f.state.waitingPanes.set("%1", pane ? "1" : "0");
-	f.state.waitingPanes.set("%2", peer ? "1" : "0");
-	f.state.waitingPanes.set("%3", elsewhere ? "1" : "0");
-	f.state.otherWindowPanes.add("%3");
-	await f.refresh("status");
-	expect(f.notices[0]).toContain("Waiting flags: " + flags);
-	expect(f.notices[0]).toContain("Local waiting: no");
-	expect(f.calls).toHaveLength(1);
-	expect(f.writes).toEqual([]);
-});
+  {
+    pane: false,
+    peer: false,
+    elsewhere: false,
+    flags: "pane no, window no, session no",
+  },
+  {
+    pane: true,
+    peer: false,
+    elsewhere: false,
+    flags: "pane yes, window yes, session yes",
+  },
+  {
+    pane: false,
+    peer: true,
+    elsewhere: false,
+    flags: "pane no, window yes, session yes",
+  },
+  {
+    pane: false,
+    peer: false,
+    elsewhere: true,
+    flags: "pane no, window no, session yes",
+  },
+])(
+  "status reports server waiting flags separately from local state: %j",
+  async ({ pane, peer, elsewhere, flags }) => {
+    const f = fixture();
+    f.state.waitingPanes.set("%1", pane ? "1" : "0");
+    f.state.waitingPanes.set("%2", peer ? "1" : "0");
+    f.state.waitingPanes.set("%3", elsewhere ? "1" : "0");
+    f.state.otherWindowPanes.add("%3");
+    await f.refresh("status");
+    expect(f.notices[0]).toContain("Waiting flags: " + flags);
+    expect(f.notices[0]).toContain("Local waiting: no");
+    expect(f.calls).toHaveLength(1);
+    expect(f.writes).toEqual([]);
+  },
+);
 
 test("status preserves manual pins and waiting state", async () => {
-	const f = fixture();
-	await f.refresh("set pinned task");
-	await f.emit("agent_settled");
-	const previousWrites = [...f.writes];
-	const previousCalls = f.calls.length;
-	await f.refresh("status");
-	expect(f.notices.at(-1)).toContain("Title mode: manual");
-	expect(f.notices.at(-1)).toContain("Local waiting: yes");
-	expect(f.notices.at(-1)).toContain("Waiting flags: pane yes, window yes, session yes");
-	expect(f.writes).toEqual(previousWrites);
-	expect(f.calls.slice(previousCalls)).toEqual([["display-message", "-p", "-t", "%1", STATUS_SNAPSHOT_FORMAT]]);
-	f.input("another task");
-	await settle();
-	expect(f.state.title).toBe("pinned task");
-	expect(f.requests).toHaveLength(0);
+  const f = fixture();
+  await f.refresh("set pinned task");
+  await f.emit("agent_settled");
+  const previousWrites = [...f.writes];
+  const previousCalls = f.calls.length;
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Title mode: manual");
+  expect(f.notices.at(-1)).toContain("Local waiting: yes");
+  expect(f.notices.at(-1)).toContain(
+    "Waiting flags: pane yes, window yes, session yes",
+  );
+  expect(f.writes).toEqual(previousWrites);
+  expect(f.calls.slice(previousCalls)).toEqual([
+    ["display-message", "-p", "-t", "%1", STATUS_SNAPSHOT_FORMAT],
+  ]);
+  f.input("another task");
+  await settle();
+  expect(f.state.title).toBe("pinned task");
+  expect(f.requests).toHaveLength(0);
 });
 
 test("status does not cancel or wait for a pending naming request", async () => {
-	const pending = deferred();
-	const f = fixture([pending.promise]);
-	f.input("synthetic task");
-	await settle();
-	await f.refresh("status");
-	expect(f.notices.at(-1)).toContain("Naming request: pending");
-	expect(f.requests).toHaveLength(1);
-	expect(f.requests[0].options.signal.aborted).toBe(false);
-	pending.resolve(response("completed task"));
-	await settle();
-	expect(f.state.title).toBe("completed task");
+  const pending = deferred();
+  const f = fixture([pending.promise]);
+  f.input("synthetic task");
+  await settle();
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Naming request: pending");
+  expect(f.requests).toHaveLength(1);
+  expect(f.requests[0].options.signal.aborted).toBe(false);
+  pending.resolve(response("completed task"));
+  await settle();
+  expect(f.state.title).toBe("completed task");
 });
 
 test("status accepts a legacy adapter snapshot without server identity", async () => {
-	const f = fixture();
-	f.state.statusInfo = "$0\t@2\t0\t0\t0";
-	await f.refresh("status");
-	expect(f.notices.at(-1)).toContain("Targets: pane %1, window @2, session $0");
-	expect(f.notices.at(-1)).toContain("tmux writes: enabled");
-	expect(f.warnings).toEqual([]);
-	expect(f.writes).toEqual([]);
+  const f = fixture();
+  f.state.statusInfo = "$0\t@2\t0\t0\t0";
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Targets: pane %1, window @2, session $0");
+  expect(f.notices.at(-1)).toContain("tmux writes: enabled");
+  expect(f.warnings).toEqual([]);
+  expect(f.writes).toEqual([]);
 });
 
 test("status detects a changed server, cancels obsolete naming work, and leaves tmux untouched", async () => {
-	const pending = deferred();
-	const f = fixture([pending.promise]);
-	f.state.windowInfo = "$0:1:123\t@2\t0\texisting task";
-	f.input("synthetic task");
-	await settle();
-	expect(f.requests).toHaveLength(1);
-	expect(f.requests[0].options.signal.aborted).toBe(false);
+  const pending = deferred();
+  const f = fixture([pending.promise]);
+  f.state.windowInfo = "$0:1:123\t@2\t0\texisting task";
+  f.input("synthetic task");
+  await settle();
+  expect(f.requests).toHaveLength(1);
+  expect(f.requests[0].options.signal.aborted).toBe(false);
 
-	f.state.statusInfo = "124\t$0\t@2\t0\t0\t0";
-	const beforeWrites = [...f.writes];
-	const beforeCalls = f.calls.length;
-	await f.refresh("status");
-	expect(f.notices.at(-1)).toContain("tmux writes: stopped (server changed; restart Pi to resume)");
-	expect(f.notices.at(-1)).toContain("Naming request: idle");
-	expect(f.requests[0].options.signal.aborted).toBe(true);
-	expect(f.writes).toEqual(beforeWrites);
-	expect(f.calls.slice(beforeCalls)).toEqual([[
-		"display-message", "-p", "-t", "%1", STATUS_SNAPSHOT_FORMAT,
-	]]);
+  f.state.statusInfo = "124\t$0\t@2\t0\t0\t0";
+  const beforeWrites = [...f.writes];
+  const beforeCalls = f.calls.length;
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain(
+    "tmux writes: stopped (server changed; restart Pi to resume)",
+  );
+  expect(f.notices.at(-1)).toContain("Naming request: idle");
+  expect(f.requests[0].options.signal.aborted).toBe(true);
+  expect(f.writes).toEqual(beforeWrites);
+  expect(f.calls.slice(beforeCalls)).toEqual([
+    ["display-message", "-p", "-t", "%1", STATUS_SNAPSHOT_FORMAT],
+  ]);
 
-	pending.resolve(response("obsolete title"));
-	await settle();
-	expect(f.state.title).toBe("existing task");
-	expect(f.requests).toHaveLength(1);
+  pending.resolve(response("obsolete title"));
+  await settle();
+  expect(f.state.title).toBe("existing task");
+  expect(f.requests).toHaveLength(1);
 });
 
 test("a reloaded controller keeps the old server identity when tmux restarts during reload", async () => {
-	const warningKey = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
-	const previousWarningDescriptor = Object.getOwnPropertyDescriptor(process, warningKey);
-	Reflect.deleteProperty(process, warningKey);
-	try {
-		process.env.PI_TMUX_MODEL = "off";
-		let serverPid = "123";
-		const warnings: string[] = [];
-		const writes: string[][] = [];
-		const ctx = {
-			mode: "tui",
-			ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
-		} as unknown as ExtensionContext;
-		const tmux: RunTmux = async (args) => {
-			if (args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT) {
-				return `$0:1:${serverPid}:0\t@2\t0\texisting task`;
-			}
-			writes.push(args);
-			return "";
-		};
-		const load = () => {
-			const runtimeHandlers = new Map<string, Function>();
-			piTmux({
-				on: (event: string, handler: Function) => runtimeHandlers.set(event, handler),
-				registerCommand: () => {},
-			} as unknown as ExtensionAPI, tmux);
-			return async (event: string, reason = "startup") => {
-				await runtimeHandlers.get(event)!({ type: event, reason }, ctx);
-				await settle();
-			};
-		};
+  const warningKey = Symbol.for(
+    "@leocavalcante/pi-tmux/server-change-warning-shown",
+  );
+  const previousWarningDescriptor = Object.getOwnPropertyDescriptor(
+    process,
+    warningKey,
+  );
+  Reflect.deleteProperty(process, warningKey);
+  try {
+    process.env.PI_TMUX_MODEL = "off";
+    let serverPid = "123";
+    const warnings: string[] = [];
+    const writes: string[][] = [];
+    const ctx = {
+      mode: "tui",
+      ui: {
+        notify: (text: string, level: string) => {
+          if (level === "warning") warnings.push(text);
+        },
+      },
+    } as unknown as ExtensionContext;
+    const tmux: RunTmux = async (args) => {
+      if (
+        args[0] === "display-message" &&
+        args[4] === WINDOW_INFO_INTERNAL_FORMAT
+      ) {
+        return `$0:1:${serverPid}:0\t@2\t0\texisting task`;
+      }
+      writes.push(args);
+      return "";
+    };
+    const load = () => {
+      const runtimeHandlers = new Map<string, Function>();
+      piTmux(
+        {
+          on: (event: string, handler: Function) =>
+            runtimeHandlers.set(event, handler),
+          registerCommand: () => {},
+        } as unknown as ExtensionAPI,
+        tmux,
+      );
+      return async (event: string, reason = "startup") => {
+        await runtimeHandlers.get(event)!({ type: event, reason }, ctx);
+        await settle();
+      };
+    };
 
-		const firstRuntime = load();
-		await firstRuntime("session_start");
-		await firstRuntime("session_shutdown", "reload");
-		const writesBeforeRestart = writes.length;
-		serverPid = "124";
-		const secondRuntime = load();
-		await secondRuntime("session_start", "reload");
+    const firstRuntime = load();
+    await firstRuntime("session_start");
+    await firstRuntime("session_shutdown", "reload");
+    const writesBeforeRestart = writes.length;
+    serverPid = "124";
+    const secondRuntime = load();
+    await secondRuntime("session_start", "reload");
 
-		expect(writes).toHaveLength(writesBeforeRestart);
-		expect(warnings).toEqual(["The tmux server changed; restart Pi to resume title updates."]);
-	} finally {
-		if (previousWarningDescriptor) Object.defineProperty(process, warningKey, previousWarningDescriptor);
-		else Reflect.deleteProperty(process, warningKey);
-	}
+    expect(writes).toHaveLength(writesBeforeRestart);
+    expect(warnings).toEqual([
+      "The tmux server changed; restart Pi to resume title updates.",
+    ]);
+  } finally {
+    if (previousWarningDescriptor)
+      Object.defineProperty(process, warningKey, previousWarningDescriptor);
+    else Reflect.deleteProperty(process, warningKey);
+  }
 });
 
 test("separate injected tmux adapters keep independent server identities across reloads", async () => {
-	process.env.PI_TMUX_MODEL = "off";
-	const warning = "The tmux server changed; restart Pi to resume title updates.";
-	const makeAdapter = (initialPid: string, writes: string[][]) => {
-		let serverPid = initialPid;
-		const tmux: RunTmux = async (args) => {
-			if (args[0] === "display-message") {
-				if (args[4] === STATUS_SNAPSHOT_FORMAT) return `${serverPid}\t$0\t@2\t0\t0\t0`;
-				if (args[4] === WINDOW_INFO_INTERNAL_FORMAT) return `$0:1:${serverPid}:0\t@2\t0\texisting task`;
-				if (args[4] === "#{window_name}") return "existing task";
-			}
-			if (args[0] === "show-options") return "";
-			writes.push(args);
-			return "";
-		};
-		return { tmux, setServerPid: (pid: string) => { serverPid = pid; } };
-	};
-	const makeRuntime = (tmux: RunTmux, writes: string[][]) => {
-		const handlers = new Map<string, Function>();
-		const commands = new Map<string, { handler: Function }>();
-		const warnings: string[] = [];
-		const ctx = {
-			mode: "tui",
-			ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
-		} as unknown as ExtensionContext;
-		piTmux({
-			on: (event: string, handler: Function) => handlers.set(event, handler),
-			registerCommand: (name: string, command: { handler: Function }) => commands.set(name, command),
-		} as unknown as ExtensionAPI, tmux);
-		return {
-			ctx,
-			warnings,
-			writes,
-			start: async () => handlers.get("session_start")!({ type: "session_start", reason: "startup" }, ctx),
-			sync: async () => commands.get("tmux-title")!.handler("sync", ctx),
-		};
-	};
+  process.env.PI_TMUX_MODEL = "off";
+  const warning =
+    "The tmux server changed; restart Pi to resume title updates.";
+  const makeAdapter = (initialPid: string, writes: string[][]) => {
+    let serverPid = initialPid;
+    const tmux: RunTmux = async (args) => {
+      if (args[0] === "display-message") {
+        if (args[4] === STATUS_SNAPSHOT_FORMAT)
+          return `${serverPid}\t$0\t@2\t0\t0\t0`;
+        if (args[4] === WINDOW_INFO_INTERNAL_FORMAT)
+          return `$0:1:${serverPid}:0\t@2\t0\texisting task`;
+        if (args[4] === "#{window_name}") return "existing task";
+      }
+      if (args[0] === "show-options") return "";
+      writes.push(args);
+      return "";
+    };
+    return {
+      tmux,
+      setServerPid: (pid: string) => {
+        serverPid = pid;
+      },
+    };
+  };
+  const makeRuntime = (tmux: RunTmux, writes: string[][]) => {
+    const handlers = new Map<string, Function>();
+    const commands = new Map<string, { handler: Function }>();
+    const warnings: string[] = [];
+    const ctx = {
+      mode: "tui",
+      ui: {
+        notify: (text: string, level: string) => {
+          if (level === "warning") warnings.push(text);
+        },
+      },
+    } as unknown as ExtensionContext;
+    piTmux(
+      {
+        on: (event: string, handler: Function) => handlers.set(event, handler),
+        registerCommand: (name: string, command: { handler: Function }) =>
+          commands.set(name, command),
+      } as unknown as ExtensionAPI,
+      tmux,
+    );
+    return {
+      ctx,
+      warnings,
+      writes,
+      start: async () =>
+        handlers.get("session_start")!(
+          { type: "session_start", reason: "startup" },
+          ctx,
+        ),
+      sync: async () => commands.get("tmux-title")!.handler("sync", ctx),
+    };
+  };
 
-	const firstWrites: string[][] = [];
-	const secondWrites: string[][] = [];
-	const firstAdapter = makeAdapter("123", firstWrites);
-	const secondAdapter = makeAdapter("456", secondWrites);
-	const first = makeRuntime(firstAdapter.tmux, firstWrites);
-	const second = makeRuntime(secondAdapter.tmux, secondWrites);
-	await first.start();
-	await second.start();
-	expect(firstWrites.length).toBeGreaterThan(0);
-	expect(secondWrites.length).toBeGreaterThan(0);
+  const firstWrites: string[][] = [];
+  const secondWrites: string[][] = [];
+  const firstAdapter = makeAdapter("123", firstWrites);
+  const secondAdapter = makeAdapter("456", secondWrites);
+  const first = makeRuntime(firstAdapter.tmux, firstWrites);
+  const second = makeRuntime(secondAdapter.tmux, secondWrites);
+  await first.start();
+  await second.start();
+  expect(firstWrites.length).toBeGreaterThan(0);
+  expect(secondWrites.length).toBeGreaterThan(0);
 
-	firstAdapter.setServerPid("124");
-	const firstWriteCount = firstWrites.length;
-	await first.sync();
-	expect(firstWrites).toHaveLength(firstWriteCount);
-	expect(first.warnings).toEqual([warning]);
+  firstAdapter.setServerPid("124");
+  const firstWriteCount = firstWrites.length;
+  await first.sync();
+  expect(firstWrites).toHaveLength(firstWriteCount);
+  expect(first.warnings).toEqual([warning]);
 
-	const secondWriteCount = secondWrites.length;
-	await second.sync();
-	expect(secondWrites.length).toBeGreaterThan(secondWriteCount);
-	expect(second.warnings).toEqual([]);
+  const secondWriteCount = secondWrites.length;
+  await second.sync();
+  expect(secondWrites.length).toBeGreaterThan(secondWriteCount);
+  expect(second.warnings).toEqual([]);
 
-	secondAdapter.setServerPid("457");
-	const secondWritesBeforeRestart = secondWrites.length;
-	await second.start();
-	expect(secondWrites).toHaveLength(secondWritesBeforeRestart);
-	expect(second.warnings).toEqual([warning]);
+  secondAdapter.setServerPid("457");
+  const secondWritesBeforeRestart = secondWrites.length;
+  await second.start();
+  expect(secondWrites).toHaveLength(secondWritesBeforeRestart);
+  expect(second.warnings).toEqual([warning]);
 
-	const reloadedSecond = makeRuntime(secondAdapter.tmux, secondWrites);
-	await reloadedSecond.start();
-	expect(secondWrites).toHaveLength(secondWritesBeforeRestart);
-	expect(reloadedSecond.warnings).toEqual([]);
+  const reloadedSecond = makeRuntime(secondAdapter.tmux, secondWrites);
+  await reloadedSecond.start();
+  expect(secondWrites).toHaveLength(secondWritesBeforeRestart);
+  expect(reloadedSecond.warnings).toEqual([]);
 });
 
 // Pi's extension loader uses Node + Jiti with moduleCache:false; Bun's own loader caches these imports.
 test.serial.skipIf(process.platform === "win32")(
-	"the default adapter retains and migrates server identity across Pi's uncached extension reload",
-	async () => {
-		const nodeExecutable = Bun.which("node");
-		if (!nodeExecutable) throw new Error("Node.js is required for the fake tmux executable");
-		const directory = mkdtempSync(join(tmpdir(), "pi-tmux-reload-"));
-		const fakeTmux = join(directory, "tmux");
-		const writeLog = join(directory, "writes.log");
-		const entrypoint = fileURLToPath(new URL("../index.ts", import.meta.url));
-		try {
-			writeFileSync(fakeTmux, [
-				"#!/usr/bin/env node",
-				"const args = process.argv.slice(2);",
-				"const fs = require('node:fs');",
-				"if (args[0] === 'display-message') {",
-				"  process.stdout.write('$0:1:' + process.env.PI_TMUX_TEST_SERVER_PID + ':0\\t@2\\t0\\texisting task\\n');",
-				"} else if (args[0] !== 'show-options') {",
-				"  fs.appendFileSync(process.env.PI_TMUX_TEST_WRITE_LOG, JSON.stringify(args) + '\\n');",
-				"}",
-			].join("\n"));
-			chmodSync(fakeTmux, 0o755);
-		} catch (error) {
-			rmSync(directory, { recursive: true, force: true });
-			throw error;
-		}
-		try {
-			const script = [
-				'import { createJiti } from "jiti";',
-				'import { readFileSync } from "node:fs";',
-				`const entrypoint = ${JSON.stringify(entrypoint)};`,
-				`const writeLog = ${JSON.stringify(writeLog)};`,
-				'const warnings = [];',
-				'const ctx = { mode: "tui", ui: { notify: (text, level) => { if (level === "warning") warnings.push(text); } } };',
-				'const load = async () => {',
-				'  const jiti = createJiti(import.meta.url, { moduleCache: false, tsconfigPaths: true });',
-				'  const extension = await jiti.import(entrypoint, { default: true });',
-				'  const handlers = new Map();',
-				'  extension({ on: (event, handler) => handlers.set(event, handler), registerCommand: () => {} });',
-				'  return { extension, emit: async (event, reason = "startup") => handlers.get(event)({ type: event, reason }, ctx) };',
-				'};',
-				'const first = await load();',
-				'await first.emit("session_start");',
-				'await first.emit("session_shutdown", "reload");',
-				'const before = readFileSync(writeLog, "utf8").trim().split("\\n").filter(Boolean).length;',
-				'process.env.PI_TMUX_TEST_SERVER_PID = "456";',
-				'const second = await load();',
-				'await second.emit("session_start", "reload");',
-				'const after = readFileSync(writeLog, "utf8").trim().split("\\n").filter(Boolean).length;',
-				'const modernWarnings = [...warnings];',
-				'warnings.length = 0;',
-				'// Simulate scalar process state left by a pre-migration extension version.',
-				'Object.defineProperty(process, Symbol.for("@leocavalcante/pi-tmux/server-identity"), { configurable: true, value: "456" });',
-				'Object.defineProperty(process, Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown"), { configurable: true, value: true });',
-				'process.env.PI_TMUX_TEST_SERVER_PID = "789";',
-				'const legacy = await load();',
-				'await legacy.emit("session_start", "reload");',
-				'const afterLegacy = readFileSync(writeLog, "utf8").trim().split("\\n").filter(Boolean).length;',
-				'console.log(JSON.stringify({ reloaded: first.extension !== second.extension, before, after, modernWarnings, legacyReloaded: legacy.extension !== second.extension, afterLegacy, warnings }));',
-			].join("\n");
-			const env: NodeJS.ProcessEnv = {
-				PATH: [directory, dirname(nodeExecutable), process.env.PATH].filter(Boolean).join(delimiter),
-				HOME: process.env.HOME,
-				USERPROFILE: process.env.HOME,
-				TMPDIR: process.env.TMPDIR,
-				TEMP: process.env.TEMP,
-				TMP: process.env.TMP,
-				TERM: "dumb",
-				TMUX: "/tmp/pi-tmux-reload-test,123,456",
-				TMUX_PANE: "%1",
-				PI_TMUX_MODEL: "off",
-				PI_TMUX_TEST_SERVER_PID: "123",
-				PI_TMUX_TEST_WRITE_LOG: writeLog,
-			};
-			const output = execFileSync(nodeExecutable, ["--input-type=module", "-e", script], {
-				cwd: process.cwd(), env, encoding: "utf8", timeout: 30_000,
-			});
-			const result = JSON.parse(output) as {
-				reloaded: boolean; before: number; after: number; modernWarnings: string[];
-				legacyReloaded: boolean; afterLegacy: number; warnings: string[];
-			};
-			expect(result.reloaded).toBe(true);
-			expect(result.before).toBeGreaterThan(0);
-			expect(result.after).toBe(result.before);
-			expect(result.modernWarnings).toEqual(["The tmux server changed; restart Pi to resume title updates."]);
-			expect(result.legacyReloaded).toBe(true);
-			expect(result.afterLegacy).toBe(result.after);
-			expect(result.warnings).toEqual([]);
-		} finally {
-			rmSync(directory, { recursive: true, force: true });
-		}
-	},
+  "the default adapter retains and migrates server identity across Pi's uncached extension reload",
+  async () => {
+    const nodeExecutable = Bun.which("node");
+    if (!nodeExecutable)
+      throw new Error("Node.js is required for the fake tmux executable");
+    const directory = mkdtempSync(join(tmpdir(), "pi-tmux-reload-"));
+    const fakeTmux = join(directory, "tmux");
+    const writeLog = join(directory, "writes.log");
+    const entrypoint = fileURLToPath(new URL("../index.ts", import.meta.url));
+    try {
+      writeFileSync(
+        fakeTmux,
+        [
+          "#!/usr/bin/env node",
+          "const args = process.argv.slice(2);",
+          "const fs = require('node:fs');",
+          "if (args[0] === 'display-message') {",
+          "  process.stdout.write('$0:1:' + process.env.PI_TMUX_TEST_SERVER_PID + ':0\\t@2\\t0\\texisting task\\n');",
+          "} else if (args[0] !== 'show-options') {",
+          "  fs.appendFileSync(process.env.PI_TMUX_TEST_WRITE_LOG, JSON.stringify(args) + '\\n');",
+          "}",
+        ].join("\n"),
+      );
+      chmodSync(fakeTmux, 0o755);
+    } catch (error) {
+      rmSync(directory, { recursive: true, force: true });
+      throw error;
+    }
+    try {
+      const script = [
+        'import { createJiti } from "jiti";',
+        'import { readFileSync } from "node:fs";',
+        `const entrypoint = ${JSON.stringify(entrypoint)};`,
+        `const writeLog = ${JSON.stringify(writeLog)};`,
+        "const warnings = [];",
+        'const ctx = { mode: "tui", ui: { notify: (text, level) => { if (level === "warning") warnings.push(text); } } };',
+        "const load = async () => {",
+        "  const jiti = createJiti(import.meta.url, { moduleCache: false, tsconfigPaths: true });",
+        "  const extension = await jiti.import(entrypoint, { default: true });",
+        "  const handlers = new Map();",
+        "  extension({ on: (event, handler) => handlers.set(event, handler), registerCommand: () => {} });",
+        '  return { extension, emit: async (event, reason = "startup") => handlers.get(event)({ type: event, reason }, ctx) };',
+        "};",
+        "const first = await load();",
+        'await first.emit("session_start");',
+        'await first.emit("session_shutdown", "reload");',
+        'const before = readFileSync(writeLog, "utf8").trim().split("\\n").filter(Boolean).length;',
+        'process.env.PI_TMUX_TEST_SERVER_PID = "456";',
+        "const second = await load();",
+        'await second.emit("session_start", "reload");',
+        'const after = readFileSync(writeLog, "utf8").trim().split("\\n").filter(Boolean).length;',
+        "const modernWarnings = [...warnings];",
+        "warnings.length = 0;",
+        "// Simulate scalar process state left by a pre-migration extension version.",
+        'Object.defineProperty(process, Symbol.for("@leocavalcante/pi-tmux/server-identity"), { configurable: true, value: "456" });',
+        'Object.defineProperty(process, Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown"), { configurable: true, value: true });',
+        'process.env.PI_TMUX_TEST_SERVER_PID = "789";',
+        "const legacy = await load();",
+        'await legacy.emit("session_start", "reload");',
+        'const afterLegacy = readFileSync(writeLog, "utf8").trim().split("\\n").filter(Boolean).length;',
+        "console.log(JSON.stringify({ reloaded: first.extension !== second.extension, before, after, modernWarnings, legacyReloaded: legacy.extension !== second.extension, afterLegacy, warnings }));",
+      ].join("\n");
+      const env: NodeJS.ProcessEnv = {
+        PATH: [directory, dirname(nodeExecutable), process.env.PATH]
+          .filter(Boolean)
+          .join(delimiter),
+        HOME: process.env.HOME,
+        USERPROFILE: process.env.HOME,
+        TMPDIR: process.env.TMPDIR,
+        TEMP: process.env.TEMP,
+        TMP: process.env.TMP,
+        TERM: "dumb",
+        TMUX: "/tmp/pi-tmux-reload-test,123,456",
+        TMUX_PANE: "%1",
+        PI_TMUX_MODEL: "off",
+        PI_TMUX_TEST_SERVER_PID: "123",
+        PI_TMUX_TEST_WRITE_LOG: writeLog,
+      };
+      const output = execFileSync(
+        nodeExecutable,
+        ["--input-type=module", "-e", script],
+        {
+          cwd: process.cwd(),
+          env,
+          encoding: "utf8",
+          timeout: 30_000,
+        },
+      );
+      const result = JSON.parse(output) as {
+        reloaded: boolean;
+        before: number;
+        after: number;
+        modernWarnings: string[];
+        legacyReloaded: boolean;
+        afterLegacy: number;
+        warnings: string[];
+      };
+      expect(result.reloaded).toBe(true);
+      expect(result.before).toBeGreaterThan(0);
+      expect(result.after).toBe(result.before);
+      expect(result.modernWarnings).toEqual([
+        "The tmux server changed; restart Pi to resume title updates.",
+      ]);
+      expect(result.legacyReloaded).toBe(true);
+      expect(result.afterLegacy).toBe(result.after);
+      expect(result.warnings).toEqual([]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
 );
 
-test.each(["sync", "set synthetic title"])("%s warns when the tmux server changes after its initial guard", async (command) => {
-	const warningKey = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
-	const previousWarningDescriptor = Object.getOwnPropertyDescriptor(process, warningKey);
-	Reflect.deleteProperty(process, warningKey);
-	let serverPid = "123";
-	const handlers = new Map<string, Function>();
-	const commands = new Map<string, { handler: Function }>();
-	const warnings: string[] = [];
-	const ctx = {
-		mode: "tui",
-		ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
-	} as unknown as ExtensionContext;
-	const tmux: RunTmux = async (args) => args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT
-		? `$0:1:${serverPid}:0\t@2\t0\texisting task`
-		: "";
-	tmux.supportsServerPidGuard = true;
-	try {
-		process.env.PI_TMUX_MODEL = "off";
-		piTmux({
-			on: (event: string, handler: Function) => handlers.set(event, handler),
-			registerCommand: (name: string, command: { handler: Function }) => commands.set(name, command),
-		} as unknown as ExtensionAPI, tmux);
-		await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, ctx);
+test.each(["sync", "set synthetic title"])(
+  "%s warns when the tmux server changes after its initial guard",
+  async (command) => {
+    const warningKey = Symbol.for(
+      "@leocavalcante/pi-tmux/server-change-warning-shown",
+    );
+    const previousWarningDescriptor = Object.getOwnPropertyDescriptor(
+      process,
+      warningKey,
+    );
+    Reflect.deleteProperty(process, warningKey);
+    let serverPid = "123";
+    const handlers = new Map<string, Function>();
+    const commands = new Map<string, { handler: Function }>();
+    const warnings: string[] = [];
+    const ctx = {
+      mode: "tui",
+      ui: {
+        notify: (text: string, level: string) => {
+          if (level === "warning") warnings.push(text);
+        },
+      },
+    } as unknown as ExtensionContext;
+    const tmux: RunTmux = async (args) =>
+      args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT
+        ? `$0:1:${serverPid}:0\t@2\t0\texisting task`
+        : "";
+    tmux.supportsServerPidGuard = true;
+    try {
+      process.env.PI_TMUX_MODEL = "off";
+      piTmux(
+        {
+          on: (event: string, handler: Function) =>
+            handlers.set(event, handler),
+          registerCommand: (name: string, command: { handler: Function }) =>
+            commands.set(name, command),
+        } as unknown as ExtensionAPI,
+        tmux,
+      );
+      await handlers.get("session_start")!(
+        { type: "session_start", reason: "startup" },
+        ctx,
+      );
 
-		serverPid = "124";
-		await commands.get("tmux-title")!.handler(command, ctx);
+      serverPid = "124";
+      await commands.get("tmux-title")!.handler(command, ctx);
 
-		expect(warnings).toContain("The tmux server changed; restart Pi to resume title updates.");
-	} finally {
-		if (previousWarningDescriptor) Object.defineProperty(process, warningKey, previousWarningDescriptor);
-		else Reflect.deleteProperty(process, warningKey);
-	}
-});
+      expect(warnings).toContain(
+        "The tmux server changed; restart Pi to resume title updates.",
+      );
+    } finally {
+      if (previousWarningDescriptor)
+        Object.defineProperty(process, warningKey, previousWarningDescriptor);
+      else Reflect.deleteProperty(process, warningKey);
+    }
+  },
+);
 
 test("explicit title refresh warns when tmux restarts while naming is pending", async () => {
-	const warningKey = Symbol.for("@leocavalcante/pi-tmux/server-change-warning-shown");
-	const previousWarningDescriptor = Object.getOwnPropertyDescriptor(process, warningKey);
-	Reflect.deleteProperty(process, warningKey);
-	let serverPid = "123";
-	let messages: unknown[] = [];
-	const pending = deferred();
-	let requests = 0;
-	const handlers = new Map<string, Function>();
-	const commands = new Map<string, { handler: Function }>();
-	const warnings: string[] = [];
-	const ctx = {
-		mode: "tui",
-		sessionManager: { buildSessionProjection: () => ({ messages }) },
-		modelRegistry: {
-			find: (provider: string, id: string) => ({ provider, id }),
-			hasConfiguredAuth: () => true,
-			streamSimple: () => ({ result: () => { requests++; return pending.promise; } }),
-		},
-		ui: { notify: (text: string, level: string) => { if (level === "warning") warnings.push(text); } },
-	} as unknown as ExtensionContext;
-	const tmux: RunTmux = async (args) => args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT
-		? `$0:1:${serverPid}:0\t@2\t0\texisting task`
-		: "";
-	tmux.supportsServerPidGuard = true;
-	try {
-		process.env.PI_TMUX_MODEL = "test/model";
-		piTmux({
-			on: (event: string, handler: Function) => handlers.set(event, handler),
-			registerCommand: (name: string, command: { handler: Function }) => commands.set(name, command),
-		} as unknown as ExtensionAPI, tmux);
-		await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, ctx);
-		messages = [{ role: "user", content: "synthetic task" }];
-		await commands.get("tmux-title")!.handler("", ctx);
-		expect(requests).toBe(1);
+  const warningKey = Symbol.for(
+    "@leocavalcante/pi-tmux/server-change-warning-shown",
+  );
+  const previousWarningDescriptor = Object.getOwnPropertyDescriptor(
+    process,
+    warningKey,
+  );
+  Reflect.deleteProperty(process, warningKey);
+  let serverPid = "123";
+  let messages: unknown[] = [];
+  const pending = deferred();
+  let requests = 0;
+  const handlers = new Map<string, Function>();
+  const commands = new Map<string, { handler: Function }>();
+  const warnings: string[] = [];
+  const ctx = {
+    mode: "tui",
+    sessionManager: { buildSessionProjection: () => ({ messages }) },
+    modelRegistry: {
+      find: (provider: string, id: string) => ({ provider, id }),
+      hasConfiguredAuth: () => true,
+      streamSimple: () => ({
+        result: () => {
+          requests++;
+          return pending.promise;
+        },
+      }),
+    },
+    ui: {
+      notify: (text: string, level: string) => {
+        if (level === "warning") warnings.push(text);
+      },
+    },
+  } as unknown as ExtensionContext;
+  const tmux: RunTmux = async (args) =>
+    args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT
+      ? `$0:1:${serverPid}:0\t@2\t0\texisting task`
+      : "";
+  tmux.supportsServerPidGuard = true;
+  try {
+    process.env.PI_TMUX_MODEL = "test/model";
+    piTmux(
+      {
+        on: (event: string, handler: Function) => handlers.set(event, handler),
+        registerCommand: (name: string, command: { handler: Function }) =>
+          commands.set(name, command),
+      } as unknown as ExtensionAPI,
+      tmux,
+    );
+    await handlers.get("session_start")!(
+      { type: "session_start", reason: "startup" },
+      ctx,
+    );
+    messages = [{ role: "user", content: "synthetic task" }];
+    await commands.get("tmux-title")!.handler("", ctx);
+    expect(requests).toBe(1);
 
-		serverPid = "124";
-		pending.resolve(response("completed task"));
-		await settle();
+    serverPid = "124";
+    pending.resolve(response("completed task"));
+    await settle();
 
-		expect(warnings).toContain("The tmux server changed; restart Pi to resume title updates.");
-	} finally {
-		if (previousWarningDescriptor) Object.defineProperty(process, warningKey, previousWarningDescriptor);
-		else Reflect.deleteProperty(process, warningKey);
-	}
+    expect(warnings).toContain(
+      "The tmux server changed; restart Pi to resume title updates.",
+    );
+  } finally {
+    if (previousWarningDescriptor)
+      Object.defineProperty(process, warningKey, previousWarningDescriptor);
+    else Reflect.deleteProperty(process, warningKey);
+  }
 });
 
 test("status reports completed model output waiting to be applied without changing it", async () => {
-	let release!: () => void;
-	const gate = new Promise<void>((resolve) => { release = resolve; });
-	let held = false;
-	const f = fixture(undefined, async (args) => {
-		if (!held && args[0] === "display-message" && args[4] === WINDOW_INFO_INTERNAL_FORMAT) {
-			held = true;
-			await gate;
-		}
-	});
-	f.input("synthetic task");
-	await settle();
-	try {
-		expect(held).toBe(true);
-		await f.refresh("status");
-		expect(f.notices.at(-1)).toContain("Naming request: ready to apply");
-		expect(f.writes).toEqual([]);
-	} finally { release(); }
-	await settle();
-	expect(f.state.title).toBe("fix auth tests");
-	expect(f.requests).toHaveLength(1);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = false;
+  const f = fixture(undefined, async (args) => {
+    if (
+      !held &&
+      args[0] === "display-message" &&
+      args[4] === WINDOW_INFO_INTERNAL_FORMAT
+    ) {
+      held = true;
+      await gate;
+    }
+  });
+  f.input("synthetic task");
+  await settle();
+  try {
+    expect(held).toBe(true);
+    await f.refresh("status");
+    expect(f.notices.at(-1)).toContain("Naming request: ready to apply");
+    expect(f.writes).toEqual([]);
+  } finally {
+    release();
+  }
+  await settle();
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.requests).toHaveLength(1);
 });
 
 test.each([
-	"123\t$0\t@2\t2\t0\t0", "123\t$0\t@2\t0\tx\t0", "123\t$0\t@2\t0\t0\t9",
-	"pid\t$0\t@2\t0\t0\t0", "123\thome\t@2\t0\t0\t0", "123\t$0\t-t\t0\t0\t0",
-	"123\t$0\t@2\t0\t0", "123\t$0\t@2\t0\t0\t0\textra",
-])("invalid status snapshots are contained without exposing their contents: %j", async (info) => {
-	const f = fixture();
-	f.state.statusInfo = info;
-	await f.refresh("status");
-	expect(f.notices).toEqual([]);
-	expect(f.warnings).toEqual(["tmux status could not be read. Check tmux."]);
-	expect(f.calls).toHaveLength(1);
-	expect(f.requests).toHaveLength(0);
-	expect(f.writes).toEqual([]);
-});
+  "123\t$0\t@2\t2\t0\t0",
+  "123\t$0\t@2\t0\tx\t0",
+  "123\t$0\t@2\t0\t0\t9",
+  "pid\t$0\t@2\t0\t0\t0",
+  "123\thome\t@2\t0\t0\t0",
+  "123\t$0\t-t\t0\t0\t0",
+  "123\t$0\t@2\t0\t0",
+  "123\t$0\t@2\t0\t0\t0\textra",
+])(
+  "invalid status snapshots are contained without exposing their contents: %j",
+  async (info) => {
+    const f = fixture();
+    f.state.statusInfo = info;
+    await f.refresh("status");
+    expect(f.notices).toEqual([]);
+    expect(f.warnings).toEqual(["tmux status could not be read. Check tmux."]);
+    expect(f.calls).toHaveLength(1);
+    expect(f.requests).toHaveLength(0);
+    expect(f.writes).toEqual([]);
+  },
+);
 
 test("status failures do not consume or reset the automatic warning budget", async () => {
-	const f = fixture(undefined, async () => { throw new Error("synthetic private error details"); });
-	await f.refresh("status");
-	expect(f.warnings).toEqual(["tmux status could not be read. Check tmux."]);
-	await f.emit("agent_settled");
-	const warnings = f.warnings.length;
-	expect(warnings).toBe(2);
-	await f.refresh("status");
-	expect(f.warnings).toHaveLength(warnings + 1);
-	await f.emit("agent_settled");
-	expect(f.warnings).toHaveLength(warnings + 1);
-	expect(f.warnings.join("\n")).not.toContain("synthetic private error details");
+  const f = fixture(undefined, async () => {
+    throw new Error("synthetic private error details");
+  });
+  await f.refresh("status");
+  expect(f.warnings).toEqual(["tmux status could not be read. Check tmux."]);
+  await f.emit("agent_settled");
+  const warnings = f.warnings.length;
+  expect(warnings).toBe(2);
+  await f.refresh("status");
+  expect(f.warnings).toHaveLength(warnings + 1);
+  await f.emit("agent_settled");
+  expect(f.warnings).toHaveLength(warnings + 1);
+  expect(f.warnings.join("\n")).not.toContain(
+    "synthetic private error details",
+  );
 });
 
 test("reload cancels a pending status snapshot without notifying the disposed runtime", async () => {
-	process.env.PI_TMUX_MODEL = "off";
-	let release!: () => void;
-	const gate = new Promise<void>((resolve) => { release = resolve; });
-	let statusSignal: AbortSignal | undefined;
-	const f = fixture(undefined, async (args, signal) => {
-		if (args[4] === STATUS_SNAPSHOT_FORMAT) { statusSignal = signal; await gate; }
-	});
-	const status = f.refresh("status");
-	await settle();
-	await f.emit("session_shutdown", "reload");
-	expect(statusSignal?.aborted).toBe(true);
-	release();
-	await status;
-	expect(f.notices).toEqual([]);
-	expect(f.warnings).toEqual([]);
+  process.env.PI_TMUX_MODEL = "off";
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let statusSignal: AbortSignal | undefined;
+  const f = fixture(undefined, async (args, signal) => {
+    if (args[4] === STATUS_SNAPSHOT_FORMAT) {
+      statusSignal = signal;
+      await gate;
+    }
+  });
+  const status = f.refresh("status");
+  await settle();
+  await f.emit("session_shutdown", "reload");
+  expect(statusSignal?.aborted).toBe(true);
+  release();
+  await status;
+  expect(f.notices).toEqual([]);
+  expect(f.warnings).toEqual([]);
 });
 
-test.each(["print", "json", "rpc"])("status cannot query tmux in %s mode", async (mode) => {
-	const f = fixture();
-	(f.ctx as any).mode = mode;
-	await f.refresh("status");
-	expect(f.calls).toEqual([]);
-	expect(f.requests).toEqual([]);
-	expect(f.warnings[0]).toContain("interactive Pi inside tmux");
-});
+test.each(["print", "json", "rpc"])(
+  "status cannot query tmux in %s mode",
+  async (mode) => {
+    const f = fixture();
+    (f.ctx as any).mode = mode;
+    await f.refresh("status");
+    expect(f.calls).toEqual([]);
+    expect(f.requests).toEqual([]);
+    expect(f.warnings[0]).toContain("interactive Pi inside tmux");
+  },
+);
 
-test.each([undefined, "@2", "%1; unsafe"])("status rejects a missing or invalid pane ID: %j", async (pane) => {
-	const f = fixture();
-	if (pane === undefined) delete process.env.TMUX_PANE;
-	else process.env.TMUX_PANE = pane;
-	await f.refresh("status");
-	expect(f.calls).toEqual([]);
-	expect(f.warnings[0]).toContain("interactive Pi inside tmux");
-});
+test.each([undefined, "@2", "%1; unsafe"])(
+  "status rejects a missing or invalid pane ID: %j",
+  async (pane) => {
+    const f = fixture();
+    if (pane === undefined) delete process.env.TMUX_PANE;
+    else process.env.TMUX_PANE = pane;
+    await f.refresh("status");
+    expect(f.calls).toEqual([]);
+    expect(f.warnings[0]).toContain("interactive Pi inside tmux");
+  },
+);
 
 test("status does not accept trailing arguments or reserve set status as a command", async () => {
-	const f = fixture();
-	await f.refresh("status extra");
-	expect(f.calls).toEqual([]);
-	expect(f.warnings[0]).toContain("auto | read | status");
-	await f.refresh("set status");
-	expect(f.state.title).toBe("status");
+  const f = fixture();
+  await f.refresh("status extra");
+  expect(f.calls).toEqual([]);
+  expect(f.warnings[0]).toContain("auto | read | status");
+  await f.refresh("set status");
+  expect(f.state.title).toBe("status");
 });
 
 test("tmux failures are contained and warn only once", async () => {
-	const f = fixture([], async () => { throw new Error("Synthetic tmux failure"); });
-	await f.emit("agent_settled");
-	f.emit("agent_start");
-	await settle();
-	await f.emit("agent_settled");
-	expect(f.state.title).toBe("existing task");
-	expect(f.warnings).toHaveLength(1);
-	expect(f.requests).toHaveLength(0);
+  const f = fixture([], async () => {
+    throw new Error("Synthetic tmux failure");
+  });
+  await f.emit("agent_settled");
+  f.emit("agent_start");
+  await settle();
+  await f.emit("agent_settled");
+  expect(f.state.title).toBe("existing task");
+  expect(f.warnings).toHaveLength(1);
+  expect(f.requests).toHaveLength(0);
 });
 
 test("a throwing warning notification does not poison later tmux updates", async () => {
-	process.env.PI_TMUX_MODEL = "off";
-	let failFirstLookup = true;
-	const f = fixture([], async (args) => {
-		if (failFirstLookup && args[0] === "display-message") {
-			failFirstLookup = false;
-			throw new Error("Synthetic tmux failure");
-		}
-	});
-	let throwWarning = true;
-	(f.ctx.ui as any).notify = (text: string, level: string) => {
-		if (throwWarning && level === "warning") throw new Error("UI is disposed");
-		(level === "warning" ? f.warnings : f.notices).push(text);
-	};
+  process.env.PI_TMUX_MODEL = "off";
+  let failFirstLookup = true;
+  const f = fixture([], async (args) => {
+    if (failFirstLookup && args[0] === "display-message") {
+      failFirstLookup = false;
+      throw new Error("Synthetic tmux failure");
+    }
+  });
+  let throwWarning = true;
+  (f.ctx.ui as any).notify = (text: string, level: string) => {
+    if (throwWarning && level === "warning") throw new Error("UI is disposed");
+    (level === "warning" ? f.warnings : f.notices).push(text);
+  };
 
-	await f.emit("agent_settled");
-	expect(f.state.waitingPanes.size).toBe(0);
-	throwWarning = false;
-	await f.refresh("sync");
-	expect(f.state.waitingPanes.get("%1")).toBe("1");
-	expect(f.state.title).toBe("* existing task");
-	expect(f.notices).toContain("tmux title and waiting markers synchronized.");
+  await f.emit("agent_settled");
+  expect(f.state.waitingPanes.size).toBe(0);
+  throwWarning = false;
+  await f.refresh("sync");
+  expect(f.state.waitingPanes.get("%1")).toBe("1");
+  expect(f.state.title).toBe("* existing task");
+  expect(f.notices).toContain("tmux title and waiting markers synchronized.");
 });
 
 test("a failed status notification is not misreported as a tmux failure", async () => {
-	const f = fixture();
-	let calls = 0;
-	(f.ctx.ui as any).notify = (text: string, level: string) => {
-		calls++;
-		if (level === "info") throw new Error("UI is disposed");
-		f.warnings.push(text);
-	};
+  const f = fixture();
+  let calls = 0;
+  (f.ctx.ui as any).notify = (text: string, level: string) => {
+    calls++;
+    if (level === "info") throw new Error("UI is disposed");
+    f.warnings.push(text);
+  };
 
-	await expect(f.refresh("status")).resolves.toBeUndefined();
-	expect(calls).toBe(1);
-	expect(f.warnings).toEqual([]);
-	expect(f.calls).toHaveLength(1);
+  await expect(f.refresh("status")).resolves.toBeUndefined();
+  expect(calls).toBe(1);
+  expect(f.warnings).toEqual([]);
+  expect(f.calls).toHaveLength(1);
 });
 
 test("disposed UI notifications do not reject successful title commands", async () => {
-	process.env.PI_TMUX_MODEL = "off";
-	const f = fixture([]);
-	(f.ctx.ui as any).notify = () => { throw new Error("UI is disposed"); };
+  process.env.PI_TMUX_MODEL = "off";
+  const f = fixture([]);
+  (f.ctx.ui as any).notify = () => {
+    throw new Error("UI is disposed");
+  };
 
-	await expect(f.refresh("set pinned task")).resolves.toBeUndefined();
-	expect(f.state.title).toBe("pinned task");
-	await expect(f.refresh("sync")).resolves.toBeUndefined();
-	await expect(f.refresh("status")).resolves.toBeUndefined();
-	await expect(f.refresh("unknown command")).resolves.toBeUndefined();
-	await expect(f.refresh("auto")).resolves.toBeUndefined();
+  await expect(f.refresh("set pinned task")).resolves.toBeUndefined();
+  expect(f.state.title).toBe("pinned task");
+  await expect(f.refresh("sync")).resolves.toBeUndefined();
+  await expect(f.refresh("status")).resolves.toBeUndefined();
+  await expect(f.refresh("unknown command")).resolves.toBeUndefined();
+  await expect(f.refresh("auto")).resolves.toBeUndefined();
 });
 
 test("rejects Vercel tokens only when a Vercel label is present", async () => {
-	const token = "A1b2".repeat(6);
-	const labeledOutput = `Vercel: ${token}`;
-	const obfuscatedToken = `${token.slice(0, 12)}\u200b${token.slice(12)}`;
-	for (const output of [
-		labeledOutput,
-		labeledOutput.replace("Vercel", "Ver\u200bcel"),
-		`Vercel: ${obfuscatedToken}`,
-	]) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(1);
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = "A1b2".repeat(6);
+  const labeledOutput = `Vercel: ${token}`;
+  const obfuscatedToken = `${token.slice(0, 12)}\u200b${token.slice(12)}`;
+  for (const output of [
+    labeledOutput,
+    labeledOutput.replace("Vercel", "Ver\u200bcel"),
+    `Vercel: ${obfuscatedToken}`,
+  ]) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(1);
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("vercel deployment tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("vercel deployment tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("vercel deployment tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("vercel deployment tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 });
 
 test("rejects Railway tokens only when a Railway label is present", async () => {
-	const token = ["a".repeat(8), "b".repeat(4), "c".repeat(4), "d".repeat(4), "e".repeat(12)].join("-");
-	const labeledOutput = `Railway: ${token}`;
-	const obfuscatedToken = `${token.slice(0, 16)}\u200b${token.slice(16)}`;
-	for (const output of [
-		labeledOutput,
-		labeledOutput.replace("Railway", "Rail\u200bway"),
-		`Railway: ${obfuscatedToken}`,
-	]) {
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(1);
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(token);
-	}
+  const token = [
+    "a".repeat(8),
+    "b".repeat(4),
+    "c".repeat(4),
+    "d".repeat(4),
+    "e".repeat(12),
+  ].join("-");
+  const labeledOutput = `Railway: ${token}`;
+  const obfuscatedToken = `${token.slice(0, 16)}\u200b${token.slice(16)}`;
+  for (const output of [
+    labeledOutput,
+    labeledOutput.replace("Railway", "Rail\u200bway"),
+    `Railway: ${obfuscatedToken}`,
+  ]) {
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(1);
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(token);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("railway deployment tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("railway deployment tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("railway deployment tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("railway deployment tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		token,
-		`project id: ${token}`,
-		`Railway ${token}`,
-		`Railway: ${token.slice(1)}`,
-		`Railway: ${token.replace("a", "g")}`,
-		`Railway: ${token}x`,
-	];
-	for (const output of nearMisses) {
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("railway deployment tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("railway deployment tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    token,
+    `project id: ${token}`,
+    `Railway ${token}`,
+    `Railway: ${token.slice(1)}`,
+    `Railway: ${token.replace("a", "g")}`,
+    `Railway: ${token}x`,
+  ];
+  for (const output of nearMisses) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("railway deployment tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("railway deployment tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("rejects labeled Cloudflare API keys without mistaking near-misses for keys", async () => {
-	const apiKey = "A1b2".repeat(10);
-	const globalApiKey = "a1b2".repeat(9) + "c";
-	const sensitiveOutputs = [
-		`Cloudflare: ${apiKey}`,
-		`Cloudflare: ${apiKey.slice(0, 20)}\u200b${apiKey.slice(20)}`,
-		`Cloudflare global: ${globalApiKey}`,
-		`Cloudflare global: ${globalApiKey.slice(0, 18)}\u200b${globalApiKey.slice(18)}`,
-	];
-	for (const output of sensitiveOutputs) {
-		expect(hasSensitiveNamingContext(output)).toBe(true);
-		expect(hasSensitiveOutput(output)).toBe(true);
-		const f = fixture([Promise.resolve(response(output))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(1);
-		expect(f.state.title).toBe("existing task");
-		expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-		expect(f.warnings).toEqual(["Sensitive-looking naming output was not applied."]);
-		expect(f.warnings.join(" ")).not.toContain(apiKey);
-		expect(f.warnings.join(" ")).not.toContain(globalApiKey);
-	}
+  const apiKey = "A1b2".repeat(10);
+  const globalApiKey = "a1b2".repeat(9) + "c";
+  const sensitiveOutputs = [
+    `Cloudflare: ${apiKey}`,
+    `Cloudflare: ${apiKey.slice(0, 20)}\u200b${apiKey.slice(20)}`,
+    `Cloudflare global: ${globalApiKey}`,
+    `Cloudflare global: ${globalApiKey.slice(0, 18)}\u200b${globalApiKey.slice(18)}`,
+  ];
+  for (const output of sensitiveOutputs) {
+    expect(hasSensitiveNamingContext(output)).toBe(true);
+    expect(hasSensitiveOutput(output)).toBe(true);
+    const f = fixture([Promise.resolve(response(output))]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(1);
+    expect(f.state.title).toBe("existing task");
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([
+      "Sensitive-looking naming output was not applied.",
+    ]);
+    expect(f.warnings.join(" ")).not.toContain(apiKey);
+    expect(f.warnings.join(" ")).not.toContain(globalApiKey);
+  }
 
-	const ordinaryTitle = fixture([Promise.resolve(response("cloudflare api tests"))]);
-	ordinaryTitle.input("Name a task");
-	await settle();
-	expect(ordinaryTitle.requests).toHaveLength(1);
-	expect(ordinaryTitle.state.title).toBe("cloudflare api tests");
-	expect(ordinaryTitle.warnings).toEqual([]);
+  const ordinaryTitle = fixture([
+    Promise.resolve(response("cloudflare api tests")),
+  ]);
+  ordinaryTitle.input("Name a task");
+  await settle();
+  expect(ordinaryTitle.requests).toHaveLength(1);
+  expect(ordinaryTitle.state.title).toBe("cloudflare api tests");
+  expect(ordinaryTitle.warnings).toEqual([]);
 
-	const nearMisses = [
-		`Cloudflare: ${apiKey.slice(1)}`,
-		`Cloudflare: ${apiKey}A`,
-		`Cloudflare ${apiKey}`,
-		apiKey,
-		`Cloudflare global: ${globalApiKey.slice(1)}`,
-		`Cloudflare global: ${globalApiKey}a`,
-		`Cloudflare global: ${"g".repeat(37)}`,
-	];
-	for (const output of nearMisses) {
-		expect(hasSensitiveNamingContext(output)).toBe(false);
-		expect(hasSensitiveOutput(output)).toBe(false);
-		const f = fixture([Promise.resolve(response(output)), Promise.resolve(response("cloudflare api tests"))]);
-		f.input("Name a task");
-		await settle();
-		expect(f.requests).toHaveLength(2);
-		expect(f.state.title).toBe("cloudflare api tests");
-		expect(f.warnings).toEqual([]);
-	}
+  const nearMisses = [
+    `Cloudflare: ${apiKey.slice(1)}`,
+    `Cloudflare: ${apiKey}A`,
+    `Cloudflare ${apiKey}`,
+    apiKey,
+    `Cloudflare global: ${globalApiKey.slice(1)}`,
+    `Cloudflare global: ${globalApiKey}a`,
+    `Cloudflare global: ${"g".repeat(37)}`,
+  ];
+  for (const output of nearMisses) {
+    expect(hasSensitiveNamingContext(output)).toBe(false);
+    expect(hasSensitiveOutput(output)).toBe(false);
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("cloudflare api tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(f.state.title).toBe("cloudflare api tests");
+    expect(f.warnings).toEqual([]);
+  }
 });
 
 test("coalesces superseded title refreshes during a burst of lifecycle updates", async () => {
-	process.env.PI_TMUX_MODEL = "off";
-	let release!: () => void;
-	const gate = new Promise<void>((resolve) => { release = resolve; });
-	let held = false;
-	const f = fixture([], async (args) => {
-		if (!held && args[0] === "display-message") { held = true; await gate; }
-	});
-	const initial = f.refresh("sync");
-	await settle();
-	expect(held).toBe(true);
+  process.env.PI_TMUX_MODEL = "off";
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = false;
+  const f = fixture([], async (args) => {
+    if (!held && args[0] === "display-message") {
+      held = true;
+      await gate;
+    }
+  });
+  const initial = f.refresh("sync");
+  await settle();
+  expect(held).toBe(true);
 
-	let completed = 0;
-	const superseded = Array.from({ length: 64 }, () => f.emit("agent_settled") as Promise<void>);
-	for (const update of superseded) void update.then(() => { completed++; });
-	f.emit("agent_start");
-	let completedWhileBlocked = 0;
-	try {
-		await settle();
-		completedWhileBlocked = completed;
-	} finally {
-		release();
-	}
+  let completed = 0;
+  const superseded = Array.from(
+    { length: 64 },
+    () => f.emit("agent_settled") as Promise<void>,
+  );
+  for (const update of superseded)
+    void update.then(() => {
+      completed++;
+    });
+  f.emit("agent_start");
+  let completedWhileBlocked = 0;
+  try {
+    await settle();
+    completedWhileBlocked = completed;
+  } finally {
+    release();
+  }
 
-	await Promise.all([initial, ...superseded]);
-	await settle();
-	expect(completedWhileBlocked).toBe(superseded.length);
-	expect(f.state.waitingPanes.get("%1")).toBe("0");
-	expect(f.state.activePanes.get("%1")).toBe("1");
-	expect(f.warnings).toEqual([]);
+  await Promise.all([initial, ...superseded]);
+  await settle();
+  expect(completedWhileBlocked).toBe(superseded.length);
+  expect(f.state.waitingPanes.get("%1")).toBe("0");
+  expect(f.state.activePanes.get("%1")).toBe("1");
+  expect(f.warnings).toEqual([]);
 });
