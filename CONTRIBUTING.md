@@ -1,6 +1,8 @@
 # Contributing
 
-## Setup
+## Development
+
+### Setup
 
 Development uses [Bun](https://bun.sh/docs/installation) 1.4.4 for dependencies, scripts, and most tests, and Node.js 22.19 or newer, which Pi runs extensions on. `bun run test` runs both lanes: Bun's test runner for `tests/*.test.ts`, then Node's native test runner for `tests/*.node-test.ts`.
 
@@ -13,12 +15,12 @@ bun install --frozen-lockfile
 To try the checkout in Pi without changing your settings:
 
 ```sh
-pi --extension ./index.ts
+pi -e ./src/extension.ts
 ```
 
 Use either the installed package or the development extension, not both.
 
-## Checks
+### Checks
 
 Run the local validation gates used by CI—formatting, TypeScript checks for the
 extension and tests, both test lanes, the package check, and the high-severity
@@ -37,9 +39,9 @@ package, subprocess, and protocol payloads. `bun run verify` stops at the first
 failure. It does not include Gitleaks; install
 it separately to run the secret scans under [Before submitting](#before-submitting).
 
-`index.ts` is the package entrypoint and re-exports the public helpers. The implementation lives in focused modules: `src/title.ts` handles title formatting, `src/naming.ts` handles model configuration and context, `src/tmux.ts` owns tmux formats and command adapters, `src/controller.ts` owns per-instance state and updates, and `src/extension.ts` registers commands and lifecycle events. The window snapshot is tab-delimited and its last field can be empty; preserve its trailing tab and remove only tmux's line terminator. Injected `RunTmux` adapters retain flat command arrays by default; adapters that support the server-PID guard can opt in with `supportsServerPidGuard = true`.
+`src/extension.ts` is the Pi entry point, named by `package.json` `pi.extensions`; the root `index.ts` re-exports it with the public helpers that tests use. The implementation lives in focused modules: `src/title.ts` handles title formatting, `src/naming.ts` handles model configuration and context, `src/tmux.ts` owns tmux formats and command adapters, `src/controller.ts` owns per-instance state and updates, and `src/extension.ts` registers commands and lifecycle events. The window snapshot is tab-delimited and its last field can be empty; preserve its trailing tab and remove only tmux's line terminator. Injected `RunTmux` adapters retain flat command arrays by default; adapters that support the server-PID guard can opt in with `supportsServerPidGuard = true`.
 
-## Tests
+### Tests
 
 Run both test lanes:
 
@@ -65,6 +67,10 @@ bun run test
 - `tests/release.test.ts` checks which commit types release, and that git-cliff writes notes Pi can read, with breaking changes and absolute pull request links.
 
 Tmux integration tests use separate temporary servers and skip automatically when `tmux` is unavailable or on native Windows. To run them, install tmux on a Unix-like host: the fixtures use Unix paths (`/dev/null` and `/bin/sleep`), so use Linux, macOS, or WSL. Mock-only tests, including empty window-name parsing and both fake-subprocess suites, do not need tmux. GitHub Actions runs the full tmux suite with Node.js 24 on Ubuntu 24.04 (tmux 3.4) and macOS 15 (Homebrew tmux), and on Ubuntu against a pinned tmux 3.7c source build with Node.js 22.19.0. Windows Server 2025 runs the type checks and mock-capable tests; tmux integration tests are skipped on native Windows. The Node.js lane also runs on 22.19.0 (the declared minimum), 22, 24, and 26, and a separate job runs both lanes against the minimum supported Pi from `engines.pi`. Maintainers can run CI on demand from GitHub Actions or with `gh workflow run CI --ref main`. Tests make no model API calls and do not rename your windows or sessions.
+
+## Deviations from the standard
+
+- The root `index.ts` re-exports the extension together with its title, naming, and tmux helpers, which the tests import. Pi loads `src/extension.ts`.
 
 ## Commits and pull requests
 

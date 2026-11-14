@@ -79,7 +79,7 @@
   },
   "pi": {
     "extensions": [
-      "./index.ts"
+      "./src/extension.ts"
     ]
   }
 }

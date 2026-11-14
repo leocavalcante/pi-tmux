@@ -1,11 +1,13 @@
 // @ts-check
+// Shared by every Pi extension: keep this file identical in each repository.
 import eslint from "@eslint/js";
 import { defineConfig } from "eslint/config";
 import prettier from "eslint-config-prettier/flat";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-// Test fixtures inspect dynamic package, subprocess, and protocol payloads; keep these relaxations test-only.
+// Tests inspect dynamically shaped JSON, protocol, and subprocess payloads;
+// keep these relaxations test-only.
 const testPayloadRules = Object.fromEntries(
   Object.keys(tseslint.plugin.rules)
     .filter(
@@ -29,10 +31,8 @@ export default defineConfig(
         tsconfigRootDir: import.meta.dirname,
       },
     },
-  },
-  {
-    // Node's test runner owns and reports promises returned by these declarations.
     rules: {
+      // Node's test runner owns and reports the promises its declarations return.
       "@typescript-eslint/no-floating-promises": [
         "error",
         {
@@ -48,7 +48,7 @@ export default defineConfig(
     },
   },
   {
-    // This extension's runtime entry is index.ts rather than src/extension.ts.
+    // Runtime code. A root index.ts, where a repository keeps one, re-exports src/.
     files: ["index.ts", "src/**/*.ts"],
     rules: {
       "no-restricted-imports": [
@@ -58,7 +58,7 @@ export default defineConfig(
             {
               group: ["bun", "bun:*"],
               message:
-                "Pi runs extensions on Node.js. Use node:* APIs in src/.",
+                "Pi runs extensions on Node.js. Use node:* APIs in runtime code.",
             },
           ],
         },
@@ -68,17 +68,25 @@ export default defineConfig(
   {
     files: ["**/*.{js,mjs,cjs}"],
     extends: [tseslint.configs.disableTypeChecked],
-  },
-  {
-    files: [".github/scripts/**/*.{js,mjs,cjs}"],
     languageOptions: { globals: globals.node },
   },
   {
     files: ["tests/**/*.ts"],
     rules: {
       ...testPayloadRules,
-      // Async test doubles intentionally retain Promise-shaped runtime contracts.
+      // Async test doubles keep Promise-shaped contracts.
       "@typescript-eslint/require-await": "off",
+    },
+  },
+  {
+    // JavaScript subprocess fixtures use no-op callbacks, empty cleanup catches,
+    // computed environment keys, and constant worker loops.
+    files: ["tests/**/*.{js,mjs,cjs}"],
+    rules: {
+      "@typescript-eslint/no-empty-function": "off",
+      "@typescript-eslint/no-dynamic-delete": "off",
+      "no-constant-condition": "off",
+      "no-empty": "off",
     },
   },
   prettier,

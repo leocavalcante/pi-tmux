@@ -492,15 +492,15 @@ test("the packed Pi extension installs through the CLI and runs its status-only 
     const entrypoint: unknown = Array.isArray(entrypoints)
       ? entrypoints[0]
       : undefined;
-    expect(entrypoint).toBe("./index.ts");
-    if (entrypoint !== "./index.ts")
+    expect(entrypoint).toBe("./src/extension.ts");
+    if (entrypoint !== "./src/extension.ts")
       throw new Error("Unexpected packed Pi entrypoint");
     expect(manifest.repository).toEqual({
       type: "git",
       url: "git+https://github.com/leocavalcante/pi-tmux.git",
     });
-    expect(manifest.files).toContain(entrypoint.replace(/^\.\//, ""));
     expect(manifest.files).toContain("src/");
+    expect(manifest.files).toContain("index.ts");
     expect(manifest.keywords).toContain("pi-extension");
     expect(manifest.keywords).toContain("pi-coding-agent");
     expect(manifest.peerDependencies?.["@earendil-works/pi-coding-agent"]).toBe(
@@ -533,6 +533,7 @@ test("the packed Pi extension installs through the CLI and runs its status-only 
         await readPackedMember(archive, `package/${member}`),
       );
     }
+    // The root module re-exports the extension with its public helpers.
     const packedEntrypoint = join(packageDirectory, "index.ts");
     const piSdkDirectory = join(
       repository,
