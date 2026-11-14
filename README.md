@@ -46,9 +46,9 @@ Run interactive Pi inside tmux, with `tmux` available on `PATH` and
 `TMUX_PANE` set by tmux. Linux CI exercises tmux 3.4 and a pinned tmux 3.7c
 build; macOS CI uses the runner's installed version. These are tested versions,
 not a stated minimum-version requirement. Tested with Pi 1.5.0; CI also checks
-the minimum supported Pi 1.1.0 peer version. The package
-declares Node.js 22.19 or newer; the Pi extension API peer range is `^1.1.0`.
-Pi supplies the runtime dependencies, with no build step.
+the minimum supported Pi 1.1.0. The package declares Node.js 22.19 or newer. It
+accepts any Pi version as its extension API peer (`*`), so it always uses the Pi
+that loads it. Pi supplies the runtime dependencies, with no build step.
 
 The npm package is available:
 
