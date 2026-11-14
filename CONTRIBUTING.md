@@ -20,16 +20,18 @@ Use either the installed package or the development extension, not both.
 
 ## Checks
 
-Run the local validation gates used by CI—TypeScript checks for the extension
-and tests, both test lanes, the package check, and the high-severity dependency
-audit—with one command:
+Run the local validation gates used by CI—formatting, TypeScript checks for the
+extension and tests, both test lanes, the package check, and the high-severity
+dependency audit—with one command:
 
 ```sh
 bun run verify
 ```
 
 The individual scripts remain available when you only need a targeted check.
-`bun run verify` stops at the first failure. It does not include Gitleaks; install
+Prettier formats every file with its default settings: `bun run lint` checks the
+formatting and `bun run format` applies it. `bun run verify` stops at the first
+failure. It does not include Gitleaks; install
 it separately to run the secret scans under [Before submitting](#before-submitting).
 
 `index.ts` is the package entrypoint and re-exports the public helpers. The implementation lives in focused modules: `src/title.ts` handles title formatting, `src/naming.ts` handles model configuration and context, `src/tmux.ts` owns tmux formats and command adapters, `src/controller.ts` owns per-instance state and updates, and `src/extension.ts` registers commands and lifecycle events. The window snapshot is tab-delimited and its last field can be empty; preserve its trailing tab and remove only tmux's line terminator. Injected `RunTmux` adapters retain flat command arrays by default; adapters that support the server-PID guard can opt in with `supportsServerPidGuard = true`.

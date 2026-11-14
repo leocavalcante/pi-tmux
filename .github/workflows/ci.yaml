@@ -29,6 +29,7 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: bun install --frozen-lockfile
+      - run: bun run lint
       - run: bun run check
       - run: bun run --if-present build
       - run: bunx --no-install publint
@@ -192,7 +193,8 @@ jobs:
 
   required:
     if: always()
-    needs: [static, test, node, pi-min, package, pi-canary, canary-report, tmux-3-7c]
+    needs:
+      [static, test, node, pi-min, package, pi-canary, canary-report, tmux-3-7c]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

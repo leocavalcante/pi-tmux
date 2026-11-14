@@ -25,12 +25,12 @@ prompt. Naming runs in the background and does not delay Pi's answer.
 - [Development](#development)
 - [License](#license)
 
-| State | Window name | tmux session name |
-| --- | --- | --- |
-| Pi is working alone in its window | `fix auth tests` | Existing name |
-| Pi has settled and is waiting for input | `* fix auth tests` | `* ` plus the existing name |
-| Pi quits, another Pi remains in the window | Current task title, marked if a remaining pane is waiting | Existing name, still prefixed if another Pi pane is waiting |
-| Last Pi in a window quits normally | `zsh` by default; configurable | Existing name, still prefixed if a Pi pane in another window is waiting |
+| State                                      | Window name                                               | tmux session name                                                       |
+| ------------------------------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Pi is working alone in its window          | `fix auth tests`                                          | Existing name                                                           |
+| Pi has settled and is waiting for input    | `* fix auth tests`                                        | `* ` plus the existing name                                             |
+| Pi quits, another Pi remains in the window | Current task title, marked if a remaining pane is waiting | Existing name, still prefixed if another Pi pane is waiting             |
+| Last Pi in a window quits normally         | `zsh` by default; configurable                            | Existing name, still prefixed if a Pi pane in another window is waiting |
 
 Generated and pinned task titles are lowercase and limited to 24 ASCII
 characters, including the waiting prefix. tmux session names keep their
