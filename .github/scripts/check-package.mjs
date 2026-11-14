@@ -72,7 +72,7 @@ try {
     extension,
     `
     import assert from "node:assert/strict";
-    const loaded = await import("@leocavalcante/pi-tmux/index.ts");
+    const loaded = await import("@leocavalcante/pi-tmux/src/extension.ts");
     // jiti exposes TypeScript in node_modules through CommonJS interop; Pi unwraps it the same way.
     const register = typeof loaded.default === "function" ? loaded.default : loaded.default.default;
     assert.equal(typeof register, "function");
