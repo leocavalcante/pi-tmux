@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
+import { assertDefined } from "./assert-defined.ts";
 import { cleanupTmuxFixture, supportsUnixTmux } from "./tmux-support.ts";
 
 const WORKFLOWS_DIRECTORY = fileURLToPath(
@@ -35,12 +36,11 @@ test("tmux fixture cleanup does not mask a test failure", () => {
   expect(observed).toBe(failure);
   expect(existsSync(directory)).toBe(false);
 
-  observed = undefined;
   try {
     try {
       throw failure;
     } finally {
-      cleanupTmuxFixture(() => {}, "\0");
+      cleanupTmuxFixture(() => undefined, "\0");
     }
   } catch (error) {
     observed = error;
@@ -62,7 +62,7 @@ test("README table of contents links resolve to section headings", () => {
   const occurrences = new Map<string, number>();
   const headingAnchors = new Set(
     [...readme.matchAll(/^#{1,6}\s+(.+?)\s*$/gm)].map(([, heading]) => {
-      const slug = heading!
+      const slug = assertDefined(heading)
         .toLowerCase()
         .replace(/[^\p{L}\p{N}\s_-]/gu, "")
         .trim()
@@ -70,11 +70,11 @@ test("README table of contents links resolve to section headings", () => {
         .replace(/-+/gu, "-");
       const occurrence = occurrences.get(slug) ?? 0;
       occurrences.set(slug, occurrence + 1);
-      return occurrence === 0 ? slug : `${slug}-${occurrence}`;
+      return occurrence === 0 ? slug : `${slug}-${String(occurrence)}`;
     }),
   );
-  const anchors = [...contents.matchAll(/\]\(#([^)]*)\)/gu)].map(
-    ([, anchor]) => anchor!,
+  const anchors = [...contents.matchAll(/\]\(#([^)]*)\)/gu)].map(([, anchor]) =>
+    assertDefined(anchor),
   );
   expect(anchors.length).toBeGreaterThan(0);
   expect(anchors.filter((anchor) => !headingAnchors.has(anchor))).toEqual([]);
@@ -116,12 +116,14 @@ test("README's tested Pi version matches the development SDK", () => {
     devDependencies: Record<string, string>;
   };
   expect(readme).toContain(
-    `Tested with Pi ${manifest.devDependencies["@earendil-works/pi-coding-agent"]}`,
+    `Tested with Pi ${String(manifest.devDependencies["@earendil-works/pi-coding-agent"])}`,
   );
 });
 
 test("CI tests the minimum supported Pi from engines.pi without changing the lockfile", () => {
-  type Step = { run?: string };
+  interface Step {
+    run?: string;
+  }
   const workflow = parseYaml(
     readFileSync(
       fileURLToPath(new URL("../.github/workflows/ci.yaml", import.meta.url)),
@@ -146,7 +148,7 @@ test("CI tests the minimum supported Pi from engines.pi without changing the loc
   )?.[1];
   if (!minimumVersion)
     throw new Error(
-      `Expected engines.pi to be ">=x.y.z", got ${manifest.engines.pi}`,
+      `Expected engines.pi to be ">=x.y.z", got ${String(manifest.engines.pi)}`,
     );
   const readme = readFileSync(
     fileURLToPath(new URL("../README.md", import.meta.url)),
@@ -347,7 +349,10 @@ test("README specifies UTF-16 code-unit limits for naming context sent to the mo
 });
 
 test("CI history secret scanning verifies its pinned binary and redacts findings", () => {
-  type Step = { run?: string; with?: Record<string, unknown> };
+  interface Step {
+    run?: string;
+    with?: Record<string, unknown>;
+  }
   const workflow = parseYaml(
     readFileSync(
       fileURLToPath(new URL("../.github/workflows/ci.yaml", import.meta.url)),
@@ -375,7 +380,7 @@ test("CI history secret scanning verifies its pinned binary and redacts findings
   ).toBe(true);
   expect(script).toMatch(/gitleaks_\d+\.\d+\.\d+_linux_x64\.tar\.gz/u);
   expect(script).toMatch(
-    /printf '%s  %s\\n' [a-f0-9]{64} "\$directory\/gitleaks\.tar\.gz" \| sha256sum --check --status/u,
+    /printf '%s {2}%s\\n' [a-f0-9]{64} "\$directory\/gitleaks\.tar\.gz" \| sha256sum --check --status/u,
   );
   const checksum = script.indexOf(
     'gitleaks.tar.gz" | sha256sum --check --status',
@@ -408,7 +413,9 @@ test("local verify script runs the same validation gates as CI", () => {
   ) as {
     scripts?: Record<string, string>;
   };
-  type Step = { run?: string };
+  interface Step {
+    run?: string;
+  }
   const workflow = parseYaml(
     readFileSync(
       fileURLToPath(new URL("../.github/workflows/ci.yaml", import.meta.url)),
@@ -504,17 +511,18 @@ test("external GitHub Actions use full commit SHAs with version comments", () =>
         line,
       );
       if (!match) continue;
-      const [, reference, versionComment] = match;
+      const reference = assertDefined(match[1]);
+      const versionComment = match[2];
       if (reference.startsWith("./")) continue;
       checkedActions++;
       if (!/^[^@]+@[0-9a-f]{40}$/.test(reference)) {
         throw new Error(
-          `${file}:${index + 1}: pin external action to a full commit SHA: ${reference}`,
+          `${file}:${String(index + 1)}: pin external action to a full commit SHA: ${reference}`,
         );
       }
       if (!versionComment?.startsWith("v")) {
         throw new Error(
-          `${file}:${index + 1}: retain a version comment for Dependabot: ${reference}`,
+          `${file}:${String(index + 1)}: retain a version comment for Dependabot: ${reference}`,
         );
       }
     }

@@ -1,3 +1,4 @@
+import { assertDefined } from "./assert-defined.ts";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -41,9 +42,9 @@ const sessionRenameTarget = (args: string[]) => {
 function parseTmuxCommand(command: string): string[] {
   const args: string[] = [];
   for (let index = 0; index < command.length;) {
-    while (/\s/.test(command[index] ?? "")) index++;
+    while (/\s/.test(command.charAt(index))) index++;
     if (index >= command.length) break;
-    if (command[index] === ";") {
+    if (command.charAt(index) === ";") {
       args.push(";");
       index++;
       continue;
@@ -53,11 +54,11 @@ function parseTmuxCommand(command: string): string[] {
     let quote: "'" | '"' | undefined;
     let started = false;
     while (index < command.length) {
-      const character = command[index];
+      const character = command.charAt(index);
       if (!quote && (/\s/.test(character) || character === ";")) break;
       if (character === "\\" && quote !== "'") {
         index++;
-        if (index < command.length) value += command[index++];
+        if (index < command.length) value += command.charAt(index++);
         started = true;
         continue;
       }
@@ -78,7 +79,7 @@ function parseTmuxCommand(command: string): string[] {
       index++;
     }
     if (started) args.push(value);
-    if (command[index] === ";") {
+    if (command.charAt(index) === ";") {
       args.push(";");
       index++;
     }
@@ -90,13 +91,13 @@ function observedCommand(args: string[]): string[] {
   if (
     args[0] !== "if-shell" ||
     args[1] !== "-F" ||
-    !/^#\{==:#\{pid\},\d+\}$/.test(args[2])
+    !/^#\{==:#\{pid\},\d+\}$/.test(String(args[2]))
   )
     return args;
-  return parseTmuxCommand(args[3]);
+  return parseTmuxCommand(assertDefined(args[3]));
 }
 
-type Fixture = {
+interface Fixture {
   tmux: (...args: string[]) => string;
   calls: string[][];
   rawCalls: string[][];
@@ -108,14 +109,14 @@ type Fixture = {
   status: () => Promise<string>;
   sync: () => Promise<string>;
   refresh: (args?: string) => Promise<void>;
-};
+}
 
 async function waitForProcessExit(pidText: string) {
   const pid = Number(pidText);
   if (!Number.isSafeInteger(pid) || pid < 1)
     throw new Error("Invalid tmux server PID");
   const deadline = Date.now() + 2_000;
-  while (true) {
+  for (;;) {
     try {
       process.kill(pid, 0);
     } catch (error) {
@@ -129,7 +130,7 @@ async function waitForProcessExit(pidText: string) {
       throw error;
     }
     if (Date.now() >= deadline)
-      throw new Error(`tmux server ${pid} did not exit`);
+      throw new Error(`tmux server ${String(pid)} did not exit`);
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
@@ -162,22 +163,22 @@ async function withServer(run: (fixture: Fixture) => Promise<void>) {
     warnings,
     notices,
     emit: async (event, reason = "quit") => {
-      await handlers.get(event)!({ type: event, reason }, ctx);
+      await assertDefined(handlers.get(event))({ type: event, reason }, ctx);
       await new Promise<void>((resolve) => setImmediate(resolve));
     },
     pin: async (title) => {
-      await commands.get("tmux-title")!("set " + title, ctx);
+      await assertDefined(commands.get("tmux-title"))("set " + title, ctx);
     },
     status: async () => {
-      await commands.get("tmux-title")!("status", ctx);
-      return notices.at(-1)!;
+      await assertDefined(commands.get("tmux-title"))("status", ctx);
+      return assertDefined(notices.at(-1));
     },
     sync: async () => {
-      await commands.get("tmux-title")!("sync", ctx);
-      return notices.at(-1)!;
+      await assertDefined(commands.get("tmux-title"))("sync", ctx);
+      return assertDefined(notices.at(-1));
     },
     refresh: async (args = "") => {
-      await commands.get("tmux-title")!(args, ctx);
+      await assertDefined(commands.get("tmux-title"))(args, ctx);
     },
   };
   const tmux: RunTmux = async (args, signal) => {
@@ -239,7 +240,7 @@ test.skipIf(!hasTmux)(
         if (restarted || args[0] !== "set-option") return;
         restarted = true;
         f.tmux("kill-server");
-        await waitForProcessExit(oldServer);
+        await waitForProcessExit(assertDefined(oldServer));
         const replacementPane = f.tmux(
           "new-session",
           "-d",
@@ -275,7 +276,7 @@ test.skipIf(!hasTmux)(
         f.tmux("display-message", "-p", "-t", pane, "#{session_name}"),
       ).toBe("Replacement");
       const guardedWrite = f.rawCalls.find((args) => args[0] === "if-shell");
-      expect(guardedWrite?.[2]).toBe(`#{==:#{pid},${oldServer}}`);
+      expect(guardedWrite?.[2]).toBe(`#{==:#{pid},${String(oldServer)}}`);
 
       const afterDetection = f.rawCalls.length;
       await f.emit("agent_settled");
@@ -341,7 +342,7 @@ test.skipIf(!hasTmux)(
       await f.emit("session_start");
 
       f.tmux("kill-server");
-      await waitForProcessExit(oldServer);
+      await waitForProcessExit(assertDefined(oldServer));
       const replacementPane = f.tmux(
         "new-session",
         "-d",
@@ -437,7 +438,7 @@ test.skipIf(!hasTmux)(
         if (restarted || args[0] !== "rename-window") return;
         restarted = true;
         f.tmux("kill-server");
-        await waitForProcessExit(oldServer);
+        await waitForProcessExit(assertDefined(oldServer));
         const replacementPane = f.tmux(
           "new-session",
           "-d",
@@ -1627,7 +1628,7 @@ test("continuous moves and transient failures keep stabilization and repair queu
     piTmux(
       {
         on: (event: string, handler: Function) => handlers.set(event, handler),
-        registerCommand: () => {},
+        registerCommand: () => undefined,
       } as unknown as ExtensionAPI,
       async (args) => {
         calls.push(args);
@@ -1636,7 +1637,7 @@ test("continuous moves and transient failures keep stabilization and repair queu
           args[4] === WINDOW_INFO_INTERNAL_FORMAT
         ) {
           location++;
-          return `$${location}\t@${location}\t0\tcustom name`;
+          return `$${String(location)}\t@${String(location)}\t0\tcustom name`;
         }
         if (args[0] === "display-message") return "custom name";
         if (
@@ -1652,12 +1653,12 @@ test("continuous moves and transient failures keep stabilization and repair queu
       mode: "tui",
       ui: { notify: (text: string) => warnings.push(text) },
     } as unknown as ExtensionContext;
-    await handlers.get("session_start")!(
+    await assertDefined(handlers.get("session_start"))(
       { type: "session_start", reason: "reload" },
       ctx,
     );
     const firstCalls = calls.length;
-    await handlers.get("session_start")!(
+    await assertDefined(handlers.get("session_start"))(
       { type: "session_start", reason: "reload" },
       ctx,
     );
@@ -1699,6 +1700,8 @@ test("continuous moves and transient failures keep stabilization and repair queu
 test("tracked session metadata stays bounded when former-session repairs keep failing", async () => {
   const originalPane = process.env.TMUX_PANE;
   const originalModel = process.env.PI_TMUX_MODEL;
+  // The wrapper invokes the original method with its runtime receiver via .call.
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- Preserve Set.prototype.has receiver semantics in this spy.
   const originalHas = Set.prototype.has;
   const handlers = new Map<string, Function>();
   const checkedSizes: number[] = [];
@@ -1715,13 +1718,13 @@ test("tracked session metadata stays bounded when former-session repairs keep fa
     piTmux(
       {
         on: (event: string, handler: Function) => handlers.set(event, handler),
-        registerCommand: () => {},
+        registerCommand: () => undefined,
       } as unknown as ExtensionAPI,
       async (args) => {
         commands.push(args);
         if (args[0] === "display-message")
-          return `\u0024${currentSession}:1:123\t@${currentSession}\t0\tcustom name`;
-        if (args[0] === "rename-session" && /^\$\d+$/.test(args[2])) {
+          return `\u0024${String(currentSession)}:1:123\t@${String(currentSession)}\t0\tcustom name`;
+        if (args[0] === "rename-session" && /^\$\d+$/.test(String(args[2]))) {
           throw new Error("Synthetic persistent former-session repair failure");
         }
         return "";
@@ -1729,10 +1732,10 @@ test("tracked session metadata stays bounded when former-session repairs keep fa
     );
     const ctx = {
       mode: "tui",
-      ui: { notify: () => {} },
+      ui: { notify: () => undefined },
     } as unknown as ExtensionContext;
     for (currentSession = 1; currentSession <= 32; currentSession++) {
-      await handlers.get("session_start")!(
+      await assertDefined(handlers.get("session_start"))(
         { type: "session_start", reason: "reload" },
         ctx,
       );
@@ -1747,12 +1750,12 @@ test("tracked session metadata stays bounded when former-session repairs keep fa
     // stored-base-name support when it becomes a former session again.
     commands.length = 0;
     currentSession = 24;
-    await handlers.get("session_start")!(
+    await assertDefined(handlers.get("session_start"))(
       { type: "session_start", reason: "reload" },
       ctx,
     );
     currentSession = 33;
-    await handlers.get("session_start")!(
+    await assertDefined(handlers.get("session_start"))(
       { type: "session_start", reason: "reload" },
       ctx,
     );

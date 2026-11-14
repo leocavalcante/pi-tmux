@@ -1,3 +1,4 @@
+import { assertDefined } from "./assert-defined.ts";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
@@ -99,27 +100,27 @@ function observedCommand(args: string[]): string[] {
   if (
     args[0] !== "if-shell" ||
     args[1] !== "-F" ||
-    !/^#\{==:#\{pid\},\d+\}$/.test(args[2])
+    !/^#\{==:#\{pid\},\d+\}$/.test(String(args[2]))
   )
     return args;
   const result: string[] = [];
-  const command = args[3];
+  const command = assertDefined(args[3]);
   for (let index = 0; index < command.length;) {
-    while (/\s/.test(command[index] ?? "")) index++;
+    while (/\s/.test(command.charAt(index))) index++;
     if (index >= command.length) break;
-    if (command[index] === ";") {
+    if (assertDefined(command[index]) === ";") {
       result.push(";");
       index++;
       continue;
     }
-    expect(command[index]).toBe('"');
+    expect(assertDefined(command[index])).toBe('"');
     index++;
     let value = "";
-    while (index < command.length && command[index] !== '"') {
-      if (command[index] === "\\") index++;
-      value += command[index++];
+    while (index < command.length && assertDefined(command[index]) !== '"') {
+      if (assertDefined(command[index]) === "\\") index++;
+      value += assertDefined(command[index++]);
     }
-    expect(command[index]).toBe('"');
+    expect(assertDefined(command[index])).toBe('"');
     index++;
     result.push(value);
   }
@@ -218,7 +219,10 @@ test.skipIf(!hasTmux).each([
         sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
-      await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+      await assertDefined(handlers.get(event))(
+        { type: event, reason: "quit" },
+        ctx,
+      );
       expect(
         tmux("display-message", "-p", "-t", destination, "#{session_name}"),
       ).toBe(event === "agent_settled" ? "* Destination" : "Destination");
@@ -234,7 +238,7 @@ test.skipIf(!hasTmux).each([
       expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe(
         event === "agent_settled" ? "1" : "0",
       );
-      await handlers.get("session_shutdown")!(
+      await assertDefined(handlers.get("session_shutdown"))(
         { type: "session_shutdown", reason: "quit" },
         ctx,
       );
@@ -290,11 +294,14 @@ test.skipIf(!hasTmux)(
         sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
-      await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
+      await assertDefined(handlers.get("agent_settled"))(
+        { type: "agent_settled" },
+        ctx,
+      );
       expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe(
         "* -fix auth",
       );
-      await handlers.get("session_start")!(
+      await assertDefined(handlers.get("session_start"))(
         { type: "session_start", reason: "reload" },
         ctx,
       );
@@ -344,10 +351,10 @@ test.skipIf(!hasTmux)(
       piTmux(mockPi(handlers), async (args) => tmux(...args));
       const ctx = {
         mode: "tui",
-        ui: { notify: () => {} },
+        ui: { notify: () => undefined },
       } as unknown as ExtensionContext;
       const emit = async (event: string, reason = "startup") =>
-        handlers.get(event)!({ type: event, reason }, ctx);
+        assertDefined(handlers.get(event))({ type: event, reason }, ctx);
       const title = () =>
         tmux("display-message", "-p", "-t", pane, "#{window_name}");
       const sessionTitle = () =>
@@ -400,7 +407,7 @@ test.skipIf(!hasTmux)(
       }).replace(/\r?\n$/, "");
     try {
       process.env.PI_TMUX_MODEL = "off";
-      const requestedTitle = `Custom API #{session_id}, \"Deploy\" ${"X".repeat(30)}  `;
+      const requestedTitle = `Custom API #{session_id}, "Deploy" ${"X".repeat(30)}  `;
       const pane = tmux(
         "new-session",
         "-d",
@@ -442,12 +449,15 @@ test.skipIf(!hasTmux)(
       };
 
       expect(windowTitle()).toBe(customTitle);
-      await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
+      await assertDefined(handlers.get("agent_settled"))(
+        { type: "agent_settled" },
+        ctx,
+      );
       await waitForTitle(`* ${customTitle}`);
       expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe(
         "1",
       );
-      handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+      assertDefined(handlers.get("agent_start"))({ type: "agent_start" }, ctx);
       await waitForTitle(customTitle);
       expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe(
         "0",
@@ -517,7 +527,10 @@ test.skipIf(!hasTmux)(
       const windowTitle = () =>
         tmux("display-message", "-p", "-t", pane, "#{window_name}");
 
-      await handlers.get("session_start")!({ type: "session_start" }, ctx);
+      await assertDefined(handlers.get("session_start"))(
+        { type: "session_start" },
+        ctx,
+      );
       expect(windowTitle()).toBe("* Custom window");
       expect(
         tmux(
@@ -538,7 +551,7 @@ test.skipIf(!hasTmux)(
       }
       tmux("set-option", "-p", "-t", peer, WAITING_OPTION, "1");
 
-      await handlers.get("session_shutdown")!(
+      await assertDefined(handlers.get("session_shutdown"))(
         { type: "session_shutdown", reason: "quit" },
         ctx,
       );
@@ -630,7 +643,10 @@ test.skipIf(!hasTmux)(
         );
       };
 
-      await handlers.get("session_start")!({ type: "session_start" }, ctx);
+      await assertDefined(handlers.get("session_start"))(
+        { type: "session_start" },
+        ctx,
+      );
       expect(windowTitle()).toBe("* Custom window");
       expect(
         tmux(
@@ -657,15 +673,18 @@ test.skipIf(!hasTmux)(
       ).toBe("on");
 
       tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "1");
-      handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+      assertDefined(handlers.get("agent_start"))({ type: "agent_start" }, ctx);
       await waitForTitle("* * Custom window");
       tmux("set-option", "-p", "-t", sibling, WAITING_OPTION, "0");
-      handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+      assertDefined(handlers.get("agent_start"))({ type: "agent_start" }, ctx);
       await waitForTitle("* Custom window");
 
-      await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
+      await assertDefined(handlers.get("agent_settled"))(
+        { type: "agent_settled" },
+        ctx,
+      );
       await waitForTitle("* * Custom window");
-      handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+      assertDefined(handlers.get("agent_start"))({ type: "agent_start" }, ctx);
       await waitForTitle("* Custom window");
       expect(warnings).toEqual([]);
     } finally {
@@ -811,13 +830,19 @@ test.skipIf(!hasTmux)(
         );
       };
 
-      await handlers.get("session_start")!({ type: "session_start" }, ctx);
-      await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
+      await assertDefined(handlers.get("session_start"))(
+        { type: "session_start" },
+        ctx,
+      );
+      await assertDefined(handlers.get("agent_settled"))(
+        { type: "agent_settled" },
+        ctx,
+      );
       await waitForTitle(pane, "* * Custom window");
       tmux("set-option", "-p", "-t", anchor, WAITING_OPTION, "0");
       tmux("set-option", "-p", "-t", peer, ACTIVE_OPTION, "1");
       tmux("join-pane", "-d", "-s", pane, "-t", destinationPane);
-      handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+      assertDefined(handlers.get("agent_start"))({ type: "agent_start" }, ctx);
       await waitForTitle(anchor, "* Custom window");
       await waitForTitle(pane, "* Custom window");
       await waitForOption(
@@ -840,7 +865,7 @@ test.skipIf(!hasTmux)(
       );
 
       tmux("set-option", "-p", "-t", peer, WAITING_OPTION, "1");
-      await handlers.get("session_shutdown")!(
+      await assertDefined(handlers.get("session_shutdown"))(
         { type: "session_shutdown", reason: "quit" },
         ctx,
       );
@@ -850,7 +875,7 @@ test.skipIf(!hasTmux)(
       );
       tmux("set-option", "-p", "-t", peer, ACTIVE_OPTION, "0");
       tmux("set-option", "-p", "-t", peer, WAITING_OPTION, "0");
-      await handlers.get("session_shutdown")!(
+      await assertDefined(handlers.get("session_shutdown"))(
         { type: "session_shutdown", reason: "quit" },
         ctx,
       );
@@ -941,7 +966,10 @@ test.skipIf(!hasTmux).each([false, true])(
           },
         },
       } as unknown as ExtensionContext;
-      await commands.get("tmux-title")!("set " + "x".repeat(24), ctx);
+      await assertDefined(commands.get("tmux-title"))(
+        "set " + "x".repeat(24),
+        ctx,
+      );
       const title = tmux("display-message", "-p", "-t", pane, "#{window_name}");
       expect(title).toBe(
         initialWaiting ? "x".repeat(24) : "* " + "x".repeat(22),
@@ -1008,16 +1036,25 @@ test.skipIf(!hasTmux)(
           `Window title did not become ${JSON.stringify(expected)}; got ${JSON.stringify(title())}`,
         );
       };
-      await handlers.get("session_start")!({ type: "session_start" }, ctx);
+      await assertDefined(handlers.get("session_start"))(
+        { type: "session_start" },
+        ctx,
+      );
       expect(title()).toBe("");
       expect(warnings).toEqual([]);
-      await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
+      await assertDefined(handlers.get("agent_settled"))(
+        { type: "agent_settled" },
+        ctx,
+      );
       await waitForTitle("* pi");
-      handlers.get("agent_start")!({ type: "agent_start" }, ctx);
+      assertDefined(handlers.get("agent_start"))({ type: "agent_start" }, ctx);
       await waitForTitle("");
-      await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
+      await assertDefined(handlers.get("agent_settled"))(
+        { type: "agent_settled" },
+        ctx,
+      );
       await waitForTitle("* pi");
-      await handlers.get("session_shutdown")!(
+      await assertDefined(handlers.get("session_shutdown"))(
         { type: "session_shutdown", reason: "quit" },
         ctx,
       );
@@ -1077,7 +1114,10 @@ test.skipIf(!hasTmux)(
         mode: "tui",
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
-      await handlers.get("session_start")!({ type: "session_start" }, ctx);
+      await assertDefined(handlers.get("session_start"))(
+        { type: "session_start" },
+        ctx,
+      );
       expect(warnings).toEqual([]);
       expect(tmux("display-message", "-p", "-t", pane, "#{window_name}")).toBe(
         title,
@@ -1148,11 +1188,11 @@ test.skipIf(!hasTmux)(
         return {
           emit: async (event: string) => {
             process.env.TMUX_PANE = target;
-            await handlers.get(event)!({ type: event }, ctx);
+            await assertDefined(handlers.get(event))({ type: event }, ctx);
           },
           command: async (args: string) => {
             process.env.TMUX_PANE = target;
-            await commands.get("tmux-title")!(args, ctx);
+            await assertDefined(commands.get("tmux-title"))(args, ctx);
           },
         };
       };
@@ -1232,12 +1272,18 @@ test.skipIf(!hasTmux).each([false, true])(
         return {
           emit: async (event: string) => {
             process.env.TMUX_PANE = target;
-            await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+            await assertDefined(handlers.get(event))(
+              { type: event, reason: "quit" },
+              ctx,
+            );
             await new Promise<void>((resolve) => setImmediate(resolve));
           },
           pin: async (title: string) => {
             process.env.TMUX_PANE = target;
-            await commands.get("tmux-title")!("set " + title, ctx);
+            await assertDefined(commands.get("tmux-title"))(
+              "set " + title,
+              ctx,
+            );
           },
         };
       };
@@ -1321,8 +1367,11 @@ test.skipIf(!hasTmux)(
         mode: "tui",
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
-      await handlers.get("session_start")!({ type: "session_start" }, ctx);
-      await handlers.get("session_shutdown")!(
+      await assertDefined(handlers.get("session_start"))(
+        { type: "session_start" },
+        ctx,
+      );
+      await assertDefined(handlers.get("session_shutdown"))(
         { type: "session_shutdown", reason: "quit" },
         ctx,
       );
@@ -1428,9 +1477,12 @@ test.skipIf(!hasTmux).each([
         mode: "tui",
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
-      await handlers.get("session_start")!({ type: "session_start" }, ctx);
+      await assertDefined(handlers.get("session_start"))(
+        { type: "session_start" },
+        ctx,
+      );
       quitting = true;
-      await handlers.get("session_shutdown")!(
+      await assertDefined(handlers.get("session_shutdown"))(
         { type: "session_shutdown", reason: "quit" },
         ctx,
       );
@@ -1516,7 +1568,10 @@ test.skipIf(!hasTmux)(
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
       const emit = async (event: string) => {
-        await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+        await assertDefined(handlers.get(event))(
+          { type: event, reason: "quit" },
+          ctx,
+        );
         // agent_start intentionally schedules its status write without awaiting it.
         await new Promise<void>((resolve) => setImmediate(resolve));
       };
@@ -1706,8 +1761,8 @@ test.skipIf(!hasTmux)(
         "synthetic 'quoted' $pi_tmux_literal",
       ];
       for (const [index, syntheticValue] of syntheticValues.entries()) {
-        const option = `@pi-tmux-test-dollar-guarded-${index}`;
-        const directOption = `@pi-tmux-test-dollar-direct-${index}`;
+        const option = `@pi-tmux-test-dollar-guarded-${String(index)}`;
+        const directOption = `@pi-tmux-test-dollar-direct-${String(index)}`;
         tmux("set-option", "-g", directOption, syntheticValue);
         const directValue = tmux("show-options", "-gqv", directOption);
         await writeOnServer(
@@ -1761,12 +1816,12 @@ test.skipIf(!hasTmux)(
         }),
       ];
       for (const [index, { value, directArgument }] of values.entries()) {
-        const directOption = `@pi-tmux-semicolon-direct-${index}`;
+        const directOption = `@pi-tmux-semicolon-direct-${String(index)}`;
         tmux("set-option", "-g", directOption, directArgument);
         const directValue = tmux("show-options", "-gqv", directOption);
         expect(directValue).toBe(value);
 
-        const guardedOption = `@pi-tmux-semicolon-guarded-${index}`;
+        const guardedOption = `@pi-tmux-semicolon-guarded-${String(index)}`;
         await writeOnServer(
           guarded,
           server,
@@ -1775,7 +1830,7 @@ test.skipIf(!hasTmux)(
         );
         expect(tmux("show-options", "-gqv", guardedOption)).toBe(directValue);
 
-        const unguardedOption = `@pi-tmux-semicolon-unguarded-${index}`;
+        const unguardedOption = `@pi-tmux-semicolon-unguarded-${String(index)}`;
         await writeOnServer(
           unguarded,
           undefined,
@@ -1876,7 +1931,10 @@ test.skipIf(!hasTmux).each(tmuxEscapedSessionNames)(
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
       const emit = async (event: string) => {
-        await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+        await assertDefined(handlers.get(event))(
+          { type: event, reason: "quit" },
+          ctx,
+        );
         // agent_start intentionally schedules its status write without awaiting it.
         await new Promise<void>((resolve) => setImmediate(resolve));
       };
@@ -1998,7 +2056,10 @@ test.skipIf(!hasTmux)(
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
       const emit = async (event: string) => {
-        await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+        await assertDefined(handlers.get(event))(
+          { type: event, reason: "quit" },
+          ctx,
+        );
         await new Promise<void>((resolve) => setImmediate(resolve));
       };
 
@@ -2076,7 +2137,10 @@ test.skipIf(!hasTmux || !hasRoundTripUnsafeSessionNames)(
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
       const emit = async (event: string) => {
-        await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+        await assertDefined(handlers.get(event))(
+          { type: event, reason: "quit" },
+          ctx,
+        );
         // agent_start intentionally schedules its status write without awaiting it.
         await new Promise<void>((resolve) => setImmediate(resolve));
       };
@@ -2197,7 +2261,10 @@ test.skipIf(!hasTmux)(
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
       const emit = async (event: string) => {
-        await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+        await assertDefined(handlers.get(event))(
+          { type: event, reason: "quit" },
+          ctx,
+        );
         await new Promise<void>((resolve) => setImmediate(resolve));
       };
 
@@ -2327,7 +2394,10 @@ test.skipIf(!hasTmux || !hasRoundTripUnsafeWindowNames)(
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
       const emit = async (event: string) => {
-        await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+        await assertDefined(handlers.get(event))(
+          { type: event, reason: "quit" },
+          ctx,
+        );
         await new Promise<void>((resolve) => setImmediate(resolve));
       };
 
@@ -2429,7 +2499,10 @@ test.skipIf(!hasTmux).each([{ requestedTitle: "Custom\\path" }])(
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
       const emit = async (event: string) => {
-        await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+        await assertDefined(handlers.get(event))(
+          { type: event, reason: "quit" },
+          ctx,
+        );
         // agent_start intentionally schedules its status write without awaiting it.
         await new Promise<void>((resolve) => setImmediate(resolve));
       };
@@ -2507,7 +2580,10 @@ test.skipIf(!hasTmux || !hasRoundTripUnsafeWindowNames)(
         ui: { notify: (text: string) => warnings.push(text) },
       } as unknown as ExtensionContext;
       const emit = async (event: string) => {
-        await handlers.get(event)!({ type: event, reason: "quit" }, ctx);
+        await assertDefined(handlers.get(event))(
+          { type: event, reason: "quit" },
+          ctx,
+        );
         // agent_start intentionally schedules its status write without awaiting it.
         await new Promise<void>((resolve) => setImmediate(resolve));
       };

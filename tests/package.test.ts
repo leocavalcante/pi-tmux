@@ -1,3 +1,4 @@
+import { assertDefined } from "./assert-defined.ts";
 import { expect, test } from "bun:test";
 import {
   execFile,
@@ -41,14 +42,14 @@ const PUBLIC_RUNTIME_EXPORTS = [
   "parseNamingModel",
 ].sort();
 
-type CommandOptions = {
+interface CommandOptions {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   maxBuffer?: number;
   shell?: boolean;
   timeoutMs?: number;
   signal?: AbortSignal;
-};
+}
 
 function needsCommandShell(file: string, platform = process.platform): boolean {
   // On Windows npm is a .cmd shim, which execFile cannot launch directly.
@@ -159,8 +160,11 @@ function runCommand(
           signal: options.signal,
         },
         (error, stdout) => {
-          if (error) reject(error);
-          else resolve(stdout);
+          if (error) {
+            // Preserve the subprocess error and its attached metadata.
+            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- Preserve child error identity.
+            reject(error);
+          } else resolve(stdout);
         },
       );
     });
@@ -173,7 +177,14 @@ function runCommand(
       return;
     }
     const maxBuffer = options.maxBuffer ?? 4 * 1024 * 1024;
-    let child: ChildProcess;
+    const child = spawn(file, args, {
+      cwd: options.cwd,
+      env: options.env,
+      shell: true,
+      detached: process.platform !== "win32",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let stopReason: "timeout" | "abort" | "maxBuffer" | undefined;
     let spawnError: Error | undefined;
@@ -185,28 +196,32 @@ function runCommand(
       stopReason = reason;
       killCommandTree(child);
     };
-    const abort = () => stopProcessTree("abort");
+    const abort = () => {
+      stopProcessTree("abort");
+    };
     const collect = (stream: "stdout" | "stderr", chunk: Buffer) => {
       if (stopReason) return;
       if (stream === "stdout") {
         stdoutLength += chunk.length;
-        if (stdoutLength > maxBuffer) return stopProcessTree("maxBuffer");
+        if (stdoutLength > maxBuffer) {
+          stopProcessTree("maxBuffer");
+          return;
+        }
         stdout.push(chunk);
       } else {
         stderrLength += chunk.length;
-        if (stderrLength > maxBuffer) return stopProcessTree("maxBuffer");
+        if (stderrLength > maxBuffer) {
+          stopProcessTree("maxBuffer");
+          return;
+        }
       }
     };
-    child = spawn(file, args, {
-      cwd: options.cwd,
-      env: options.env,
-      shell: true,
-      detached: process.platform !== "win32",
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
+    child.stdout.on("data", (chunk: Buffer) => {
+      collect("stdout", chunk);
     });
-    child.stdout?.on("data", (chunk: Buffer) => collect("stdout", chunk));
-    child.stderr?.on("data", (chunk: Buffer) => collect("stderr", chunk));
+    child.stderr.on("data", (chunk: Buffer) => {
+      collect("stderr", chunk);
+    });
     child.once("error", (error) => {
       spawnError = error;
     });
@@ -215,7 +230,7 @@ function runCommand(
       signal?.removeEventListener("abort", abort);
       if (stopReason === "abort") reject(createAbortError(signal?.reason));
       else if (stopReason === "timeout")
-        reject(new Error(`Command timed out after ${timeoutMs} ms`));
+        reject(new Error(`Command timed out after ${String(timeoutMs)} ms`));
       else if (stopReason === "maxBuffer") {
         const error = new Error(
           "Command output exceeded the configured buffer limit",
@@ -236,7 +251,9 @@ function runCommand(
       } else resolve(Buffer.concat(stdout).toString("utf8"));
     });
     if (timeoutMs > 0)
-      timeout = setTimeout(() => stopProcessTree("timeout"), timeoutMs);
+      timeout = setTimeout(() => {
+        stopProcessTree("timeout");
+      }, timeoutMs);
     signal?.addEventListener("abort", abort, { once: true });
     // An abort between the initial check and listener registration is not replayed.
     if (signal?.aborted) abort();
@@ -317,7 +334,9 @@ test("package subprocesses are force-killed on timeout and cancellation", async 
       const result = await Promise.race([
         commandOutcome,
         new Promise<{ settled: false }>((resolve) => {
-          watchdog = setTimeout(() => resolve({ settled: false }), 4_000);
+          watchdog = setTimeout(() => {
+            resolve({ settled: false });
+          }, 4_000);
         }),
       ]);
       if (watchdog) clearTimeout(watchdog);
@@ -352,7 +371,9 @@ test("package subprocesses are force-killed on timeout and cancellation", async 
   await runStubbornChild({ timeoutMs: 2_500 }, undefined, "Error");
   await runStubbornChild(
     { signal: controller.signal },
-    () => controller.abort(),
+    () => {
+      controller.abort();
+    },
     "AbortError",
   );
 }, 15_000);
@@ -391,7 +412,9 @@ test("shell-backed package subprocesses kill descendants on timeout and cancella
       const result = await Promise.race([
         commandOutcome,
         new Promise<{ settled: false }>((resolve) => {
-          watchdog = setTimeout(() => resolve({ settled: false }), 4_000);
+          watchdog = setTimeout(() => {
+            resolve({ settled: false });
+          }, 4_000);
         }),
       ]);
       if (watchdog) clearTimeout(watchdog);
@@ -426,7 +449,9 @@ test("shell-backed package subprocesses kill descendants on timeout and cancella
   await runStubbornShellChild({ timeoutMs: 2_500 }, undefined, "Error");
   await runStubbornShellChild(
     { signal: controller.signal },
-    () => controller.abort(),
+    () => {
+      controller.abort();
+    },
     "AbortError",
   );
 }, 15_000);
@@ -594,13 +619,13 @@ test("the packed Pi extension installs through the CLI and runs its status-only 
         timeout: COMMAND_TIMEOUT_MS,
       },
     );
-    type RpcRecord = {
+    interface RpcRecord {
       type?: unknown;
       id?: unknown;
       command?: unknown;
       success?: unknown;
-      data?: { commands?: Array<{ name?: unknown }> };
-    };
+      data?: { commands?: { name?: unknown }[] };
+    }
     const rpcRecords = piOutput
       .split(/\r?\n/u)
       .filter(Boolean)
@@ -639,7 +664,7 @@ test("the packed Pi extension installs through the CLI and runs its status-only 
     extension.default(
       {
         on: (event: string, handler: Function) => handlers.set(event, handler),
-        registerCommand: () => {},
+        registerCommand: () => undefined,
       },
       tmux,
     );
@@ -671,28 +696,31 @@ test("the packed Pi extension installs through the CLI and runs its status-only 
         },
       },
     };
-    await handlers.get("session_start")!(
+    await assertDefined(handlers.get("session_start"))(
       { type: "session_start", reason: "startup" },
       context,
     );
-    await handlers.get("agent_settled")!({ type: "agent_settled" }, context);
-    await handlers.get("session_before_compact")!(
+    await assertDefined(handlers.get("agent_settled"))(
+      { type: "agent_settled" },
+      context,
+    );
+    await assertDefined(handlers.get("session_before_compact"))(
       { type: "session_before_compact", reason: "manual", willRetry: false },
       context,
     );
-    await handlers.get("session_compact")!(
+    await assertDefined(handlers.get("session_compact"))(
       { type: "session_compact", reason: "manual" },
       context,
     );
-    await handlers.get("session_before_compact")!(
+    await assertDefined(handlers.get("session_before_compact"))(
       { type: "session_before_compact", reason: "manual", willRetry: false },
       context,
     );
-    await handlers.get("session_compact_failed")!(
+    await assertDefined(handlers.get("session_compact_failed"))(
       { type: "session_compact_failed", reason: "manual", aborted: false },
       context,
     );
-    await handlers.get("session_shutdown")!(
+    await assertDefined(handlers.get("session_shutdown"))(
       { type: "session_shutdown", reason: "quit" },
       context,
     );
@@ -706,7 +734,8 @@ test("the packed Pi extension installs through the CLI and runs its status-only 
     ).toEqual(["0", "1", "0", "1", "0", "1", "0"]);
     expect(
       calls.some(
-        (args) => args[0] === "rename-window" && args[4].includes("zsh"),
+        (args) =>
+          args[0] === "rename-window" && assertDefined(args[4]).includes("zsh"),
       ),
     ).toBe(true);
     expect(warnings).toEqual([]);

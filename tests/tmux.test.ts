@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { runTmux, targetDisappeared } from "../src/tmux.ts";
 import {
@@ -48,11 +49,17 @@ test.serial(
         const controller = new AbortController();
         const reason = new Error("cancelled");
         controller.abort(reason);
-        await expect(runTmux([], controller.signal)).rejects.toMatchObject({
-          name: "AbortError",
-          code: "ABORT_ERR",
-          cause: reason,
-        });
+        await assert.rejects(
+          runTmux([], controller.signal),
+          (error: unknown) => {
+            expect(error).toMatchObject({
+              name: "AbortError",
+              code: "ABORT_ERR",
+              cause: reason,
+            });
+            return true;
+          },
+        );
         expect(existsSync(pid)).toBe(false);
       },
     );

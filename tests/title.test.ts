@@ -1,3 +1,4 @@
+import { assertDefined } from "./assert-defined.ts";
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { getEventListeners } from "node:events";
@@ -141,7 +142,7 @@ function fixture(
       hasConfiguredAuth: () => true,
       streamSimple: (model: unknown, context: unknown, options: unknown) => {
         requests.push({ model, context, options });
-        return { result: () => results.shift()! };
+        return { result: () => assertDefined(results.shift()) };
       },
     },
   } as unknown as ExtensionContext;
@@ -181,7 +182,7 @@ function fixture(
     expect(format).toStartWith(prefix);
     expect(format).toEndWith("}");
     const [ready, busy] = format.slice(prefix.length, -1).split(",");
-    return windowWaiting() ? ready : busy;
+    return windowWaiting() ? assertDefined(ready) : assertDefined(busy);
   };
   const tmux: RunTmux = async (args, signal) => {
     calls.push(args);
@@ -189,7 +190,9 @@ function fixture(
       await beforeCommand(
         args,
         signal,
-        args[0] === "rename-window" ? renderTitle(args[4]) : undefined,
+        args[0] === "rename-window"
+          ? renderTitle(assertDefined(args[4]))
+          : undefined,
       );
     if (args[0] === "display-message" && args[4] === "#{pid}") return "123";
     if (args[0] === "display-message" && args[4] === STATUS_SNAPSHOT_FORMAT) {
@@ -243,7 +246,7 @@ function fixture(
         value.startsWith("rename-window -t "),
       );
       if (action) {
-        const titleFormat = action.match(/ -- '([\s\S]*)'$/)?.[1];
+        const titleFormat = / -- '([\s\S]*)'$/.exec(action)?.[1];
         expect(titleFormat).toBeDefined();
         if (titleFormat === quitFormats.title) {
           const hasPeer = [...state.activePanes, ...state.waitingPanes].some(
@@ -256,9 +259,10 @@ function fixture(
             : formatTitle(idleTitle, windowWaiting());
         } else if (titleFormat === WINDOW_BASE_NAME_TITLE_FORMAT) {
           state.title = windowWaiting()
-            ? `${READY_PREFIX}${state.windowBaseName || "pi"}`
+            ? // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- Preserve the empty-title fallback.
+              `${READY_PREFIX}${state.windowBaseName || "pi"}`
             : (state.windowBaseName ?? "");
-        } else state.title = renderTitle(titleFormat!);
+        } else state.title = renderTitle(assertDefined(titleFormat));
       }
       state.windowTitleMarked =
         args.at(-1) === WINDOW_TITLE_MARKED_VALUE_FORMAT
@@ -275,22 +279,22 @@ function fixture(
         "-t",
         "%1",
         WAITING_OPTION,
-        args[5],
+        assertDefined(args[5]),
         ";",
         "set-option",
         "-p",
         "-t",
         "%1",
         ACTIVE_OPTION,
-        args[12],
+        assertDefined(args[12]),
         ";",
         "rename-session",
         "-t",
         "%1",
         SESSION_TITLE_FORMAT,
       ]);
-      state.waitingPanes.set(args[3], args[5]);
-      state.activePanes.set(args[10], args[12]);
+      state.waitingPanes.set(assertDefined(args[3]), assertDefined(args[5]));
+      state.activePanes.set(assertDefined(args[10]), assertDefined(args[12]));
       const anyWaiting = [...state.waitingPanes.values()].includes("1");
       state.sessionTitle =
         (anyWaiting ? READY_PREFIX : "") +
@@ -298,7 +302,7 @@ function fixture(
     }
     if (args[0] === "rename-window") {
       expect(args.slice(0, 4)).toEqual(["rename-window", "-t", "%1", "--"]);
-      state.title = renderTitle(args[4]);
+      state.title = renderTitle(assertDefined(args[4]));
       writes.push(state.title);
     }
     return "";
@@ -309,7 +313,7 @@ function fixture(
       setting.length > MAX_TITLE_INPUT_LENGTH || hasSensitiveOutput(setting)
         ? "zsh"
         : cleanTitle(setting) || "zsh";
-    return piTmux(
+    piTmux(
       {
         on: (event: string, handler: Function) => handlers.set(event, handler),
         registerCommand: (
@@ -389,7 +393,7 @@ test("automatic server-change warnings stay deduplicated across extension reload
         {
           on: (event: string, handler: Function) =>
             handlers.set(event, handler),
-          registerCommand: () => {},
+          registerCommand: () => undefined,
         } as unknown as ExtensionAPI,
         tmux,
       );
@@ -466,7 +470,12 @@ async function withNamingTimers(
   ) => {
     const handle = nativeSet(callback, delay, ...args);
     if (delay === 15_000)
-      timers.push({ handle, fire: () => callback(...args) });
+      timers.push({
+        handle,
+        fire: () => {
+          callback(...args);
+        },
+      });
     return handle;
   }) as typeof globalThis.setTimeout);
   const clear = spyOn(globalThis, "clearTimeout").mockImplementation(
@@ -480,7 +489,7 @@ async function withNamingTimers(
   } finally {
     set.mockRestore();
     clear.mockRestore();
-    for (const { handle } of timers) nativeClear(handle as Timer);
+    for (const { handle } of timers) nativeClear(handle);
   }
 }
 
@@ -532,7 +541,7 @@ test("an empty server-PID field remains compatible with older tmux adapters", as
   piTmux(
     {
       on: (event: string, handler: Function) => handlers.set(event, handler),
-      registerCommand: () => {},
+      registerCommand: () => undefined,
     } as unknown as ExtensionAPI,
     async (args) => {
       calls.push(args);
@@ -555,7 +564,7 @@ test("an empty server-PID field remains compatible with older tmux adapters", as
     "%1",
     WINDOW_INFO_INTERNAL_FORMAT,
   ]);
-  expect(calls[1][0]).toBe("set-option");
+  expect(assertDefined(calls[1])[0]).toBe("set-option");
   expect(warnings).toEqual([]);
 });
 
@@ -610,7 +619,7 @@ test("passes input through immediately and renames the owning window", async () 
   });
   expect(f.calls).toEqual([]);
   await settle();
-  expect(f.requests[0].model).toEqual({
+  expect(assertDefined(f.requests[0]).model).toEqual({
     provider: "openai-codex",
     id: "gpt-6-luna",
   });
@@ -642,7 +651,7 @@ test("a descriptive first prompt can be titled without answering it", async () =
   const f = fixture([Promise.resolve(response("explain tmux titles"))]);
   f.input(prompt);
   await settle();
-  expect(f.requests[0].context.messages).toEqual([
+  expect(assertDefined(f.requests[0]).context.messages).toEqual([
     { role: "user", content: `user: ${prompt}`, timestamp: expect.any(Number) },
   ]);
   expect(f.state.title).toBe("explain tmux titles");
@@ -665,7 +674,7 @@ test("extension instances keep pins and pending naming state isolated", async ()
   // Resetting one instance must not abort another instance's request
   // or erase its result.
   await first.emit("session_tree");
-  expect(second.requests[0].options.signal.aborted).toBe(false);
+  expect(assertDefined(second.requests[0]).options.signal.aborted).toBe(false);
   pending.resolve(response("second task"));
   await settle();
   expect(second.state.title).toBe("second task");
@@ -696,7 +705,7 @@ test.each([true, false])(
     f.input("Fix the failing authentication tests");
     await settle();
     expect(f.requests).toHaveLength(1);
-    expect(f.requests[0].options.reasoning).toBe(
+    expect(assertDefined(f.requests[0]).options.reasoning).toBe(
       reasoning ? "minimal" : undefined,
     );
     expect(f.state.title).toBe("fix auth tests");
@@ -708,7 +717,7 @@ test("balances oversized prompt context and disables provider retries", async ()
   const f = fixture();
   f.input("x".repeat(10_000));
   await settle();
-  const request = f.requests[0];
+  const request = assertDefined(f.requests[0]);
   const marker = "[... middle of prompt omitted ...]";
   const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
   const prefixLength = Math.ceil(retainedLength / 2);
@@ -804,7 +813,9 @@ test("input skips trimming a bounded prompt's unneeded suffix", async () => {
     trim.mockRestore();
   }
   await settle();
-  expect(f.requests[0].context.messages[0].content).toBe("user: Task");
+  expect(assertDefined(f.requests[0]).context.messages[0].content).toBe(
+    "user: Task",
+  );
   expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([
     renameCommand("fix auth tests"),
   ]);
@@ -833,7 +844,7 @@ test("superseding input aborts old work and an old result cannot overwrite the n
   const f = fixture([old.promise, Promise.resolve(response("New task"))]);
   f.input("Old task");
   f.input("New task");
-  expect(f.requests[0].options.signal.aborted).toBe(true);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(true);
   await settle();
   old.resolve(response("Old task"));
   await settle();
@@ -848,7 +859,7 @@ test("shutdown and session replacement cancel outstanding naming", async () => {
     const f = fixture([work.promise]);
     f.input("Task");
     await f.emit(event);
-    expect(f.requests[0].options.signal.aborted).toBe(true);
+    expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(true);
     work.resolve(response("Late title"));
     await settle();
     expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual(
@@ -859,17 +870,17 @@ test("shutdown and session replacement cancel outstanding naming", async () => {
 
 test("deadline settles pending naming even when the provider never settles", async () => {
   await withNamingTimers(async (timers, cleared) => {
-    const f = fixture([new Promise(() => {})]);
+    const f = fixture([new Promise(() => undefined)]);
     f.input("synthetic task");
     await settle();
     expect(timers).toHaveLength(1);
-    expect(timers[0].handle.hasRef()).toBe(false);
-    timers[0].fire();
+    expect(assertDefined(timers[0]).handle.hasRef()).toBe(false);
+    assertDefined(timers[0]).fire();
     await settle();
-    expect(f.requests[0].options.signal.aborted).toBe(true);
-    expect(cleared.has(timers[0].handle)).toBe(true);
+    expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(true);
+    expect(cleared.has(assertDefined(timers[0]).handle)).toBe(true);
     expect(
-      getEventListeners(f.requests[0].options.signal, "abort"),
+      getEventListeners(assertDefined(f.requests[0]).options.signal, "abort"),
     ).toHaveLength(0);
     await f.refresh("status");
     expect(f.notices.at(-1)).toContain("Naming request: idle");
@@ -891,13 +902,15 @@ test("the original deadline also aborts a hanging title correction request", asy
     f.input("Explain in two short sentences what a tmux window title is.");
     await settle();
     expect(f.requests).toHaveLength(2);
-    expect(f.requests[1].options.signal).toBe(f.requests[0].options.signal);
+    expect(assertDefined(f.requests[1]).options.signal).toBe(
+      assertDefined(f.requests[0]).options.signal,
+    );
     expect(timers).toHaveLength(1);
-    timers[0].fire();
+    assertDefined(timers[0]).fire();
     await settle();
-    const signal = f.requests[1].options.signal as AbortSignal;
+    const signal = assertDefined(f.requests[1]).options.signal as AbortSignal;
     expect(signal.aborted).toBe(true);
-    expect(cleared.has(timers[0].handle)).toBe(true);
+    expect(cleared.has(assertDefined(timers[0]).handle)).toBe(true);
     expect(getEventListeners(signal, "abort")).toHaveLength(0);
     expect(f.state.title).toBe("existing task");
     expect(f.warnings).toHaveLength(1);
@@ -921,7 +934,7 @@ test.each(["resolve", "reject"])(
       const f = fixture([work]);
       f.input("synthetic task");
       await settle();
-      timers[0].fire();
+      assertDefined(timers[0]).fire();
       await settle();
       expect(f.warnings).toHaveLength(1);
       if (completion === "resolve") resolve(response("stale late title"));
@@ -944,12 +957,12 @@ test("a retry after timeout works and late cleanup cannot clear a newer pending 
     f.input("synthetic task");
     await settle();
     f.messages.push({ role: "user", content: "synthetic task" });
-    timers[0].fire();
+    assertDefined(timers[0]).fire();
     await settle();
     await f.refresh();
     expect(f.requests).toHaveLength(2);
-    expect(cleared.has(timers[0].handle)).toBe(true);
-    expect(cleared.has(timers[1].handle)).toBe(false);
+    expect(cleared.has(assertDefined(timers[0]).handle)).toBe(true);
+    expect(cleared.has(assertDefined(timers[1]).handle)).toBe(false);
     old.resolve(response("stale title"));
     await settle();
     await f.refresh("status");
@@ -957,9 +970,9 @@ test("a retry after timeout works and late cleanup cannot clear a newer pending 
     fresh.resolve(response("fresh title"));
     await settle();
     expect(f.state.title).toBe("fresh title");
-    expect(cleared.has(timers[1].handle)).toBe(true);
+    expect(cleared.has(assertDefined(timers[1]).handle)).toBe(true);
     expect(
-      getEventListeners(f.requests[1].options.signal, "abort"),
+      getEventListeners(assertDefined(f.requests[1]).options.signal, "abort"),
     ).toHaveLength(0);
   });
 });
@@ -969,7 +982,7 @@ test.each(["new input", "manual pin", "reload", "quit", "session tree"])(
   async (cancellation) => {
     await withNamingTimers(async (timers, cleared) => {
       const work = deferred();
-      const f = fixture([work.promise, new Promise(() => {})]);
+      const f = fixture([work.promise, new Promise(() => undefined)]);
       f.input("synthetic task");
       await settle();
       if (cancellation === "new input") f.input("another task");
@@ -978,9 +991,9 @@ test.each(["new input", "manual pin", "reload", "quit", "session tree"])(
       else if (cancellation === "session tree") await f.emit("session_tree");
       else await f.emit("session_shutdown", cancellation);
       await settle();
-      expect(cleared.has(timers[0].handle)).toBe(true);
+      expect(cleared.has(assertDefined(timers[0]).handle)).toBe(true);
       expect(
-        getEventListeners(f.requests[0].options.signal, "abort"),
+        getEventListeners(assertDefined(f.requests[0]).options.signal, "abort"),
       ).toHaveLength(0);
       expect(f.warnings).toEqual([]);
       work.resolve(response("stale title"));
@@ -1024,7 +1037,7 @@ test.each([
     if (completion === "success") work.resolve(response("fresh title"));
     if (completion === "rejection") work.resolve(response("", "error"));
     await settle();
-    expect(cleared.has(timers[0].handle)).toBe(true);
+    expect(cleared.has(assertDefined(timers[0]).handle)).toBe(true);
     if (f.requests[0])
       expect(
         getEventListeners(f.requests[0].options.signal, "abort"),
@@ -1051,7 +1064,7 @@ test("cancellation during model lookup skips credential checks and provider star
     await settle();
     expect(authChecks).toBe(0);
     expect(f.requests).toEqual([]);
-    expect(cleared.has(timers[0].handle)).toBe(true);
+    expect(cleared.has(assertDefined(timers[0]).handle)).toBe(true);
     expect(f.warnings).toEqual([]);
   });
 });
@@ -1132,10 +1145,12 @@ test.each(["one block", "combined final blocks"])(
     f.input("Name a task");
     await settle();
     expect(f.requests).toHaveLength(2);
-    expect(f.requests[1].context.systemPrompt).toContain(
+    expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
       "previous candidate exceeded a title limit",
     );
-    expect(f.requests[1].context.systemPrompt).not.toContain(oversized);
+    expect(assertDefined(f.requests[1]).context.systemPrompt).not.toContain(
+      oversized,
+    );
     expect(f.state.title).toBe("fix auth tests");
     expect(f.warnings).toEqual([]);
   },
@@ -1371,23 +1386,25 @@ test.each([
     );
     await settle();
     expect(f.requests).toHaveLength(2);
-    expect(f.requests[0].context.messages[0].content).toBe(
-      f.requests[1].context.messages[0].content,
+    expect(assertDefined(f.requests[0]).context.messages[0].content).toBe(
+      assertDefined(f.requests[1]).context.messages[0].content,
     );
-    expect(f.requests[1].context.systemPrompt).toContain(
+    expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
       "previous candidate exceeded a title limit",
     );
-    expect(f.requests[1].context.systemPrompt).toContain(
+    expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
       "Do not restate the full request",
     );
-    expect(f.requests[1].context.systemPrompt).toContain(
+    expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
       "answer-format constraints",
     );
-    expect(f.requests[1].context.systemPrompt).toContain(
-      `${MAX_TITLE_LENGTH} ASCII characters`,
+    expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
+      `${String(MAX_TITLE_LENGTH)} ASCII characters`,
     );
-    expect(f.requests[1].context.systemPrompt).not.toContain(firstOutput);
-    expect(f.requests[1].options.maxRetries).toBe(0);
+    expect(assertDefined(f.requests[1]).context.systemPrompt).not.toContain(
+      firstOutput,
+    );
+    expect(assertDefined(f.requests[1]).options.maxRetries).toBe(0);
     expect(f.state.title).toBe(correctedTitle);
     expect(f.warnings).toEqual([]);
   },
@@ -1421,7 +1438,8 @@ test("superseding input cancels an overlong-title retry without applying its sta
   f.input("Old task");
   await settle();
   expect(f.requests).toHaveLength(2);
-  const retrySignal = f.requests[1].options.signal as AbortSignal;
+  const retrySignal = assertDefined(f.requests[1]).options
+    .signal as AbortSignal;
   f.input("New task");
   await settle();
   expect(retrySignal.aborted).toBe(true);
@@ -1442,10 +1460,11 @@ test("superseding input cancels a multiline-title correction retry", async () =>
   f.input("Old task");
   await settle();
   expect(f.requests).toHaveLength(2);
-  expect(f.requests[1].context.systemPrompt).toContain(
+  expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
     "previous response was not a single-line title",
   );
-  const retrySignal = f.requests[1].options.signal as AbortSignal;
+  const retrySignal = assertDefined(f.requests[1]).options
+    .signal as AbortSignal;
   f.input("New task");
   await settle();
   expect(retrySignal.aborted).toBe(true);
@@ -1475,13 +1494,17 @@ test.each([
     f.input("Name a task");
     await settle();
     expect(f.requests).toHaveLength(2);
-    expect(f.requests[1].context.systemPrompt).toContain(
+    expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
       "previous response was not a single-line title",
     );
-    expect(f.requests[1].context.systemPrompt).toContain("without line breaks");
-    expect(f.requests[1].context.systemPrompt).not.toContain(rejectedOutput);
-    expect(f.requests[1].context.messages[0].content).toBe(
-      f.requests[0].context.messages[0].content,
+    expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
+      "without line breaks",
+    );
+    expect(assertDefined(f.requests[1]).context.systemPrompt).not.toContain(
+      rejectedOutput,
+    );
+    expect(assertDefined(f.requests[1]).context.messages[0].content).toBe(
+      assertDefined(f.requests[0]).context.messages[0].content,
     );
     expect(f.state.title).toBe("fix auth tests");
     expect(f.warnings).toEqual([]);
@@ -1510,10 +1533,12 @@ test.each([
       f.input("Name a task");
       await settle();
       expect(f.requests).toHaveLength(2);
-      expect(f.requests[1].context.systemPrompt).toContain(
+      expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
         "previous response was not a single-line title",
       );
-      expect(f.requests[1].context.systemPrompt).not.toContain(output);
+      expect(assertDefined(f.requests[1]).context.systemPrompt).not.toContain(
+        output,
+      );
       expect(f.state.title).toBe("fix auth tests");
       expect(f.warnings).toEqual([]);
     }
@@ -1633,7 +1658,7 @@ test("sensitive model output updates the status category without disclosing the 
   );
   expect(f.warnings.join(" ")).not.toContain(syntheticToken);
   await f.refresh("status");
-  const status = f.notices.at(-1)!;
+  const status = assertDefined(f.notices.at(-1));
   expect(status).toContain("Last naming rejection: sensitive-looking output;");
   expect(status).not.toContain(syntheticToken);
 });
@@ -1789,10 +1814,9 @@ test("sensitive-looking prompts and recent history never reach the naming model"
   for (const key of stripeProductionKeys) {
     await suppressed(fixture(), `Review payment processing ${key}`, key);
   }
-  const obfuscatedStripeProductionKey = stripeProductionKeys[0]!.replace(
-    "prod",
-    "pr\u200bod",
-  );
+  const obfuscatedStripeProductionKey = assertDefined(
+    stripeProductionKeys[0],
+  ).replace("prod", "pr\u200bod");
   await suppressed(
     fixture(),
     `Review payment processing ${obfuscatedStripeProductionKey}`,
@@ -3177,34 +3201,47 @@ test("sensitive-looking prompts and recent history never reach the naming model"
   const historyWithShopifyToken = fixture();
   historyWithShopifyToken.messages.push({
     role: "assistant",
-    content: [{ type: "text", text: `Generated value: ${shopifyTokens[1]!}` }],
+    content: [
+      {
+        type: "text",
+        text: `Generated value: ${assertDefined(shopifyTokens[1])}`,
+      },
+    ],
   });
   await suppressed(
     historyWithShopifyToken,
     "Continue the task",
-    shopifyTokens[1]!,
+    shopifyTokens[1],
   );
   const historyWithShippoToken = fixture();
   historyWithShippoToken.messages.push({
     role: "assistant",
-    content: [{ type: "text", text: `Generated value: ${shippoTokens[0]!}` }],
+    content: [
+      {
+        type: "text",
+        text: `Generated value: ${assertDefined(shippoTokens[0])}`,
+      },
+    ],
   });
   await suppressed(
     historyWithShippoToken,
     "Continue the task",
-    shippoTokens[0]!,
+    shippoTokens[0],
   );
   const historyWithPlanetScaleToken = fixture();
   historyWithPlanetScaleToken.messages.push({
     role: "assistant",
     content: [
-      { type: "text", text: `Generated value: ${planetscaleTokens[2]!}` },
+      {
+        type: "text",
+        text: `Generated value: ${assertDefined(planetscaleTokens[2])}`,
+      },
     ],
   });
   await suppressed(
     historyWithPlanetScaleToken,
     "Continue the task",
-    planetscaleTokens[2]!,
+    planetscaleTokens[2],
   );
   const historyWithPostmanToken = fixture();
   historyWithPostmanToken.messages.push({
@@ -3262,7 +3299,7 @@ test("sensitive-looking prompts and recent history never reach the naming model"
   const obfuscated = `ghp_${"A".repeat(10)}\u200b${"A".repeat(10)}`;
   await suppressed(fixture(), `Review ${obfuscated}`);
 
-  const compatibilityToken = [...token]
+  const compatibilityToken = Array.from(token)
     .map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0))
     .join("");
   await suppressed(fixture(), `Review ${compatibilityToken}`);
@@ -3688,12 +3725,12 @@ test("whitespace-free token boundaries do not extend short near-misses with pros
   const slackLegacyWebhookPrefix =
     "https://hooks.slack.com/services/T12345678/B12345678/";
   const discordWebhookPrefix = `https://discord.com/api/webhooks/${"1".repeat(18)}/`;
-  type BoundaryToken = {
+  interface BoundaryToken {
     value: string;
     captureOffset?: number;
     controlOffset?: number;
     nearMissProseCharacter?: string;
-  };
+  }
   const tokens: BoundaryToken[] = [
     { value: `NRAK-${"A".repeat(27)}` },
     labeledCredential("Cloudflare", "a".repeat(40)),
@@ -3848,7 +3885,7 @@ test("whitespace-free token boundaries do not extend short near-misses with pros
     expect(hasSensitiveOutput(whitespaceSplit)).toBe(true);
   }
 
-  const nearMiss = tokens[0]!.value.slice(0, -1);
+  const nearMiss = assertDefined(tokens[0]).value.slice(0, -1);
   const allowed = fixture([
     Promise.resolve(response("inspect build failures")),
   ]);
@@ -4676,7 +4713,8 @@ test("new credential-looking context cancels in-flight naming without sending it
   f.input("Fix auth tests");
   await settle();
   expect(f.requests).toHaveLength(1);
-  const previousSignal = f.requests[0].options.signal as AbortSignal;
+  const previousSignal = assertDefined(f.requests[0]).options
+    .signal as AbortSignal;
   const find = spyOn(f.ctx.modelRegistry, "find");
   const token = ["ghp_", "B".repeat(20)].join("");
   f.input(`Use ${token} to test the integration`);
@@ -4859,11 +4897,11 @@ test("OneDrive short links stay out of naming context and model output", async (
 test("OneDrive s! share keys stay out of naming context and model output", async () => {
   const keys = ["A1b2".repeat(7), "ab_CD-".repeat(4)];
   const links = [
-    `https://1drv.ms/f/s!${keys[0]}?e=example`,
-    `https://1drv.ms/u/s!${keys[1]}`,
+    `https://1drv.ms/f/s!${String(keys[0])}?e=example`,
+    `https://1drv.ms/u/s!${String(keys[1])}`,
   ];
   for (const [index, url] of links.entries()) {
-    const key = keys[index]!;
+    const key = assertDefined(keys[index]);
     const sensitiveContext = fixture();
     sensitiveContext.input(`Review this OneDrive file: ${url}`);
     await settle();
@@ -4954,8 +4992,14 @@ test("GoFile shared links stay out of naming context and model output", async ()
 test("Wormhole share keys stay out of naming context and model output", async () => {
   const keys = [`${"Ab3_-X".repeat(3)}QWER`, `${"A1b2_-".repeat(3)}QWER`];
   const links = [
-    { url: `https://wormhole.app/Test42#${keys[0]}`, key: keys[0]! },
-    { url: `https://www.wormhole.app/Fake99#${keys[1]}`, key: keys[1]! },
+    {
+      url: `https://wormhole.app/Test42#${String(keys[0])}`,
+      key: assertDefined(keys[0]),
+    },
+    {
+      url: `https://www.wormhole.app/Fake99#${String(keys[1])}`,
+      key: assertDefined(keys[1]),
+    },
   ];
   for (const { url, key } of links) {
     const sensitiveContext = fixture();
@@ -5302,7 +5346,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
     "Q~",
     "Q\u200b~",
   );
-  const compatibilityGithubToken = [...githubToken]
+  const compatibilityGithubToken = Array.from(githubToken)
     .map((character) => String.fromCodePoint(character.charCodeAt(0) + 0xfee0))
     .join("");
   const basicAuthHeaders = [
@@ -5566,7 +5610,7 @@ test("credential-shaped model output is rejected without applying or disclosing 
       text,
       textSignature: JSON.stringify({
         v: 1,
-        id: `split-${index}`,
+        id: `split-${String(index)}`,
         phase: "final_answer",
       }),
     })),
@@ -5850,7 +5894,7 @@ test("GitLab boundary scans preserve token minima beside prompt-edge prose", asy
     for (let edge = 0; edge < nearMissStarts.length; edge++) {
       const nearMissContext = buildNamingRequestContext(
         [],
-        makePrompt(nearMiss, nearMissStarts[edge]!),
+        makePrompt(nearMiss, assertDefined(nearMissStarts[edge])),
       );
       expect(hasSensitiveNamingContext(nearMissContext.text)).toBe(false);
       expect(nearMissContext.hasSensitiveBoundary()).toBe(false);
@@ -5876,8 +5920,8 @@ test("GitLab boundary scans preserve token minima beside prompt-edge prose", asy
   }
 
   const nearMissPrompt = makePrompt(
-    tokens[0]!.slice(0, -1),
-    prefixBoundary - tokens[0]!.length,
+    assertDefined(tokens[0]).slice(0, -1),
+    prefixBoundary - assertDefined(tokens[0]).length,
   );
   const allowed = fixture([Promise.resolve(response("review GitLab setup"))]);
   const allowedFind = spyOn(allowed.ctx.modelRegistry, "find");
@@ -5933,8 +5977,8 @@ test("rejects Docker Hub personal and organization tokens without mistaking near
     `dckr_oat_${oatBody.slice(0, -1)}`,
     `dckr_oat_${oatBody}Z`,
     `dckr_pot_${patBody}`,
-    `x${tokens[0].value}`,
-    `_${tokens[1].value}`,
+    `x${assertDefined(tokens[0]).value}`,
+    `_${assertDefined(tokens[1]).value}`,
   ]) {
     expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
     expect(hasSensitiveOutput(nearMiss)).toBe(false);
@@ -5978,10 +6022,10 @@ test("rejects PyPI API tokens without mistaking near-misses for tokens", async (
   }
 
   for (const nearMiss of [
-    `${prefixes[0]}${body.slice(0, 49)}`,
+    `${String(prefixes[0])}${body.slice(0, 49)}`,
     `pypx-${body}`,
-    `x${tokens[0]}`,
-    `_${tokens[1]}`,
+    `x${String(tokens[0])}`,
+    `_${String(tokens[1])}`,
   ]) {
     expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
     expect(hasSensitiveOutput(nearMiss)).toBe(false);
@@ -6490,9 +6534,9 @@ test("rejects Fly.io token formats without mistaking near-misses for tokens", as
     `fm1a_${"A1b+/".repeat(19)}xxxx`,
     `fm1x_${"A1b+/".repeat(20)}`,
     `fm2_${"A1b+/".repeat(20)}====`,
-    `x${machineTokens[0]}`,
-    `${machineTokens[0]}_`,
-    `${machineTokens[0]}-`,
+    `x${String(machineTokens[0])}`,
+    `${String(machineTokens[0])}_`,
+    `${String(machineTokens[0])}-`,
   ];
   for (const output of nearMisses) {
     const f = fixture([
@@ -6813,7 +6857,7 @@ test("rejects DigitalOcean tokens without mistaking near-miss strings for tokens
     `${prefix}${"a".repeat(65)}`,
     `${prefix}${"g".repeat(64)}`,
   ]);
-  const validToken = `${prefixes[1]}${body}`;
+  const validToken = `${String(prefixes[1])}${body}`;
   nearMisses.push(`${validToken}_x`, `${validToken}-x`, `doq_v1_${body}`);
   for (const output of nearMisses) {
     const f = fixture([
@@ -7152,7 +7196,7 @@ test("rejects Vault service and batch tokens without mistaking near-misses for t
     const outputs = [
       token,
       `configure-${token}`,
-      token.replace(prefix, `${prefix[0]}\u200b${prefix.slice(1)}`),
+      token.replace(prefix, `${String(prefix[0])}\u200b${prefix.slice(1)}`),
       `${token.slice(0, 11)}\u200b${token.slice(11)}`,
     ];
     for (const output of outputs) {
@@ -7466,11 +7510,11 @@ test("rejects Shippo API tokens without mistaking near-miss strings for tokens",
     tokenFor("test", "a".repeat(41)),
     tokenFor("live", "g".repeat(40)),
     tokenFor("sandbox"),
-    `x${tokens[0]}`,
-    `_${tokens[0]}`,
-    `${tokens[0]}x`,
-    `${tokens[0]}_x`,
-    `${tokens[0]}-x`,
+    `x${String(tokens[0])}`,
+    `_${String(tokens[0])}`,
+    `${String(tokens[0])}x`,
+    `${String(tokens[0])}_x`,
+    `${String(tokens[0])}-x`,
   ];
   for (const output of nearMisses) {
     const f = fixture([
@@ -7529,13 +7573,13 @@ test("rejects PlanetScale API and OAuth tokens without mistaking near-misses for
     tokenFor("tkn", "A".repeat(31)),
     tokenFor("oauth", "A".repeat(65)),
     tokenFor("token", body32),
-    `x${tokens[0]}`,
-    `_${tokens[0]}`,
-    `${tokens[1]}x`,
-    `${tokens[1]}_x`,
-    `${tokens[1]}-x`,
-    `${tokens[1]}.x`,
-    `${tokens[1]}=x`,
+    `x${String(tokens[0])}`,
+    `_${String(tokens[0])}`,
+    `${String(tokens[1])}x`,
+    `${String(tokens[1])}_x`,
+    `${String(tokens[1])}-x`,
+    `${String(tokens[1])}.x`,
+    `${String(tokens[1])}=x`,
   ];
   for (const output of nearMisses) {
     const f = fixture([
@@ -7815,9 +7859,9 @@ test("rejects Sourcegraph access tokens without mistaking near-miss strings for 
   expect(shortName.state.title).toBe("sourcegraph api setup");
   expect(shortName.warnings).toEqual([]);
 
-  const token = tokens[0]!;
-  const segmentedToken = tokens[1]!;
-  const localToken = tokens[2]!;
+  const token = assertDefined(tokens[0]);
+  const segmentedToken = assertDefined(tokens[1]);
+  const localToken = assertDefined(tokens[2]);
   const nearMisses = [
     `sgp_${"a".repeat(39)}`,
     `sgp_${"a".repeat(41)}`,
@@ -8230,8 +8274,8 @@ test("rejects age secret keys without mistaking near-miss strings for identities
   const nearMisses = [
     `${prefix}${"Q".repeat(57)}`,
     `${prefix}${"Q".repeat(59)}`,
-    `${prefix}${"I"}${"Q".repeat(57)}`,
-    `${prefix}${"O"}${"Q".repeat(57)}`,
+    `${prefix}I${"Q".repeat(57)}`,
+    `${prefix}O${"Q".repeat(57)}`,
     `${prefix.slice(0, -1)}2${payload}`,
     `x${identity}`,
     `_${identity}`,
@@ -10133,7 +10177,7 @@ test("rejects explicitly labeled UK National Insurance numbers without blocking 
       text,
       textSignature: JSON.stringify({
         v: 1,
-        id: `ni-${index}`,
+        id: `ni-${String(index)}`,
         phase: "final_answer",
       }),
     })),
@@ -10285,7 +10329,7 @@ test("rejects Luhn-valid payment-card-shaped output only with an explicit card l
       text,
       textSignature: JSON.stringify({
         v: 1,
-        id: `card-${index}`,
+        id: `card-${String(index)}`,
         phase: "final_answer",
       }),
     })),
@@ -10384,7 +10428,7 @@ test("email-address-like model output is rejected before normalization and not d
       text,
       textSignature: JSON.stringify({
         v: 1,
-        id: `email-${index}`,
+        id: `email-${String(index)}`,
         phase: "final_answer",
       }),
     })),
@@ -10606,7 +10650,7 @@ test("late naming result retains the settled marker", async () => {
   // Pi persists the submitted prompt before the run settles.
   f.messages.push({ role: "user", content: "Task" });
   await f.emit("agent_settled");
-  expect(f.requests[0].options.signal.aborted).toBe(false);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(false);
   expect(f.requests).toHaveLength(1);
   expect(f.state.title).toBe("* existing task");
   work.resolve(response("Fix auth tests"));
@@ -10646,7 +10690,7 @@ test("naming model failures show a generic warning without disclosing error deta
 
 test("an aborted run is settled and waiting, without implying task success", async () => {
   const f = fixture([]);
-  await f.handlers.get("agent_settled")!(
+  await assertDefined(f.handlers.get("agent_settled"))(
     { type: "agent_settled", aborted: true },
     f.ctx,
   );
@@ -10698,7 +10742,7 @@ test("reload cancels pending naming without resetting the existing task title", 
   f.input("Task");
   await settle();
   await f.emit("session_shutdown", "reload");
-  expect(f.requests[0].options.signal.aborted).toBe(true);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(true);
   f.load();
   await f.emit("session_start", "reload");
   work.resolve(response("Late title"));
@@ -11143,7 +11187,7 @@ test("naming context includes text dialogue and summaries, but not tools, thinki
 test("naming context bounds history and prioritizes recent dialogue and the new prompt", () => {
   const messages = Array.from({ length: 30 }, (_, i) => ({
     role: "user",
-    content: `task-${i}`,
+    content: `task-${String(i)}`,
   }));
   const context = buildNamingContext(messages as any, "continue");
   expect(context.match(/task-\d+/g)).toHaveLength(MAX_HISTORY_MESSAGES);
@@ -11157,7 +11201,7 @@ test("naming context bounds history and prioritizes recent dialogue and the new 
       { role: "compactionSummary", summary: "SUMMARY".repeat(2_000) },
       ...Array.from({ length: 30 }, (_, i) => ({
         role: "user",
-        content: `${i}:` + "x".repeat(10_000),
+        content: `${String(i)}:` + "x".repeat(10_000),
       })),
     ] as any,
     largePrompt,
@@ -11190,7 +11234,7 @@ test("projection-aware naming context reads the checkpoint summary and skips old
   const summary = { role: "compactionSummary", summary: "Compacted auth task" };
   const recent = Array.from({ length: MAX_HISTORY_MESSAGES }, (_, i) => ({
     role: "user",
-    content: `recent-${i}`,
+    content: `recent-${String(i)}`,
   }));
   const messages = [summary, discarded, ...recent] as any;
   const projection = {
@@ -11295,12 +11339,12 @@ test("naming context does not read text from history older than its retained win
   });
   const recent = Array.from({ length: MAX_HISTORY_MESSAGES }, (_, i) => ({
     role: "user",
-    content: `recent-${i}`,
+    content: `recent-${String(i)}`,
   }));
 
   const context = buildNamingContext([discarded, ...recent] as any);
   expect(context).toContain("recent-0");
-  expect(context).toContain(`recent-${MAX_HISTORY_MESSAGES - 1}`);
+  expect(context).toContain(`recent-${String(MAX_HISTORY_MESSAGES - 1)}`);
   expect(context).not.toContain("Discarded");
   expect(readDiscardedContent).toBe(false);
 });
@@ -11512,7 +11556,7 @@ test("empty projected context cancels stale naming without preventing a later re
         content: [{ type: "text", text: "Excluded output" }],
       });
       await f.emit(event);
-      expect(f.requests[0].options.signal.aborted).toBe(true);
+      expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(true);
       expect(f.requests).toHaveLength(1);
       old.resolve(staleResult);
       await settle();
@@ -11522,7 +11566,9 @@ test("empty projected context cancels stale naming without preventing a later re
       expect(f.warnings).toEqual([]);
       expect(
         f.calls.some(
-          (args) => args[0] === "rename-window" && args[4].includes("removed"),
+          (args) =>
+            args[0] === "rename-window" &&
+            assertDefined(args[4]).includes("removed"),
         ),
       ).toBe(false);
 
@@ -11565,7 +11611,9 @@ test("a cancelled naming result that fails during rename is not reused by later 
   expect(f.state.title).toBe("existing task");
   expect(
     f.calls.filter(
-      (args) => args[0] === "rename-window" && args[4].includes("removed task"),
+      (args) =>
+        args[0] === "rename-window" &&
+        assertDefined(args[4]).includes("removed task"),
     ),
   ).toHaveLength(1);
   expect(f.warnings).toEqual([]);
@@ -11685,7 +11733,8 @@ test.each([1, 2])(
         expect(
           f.calls.some(
             (args) =>
-              args[0] === "rename-window" && args[4].includes("removed"),
+              args[0] === "rename-window" &&
+              assertDefined(args[4]).includes("removed"),
           ),
         ).toBe(false);
         if (empty) {
@@ -11742,7 +11791,7 @@ test("a failed current naming rename remains available for a later sync retry", 
       if (
         fail &&
         args[0] === "rename-window" &&
-        args[4].includes("current task")
+        assertDefined(args[4]).includes("current task")
       ) {
         fail = false;
         throw new Error("Synthetic transient rename failure");
@@ -11787,7 +11836,7 @@ test("session-projection failures cancel stale naming and allow later retries", 
     throw new Error("Synthetic private projection failure");
   };
   expect(() => f.emit("session_compact")).not.toThrow();
-  expect(f.requests[0].options.signal.aborted).toBe(true);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(true);
   expect(f.warnings).toEqual([
     "Pi session context could not be read. The tmux title was not updated.",
   ]);
@@ -11819,14 +11868,14 @@ test("brief follow-ups include the active conversation instead of only the new p
   );
   f.input("yes, do it");
   await settle();
-  expect(f.requests[0].context.messages[0].content).toBe(
+  expect(assertDefined(f.requests[0]).context.messages[0].content).toBe(
     [
       "user: Fix authentication tests",
       "assistant: Should I update the fixtures?",
       "user: yes, do it",
     ].join("\n\n"),
   );
-  expect(f.requests[0].context.systemPrompt).toContain(
+  expect(assertDefined(f.requests[0]).context.systemPrompt).toContain(
     "Prefer the latest task when the topic changes",
   );
 });
@@ -11841,7 +11890,7 @@ test("startup, resume, fork, and reload name from the active session projection 
     await f.emit("session_start", reason);
     await settle();
     expect(f.requests).toHaveLength(1);
-    expect(f.requests[0].context.messages[0].content).toBe(
+    expect(assertDefined(f.requests[0]).context.messages[0].content).toBe(
       "user: Fix authentication tests",
     );
     expect(f.state.title).toBe("fix auth tests");
@@ -11864,8 +11913,8 @@ test("tree navigation cancels an old summary, preserves waiting, and names the n
   });
   await f.emit("session_tree");
   await settle();
-  expect(f.requests[0].options.signal.aborted).toBe(true);
-  expect(f.requests[1].context.messages[0].content).toBe(
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(true);
+  expect(assertDefined(f.requests[1]).context.messages[0].content).toBe(
     "user: Fix registry routing",
   );
   old.resolve(response("fix auth tests"));
@@ -11886,7 +11935,7 @@ test("compaction refreshes from the projected summary without resurrecting origi
   );
   await f.emit("session_compact");
   await settle();
-  expect(f.requests[0].context.messages[0].content).toBe(
+  expect(assertDefined(f.requests[0]).context.messages[0].content).toBe(
     "summary: Fix authentication tests; fixtures need updating\n\nuser: continue",
   );
   expect(f.state.title).toBe("fix auth tests");
@@ -11911,7 +11960,7 @@ test("settlement refreshes the task from new assistant context while retaining t
   await f.emit("agent_settled");
   await settle();
   expect(f.requests).toHaveLength(2);
-  expect(f.requests[1].context.messages[0].content).toContain(
+  expect(assertDefined(f.requests[1]).context.messages[0].content).toContain(
     "assistant: Updated the stale authentication fixtures",
   );
   expect(f.state.title).toBe("* auth fixtures");
@@ -11930,7 +11979,7 @@ test("persisting the same input and adding only tool work does not repeat a nami
   );
   await f.emit("agent_settled");
   expect(f.requests).toHaveLength(1);
-  expect(f.requests[0].options.signal.aborted).toBe(false);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(false);
   work.resolve(response("auth tests"));
   await settle();
   expect(f.state.title).toBe("* auth tests");
@@ -11986,7 +12035,7 @@ test("uses the configured naming model without changing the main model", async (
   const f = fixture();
   f.input("Task");
   await settle();
-  expect(f.requests[0].model).toEqual({
+  expect(assertDefined(f.requests[0]).model).toEqual({
     provider: "openrouter",
     id: "vendor/model",
   });
@@ -11999,7 +12048,10 @@ test("model configuration changes take effect only on extension reload", async (
   process.env.PI_TMUX_MODEL = "off";
   f.input("Task");
   await settle();
-  expect(f.requests[0].model).toEqual({ provider: "custom", id: "first" });
+  expect(assertDefined(f.requests[0]).model).toEqual({
+    provider: "custom",
+    id: "first",
+  });
   await f.emit("session_shutdown", "reload");
   f.load();
   f.messages.push({ role: "user", content: "Task" });
@@ -12159,7 +12211,7 @@ test("argument completion preserves pending naming and never includes task text"
   );
   expect(f.calls).toHaveLength(before);
   expect(f.requests).toHaveLength(1);
-  expect(f.requests[0].options.signal.aborted).toBe(false);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(false);
   work.resolve(response("current task"));
   await settle();
   expect(f.state.title).toBe("current task");
@@ -12213,13 +12265,15 @@ test.each([
       signal: new AbortController().signal,
     });
     expect(suggestions).not.toBeNull();
-    const item = suggestions!.items.find((entry) => entry.value === value)!;
+    const item = assertDefined(
+      assertDefined(suggestions).items.find((entry) => entry.value === value),
+    );
     const result = provider.applyCompletion(
       [line],
       0,
       line.length,
       item,
-      suggestions!.prefix,
+      assertDefined(suggestions).prefix,
     );
     expect(result.lines).toEqual([expected]);
     expect(result.cursorCol).toBe(expected.length);
@@ -12273,7 +12327,7 @@ test("manual refresh cancels pending naming and does not wait for the replacemen
   await f.emit("session_start");
   await f.refresh();
   expect(f.requests).toHaveLength(2);
-  expect(f.requests[0].options.signal.aborted).toBe(true);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(true);
   old.resolve(response("old task"));
   next.resolve(response("new task"));
   await settle();
@@ -12339,7 +12393,7 @@ test("manual refresh with empty context cancels work for removed dialogue", asyn
   await f.emit("session_start");
   f.messages.length = 0;
   await f.refresh();
-  expect(f.requests[0].options.signal.aborted).toBe(true);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(true);
   work.resolve(response("removed task"));
   await settle();
   expect(f.state.title).toBe("existing task");
@@ -12383,7 +12437,7 @@ test("pinning a title cancels pending AI work without losing waiting status", as
   f.input("Task");
   await f.emit("agent_settled");
   await f.refresh("set -manual title");
-  expect(f.requests[0].options.signal.aborted).toBe(true);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(true);
   work.resolve(response("late ai title"));
   await settle();
   expect(f.state.title).toBe("* -manual title");
@@ -12585,7 +12639,7 @@ test("rejecting a sensitive manual title leaves pending naming intact", async ()
   const f = fixture([work.promise]);
   f.input("Fix auth tests");
   await settle();
-  const signal = f.requests[0].options.signal as AbortSignal;
+  const signal = assertDefined(f.requests[0]).options.signal as AbortSignal;
   const token = ["ghp_", "D".repeat(20)].join("");
   await f.refresh(`set ${token}`);
   expect(signal.aborted).toBe(false);
@@ -12605,7 +12659,7 @@ test("invalid manual titles do not cancel pending naming or change the window", 
   await settle();
   for (const args of ["set", "set ---", "set #[]", "unknown command"])
     await f.refresh(args);
-  expect(f.requests[0].options.signal.aborted).toBe(false);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(false);
   expect(f.state.title).toBe("existing task");
   expect(f.warnings).toHaveLength(4);
   work.resolve(response("ai title"));
@@ -12720,7 +12774,7 @@ test.each(["set", "sync"])(
       if (!racing || args[0] !== "rename-window") return;
       // Cross the driver, write, queue catch, and result continuations, then
       // supersede the completed update before the command can confirm it.
-      const schedule = (remaining: number) =>
+      const schedule = (remaining: number) => {
         queueMicrotask(() => {
           if (remaining > 1) schedule(remaining - 1);
           else {
@@ -12728,6 +12782,7 @@ test.each(["set", "sync"])(
             void f.emit("agent_start");
           }
         });
+      };
       schedule(5);
     });
     if (command === "sync") {
@@ -12803,7 +12858,7 @@ test("sync leaves pending naming alive and its later result can update the title
   await settle();
   await f.refresh("sync");
   expect(f.requests).toHaveLength(1);
-  expect(f.requests[0].options.signal.aborted).toBe(false);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(false);
   work.resolve(response("late ai title"));
   await settle();
   expect(f.state.title).toBe("late ai title");
@@ -12881,7 +12936,7 @@ test("sync does not report success when continuous moves exhaust its stabilizati
       args[0] === "display-message" &&
       args[4] === WINDOW_INFO_INTERNAL_FORMAT
     )
-      f.state.window = `@${++reads}`;
+      f.state.window = `@${String(++reads)}`;
   });
   await f.refresh("sync");
   expect(f.calls.filter((args) => args[0] === "set-option")).toHaveLength(4);
@@ -12952,7 +13007,7 @@ test("/quit-pane requests graceful Pi shutdown and defers closing its pane until
   expect(f.calls[0]).toEqual(["display-message", "-p", "-t", "%1", "#{pid}"]);
   expect(f.calls[1]?.slice(0, 2)).toEqual(["run-shell", "-b"]);
   const watcher = f.calls[1]?.[2] ?? "";
-  expect(watcher).toContain(`pi_pid=${process.pid}`);
+  expect(watcher).toContain(`pi_pid=${String(process.pid)}`);
   expect(watcher).toContain("pane='%1'");
   expect(watcher).toContain("server_pid='123'");
   expect(watcher).toContain('while kill -0 "$pi_pid"');
@@ -13116,7 +13171,7 @@ test("status does not cancel or wait for a pending naming request", async () => 
   await f.refresh("status");
   expect(f.notices.at(-1)).toContain("Naming request: pending");
   expect(f.requests).toHaveLength(1);
-  expect(f.requests[0].options.signal.aborted).toBe(false);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(false);
   pending.resolve(response("completed task"));
   await settle();
   expect(f.state.title).toBe("completed task");
@@ -13139,7 +13194,7 @@ test("status detects a changed server, cancels obsolete naming work, and leaves 
   f.input("synthetic task");
   await settle();
   expect(f.requests).toHaveLength(1);
-  expect(f.requests[0].options.signal.aborted).toBe(false);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(false);
 
   f.state.statusInfo = "124\t$0\t@2\t0\t0\t0";
   const beforeWrites = [...f.writes];
@@ -13149,7 +13204,7 @@ test("status detects a changed server, cancels obsolete naming work, and leaves 
     "tmux writes: stopped (server changed; restart Pi to resume)",
   );
   expect(f.notices.at(-1)).toContain("Naming request: idle");
-  expect(f.requests[0].options.signal.aborted).toBe(true);
+  expect(assertDefined(f.requests[0]).options.signal.aborted).toBe(true);
   expect(f.writes).toEqual(beforeWrites);
   expect(f.calls.slice(beforeCalls)).toEqual([
     ["display-message", "-p", "-t", "%1", STATUS_SNAPSHOT_FORMAT],
@@ -13199,12 +13254,15 @@ test("a reloaded controller keeps the old server identity when tmux restarts dur
         {
           on: (event: string, handler: Function) =>
             runtimeHandlers.set(event, handler),
-          registerCommand: () => {},
+          registerCommand: () => undefined,
         } as unknown as ExtensionAPI,
         tmux,
       );
       return async (event: string, reason = "startup") => {
-        await runtimeHandlers.get(event)!({ type: event, reason }, ctx);
+        await assertDefined(runtimeHandlers.get(event))(
+          { type: event, reason },
+          ctx,
+        );
         await settle();
       };
     };
@@ -13278,11 +13336,12 @@ test("separate injected tmux adapters keep independent server identities across 
       warnings,
       writes,
       start: async () =>
-        handlers.get("session_start")!(
+        assertDefined(handlers.get("session_start"))(
           { type: "session_start", reason: "startup" },
           ctx,
         ),
-      sync: async () => commands.get("tmux-title")!.handler("sync", ctx),
+      sync: async () =>
+        assertDefined(commands.get("tmux-title")).handler("sync", ctx),
     };
   };
 
@@ -13473,13 +13532,13 @@ test.each(["sync", "set synthetic title"])(
         } as unknown as ExtensionAPI,
         tmux,
       );
-      await handlers.get("session_start")!(
+      await assertDefined(handlers.get("session_start"))(
         { type: "session_start", reason: "startup" },
         ctx,
       );
 
       serverPid = "124";
-      await commands.get("tmux-title")!.handler(command, ctx);
+      await assertDefined(commands.get("tmux-title")).handler(command, ctx);
 
       expect(warnings).toContain(
         "The tmux server changed; restart Pi to resume title updates.",
@@ -13542,12 +13601,12 @@ test("explicit title refresh warns when tmux restarts while naming is pending", 
       } as unknown as ExtensionAPI,
       tmux,
     );
-    await handlers.get("session_start")!(
+    await assertDefined(handlers.get("session_start"))(
       { type: "session_start", reason: "startup" },
       ctx,
     );
     messages = [{ role: "user", content: "synthetic task" }];
-    await commands.get("tmux-title")!.handler("", ctx);
+    await assertDefined(commands.get("tmux-title")).handler("", ctx);
     expect(requests).toBe(1);
 
     serverPid = "124";
@@ -13738,7 +13797,7 @@ test("a failed status notification is not misreported as a tmux failure", async 
     f.warnings.push(text);
   };
 
-  await expect(f.refresh("status")).resolves.toBeUndefined();
+  expect(await f.refresh("status")).toBeUndefined();
   expect(calls).toBe(1);
   expect(f.warnings).toEqual([]);
   expect(f.calls).toHaveLength(1);
@@ -13751,12 +13810,12 @@ test("disposed UI notifications do not reject successful title commands", async 
     throw new Error("UI is disposed");
   };
 
-  await expect(f.refresh("set pinned task")).resolves.toBeUndefined();
+  expect(await f.refresh("set pinned task")).toBeUndefined();
   expect(f.state.title).toBe("pinned task");
-  await expect(f.refresh("sync")).resolves.toBeUndefined();
-  await expect(f.refresh("status")).resolves.toBeUndefined();
-  await expect(f.refresh("unknown command")).resolves.toBeUndefined();
-  await expect(f.refresh("auto")).resolves.toBeUndefined();
+  expect(await f.refresh("sync")).toBeUndefined();
+  expect(await f.refresh("status")).toBeUndefined();
+  expect(await f.refresh("unknown command")).toBeUndefined();
+  expect(await f.refresh("auto")).toBeUndefined();
 });
 
 test("rejects Vercel tokens only when a Vercel label is present", async () => {
@@ -13932,7 +13991,7 @@ test("coalesces superseded title refreshes during a burst of lifecycle updates",
       completed++;
     });
   f.emit("agent_start");
-  let completedWhileBlocked = 0;
+  let completedWhileBlocked: number;
   try {
     await settle();
     completedWhileBlocked = completed;

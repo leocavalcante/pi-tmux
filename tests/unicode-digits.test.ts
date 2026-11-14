@@ -20,7 +20,7 @@ test("normalizes every Unicode decimal digit recognized by the runtime", () => {
       continue;
     }
     if (rangeStart < 0) rangeStart = codePoint;
-    expected += (codePoint - rangeStart) % 10;
+    expected += String((codePoint - rangeStart) % 10);
     actual += asciiDecimalDigits(character) ?? "?";
   }
   expect(actual).toBe(expected);

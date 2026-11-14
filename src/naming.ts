@@ -27,7 +27,10 @@ const MIN_FIXED_LENGTH_BOUNDARY_TOKEN_CONTINUATION_LENGTH = 8;
 const MIN_VARIABLE_LENGTH_BOUNDARY_TOKEN_CONTINUATION_LENGTH = 16;
 const DEFAULT_NAMING_MODEL = { provider: "openai-codex", id: "gpt-6-luna" };
 
-export type NamingModel = { provider: string; id: string };
+export interface NamingModel {
+  provider: string;
+  id: string;
+}
 
 export class UnsafeNamingOutputError extends Error {
   constructor() {
@@ -74,7 +77,7 @@ const BEARER_TOKEN_BOUNDARY_PATTERN = makeBoundaryPattern(
 // The Token authorization scheme carries an opaque API or session credential.
 const AUTHORIZATION_TOKEN_PATTERN = new RegExp(
   String.raw`(?<![A-Za-z0-9_-])(?:proxy[-_\s]?)?authorization\s*["']?\s*[:=]\s*["']?` +
-    `${interleaveBoundaryFormattingControls("token")}` +
+    interleaveBoundaryFormattingControls("token") +
     String.raw`[\s\p{Cc}\p{Cf}]+([A-Za-z0-9._~+/_-]{20,}={0,2})(?![A-Za-z0-9._~+/_=-])`,
   "iu",
 );
@@ -957,7 +960,7 @@ const SWISSTRANSFER_UUID_BOUNDARY_SOURCE =
   `${SWISSTRANSFER_UUID_TAIL_BOUNDARY_SOURCE})`;
 const SWISSTRANSFER_SHARE_LINK_PATTERN = new RegExp(
   String.raw`(?<![A-Za-z0-9.-])https?://(?:(?:www\.)?swisstransfer\.com/(?:[a-z]{2}/)?|swisstransfer\.infomaniak\.com/)dl?/` +
-    `${SWISSTRANSFER_UUID_SOURCE}` +
+    SWISSTRANSFER_UUID_SOURCE +
     String.raw`(?=[?#\s"'<>),.;:!?}\]]|$|/(?=[?#\s"'<>),.;:!?}\]]|$))`,
   "iu",
 );
@@ -1372,8 +1375,8 @@ const GITLAB_FIXED_TOKEN_PATTERNS = GITLAB_FIXED_TOKEN_FORMATS.map(
   ({ prefix, characters, minLength, maxLength }) => {
     const tokenLength =
       minLength === maxLength
-        ? `{${minLength}}`
-        : `{${minLength},${maxLength}}`;
+        ? `{${String(minLength)}}`
+        : `{${String(minLength)},${String(maxLength)}}`;
     return new RegExp(
       `(?<![A-Za-z0-9_-])(${prefix}${characters}${tokenLength})(?![A-Za-z0-9_-])`,
       "u",
@@ -1387,8 +1390,8 @@ const boundaryTokenCharacters = (
 ) => {
   const repeats =
     minLength === maxLength
-      ? `{${minLength - 1}}`
-      : `{${minLength - 1},${maxLength - 1}}`;
+      ? `{${String(minLength - 1)}}`
+      : `{${String(minLength - 1)},${String(maxLength - 1)}}`;
   return String.raw`[\p{Cc}\p{Cf}]*${characters}(?:[\p{Cc}\p{Cf}]*${characters})${repeats}`;
 };
 const GITLAB_FIXED_TOKEN_BOUNDARY_PATTERNS = GITLAB_FIXED_TOKEN_FORMATS.map(
@@ -1501,8 +1504,13 @@ function makeHexEscapedLiteralBoundaryPattern(pattern: RegExp): RegExp {
   );
   if (!/^[A-Za-z0-9-]+$/u.test(literal))
     throw new Error("Expected a fixed escaped ASCII signature");
-  const source = [...literal]
-    .map((character) => `\\u{${character.codePointAt(0)!.toString(16)}}`)
+  const source = Array.from(literal)
+    .map((character) => {
+      const codePoint = character.codePointAt(0);
+      if (codePoint === undefined)
+        throw new Error("Expected a non-empty character");
+      return `\\u{${codePoint.toString(16)}}`;
+    })
     .join(String.raw`[\p{Cc}\p{Cf}]*`);
   return new RegExp(`(${source})`, "u");
 }
@@ -1519,6 +1527,27 @@ function makeBoundaryPattern(
     ? pattern.flags
     : `${pattern.flags}u`;
   return new RegExp(source, flags);
+}
+
+// noUncheckedIndexedAccess types every regex capture and array entry as possibly
+// undefined. The patterns and loop bounds at these call sites guarantee them, so
+// these helpers keep the original unchecked reads: screening behaves exactly as before.
+function uncheckedIndex<T>(values: readonly T[], index: number): T {
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Unchecked read, as before noUncheckedIndexedAccess.
+  return values[index]!;
+}
+
+function uncheckedCapture(match: RegExpMatchArray, index: number): string {
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Unchecked read, as before noUncheckedIndexedAccess.
+  return match[index]!;
+}
+
+function uncheckedMatchRange(
+  match: RegExpMatchArray,
+  index: number,
+): [number, number] {
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Unchecked read; these patterns use the d flag.
+  return match.indices![index]!;
 }
 
 const NPM_AUTH_BOUNDARY_PATTERN = new RegExp(
@@ -2694,7 +2723,7 @@ function hasLabeledPaymentCard(value: string): boolean {
     `${LABELED_PAYMENT_CARD_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isLuhnValidPaymentCardNumber(match[1])) return true;
+    if (isLuhnValidPaymentCardNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -2712,7 +2741,7 @@ function hasLabeledCardSecurityCode(value: string): boolean {
     `${LABELED_CARD_SECURITY_CODE_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidCardSecurityCode(match[1]!)) return true;
+    if (isValidCardSecurityCode(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -2730,7 +2759,7 @@ function hasLabeledPin(value: string): boolean {
     `${LABELED_PIN_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidPin(match[1]!)) return true;
+    if (isValidPin(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -2748,7 +2777,7 @@ function hasLabeledOneTimeAuthCode(value: string): boolean {
     `${LABELED_ONE_TIME_AUTH_CODE_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidOneTimeAuthCode(match[1]!)) return true;
+    if (isValidOneTimeAuthCode(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -2764,7 +2793,7 @@ function hasLabeledRecoveryCode(value: string): boolean {
     `${LABELED_RECOVERY_CODE_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidRecoveryCode(match[1]!)) return true;
+    if (isValidRecoveryCode(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -2781,7 +2810,8 @@ function isValidNhsNumber(value: string): boolean {
       let weightedSum = 0;
       for (let index = 0; index < NHS_NUMBER_CHECK_WEIGHTS.length; index++) {
         weightedSum +=
-          (digits.charCodeAt(index) - 48) * NHS_NUMBER_CHECK_WEIGHTS[index]!;
+          (digits.charCodeAt(index) - 48) *
+          uncheckedIndex(NHS_NUMBER_CHECK_WEIGHTS, index);
       }
       const checkDigit = 11 - (weightedSum % 11);
       if (checkDigit === 10) return false;
@@ -2796,7 +2826,7 @@ function hasLabeledNhsNumber(value: string): boolean {
     `${LABELED_NHS_NUMBER_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidNhsNumber(match[1]!)) return true;
+    if (isValidNhsNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -2826,7 +2856,7 @@ function hasLabeledCpf(value: string): boolean {
     `${LABELED_CPF_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidCpfNumber(match[1]!)) return true;
+    if (isValidCpfNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -2848,7 +2878,7 @@ function hasLabeledCanadianSin(value: string): boolean {
     `${LABELED_CANADIAN_SIN_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidCanadianSinNumber(match[1]!)) return true;
+    if (isValidCanadianSinNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -2865,7 +2895,8 @@ function isValidAustralianTfnNumber(value: string): boolean {
       let weightedSum = 0;
       for (let index = 0; index < digits.length; index++) {
         weightedSum +=
-          (digits.charCodeAt(index) - 48) * AUSTRALIAN_TFN_WEIGHTS[index]!;
+          (digits.charCodeAt(index) - 48) *
+          uncheckedIndex(AUSTRALIAN_TFN_WEIGHTS, index);
       }
       return weightedSum % 11 === 0;
     },
@@ -2878,7 +2909,7 @@ function hasLabeledAustralianTfn(value: string): boolean {
     `${LABELED_AUSTRALIAN_TFN_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidAustralianTfnNumber(match[1]!)) return true;
+    if (isValidAustralianTfnNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -2894,8 +2925,8 @@ function isValidAustralianMedicareNumber(value: string): boolean {
     (digits) => {
       if (
         (digits.length !== 10 && digits.length !== 11) ||
-        digits[0] < "2" ||
-        digits[0] > "6"
+        digits.charAt(0) < "2" ||
+        digits.charAt(0) > "6"
       )
         return false;
       let weightedSum = 0;
@@ -2906,7 +2937,7 @@ function isValidAustralianMedicareNumber(value: string): boolean {
       ) {
         weightedSum +=
           (digits.charCodeAt(index) - 48) *
-          AUSTRALIAN_MEDICARE_NUMBER_CHECKSUM_WEIGHTS[index]!;
+          uncheckedIndex(AUSTRALIAN_MEDICARE_NUMBER_CHECKSUM_WEIGHTS, index);
       }
       return weightedSum % 10 === digits.charCodeAt(8) - 48;
     },
@@ -2919,7 +2950,8 @@ function hasLabeledAustralianMedicareNumber(value: string): boolean {
     `${LABELED_AUSTRALIAN_MEDICARE_NUMBER_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidAustralianMedicareNumber(match[1]!)) return true;
+    if (isValidAustralianMedicareNumber(uncheckedCapture(match, 1)))
+      return true;
   }
   return false;
 }
@@ -2936,7 +2968,8 @@ function getNewZealandIrdCheckDigit(
 ): number {
   let weightedSum = 0;
   for (let index = 0; index < weights.length; index++) {
-    weightedSum += (base.charCodeAt(index) - 48) * weights[index]!;
+    weightedSum +=
+      (base.charCodeAt(index) - 48) * uncheckedIndex(weights, index);
   }
   const remainder = weightedSum % 11;
   return remainder === 0 ? 0 : 11 - remainder;
@@ -2996,10 +3029,13 @@ function hasVerhoeffCheckDigit(digits: string): boolean {
   let checksum = 0;
   for (let index = 0; index < digits.length; index++) {
     const digit = digits.charCodeAt(digits.length - index - 1) - 48;
-    checksum =
-      VERHOEFF_MULTIPLICATION_TABLE[checksum]![
-        VERHOEFF_PERMUTATION_TABLE[index % 8]![digit]!
-      ]!;
+    const permutation = uncheckedIndex(VERHOEFF_PERMUTATION_TABLE, index % 8);
+    const permutedDigit = uncheckedIndex(permutation, digit);
+    const multiplication = uncheckedIndex(
+      VERHOEFF_MULTIPLICATION_TABLE,
+      checksum,
+    );
+    checksum = uncheckedIndex(multiplication, permutedDigit);
   }
   return checksum === 0;
 }
@@ -3009,8 +3045,8 @@ function isValidAadhaarNumber(value: string): boolean {
     asciiDecimalDigits(value),
     (digits) =>
       digits.length === 12 &&
-      digits[0]! >= "2" &&
-      digits[0]! <= "9" &&
+      digits.charAt(0) >= "2" &&
+      digits.charAt(0) <= "9" &&
       hasVerhoeffCheckDigit(digits),
   );
 }
@@ -3021,7 +3057,7 @@ function hasLabeledAadhaarNumber(value: string): boolean {
     `${LABELED_AADHAAR_NUMBER_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidAadhaarNumber(match[1]!)) return true;
+    if (isValidAadhaarNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3035,14 +3071,14 @@ const CHINESE_RESIDENT_ID_AREA_CODE_PATTERN =
 
 function isValidChineseResidentIdNumber(value: string): boolean {
   const normalized = value.replace(/[\p{Cc}\p{Cf}\s-]+/gu, "");
-  const characters = [...normalized];
+  const characters = Array.from(normalized);
   if (
     characters.length !== 18 ||
     !CHINESE_RESIDENT_ID_NUMBER_EXACT_PATTERN.test(normalized)
   ) {
     return false;
   }
-  const checkCharacter = characters[17]!.toUpperCase();
+  const checkCharacter = uncheckedIndex(characters, 17).toUpperCase();
   const digits = asciiDecimalDigits(characters.slice(0, 17).join(""));
   return conservativelyValidateLabeledDigits(digits, (knownDigits) => {
     if (
@@ -3062,11 +3098,14 @@ function isValidChineseResidentIdNumber(value: string): boolean {
       .split("")
       .reduce(
         (total, digit, index) =>
-          total + Number(digit) * CHINESE_RESIDENT_ID_NUMBER_WEIGHTS[index]!,
+          total +
+          Number(digit) *
+            uncheckedIndex(CHINESE_RESIDENT_ID_NUMBER_WEIGHTS, index),
         0,
       );
-    const expectedCheckDigit =
-      CHINESE_RESIDENT_ID_NUMBER_CHECK_DIGITS[sum % 11]!;
+    const expectedCheckDigit = CHINESE_RESIDENT_ID_NUMBER_CHECK_DIGITS.charAt(
+      sum % 11,
+    );
     const actualCheckDigit = /\p{Nd}/u.test(checkCharacter)
       ? asciiDecimalDigits(checkCharacter)
       : checkCharacter;
@@ -3082,7 +3121,7 @@ function hasLabeledChineseResidentIdNumber(value: string): boolean {
     `${LABELED_CHINESE_RESIDENT_ID_NUMBER_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidChineseResidentIdNumber(match[1]!)) return true;
+    if (isValidChineseResidentIdNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3095,7 +3134,7 @@ const JAPANESE_MY_NUMBER_WEIGHTS = [6, 5, 4, 3, 2, 7, 6, 5, 4, 3, 2] as const;
 function isValidJapaneseMyNumber(value: string): boolean {
   const normalized = value.replace(/[\p{Cc}\p{Cf}\s-]+/gu, "");
   if (
-    [...normalized].length !== 12 ||
+    Array.from(normalized).length !== 12 ||
     !JAPANESE_MY_NUMBER_EXACT_PATTERN.test(normalized)
   )
     return false;
@@ -3108,7 +3147,8 @@ function isValidJapaneseMyNumber(value: string): boolean {
         .split("")
         .reduce(
           (total, digit, index) =>
-            total + Number(digit) * JAPANESE_MY_NUMBER_WEIGHTS[index]!,
+            total +
+            Number(digit) * uncheckedIndex(JAPANESE_MY_NUMBER_WEIGHTS, index),
           0,
         );
       const remainder = sum % 11;
@@ -3124,7 +3164,7 @@ function hasLabeledJapaneseMyNumber(value: string): boolean {
     `${LABELED_JAPANESE_MY_NUMBER_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidJapaneseMyNumber(match[1]!)) return true;
+    if (isValidJapaneseMyNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3156,7 +3196,7 @@ function isValidSwedishPersonalId(value: string): boolean {
       const encodedDay = Number(birthDate.slice(-2));
       const day = encodedDay > 60 ? encodedDay - 60 : encodedDay;
       return isValidDateOfBirth(
-        `${year}-${month}-${String(day).padStart(2, "0")}`,
+        `${String(year)}-${month}-${String(day).padStart(2, "0")}`,
       );
     },
   );
@@ -3168,7 +3208,7 @@ function hasLabeledSwedishPersonalId(value: string): boolean {
     `${LABELED_SWEDISH_PERSONAL_ID_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidSwedishPersonalId(match[1]!)) return true;
+    if (isValidSwedishPersonalId(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3200,7 +3240,7 @@ function hasLabeledFrenchNir(value: string): boolean {
     `${LABELED_FRENCH_NIR_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidFrenchNir(match[1]!)) return true;
+    if (isValidFrenchNir(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3214,14 +3254,14 @@ function isValidSpanishNationalId(value: string): boolean {
   if (SPANISH_DNI_EXACT_PATTERN.test(normalized)) {
     number = asciiDecimalDigits(normalized.slice(0, 8));
   } else if (SPANISH_NIE_EXACT_PATTERN.test(normalized)) {
-    const prefix = normalized[0]!.toUpperCase();
+    const prefix = normalized.charAt(0).toUpperCase();
     const digits = asciiDecimalDigits(normalized.slice(1, 8));
     const prefixDigit = prefix === "X" ? "0" : prefix === "Y" ? "1" : "2";
     number = digits === undefined ? undefined : `${prefixDigit}${digits}`;
   } else {
     return false;
   }
-  const checkLetter = normalized.at(-1)!.toUpperCase();
+  const checkLetter = normalized.charAt(normalized.length - 1).toUpperCase();
   return conservativelyValidateLabeledDigits(
     number,
     (digits) =>
@@ -3236,7 +3276,7 @@ function hasLabeledSpanishNationalId(value: string): boolean {
     `${LABELED_SPANISH_NATIONAL_ID_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidSpanishNationalId(match[1]!)) return true;
+    if (isValidSpanishNationalId(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3244,7 +3284,7 @@ function hasLabeledSpanishNationalId(value: string): boolean {
 function isValidIndianPanNumber(value: string): boolean {
   const normalized = value.replace(/[\p{Cc}\p{Cf}]/gu, "");
   if (!INDIAN_PAN_EXACT_PATTERN.test(normalized)) return false;
-  const unicodeDigits = [...normalized]
+  const unicodeDigits = Array.from(normalized)
     .filter((character) => /\p{Nd}/u.test(character))
     .join("");
   return conservativelyValidateLabeledDigits(
@@ -3259,7 +3299,7 @@ function hasLabeledIndianPanNumber(value: string): boolean {
     `${LABELED_INDIAN_PAN_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidIndianPanNumber(match[1]!)) return true;
+    if (isValidIndianPanNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3270,7 +3310,7 @@ function hasLabeledNewZealandIrdNumber(value: string): boolean {
     `${LABELED_NEW_ZEALAND_IRD_NUMBER_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidNewZealandIrdNumber(match[1]!)) return true;
+    if (isValidNewZealandIrdNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3280,7 +3320,7 @@ function isValidUsItinNumber(value: string): boolean {
   return conservativelyValidateLabeledDigits(
     asciiDecimalDigits(value),
     (digits) => {
-      if (digits.length !== 9 || digits[0] !== "9") return false;
+      if (digits.length !== 9 || !digits.startsWith("9")) return false;
       const group = Number(digits.slice(3, 5));
       return (
         (group >= 50 && group <= 65) ||
@@ -3298,7 +3338,7 @@ function hasLabeledUsItin(value: string): boolean {
     `${US_ITIN_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidUsItinNumber(match[1]!)) return true;
+    if (isValidUsItinNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3329,7 +3369,7 @@ function isValidDateOfBirth(value: string): boolean {
       30,
       31,
     ];
-    return day <= monthLengths[month - 1]!;
+    return day <= uncheckedIndex(monthLengths, month - 1);
   };
   if (first.length === 4)
     return isCalendarDate(Number(first), Number(second), Number(third));
@@ -3350,7 +3390,7 @@ function hasLabeledDateOfBirth(value: string): boolean {
     `${LABELED_DATE_OF_BIRTH_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidDateOfBirth(match[1]!)) return true;
+    if (isValidDateOfBirth(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3368,6 +3408,8 @@ function isValidIbanNumber(value: string): boolean {
   }
   const country = normalized.slice(0, 2) as keyof typeof SUPPORTED_IBAN_LENGTHS;
   const length = SUPPORTED_IBAN_LENGTHS[country];
+  // Unsupported country codes are absent at runtime despite the narrowed key type.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- The cast key may be missing from the table.
   if (length === undefined || normalized.length < length) return false;
   const iban = normalized.slice(0, length);
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/u.test(iban)) return false;
@@ -3389,7 +3431,7 @@ function hasLabeledIban(value: string): boolean {
     `${LABELED_IBAN_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidIbanNumber(match[1]!)) return true;
+    if (isValidIbanNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3409,7 +3451,8 @@ function hasValidAbaRoutingChecksum(digits: string): boolean {
   const weights = [3, 7, 1] as const;
   for (let index = 0; index < digits.length; index++) {
     weightedSum +=
-      (digits.charCodeAt(index) - 48) * weights[index % weights.length]!;
+      (digits.charCodeAt(index) - 48) *
+      uncheckedIndex(weights, index % weights.length);
   }
   return weightedSum % 10 === 0;
 }
@@ -3430,7 +3473,7 @@ function hasLabeledAbaRoutingNumber(value: string): boolean {
     `${LABELED_ABA_ROUTING_NUMBER_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidAbaRoutingNumber(match[1]!)) return true;
+    if (isValidAbaRoutingNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3448,7 +3491,7 @@ function hasLabeledBankAccountNumber(value: string): boolean {
     `${LABELED_BANK_ACCOUNT_NUMBER_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidBankAccountNumber(match[1]!)) return true;
+    if (isValidBankAccountNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3464,7 +3507,7 @@ function hasLabeledPassportNumber(value: string): boolean {
     `${LABELED_PASSPORT_NUMBER_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidPassportNumber(match[1]!)) return true;
+    if (isValidPassportNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3480,7 +3523,7 @@ function hasLabeledDriverLicenseNumber(value: string): boolean {
     `${LABELED_DRIVER_LICENSE_NUMBER_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isValidDriverLicenseNumber(match[1]!)) return true;
+    if (isValidDriverLicenseNumber(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3491,8 +3534,8 @@ function hasBearerToken(value: string): boolean {
     `${BEARER_TOKEN_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    const token = match[1];
-    const firstFragment = token.split(/\s/u, 1)[0];
+    const token = uncheckedCapture(match, 1);
+    const firstFragment = token.split(/\s/u, 1)[0] ?? "";
     // Spaced bearer tokens are ambiguous with ordinary prose such as
     // "bearer authentication v2". Require a token-like first fragment
     // when whitespace is present, while keeping contiguous tokens covered.
@@ -3524,20 +3567,20 @@ function hasBasicAuthorizationCredential(value: string): boolean {
     `${BASIC_AUTHORIZATION_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isBase64UserPasswordPair(match[1])) return true;
+    if (isBase64UserPasswordPair(uncheckedCapture(match, 1))) return true;
   }
   for (const match of value.matchAll(
     OBFUSCATED_BASIC_AUTHORIZATION_SCAN_PATTERN,
   )) {
-    if (isBase64UserPasswordPair(match[2]!)) return true;
+    if (isBase64UserPasswordPair(uncheckedCapture(match, 2))) return true;
   }
   for (const match of value.matchAll(
     OBFUSCATED_AUTHORIZATION_HEADER_SCAN_PATTERN,
   )) {
-    const headerLabel = `${match[1] ?? ""}${match[2]!}`;
+    const headerLabel = `${match[1] ?? ""}${uncheckedCapture(match, 2)}`;
     if (
       OBFUSCATION_SEPARATOR_PATTERN.test(headerLabel) &&
-      isBase64UserPasswordPair(match[3]!)
+      isBase64UserPasswordPair(uncheckedCapture(match, 3))
     )
       return true;
   }
@@ -3550,7 +3593,7 @@ function hasNpmAuthCredential(value: string): boolean {
     `${NPM_AUTH_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isBase64UserPasswordPair(match[1])) return true;
+    if (isBase64UserPasswordPair(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3561,7 +3604,7 @@ function hasDockerAuthCredential(value: string): boolean {
     `${DOCKER_AUTH_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    if (isBase64UserPasswordPair(match[1])) return true;
+    if (isBase64UserPasswordPair(uncheckedCapture(match, 1))) return true;
   }
   return false;
 }
@@ -3594,7 +3637,7 @@ function hasNpmPasswordCredential(value: string): boolean {
     `${NPM_PASSWORD_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    const password = decodeNpmPassword(match[1]);
+    const password = decodeNpmPassword(uncheckedCapture(match, 1));
     if (password !== undefined && !PASSWORD_PLACEHOLDER_PATTERN.test(password))
       return true;
   }
@@ -3604,14 +3647,16 @@ function hasNpmPasswordCredential(value: string): boolean {
 function npmPasswordPlaceholderValueStarts(value: string): Set<number> {
   const starts = new Set<number>();
   for (const match of value.matchAll(NPM_PASSWORD_PLACEHOLDER_SCAN_PATTERN)) {
-    const password = decodeNpmPassword(match[1]!);
+    const password = decodeNpmPassword(uncheckedCapture(match, 1));
     // The generic password-label pattern also sees npm's `_password` setting.
     // Preserve the existing behavior that decodes and ignores placeholders.
     if (
       (password !== undefined && PASSWORD_PLACEHOLDER_PATTERN.test(password)) ||
-      NPM_PASSWORD_PLACEHOLDER_ENCODINGS_LOWERCASE.has(match[1]!.toLowerCase())
+      NPM_PASSWORD_PLACEHOLDER_ENCODINGS_LOWERCASE.has(
+        uncheckedCapture(match, 1).toLowerCase(),
+      )
     ) {
-      starts.add(match.index! + 1);
+      starts.add(match.index + 1);
     }
   }
   return starts;
@@ -3623,9 +3668,12 @@ function hasBasicAuthorizationCredentialBlock(value: string): boolean {
     `${BASIC_AUTHORIZATION_BLOCK_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    const scalar = match[1].replace(/[\s\p{Cc}\p{Cf}]+/gu, " ").trim();
+    const scalar = uncheckedCapture(match, 1)
+      .replace(/[\s\p{Cc}\p{Cf}]+/gu, " ")
+      .trim();
     const basic = /^Basic\s+([A-Za-z0-9+/]{4,}={0,2})$/iu.exec(scalar);
-    if (basic && isBase64UserPasswordPair(basic[1])) return true;
+    if (basic && isBase64UserPasswordPair(uncheckedCapture(basic, 1)))
+      return true;
   }
   return false;
 }
@@ -3636,7 +3684,10 @@ function hasLabeledCredentialBlock(value: string): boolean {
     `${LABELED_CREDENTIAL_BLOCK_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    const credential = match[2].replace(/[\s\p{Cc}\p{Cf}]+/gu, "");
+    const credential = uncheckedCapture(match, 2).replace(
+      /[\s\p{Cc}\p{Cf}]+/gu,
+      "",
+    );
     if (credential.length >= 20) return true;
   }
   return false;
@@ -3648,7 +3699,9 @@ function hasLabeledPasswordBlock(value: string): boolean {
     `${LABELED_PASSWORD_BLOCK_PATTERN.flags}g`,
   );
   for (const match of value.matchAll(pattern)) {
-    const scalar = match[1].replace(/[\s\p{Cc}\p{Cf}]+/gu, " ").trim();
+    const scalar = uncheckedCapture(match, 1)
+      .replace(/[\s\p{Cc}\p{Cf}]+/gu, " ")
+      .trim();
     if (PASSWORD_PLACEHOLDER_PATTERN.test(scalar)) continue;
     const credential = scalar.replace(/\s/gu, "");
     if (LABELED_PASSWORD_PATTERN.test(`password=${credential}`)) return true;
@@ -3663,7 +3716,7 @@ function hasLabeledPasswordPhrase(value: string): boolean {
   ] as const) {
     const pattern = new RegExp(source.source, `${source.flags}g`);
     for (const match of value.matchAll(pattern)) {
-      const scalar = match[captureIndex]
+      const scalar = uncheckedCapture(match, captureIndex)
         .replace(/[\s\p{Cc}\p{Cf}]+/gu, " ")
         .trim();
       if (PASSWORD_PLACEHOLDER_PATTERN.test(scalar)) continue;
@@ -3712,7 +3765,7 @@ function stripNonWhitespaceControls(value: string): string {
 
 function hasObfuscatedBearerToken(value: string): boolean {
   for (const match of value.matchAll(OBFUSCATED_BEARER_TOKEN_SCAN_PATTERN)) {
-    const bearerValue = stripNonWhitespaceControls(match[2]!);
+    const bearerValue = stripNonWhitespaceControls(uncheckedCapture(match, 2));
     if (hasBearerToken(`Bearer ${bearerValue}`)) return true;
   }
   return false;
@@ -3959,11 +4012,11 @@ export function parseNamingModel(value?: string): NamingModel | null {
 const WHITESPACE = /[\s\p{White_Space}]/u;
 const OBFUSCATION_SEPARATOR_PATTERN = /[\s\p{Cc}\p{Cf}]/u;
 
-type NamingContextBoundary = {
+interface NamingContextBoundary {
   left: string;
   right: string;
   retainedSide: "left" | "right";
-};
+}
 
 // Capture group 1 must contain only the sensitive value, not its contextual label.
 const SENSITIVE_BOUNDARY_PATTERNS = [
@@ -4377,7 +4430,7 @@ function hasWhitespaceSeparatedCredential(value: string): boolean {
   for (const match of value.matchAll(
     WHITESPACE_TOLERANT_LABELED_PASSWORD_SCAN_PATTERN,
   )) {
-    if (!placeholderStarts.has(match.index!)) return true;
+    if (!placeholderStarts.has(match.index)) return true;
   }
   return false;
 }
@@ -4390,14 +4443,15 @@ function hasVariableLengthBoundaryToken(
 ): boolean {
   let probe = EXTENDED_BOUNDARY_PATTERN_PROBES.get(sourcePattern);
   if (!probe) {
-    const flags = [...sourcePattern.flags]
+    const flags = Array.from(sourcePattern.flags)
       .filter((flag) => !["d", "g", "y"].includes(flag))
       .join("");
     probe = new RegExp(`^(?:${sourcePattern.source})$`, flags);
     EXTENDED_BOUNDARY_PATTERN_PROBES.set(sourcePattern, probe);
   }
+  const compiledProbe = probe;
   return BOUNDARY_TOKEN_EXTENSION_CHARACTERS.some((character) =>
-    probe!.test(`${token}${character}`),
+    compiledProbe.test(`${token}${character}`),
   );
 }
 
@@ -4408,7 +4462,7 @@ function hasSensitiveTokenAcrossBoundary({
 }: NamingContextBoundary): boolean {
   const stripFormatting = (value: string) =>
     value.normalize("NFKD").replace(/[\p{M}\p{Cf}]/gu, "");
-  const variants: Array<[string, string]> = [
+  const variants: [string, string][] = [
     [left, right],
     [stripFormatting(left), stripFormatting(right)],
   ];
@@ -4493,17 +4547,17 @@ function hasSensitiveTokenAcrossBoundary({
       for (const match of joined.matchAll(pattern)) {
         if (
           sourcePattern === LABELED_PASSWORD_BOUNDARY_PATTERN &&
-          npmPasswordPlaceholderStarts.has(match.index!)
+          npmPasswordPlaceholderStarts.has(match.index)
         )
           continue;
-        const [tokenStart, tokenEnd] = match.indices![1]!;
+        const [tokenStart, tokenEnd] = uncheckedMatchRange(match, 1);
         if (
           sourcePattern === GOOGLE_DRIVE_RESOURCE_KEYS_HEADER_BOUNDARY_PATTERN
         ) {
-          for (const pair of match[1]!.matchAll(
+          for (const pair of uncheckedCapture(match, 1).matchAll(
             GOOGLE_DRIVE_RESOURCE_KEY_HEADER_PAIR_BOUNDARY_SCAN_PATTERN,
           )) {
-            const [keyStart, keyEnd] = pair.indices![1]!;
+            const [keyStart, keyEnd] = uncheckedMatchRange(pair, 1);
             if (
               overlapsRetainedContext(
                 tokenStart + keyStart,
@@ -4517,132 +4571,135 @@ function hasSensitiveTokenAcrossBoundary({
         if (!overlapsRetainedContext(tokenStart, tokenEnd)) continue;
         if (
           sourcePattern === LABELED_PAYMENT_CARD_BOUNDARY_PATTERN &&
-          !isLuhnValidPaymentCardNumber(match[1]!)
+          !isLuhnValidPaymentCardNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_CARD_SECURITY_CODE_BOUNDARY_PATTERN &&
-          !isValidCardSecurityCode(match[1]!)
+          !isValidCardSecurityCode(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_PIN_BOUNDARY_PATTERN &&
-          !isValidPin(match[1]!)
+          !isValidPin(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_ONE_TIME_AUTH_CODE_BOUNDARY_PATTERN &&
-          !isValidOneTimeAuthCode(match[1]!)
+          !isValidOneTimeAuthCode(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_RECOVERY_CODE_BOUNDARY_PATTERN &&
-          !isValidRecoveryCode(match[1]!)
+          !isValidRecoveryCode(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_NHS_NUMBER_BOUNDARY_PATTERN &&
-          !isValidNhsNumber(match[1]!)
+          !isValidNhsNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_CPF_BOUNDARY_PATTERN &&
-          !isValidCpfNumber(match[1]!)
+          !isValidCpfNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_CANADIAN_SIN_BOUNDARY_PATTERN &&
-          !isValidCanadianSinNumber(match[1]!)
+          !isValidCanadianSinNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_AUSTRALIAN_TFN_BOUNDARY_PATTERN &&
-          !isValidAustralianTfnNumber(match[1]!)
+          !isValidAustralianTfnNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern ===
             LABELED_AUSTRALIAN_MEDICARE_NUMBER_BOUNDARY_PATTERN &&
-          !isValidAustralianMedicareNumber(match[1]!)
+          !isValidAustralianMedicareNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_NEW_ZEALAND_IRD_NUMBER_BOUNDARY_PATTERN &&
-          !isValidNewZealandIrdNumber(match[1]!)
+          !isValidNewZealandIrdNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_AADHAAR_NUMBER_BOUNDARY_PATTERN &&
-          !isValidAadhaarNumber(match[1]!)
+          !isValidAadhaarNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern ===
             LABELED_CHINESE_RESIDENT_ID_NUMBER_BOUNDARY_PATTERN &&
-          !isValidChineseResidentIdNumber(match[1]!)
+          !isValidChineseResidentIdNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_JAPANESE_MY_NUMBER_BOUNDARY_PATTERN &&
-          !isValidJapaneseMyNumber(match[1]!)
+          !isValidJapaneseMyNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_SWEDISH_PERSONAL_ID_BOUNDARY_PATTERN &&
-          !isValidSwedishPersonalId(match[1]!)
+          !isValidSwedishPersonalId(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_FRENCH_NIR_BOUNDARY_PATTERN &&
-          !isValidFrenchNir(match[1]!)
+          !isValidFrenchNir(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_SPANISH_NATIONAL_ID_BOUNDARY_PATTERN &&
-          !isValidSpanishNationalId(match[1]!)
+          !isValidSpanishNationalId(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_INDIAN_PAN_BOUNDARY_PATTERN &&
-          !isValidIndianPanNumber(match[1]!)
+          !isValidIndianPanNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === US_ITIN_BOUNDARY_PATTERN &&
-          !isValidUsItinNumber(match[1]!)
+          !isValidUsItinNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_DATE_OF_BIRTH_BOUNDARY_PATTERN &&
-          !isValidDateOfBirth(match[1]!)
+          !isValidDateOfBirth(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_IBAN_BOUNDARY_PATTERN &&
-          !isValidIbanNumber(match[1]!)
+          !isValidIbanNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_ABA_ROUTING_NUMBER_BOUNDARY_PATTERN &&
-          !isValidAbaRoutingNumber(match[1]!)
+          !isValidAbaRoutingNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_PASSPORT_NUMBER_BOUNDARY_PATTERN &&
-          !isValidPassportNumber(match[1]!)
+          !isValidPassportNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_DRIVER_LICENSE_NUMBER_BOUNDARY_PATTERN &&
-          !isValidDriverLicenseNumber(match[1]!)
+          !isValidDriverLicenseNumber(uncheckedCapture(match, 1))
         )
           continue;
         if (
           sourcePattern === LABELED_BANK_ACCOUNT_NUMBER_BOUNDARY_PATTERN &&
-          !isValidBankAccountNumber(match[1]!)
+          !isValidBankAccountNumber(uncheckedCapture(match, 1))
         )
           continue;
-        const encoded = match[1]!.replace(/[\p{Cc}\p{Cf}]/gu, "");
+        const encoded = uncheckedCapture(match, 1).replace(
+          /[\p{Cc}\p{Cf}]/gu,
+          "",
+        );
         if (
           (sourcePattern === NPM_AUTH_BOUNDARY_PATTERN ||
             sourcePattern === BASIC_AUTHORIZATION_BOUNDARY_PATTERN ||
@@ -4670,7 +4727,7 @@ function hasSensitiveTokenAcrossBoundary({
           hasWhitespaceAtRetainedEdge(tokenStart, tokenEnd) &&
           !hasSubstantialContinuationAcrossBoundary(
             sourcePattern,
-            match[1]!,
+            uncheckedCapture(match, 1),
             tokenEnd,
           )
         )
@@ -4681,22 +4738,24 @@ function hasSensitiveTokenAcrossBoundary({
     for (const match of joined.matchAll(
       OBFUSCATED_BEARER_TOKEN_BOUNDARY_SCAN_PATTERN,
     )) {
-      const labelRange = match.indices![1]!;
-      const tokenRange = match.indices![2]!;
+      const labelRange = uncheckedMatchRange(match, 1);
+      const tokenRange = uncheckedMatchRange(match, 2);
       if (
         !overlapsRetainedContext(tokenRange[0], tokenRange[1]) ||
         (!hasSeparatorInRetainedContext(labelRange[0], labelRange[1]) &&
           !hasSeparatorInRetainedContext(tokenRange[0], tokenRange[1]))
       )
         continue;
-      const bearerValue = stripNonWhitespaceControls(match[2]!);
+      const bearerValue = stripNonWhitespaceControls(
+        uncheckedCapture(match, 2),
+      );
       if (hasBearerToken(`Bearer ${bearerValue}`)) return true;
     }
     for (const match of joined.matchAll(
       OBFUSCATED_BASIC_AUTHORIZATION_BOUNDARY_SCAN_PATTERN,
     )) {
-      const schemeRange = match.indices![1]!;
-      const encodedRange = match.indices![2]!;
+      const schemeRange = uncheckedMatchRange(match, 1);
+      const encodedRange = uncheckedMatchRange(match, 2);
       if (
         !overlapsRetainedContext(encodedRange[0], encodedRange[1]) ||
         !OBFUSCATION_SEPARATOR_PATTERN.test(
@@ -4704,16 +4763,16 @@ function hasSensitiveTokenAcrossBoundary({
         )
       )
         continue;
-      if (isBase64UserPasswordPair(match[2]!)) return true;
+      if (isBase64UserPasswordPair(uncheckedCapture(match, 2))) return true;
     }
     for (const match of joined.matchAll(
       OBFUSCATED_AUTHORIZATION_HEADER_BOUNDARY_SCAN_PATTERN,
     )) {
-      const proxyRange = match.indices![1];
-      const authorizationRange = match.indices![2]!;
-      const encodedRange = match.indices![3]!;
+      const proxyRange = match.indices?.[1];
+      const authorizationRange = uncheckedMatchRange(match, 2);
+      const encodedRange = uncheckedMatchRange(match, 3);
       const hasObfuscatedLabel =
-        (proxyRange &&
+        (proxyRange !== undefined &&
           OBFUSCATION_SEPARATOR_PATTERN.test(
             joined.slice(proxyRange[0], proxyRange[1]),
           )) ||
@@ -4725,14 +4784,14 @@ function hasSensitiveTokenAcrossBoundary({
         !hasObfuscatedLabel
       )
         continue;
-      if (isBase64UserPasswordPair(match[3]!)) return true;
+      if (isBase64UserPasswordPair(uncheckedCapture(match, 3))) return true;
     }
     for (const {
       sourcePattern,
       pattern,
     } of WHITESPACE_TOLERANT_BOUNDARY_SCAN_PATTERNS) {
       for (const match of joined.matchAll(pattern)) {
-        const tokenRange = match.indices![1];
+        const tokenRange = match.indices?.[1];
         if (
           !tokenRange ||
           !overlapsRetainedContext(tokenRange[0], tokenRange[1])
@@ -4744,7 +4803,7 @@ function hasSensitiveTokenAcrossBoundary({
           )
             ? hasNonEdgeSeparatorInRetainedContext(
                 sourcePattern,
-                match[1]!,
+                uncheckedCapture(match, 1),
                 tokenRange[0],
                 tokenRange[1],
               )
@@ -4757,7 +4816,7 @@ function hasSensitiveTokenAcrossBoundary({
       captureIndex,
     } of LABELED_PASSWORD_PHRASE_BOUNDARY_SCAN_PATTERNS) {
       for (const match of joined.matchAll(pattern)) {
-        const value = match[captureIndex]!;
+        const value = uncheckedCapture(match, captureIndex);
         const normalizedValue = value
           .replace(/[\s\p{Cc}\p{Cf}]+/gu, " ")
           .trim();
@@ -4766,7 +4825,8 @@ function hasSensitiveTokenAcrossBoundary({
           normalizedValue.replace(/\s/gu, "").length < 8
         )
           continue;
-        const tokenStart = match.index! + match[0].lastIndexOf(value);
+        const tokenStart =
+          match.index + uncheckedCapture(match, 0).lastIndexOf(value);
         const tokenEnd = tokenStart + value.length;
         if (overlapsRetainedContext(tokenStart, tokenEnd)) return true;
       }
@@ -4791,7 +4851,7 @@ function boundedText(content: unknown, maxLength: number): string {
     while (leading && index < part.length) {
       if (leadingScanBudget === 0) return true;
       leadingScanBudget--;
-      if (!WHITESPACE.test(part[index])) leading = false;
+      if (!WHITESPACE.test(part.charAt(index))) leading = false;
       else index++;
     }
     if (index === part.length) return false;
@@ -4964,8 +5024,7 @@ function assembleNamingContext(
   // Walk backward so text from history older than the retained window is never
   // copied into temporary strings. Projection-aware callers supply the summary
   // separately, allowing the walk to stop as soon as the recent window is full.
-  const history: Array<{ text: string; boundaries: NamingContextBoundary[] }> =
-    [];
+  const history: { text: string; boundaries: NamingContextBoundary[] }[] = [];
   let summaryBoundaries: NamingContextBoundary[] = [];
   let summary =
     knownSummary === undefined
@@ -4989,7 +5048,7 @@ function assembleNamingContext(
     i >= 0 && scanned < scanLimit;
     i--, scanned++
   ) {
-    const message = messages[i];
+    const message = uncheckedIndex(messages, i);
     if (message.role === "compactionSummary") {
       if (!foundSummary) {
         summaryBoundaries = [];
@@ -5057,7 +5116,7 @@ function createNamingContext(
 ): string {
   if (Array.isArray(input))
     return assembleNamingContext(input, prompt, undefined, true, boundaries);
-  const projection = input as SessionProjection;
+  const projection = input;
   if (!Array.isArray(projection.entries)) {
     return assembleNamingContext(
       projection.messages,
@@ -5089,16 +5148,8 @@ function createNamingContext(
 
 // Keep the messages-only helper compatible with arbitrary message lists. Without
 // source-entry provenance it must search for a compaction summary itself.
-export function buildNamingContext(
-  messages: SessionProjection["messages"],
-  prompt?: string,
-): string;
 // Canonical projections expose the summary at the first projected entry, letting
 // long sessions avoid rescanning older messages once recent history is collected.
-export function buildNamingContext(
-  projection: SessionProjection,
-  prompt?: string,
-): string;
 export function buildNamingContext(
   input: SessionProjection["messages"] | SessionProjection,
   prompt = "",
@@ -5129,7 +5180,9 @@ function abortableResult<T>(
 ): Promise<T> {
   let onAbort!: () => void;
   return new Promise<T>((resolve, reject) => {
-    onAbort = () => reject(new Error("Naming request aborted"));
+    onAbort = () => {
+      reject(new Error("Naming request aborted"));
+    };
     signal.addEventListener("abort", onAbort, { once: true });
     if (signal.aborted) {
       onAbort();
@@ -5138,9 +5191,13 @@ function abortableResult<T>(
     try {
       start().then(resolve, reject);
     } catch (error) {
+      // Preserve the provider's rejection value verbatim, including non-Error values.
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- Provider rejection values must remain unchanged.
       reject(error);
     }
-  }).finally(() => signal.removeEventListener("abort", onAbort));
+  }).finally(() => {
+    signal.removeEventListener("abort", onAbort);
+  });
 }
 
 export async function requestNamingTitle(
@@ -5151,10 +5208,13 @@ export async function requestNamingTitle(
   isCurrent: () => boolean,
   contextAlreadyChecked = false,
 ): Promise<string | undefined> {
+  // Cancellation can happen while context screening runs.
   if (signal.aborted || !isCurrent()) return;
   if (!contextAlreadyChecked && hasSensitiveNamingContext(text))
     throw new UnsafeNamingContextError();
   const model = ctx.modelRegistry.find(modelConfig.provider, modelConfig.id);
+  // Cancellation can happen during model lookup.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- The signal can abort during the lookup.
   if (signal.aborted || !isCurrent()) return;
   if (!model || !ctx.modelRegistry.hasConfiguredAuth(model)) {
     throw new Error("Naming model unavailable");
@@ -5279,6 +5339,8 @@ export async function requestNamingTitle(
         error.reason !== "multiple-lines")
     )
       throw error;
+    // Cancellation can happen while handling a rejected provider response.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- The signal can abort while the provider responds.
     if (signal.aborted || !isCurrent()) return;
     // Retry once for a concise, single-line title; only clip the retry when it
     // remains a 2–4-word label, never long-form prose. Do not echo the rejected output.
@@ -5290,7 +5352,7 @@ export async function requestNamingTitle(
       [
         systemPrompt,
         correction,
-        `Do not restate the full request or include its answer-format constraints, such as sentence counts; label only the central task or topic. Use 2 or 3 short words, aim for 20 characters or fewer, and never exceed ${MAX_TITLE_LENGTH} ASCII characters.`,
+        `Do not restate the full request or include its answer-format constraints, such as sentence counts; label only the central task or topic. Use 2 or 3 short words, aim for 20 characters or fewer, and never exceed ${String(MAX_TITLE_LENGTH)} ASCII characters.`,
         "Return only the revised title.",
       ].join(" "),
       true,

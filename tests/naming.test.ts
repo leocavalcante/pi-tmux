@@ -1,3 +1,4 @@
+import { assertDefined } from "./assert-defined.ts";
 import { expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
@@ -61,14 +62,14 @@ test("screens webhook and Discord auth credentials across retained-context bound
     }
   }
 
-  const summaryContent = `${"x".repeat(989)} ${values[5]!.value} y`;
+  const summaryContent = `${"x".repeat(989)} ${assertDefined(values[5]).value} y`;
   const summary = buildNamingRequestContext([
     { role: "compactionSummary", summary: summaryContent },
   ] as any);
   expect(hasSensitiveNamingContext(summary.text)).toBe(false);
   expect(summary.hasSensitiveBoundary()).toBe(true);
 
-  const historyValue = values[4]!;
+  const historyValue = assertDefined(values[4]);
   const historyValueStart =
     990 - historyValue.value.indexOf(historyValue.secret);
   const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue.value} y`;
@@ -80,7 +81,7 @@ test("screens webhook and Discord auth credentials across retained-context bound
 
   // A Teams URL can straddle the omitted region while its 32-character secret
   // remains wholly omitted; the structural URL alone must not trigger a block.
-  const teamsValue = values[6]!.value;
+  const teamsValue = assertDefined(values[6]).value;
   const teamsSecretOffset = teamsValue.indexOf(teamsToken);
   const omittedSecretPromptStart = prefixLength + 5 - teamsSecretOffset;
   const omittedSecretPrompt = `${"x".repeat(omittedSecretPromptStart - 1)} ${teamsValue} ${"y".repeat(1_200)}`;
@@ -507,7 +508,7 @@ test("screens Telegram, Vault, Notion, and Supabase tokens across truncation", (
     }
   }
 
-  const historyValue = values[3]!;
+  const historyValue = assertDefined(values[3]);
   const historyValueStart =
     990 - historyValue.value.indexOf(historyValue.secret);
   const historyContent = `${"x".repeat(historyValueStart - 1)} ${historyValue.value} y`;
@@ -716,14 +717,14 @@ test("screens additional supported fixed-format tokens across retained-context b
     }
   }
 
-  const historyContent = `${"x".repeat(989)} ${tokens[0]} y`;
+  const historyContent = `${"x".repeat(989)} ${String(tokens[0])} y`;
   const history = buildNamingRequestContext([
     { role: "user", content: historyContent },
   ] as any);
   expect(hasSensitiveNamingContext(history.text)).toBe(false);
   expect(history.hasSensitiveBoundary()).toBe(true);
 
-  const summaryContent = `${"x".repeat(989)} ${tokens[2]} y`;
+  const summaryContent = `${"x".repeat(989)} ${String(tokens[2])} y`;
   const summary = buildNamingRequestContext([
     { role: "compactionSummary", summary: summaryContent },
   ] as any);
@@ -736,7 +737,7 @@ test("screens additional supported fixed-format tokens across retained-context b
     buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
   ).toBe(false);
 
-  const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${tokens[5]} ${"y".repeat(1_200)}`;
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${String(tokens[5])} ${"y".repeat(1_200)}`;
   expect(
     buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
   ).toBe(false);
@@ -770,14 +771,14 @@ test("screens supported fixed-format tokens across retained-context boundaries",
     }
   }
 
-  const historyContent = `${"x".repeat(989)} ${tokens[0]} y`;
+  const historyContent = `${"x".repeat(989)} ${String(tokens[0])} y`;
   const history = buildNamingRequestContext([
     { role: "user", content: historyContent },
   ] as any);
   expect(hasSensitiveNamingContext(history.text)).toBe(false);
   expect(history.hasSensitiveBoundary()).toBe(true);
 
-  const summaryContent = `${"x".repeat(989)} ${tokens[1]} y`;
+  const summaryContent = `${"x".repeat(989)} ${String(tokens[1])} y`;
   const summary = buildNamingRequestContext([
     { role: "compactionSummary", summary: summaryContent },
   ] as any);
@@ -790,7 +791,7 @@ test("screens supported fixed-format tokens across retained-context boundaries",
     buildNamingRequestContext([], invalidPrompt).hasSensitiveBoundary(),
   ).toBe(false);
 
-  const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${tokens[2]} ${"y".repeat(1_200)}`;
+  const omittedPrompt = `${"x".repeat(prefixLength + 20)} ${String(tokens[2])} ${"y".repeat(1_200)}`;
   expect(
     buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
   ).toBe(false);
@@ -801,7 +802,7 @@ test("screens LangSmith personal and service API keys across retained-context bo
   const retainedLength = MAX_PROMPT_LENGTH - marker.length - 2;
   const prefixLength = Math.ceil(retainedLength / 2);
   const tokens = ["lsv2_pt_", "LSV2_SK_"].map(
-    (prefix) => `${prefix}${"a1b2".repeat(8)}_${"c3d4a1b2c3"}`,
+    (prefix) => `${prefix}${"a1b2".repeat(8)}_c3d4a1b2c3`,
   );
 
   for (const token of tokens) {
@@ -825,8 +826,8 @@ test("screens LangSmith personal and service API keys across retained-context bo
     `lsv2_pt_${"a".repeat(31)}_${"c".repeat(10)}`,
     `lsv2_sk_${"a".repeat(32)}_${"c".repeat(9)}`,
     `lsv2_pt_${"g".repeat(32)}_${"c".repeat(10)}`,
-    `prefix${tokens[0]}`,
-    `${tokens[1]}x`,
+    `prefix${String(tokens[0])}`,
+    `${String(tokens[1])}x`,
   ];
   for (const nearMiss of nearMisses) {
     expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
@@ -862,7 +863,7 @@ test("screens Tavily API keys across retained-context boundaries without flaggin
     `tvly-dev-${"a".repeat(15)}`,
     `tvly-qa-${"a".repeat(32)}`,
     `notvly-${"a".repeat(32)}`,
-    `${tokens[0]!.value}_suffix`,
+    `${assertDefined(tokens[0]).value}_suffix`,
   ];
   for (const nearMiss of nearMisses) {
     expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
@@ -893,9 +894,9 @@ test("screens Jina AI API keys across retained-context boundaries without flaggi
   const nearMisses = [
     `jina_${body.slice(1)}`,
     `jina_${body}a`,
-    `jina_${`${body.slice(0, 30)}!${body.slice(31)}`}`,
-    `x${tokens[0]}`,
-    `${tokens[0]}_suffix`,
+    `jina_${body.slice(0, 30)}!${body.slice(31)}`,
+    `x${String(tokens[0])}`,
+    `${String(tokens[0])}_suffix`,
   ];
   for (const nearMiss of nearMisses) {
     expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
@@ -1022,10 +1023,13 @@ test("screens Pinecone API keys without flagging near-misses", () => {
   const keyFor = (keyId = "id123", value = secret) => `pcsk_${keyId}_${value}`;
   const keys = [keyFor(), keyFor("id1234")];
   const obfuscatedKeys = [
-    keys[0]!.toUpperCase(),
-    keys[0]!.replace("pcsk_", "pc\u200bsk_"),
-    keys[0]!.replace("id123", "id\u200b123"),
-    keys[0]!.replace(secret.slice(0, 31), `${secret.slice(0, 31)}\u200b`),
+    assertDefined(keys[0]).toUpperCase(),
+    assertDefined(keys[0]).replace("pcsk_", "pc\u200bsk_"),
+    assertDefined(keys[0]).replace("id123", "id\u200b123"),
+    assertDefined(keys[0]).replace(
+      secret.slice(0, 31),
+      `${secret.slice(0, 31)}\u200b`,
+    ),
   ];
 
   for (const value of [...keys, ...obfuscatedKeys]) {
@@ -1041,11 +1045,11 @@ test("screens Pinecone API keys without flagging near-misses", () => {
     keyFor("id123", "A".repeat(62)),
     keyFor("id123", "A".repeat(64)),
     keyFor("id123", `${"A".repeat(62)}!`),
-    `prefix${keys[0]}`,
-    `_${keys[0]}`,
-    `-${keys[0]}`,
-    `${keys[0]}x`,
-    `${keys[0]}_suffix`,
+    `prefix${String(keys[0])}`,
+    `_${String(keys[0])}`,
+    `-${String(keys[0])}`,
+    `${String(keys[0])}x`,
+    `${String(keys[0])}_suffix`,
     "Pinecone index setup",
   ]) {
     expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
@@ -1069,7 +1073,7 @@ test("screens Railway UUID tokens only when Railway context is present", () => {
     `RAILWAY_API_TOKEN=${token}`,
   ];
   const obfuscatedValues = [
-    labeledValues[0]!.replace("Railway", "Rail\u200bway"),
+    assertDefined(labeledValues[0]).replace("Railway", "Rail\u200bway"),
     `Railway token: ${token.slice(0, 16)}\u200b${token.slice(16)}`,
   ];
 
@@ -1100,7 +1104,7 @@ test("screens Vercel tokens only when a Vercel label is present", () => {
     `VERCEL_TOKEN=${token}`,
   ];
   const obfuscatedValues = [
-    labeledValues[0]!.replace("Vercel", "Ver\u200bcel"),
+    assertDefined(labeledValues[0]).replace("Vercel", "Ver\u200bcel"),
     `Vercel: ${token.slice(0, 12)}\u200b${token.slice(12)}`,
   ];
 
@@ -1487,7 +1491,7 @@ test("screens Docker registry auth fields only when they encode user/password pa
     expect(context.hasSensitiveBoundary()).toBe(false);
   }
 
-  const historyContent = `${"x".repeat(981)}${candidates[0]!.value} trailing text`;
+  const historyContent = `${"x".repeat(981)}${assertDefined(candidates[0]).value} trailing text`;
   for (const input of [
     [{ role: "user", content: historyContent }],
     [{ role: "compactionSummary", summary: historyContent }],
@@ -1554,7 +1558,7 @@ test("screens npm .npmrc _auth values across retained-context truncation boundar
     }
   }
 
-  const historyContent = `${"x".repeat(990 - candidates[0]!.tokenOffset)}${candidates[0]!.value} trailing text`;
+  const historyContent = `${"x".repeat(990 - assertDefined(candidates[0]).tokenOffset)}${assertDefined(candidates[0]).value} trailing text`;
   for (const input of [
     [{ role: "user", content: historyContent }],
     [{ role: "compactionSummary", summary: historyContent }],
@@ -3658,7 +3662,7 @@ test("screens CloudFront signed-cookie signatures across retained-context bounda
 
   const omittedSignature = buildNamingRequestContext(
     [],
-    promptAt(values[0]!, signature, prefixLength + 5),
+    promptAt(assertDefined(values[0]), signature, prefixLength + 5),
   );
   expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
 
@@ -3772,12 +3776,12 @@ test("screens Imgix Secure URL signatures across retained-context boundaries", (
   const signatures = ["a".repeat(32), "b".repeat(32)];
   const values = [
     {
-      url: `https://assets.imgix.net/examples/bridge.jpg?auto=format&fit=crop&w=200&s=${signatures[0]}`,
-      signature: signatures[0]!,
+      url: `https://assets.imgix.net/examples/bridge.jpg?auto=format&fit=crop&w=200&s=${String(signatures[0])}`,
+      signature: assertDefined(signatures[0]),
     },
     {
-      url: `https://images.example.test/private/logo.png?s=${signatures[1]}&expires=1790000000`,
-      signature: signatures[1]!,
+      url: `https://images.example.test/private/logo.png?s=${String(signatures[1])}&expires=1790000000`,
+      signature: assertDefined(signatures[1]),
     },
   ];
   const promptAt = (url: string, signature: string, start: number) => {
@@ -3824,9 +3828,18 @@ test("screens Imgix Secure URL signatures across retained-context boundaries", (
     { url: `?s=${"a".repeat(31)}`, signature: "a".repeat(31) },
     { url: `?s=${"a".repeat(33)}`, signature: "a".repeat(33) },
     { url: `?s=${"a".repeat(31)}g`, signature: `${"a".repeat(31)}g` },
-    { url: `?xs=${signatures[0]}`, signature: signatures[0]! },
-    { url: `?ss=${signatures[0]}`, signature: signatures[0]! },
-    { url: `?s=${signatures[0]}x`, signature: `${signatures[0]}x` },
+    {
+      url: `?xs=${String(signatures[0])}`,
+      signature: assertDefined(signatures[0]),
+    },
+    {
+      url: `?ss=${String(signatures[0])}`,
+      signature: assertDefined(signatures[0]),
+    },
+    {
+      url: `?s=${String(signatures[0])}x`,
+      signature: `${String(signatures[0])}x`,
+    },
   ];
   for (const { url, signature } of nearMisses) {
     expect(hasSensitiveNamingContext(url)).toBe(false);
@@ -3850,16 +3863,16 @@ test("screens ImageKit Secure URL signatures across retained-context boundaries"
   const signatures = ["a".repeat(40), "b".repeat(40), "c".repeat(40)];
   const values = [
     {
-      url: `https://ik.imagekit.io/demo/image.jpg?ik-s=${signatures[0]}&ik-t=1790000000`,
-      signature: signatures[0]!,
+      url: `https://ik.imagekit.io/demo/image.jpg?ik-s=${String(signatures[0])}&ik-t=1790000000`,
+      signature: assertDefined(signatures[0]),
     },
     {
-      url: `https://cdn.example.test/private.jpg?ik-t=1790000000&ik-s=${signatures[1]}`,
-      signature: signatures[1]!,
+      url: `https://cdn.example.test/private.jpg?ik-t=1790000000&ik-s=${String(signatures[1])}`,
+      signature: assertDefined(signatures[1]),
     },
     {
-      url: `https://ik.imagekit.io/demo/private.jpg?ik-s=${signatures[2]}`,
-      signature: signatures[2]!,
+      url: `https://ik.imagekit.io/demo/private.jpg?ik-s=${String(signatures[2])}`,
+      signature: assertDefined(signatures[2]),
     },
   ];
   const promptAt = (url: string, signature: string, start: number) => {
@@ -3902,7 +3915,7 @@ test("screens ImageKit Secure URL signatures across retained-context boundaries"
     expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
   }
 
-  const signature = signatures[0]!;
+  const signature = assertDefined(signatures[0]);
   const nearMisses = [
     { url: `?ik-s=${"a".repeat(39)}`, signature: "a".repeat(39) },
     { url: `?ik-s=${"a".repeat(41)}`, signature: "a".repeat(41) },
@@ -3933,12 +3946,12 @@ test("screens expiring NGINX Secure Link URLs across retained-context boundaries
   const signatures = ["a".repeat(22), "b".repeat(22)];
   const values = [
     {
-      url: `https://downloads.example.test/s/link?md5=${signatures[0]}&format=raw&expires=1790000000`,
-      signature: signatures[0]!,
+      url: `https://downloads.example.test/s/link?md5=${String(signatures[0])}&format=raw&expires=1790000000`,
+      signature: assertDefined(signatures[0]),
     },
     {
-      url: `https://cdn.example.test/private/file.zip?expires=2147483647&md5=${signatures[1]}`,
-      signature: signatures[1]!,
+      url: `https://cdn.example.test/private/file.zip?expires=2147483647&md5=${String(signatures[1])}`,
+      signature: assertDefined(signatures[1]),
     },
   ];
   const promptAt = (url: string, signature: string, start: number) => {
@@ -3981,7 +3994,7 @@ test("screens expiring NGINX Secure Link URLs across retained-context boundaries
     expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
   }
 
-  const signature = signatures[0]!;
+  const signature = assertDefined(signatures[0]);
   const nearMisses = [
     {
       url: `?md5=${"a".repeat(21)}&expires=1790000000`,
@@ -4026,12 +4039,12 @@ test("screens Dropbox shared-link keys across retained-context boundaries", () =
   const keys = ["A".repeat(32), "b".repeat(32)];
   const values = [
     {
-      url: `https://www.dropbox.com/scl/fi/abc123/manual.pdf?rlkey=${keys[0]}&dl=0`,
-      key: keys[0]!,
+      url: `https://www.dropbox.com/scl/fi/abc123/manual.pdf?rlkey=${String(keys[0])}&dl=0`,
+      key: assertDefined(keys[0]),
     },
     {
-      url: `https://dropbox.com/scl/fo/folder123/shared-folder?dl=0&rlkey=${keys[1]}&st=example`,
-      key: keys[1]!,
+      url: `https://dropbox.com/scl/fo/folder123/shared-folder?dl=0&rlkey=${String(keys[1])}&st=example`,
+      key: assertDefined(keys[1]),
     },
   ];
   const promptAt = (url: string, key: string, start: number) => {
@@ -4074,7 +4087,7 @@ test("screens Dropbox shared-link keys across retained-context boundaries", () =
     expect(omittedKey.hasSensitiveBoundary()).toBe(false);
   }
 
-  const key = keys[0]!;
+  const key = assertDefined(keys[0]);
   const nearMisses = [
     {
       url: `https://www.dropbox.com/scl/fi/file?rlkey=${"a".repeat(19)}&dl=0`,
@@ -4112,8 +4125,14 @@ test("screens legacy Dropbox file and folder share IDs across retained-context b
   const suffixStart = promptLength - Math.floor(retainedLength / 2);
   const ids = ["a".repeat(15), "B".repeat(32)];
   const values = [
-    { url: `https://www.dropbox.com/s/${ids[0]}/manual.pdf?dl=0`, id: ids[0]! },
-    { url: `https://dropbox.com/sh/${ids[1]}/shared-folder`, id: ids[1]! },
+    {
+      url: `https://www.dropbox.com/s/${String(ids[0])}/manual.pdf?dl=0`,
+      id: assertDefined(ids[0]),
+    },
+    {
+      url: `https://dropbox.com/sh/${String(ids[1])}/shared-folder`,
+      id: assertDefined(ids[1]),
+    },
   ];
   const promptAt = (url: string, id: string, start: number) => {
     const urlStart = start - url.indexOf(id);
@@ -4151,7 +4170,7 @@ test("screens legacy Dropbox file and folder share IDs across retained-context b
     ).toBe(false);
   }
 
-  const id = ids[0]!;
+  const id = assertDefined(ids[0]);
   const nearMisses = [
     `https://www.dropbox.com/s/${"a".repeat(14)}/file.pdf`,
     `https://www.dropbox.com/sh/${"a".repeat(65)}/folder`,
@@ -4183,12 +4202,12 @@ test("screens Google Drive shared-link resource keys across retained-context bou
   const keys = [`0-${"a".repeat(28)}`, `0-${"b".repeat(28)}`];
   const values = [
     {
-      url: `https://drive.google.com/file/d/fileId/view?usp=sharing&resourcekey=${keys[0]}`,
-      key: keys[0]!,
+      url: `https://drive.google.com/file/d/fileId/view?usp=sharing&resourcekey=${String(keys[0])}`,
+      key: assertDefined(keys[0]),
     },
     {
-      url: `https://docs.google.com/document/d/fileId/edit?resourcekey=${keys[1]}&usp=sharing`,
-      key: keys[1]!,
+      url: `https://docs.google.com/document/d/fileId/edit?resourcekey=${String(keys[1])}&usp=sharing`,
+      key: assertDefined(keys[1]),
     },
   ];
   const promptAt = (url: string, key: string, start: number) => {
@@ -4230,7 +4249,7 @@ test("screens Google Drive shared-link resource keys across retained-context bou
     expect(omittedKey.hasSensitiveBoundary()).toBe(false);
   }
 
-  const key = keys[0]!;
+  const key = assertDefined(keys[0]);
   const nearMisses = [
     `https://drive.google.com/file/d/fileId/view?resourcekey=${"a".repeat(19)}`,
     `https://drive.google.com/file/d/fileId/view?resourcekey=${"a".repeat(129)}`,
@@ -4300,7 +4319,7 @@ test("screens Google Photos shared-album links across retained-context boundarie
     }
   }
 
-  const id = values[0]!.id;
+  const id = assertDefined(values[0]).id;
   const nearMisses = [
     `https://photos.app.goo.gl/${id.slice(1)}`,
     `https://photos.app.goo.gl/${id}A`,
@@ -4327,7 +4346,7 @@ test("screens Google Photos shared-album links across retained-context boundarie
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(values[0]!.url, id, prefixLength + 5),
+      promptAt(assertDefined(values[0]).url, id, prefixLength + 5),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -4390,7 +4409,7 @@ test("screens Apple iCloud shared-album links across retained-context boundaries
     }
   }
 
-  const token = values[0]!.token;
+  const token = assertDefined(values[0]).token;
   const nearMisses = [
     `https://www.icloud.com/sharedalbum/#${token.slice(0, 5)}`,
     `https://www.icloud.com/sharedalbum/#${token}${"A".repeat(115)}`,
@@ -4423,7 +4442,7 @@ test("screens Apple iCloud shared-album links across retained-context boundaries
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(values[0]!.url, token, prefixLength + 5),
+      promptAt(assertDefined(values[0]).url, token, prefixLength + 5),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -4486,7 +4505,7 @@ test("screens Apple iCloud Photo links across retained-context boundaries", () =
     }
   }
 
-  const token = values[0]!.token;
+  const token = assertDefined(values[0]).token;
   const nearMisses = [
     `https://share.icloud.com/photos/${token.slice(0, 9)}`,
     `https://share.icloud.com/photos/${token}${"A".repeat(113)}`,
@@ -4518,7 +4537,7 @@ test("screens Apple iCloud Photo links across retained-context boundaries", () =
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(values[0]!.url, token, prefixLength + 5),
+      promptAt(assertDefined(values[0]).url, token, prefixLength + 5),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -4585,7 +4604,7 @@ test("screens pCloud public-link codes across retained-context boundaries", () =
     }
   }
 
-  const token = values[0]!.token;
+  const token = assertDefined(values[0]).token;
   const nearMisses = [
     `https://my.pcloud.com/publink/show?code=${token.slice(0, 15)}`,
     `https://my.pcloud.com/publink/show?code=${token}${"A".repeat(97)}`,
@@ -4617,7 +4636,7 @@ test("screens pCloud public-link codes across retained-context boundaries", () =
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(values[0]!.url, token, prefixLength + 5),
+      promptAt(assertDefined(values[0]).url, token, prefixLength + 5),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -4666,7 +4685,7 @@ test("screens Google Drive resourceKey fields in API responses across retained-c
 
   const omittedKey = buildNamingRequestContext(
     [],
-    promptAt(responses[0]!, key, prefixLength + 5),
+    promptAt(assertDefined(responses[0]), key, prefixLength + 5),
   );
   expect(omittedKey.hasSensitiveBoundary()).toBe(false);
 
@@ -4770,12 +4789,12 @@ test("screens Proton Drive share-link passwords across retained-context boundari
   const keys = [`${"A".repeat(5)}_-${"A".repeat(5)}`, "B".repeat(12)];
   const values = [
     {
-      url: `https://drive.proton.me/urls/sharetoken#${keys[0]}`,
-      key: keys[0]!,
+      url: `https://drive.proton.me/urls/sharetoken#${String(keys[0])}`,
+      key: assertDefined(keys[0]),
     },
     {
-      url: `https://drive.protonmail.com/urls/sharedlink#${keys[1]}`,
-      key: keys[1]!,
+      url: `https://drive.protonmail.com/urls/sharedlink#${String(keys[1])}`,
+      key: assertDefined(keys[1]),
     },
   ];
   const promptAt = (url: string, key: string, start: number) => {
@@ -4817,7 +4836,7 @@ test("screens Proton Drive share-link passwords across retained-context boundari
     ).toBe(false);
   }
 
-  const key = values[0]!.key;
+  const key = assertDefined(values[0]).key;
   const nearMisses = [
     `https://drive.proton.me/urls/sharetoken#${key.slice(1)}`,
     `https://drive.proton.me/urls/sharetoken#${key}X`,
@@ -4895,7 +4914,7 @@ test("screens GoFile shared-link IDs across retained-context boundaries", () => 
     }
   }
 
-  const id = values[0]!.id;
+  const id = assertDefined(values[0]).id;
   const nearMisses = [
     `https://gofile.io/d/${id.slice(1)}`,
     `https://gofile.io/d/${id}a`,
@@ -4926,7 +4945,7 @@ test("screens GoFile shared-link IDs across retained-context boundaries", () => 
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(values[0]!.url, id, prefixLength + 2),
+      promptAt(assertDefined(values[0]).url, id, prefixLength + 2),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -4939,8 +4958,14 @@ test("screens Wormhole share keys across retained-context boundaries", () => {
   const suffixStart = promptLength - Math.floor(retainedLength / 2);
   const keys = [`${"Ab3_-X".repeat(3)}QWER`, `${"A1b2_-".repeat(3)}QWER`];
   const values = [
-    { url: `https://wormhole.app/Test42#${keys[0]}`, key: keys[0]! },
-    { url: `https://www.wormhole.app/Fake99#${keys[1]}`, key: keys[1]! },
+    {
+      url: `https://wormhole.app/Test42#${String(keys[0])}`,
+      key: assertDefined(keys[0]),
+    },
+    {
+      url: `https://www.wormhole.app/Fake99#${String(keys[1])}`,
+      key: assertDefined(keys[1]),
+    },
   ];
   const promptAt = (text: string, key: string, start: number) => {
     const textStart = start - text.indexOf(key);
@@ -4985,7 +5010,7 @@ test("screens Wormhole share keys across retained-context boundaries", () => {
     }
   }
 
-  const { url, key } = values[0]!;
+  const { url, key } = assertDefined(values[0]);
   const nearMisses = [
     `https://wormhole.app/Test42#${key.slice(1)}`,
     `https://wormhole.app/Test42#${key}a`,
@@ -5080,7 +5105,7 @@ test("screens Filemail transfer IDs across retained-context boundaries", () => {
     }
   }
 
-  const id = values[0]!.id;
+  const id = assertDefined(values[0]).id;
   const nearMisses = [
     `https://www.filemail.com/d/${id.slice(1)}`,
     `https://www.filemail.com/d/${id}a`,
@@ -5111,7 +5136,7 @@ test("screens Filemail transfer IDs across retained-context boundaries", () => {
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(values[0]!.url, id, prefixLength + 5),
+      promptAt(assertDefined(values[0]).url, id, prefixLength + 5),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -5178,7 +5203,7 @@ test("screens SwissTransfer share-link UUIDs across retained-context boundaries"
     }
   }
 
-  const uuid = values[0]!.uuid;
+  const uuid = assertDefined(values[0]).uuid;
   const nearMisses = [
     {
       url: `https://www.swisstransfer.com/d/${uuid.replaceAll("-", "")}`,
@@ -5215,7 +5240,7 @@ test("screens SwissTransfer share-link UUIDs across retained-context boundaries"
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(values[0]!.url, uuid, prefixLength + 5),
+      promptAt(assertDefined(values[0]).url, uuid, prefixLength + 5),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -5228,9 +5253,18 @@ test("screens Box shared-link IDs across retained-context boundaries", () => {
   const suffixStart = promptLength - Math.floor(retainedLength / 2);
   const ids = ["a".repeat(20), "b".repeat(32), "c".repeat(12)];
   const values = [
-    { url: `https://www.box.com/s/${ids[0]}?utm_source=docs`, id: ids[0]! },
-    { url: `https://cloud.app.box.com/s/${ids[1]}`, id: ids[1]! },
-    { url: `https://app.box.com/s/${ids[2]}`, id: ids[2]! },
+    {
+      url: `https://www.box.com/s/${String(ids[0])}?utm_source=docs`,
+      id: assertDefined(ids[0]),
+    },
+    {
+      url: `https://cloud.app.box.com/s/${String(ids[1])}`,
+      id: assertDefined(ids[1]),
+    },
+    {
+      url: `https://app.box.com/s/${String(ids[2])}`,
+      id: assertDefined(ids[2]),
+    },
   ];
   const promptAt = (url: string, id: string, start: number) => {
     const urlStart = start - url.indexOf(id);
@@ -5271,7 +5305,7 @@ test("screens Box shared-link IDs across retained-context boundaries", () => {
     ).toBe(false);
   }
 
-  const id = ids[0]!;
+  const id = assertDefined(ids[0]);
   const nearMisses = [
     `https://app.box.com/s/${"a".repeat(11)}`,
     `https://app.box.com/s/${"a".repeat(65)}`,
@@ -5306,12 +5340,12 @@ test("screens legacy OneDrive shared-link auth keys across retained-context boun
   const keys = ["1201919!12921!1", "!KLMNOPQRST_uvWX"];
   const values = [
     {
-      url: `https://onedrive.live.com/redir?resid=1231244193912!12&authKey=${keys[0]}`,
-      key: keys[0]!,
+      url: `https://onedrive.live.com/redir?resid=1231244193912!12&authKey=${String(keys[0])}`,
+      key: assertDefined(keys[0]),
     },
     {
-      url: `https://www.onedrive.live.com/embed?cid=example&authkey=${keys[1]}`,
-      key: keys[1]!,
+      url: `https://www.onedrive.live.com/embed?cid=example&authkey=${String(keys[1])}`,
+      key: assertDefined(keys[1]),
     },
   ];
   const promptAt = (url: string, key: string, start: number) => {
@@ -5353,7 +5387,7 @@ test("screens legacy OneDrive shared-link auth keys across retained-context boun
     ).toBe(false);
   }
 
-  const key = keys[0]!;
+  const key = assertDefined(keys[0]);
   const nearMisses = [
     `https://onedrive.live.com/redir?resid=id&authkey=${"a".repeat(14)}`,
     `https://onedrive.live.com.evil.test/redir?resid=id&authkey=${key}`,
@@ -5386,8 +5420,11 @@ test("screens OneDrive short-link IDs across retained-context boundaries", () =>
   const suffixStart = promptLength - Math.floor(retainedLength / 2);
   const ids = ["A".repeat(32), "0123456789abcdef0123456789abcdef"];
   const values = [
-    { url: `https://1drv.ms/${ids[0]}?e=example`, id: ids[0]! },
-    { url: `https://1drv.ms/${ids[1]}`, id: ids[1]! },
+    {
+      url: `https://1drv.ms/${String(ids[0])}?e=example`,
+      id: assertDefined(ids[0]),
+    },
+    { url: `https://1drv.ms/${String(ids[1])}`, id: assertDefined(ids[1]) },
   ];
   const promptAt = (url: string, id: string, start: number) => {
     const urlStart = start - url.indexOf(id);
@@ -5428,7 +5465,7 @@ test("screens OneDrive short-link IDs across retained-context boundaries", () =>
     ).toBe(false);
   }
 
-  const id = ids[0]!;
+  const id = assertDefined(ids[0]);
   const nearMisses = [
     `https://1drv.ms/${id.slice(1)}`,
     `https://1drv.ms/${id}0`,
@@ -5506,7 +5543,7 @@ test("screens OneDrive s! short-link share keys across retained-context boundari
     }
   }
 
-  const key = values[0]!.key;
+  const key = assertDefined(values[0]).key;
   const nearMisses = [
     `https://1drv.ms/f/s!${key.slice(0, 19)}`,
     `https://1drv.ms/f/s!${key}${"A".repeat(101)}`,
@@ -5536,7 +5573,7 @@ test("screens OneDrive s! short-link share keys across retained-context boundari
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(values[0]!.url, key, prefixLength + 5),
+      promptAt(assertDefined(values[0]).url, key, prefixLength + 5),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -5549,8 +5586,8 @@ test("screens Microsoft Graph OneDrive share tokens across retained-context boun
   const suffixStart = promptLength - Math.floor(retainedLength / 2);
   const tokens = ["A".repeat(48), "ab_CD-".repeat(8)];
   const urls = [
-    `https://graph.microsoft.com/v1.0/shares/u!${tokens[0]}`,
-    `https://graph.microsoft.com/beta/shares/u!${tokens[1]}/driveItem?$select=id`,
+    `https://graph.microsoft.com/v1.0/shares/u!${String(tokens[0])}`,
+    `https://graph.microsoft.com/beta/shares/u!${String(tokens[1])}/driveItem?$select=id`,
   ];
   const promptAt = (url: string, token: string, start: number) => {
     const urlStart = start - url.indexOf(token);
@@ -5559,7 +5596,7 @@ test("screens Microsoft Graph OneDrive share tokens across retained-context boun
   };
 
   for (const [index, url] of urls.entries()) {
-    const token = tokens[index]!;
+    const token = assertDefined(tokens[index]);
     expect(hasSensitiveNamingContext(url)).toBe(true);
     expect(hasSensitiveOutput(url)).toBe(true);
     const obfuscatedToken = `${token.slice(0, 16)}\u200b${token.slice(16)}`;
@@ -5584,20 +5621,24 @@ test("screens Microsoft Graph OneDrive share tokens across retained-context boun
 
   const omitted = buildNamingRequestContext(
     [],
-    promptAt(urls[0]!, tokens[0]!, prefixLength + 5),
+    promptAt(
+      assertDefined(urls[0]),
+      assertDefined(tokens[0]),
+      prefixLength + 5,
+    ),
   );
   expect(omitted.hasSensitiveBoundary()).toBe(false);
 
   const nearMisses = [
     `https://graph.microsoft.com/v1.0/shares/u!${"a".repeat(23)}`,
     `https://graph.microsoft.com/v1.0/shares/u!${"a".repeat(513)}`,
-    `https://graph.microsoft.com.evil.test/v1.0/shares/u!${tokens[0]}`,
-    `https://evil.graph.microsoft.com/v1.0/shares/u!${tokens[0]}`,
-    `https://example.test/v1.0/shares/u!${tokens[0]}`,
-    `https://graph.microsoft.com/v2.0/shares/u!${tokens[0]}`,
-    `https://graph.microsoft.com/v1.0/users/me/drive/sharedWithMe/u!${tokens[0]}`,
-    `https://graph.microsoft.com/v1.0/shares/${tokens[0]}`,
-    `discussion of an encoded OneDrive share token u!${tokens[0]}`,
+    `https://graph.microsoft.com.evil.test/v1.0/shares/u!${String(tokens[0])}`,
+    `https://evil.graph.microsoft.com/v1.0/shares/u!${String(tokens[0])}`,
+    `https://example.test/v1.0/shares/u!${String(tokens[0])}`,
+    `https://graph.microsoft.com/v2.0/shares/u!${String(tokens[0])}`,
+    `https://graph.microsoft.com/v1.0/users/me/drive/sharedWithMe/u!${String(tokens[0])}`,
+    `https://graph.microsoft.com/v1.0/shares/${String(tokens[0])}`,
+    `discussion of an encoded OneDrive share token u!${String(tokens[0])}`,
   ];
   for (const value of nearMisses) {
     expect(hasSensitiveNamingContext(value)).toBe(false);
@@ -5606,7 +5647,7 @@ test("screens Microsoft Graph OneDrive share tokens across retained-context boun
       expect(
         buildNamingRequestContext(
           [],
-          promptAt(value, tokens[0]!, tokenStart),
+          promptAt(value, assertDefined(tokens[0]), tokenStart),
         ).hasSensitiveBoundary(),
       ).toBe(false);
     }
@@ -5665,7 +5706,7 @@ test("screens WeTransfer short-link codes across retained-context boundaries", (
     }
   }
 
-  const code = values[0]!.code;
+  const code = assertDefined(values[0]).code;
   const nearMisses = [
     { url: `https://we.tl/t-${code.slice(1)}`, code: code.slice(1) },
     { url: `https://we.tl/t-${code}A`, code: `${code}A` },
@@ -5694,7 +5735,7 @@ test("screens WeTransfer short-link codes across retained-context boundaries", (
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(values[0]!.url, code, prefixLength + 5),
+      promptAt(assertDefined(values[0]).url, code, prefixLength + 5),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -5744,7 +5785,7 @@ test("screens Zoom meeting passcodes in join URLs across retained-context bounda
     }
   }
 
-  const passcode = values[0]!.passcode;
+  const passcode = assertDefined(values[0]).passcode;
   const nearMisses = [
     `https://us02web.zoom.us/j/12345678901?pwd=`,
     "https://us02web.zoom.us/j/12345678901?pwd=abc",
@@ -5778,7 +5819,7 @@ test("screens Zoom meeting passcodes in join URLs across retained-context bounda
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(values[0]!.url, passcode, prefixLength + 5),
+      promptAt(assertDefined(values[0]).url, passcode, prefixLength + 5),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -5840,7 +5881,7 @@ test("screens Discord invite codes across retained-context boundaries", () => {
     }
   }
 
-  const code = links[0]!.code;
+  const code = assertDefined(links[0]).code;
   const nearMisses = [
     "https://discord.gg/",
     "https://discord.gg/a",
@@ -5873,7 +5914,7 @@ test("screens Discord invite codes across retained-context boundaries", () => {
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(links[0]!.url, code, prefixLength + 5),
+      promptAt(assertDefined(links[0]).url, code, prefixLength + 5),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -5924,7 +5965,7 @@ test("screens Webex meeting passwords in join URLs across retained-context bound
     }
   }
 
-  const password = values[0]!.password;
+  const password = assertDefined(values[0]).password;
   const nearMisses = [
     `https://synthetic.invalid.webex.com/synthetic/j.php?MTID=fake&xpwd=${password}`,
     `https://synthetic.invalid.webex.com/meet/synthetic-user?pwd=abc`,
@@ -5957,7 +5998,7 @@ test("screens Webex meeting passwords in join URLs across retained-context bound
   expect(
     buildNamingRequestContext(
       [],
-      promptAt(values[0]!.url, password, prefixLength + 5),
+      promptAt(assertDefined(values[0]).url, password, prefixLength + 5),
     ).hasSensitiveBoundary(),
   ).toBe(false);
 });
@@ -5970,8 +6011,8 @@ test("screens Google Drive resource-key API headers across retained-context boun
   const suffixStart = promptLength - Math.floor(retainedLength / 2);
   const fileIds = ["A".repeat(33), "B".repeat(33)];
   const keys = [`0-${"a".repeat(28)}`, `0-${"b".repeat(28)}`];
-  const header = `X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${keys[0]}`;
-  const multiplePairs = `X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${keys[0]}, ${fileIds[1]}/${keys[1]}`;
+  const header = `X-Goog-Drive-Resource-Keys: ${String(fileIds[0])}/${String(keys[0])}`;
+  const multiplePairs = `X-Goog-Drive-Resource-Keys: ${String(fileIds[0])}/${String(keys[0])}, ${String(fileIds[1])}/${String(keys[1])}`;
   const promptAt = (text: string, token: string, start: number) => {
     const textStart = start - text.indexOf(token);
     const prefix = `${"x".repeat(textStart - 1)} `;
@@ -5983,7 +6024,7 @@ test("screens Google Drive resource-key API headers across retained-context boun
   expect(hasSensitiveNamingContext(multiplePairs)).toBe(true);
   expect(hasSensitiveOutput(multiplePairs)).toBe(true);
 
-  const key = keys[0]!;
+  const key = assertDefined(keys[0]);
   const obfuscatedKey = `${key.slice(0, 16)}\u200b${key.slice(16)}`;
   const obfuscated = header.replace(key, obfuscatedKey);
   expect(hasSensitiveNamingContext(obfuscated)).toBe(true);
@@ -6005,23 +6046,23 @@ test("screens Google Drive resource-key API headers across retained-context boun
 
   const omittedKey = buildNamingRequestContext(
     [],
-    promptAt(header, keys[0]!, prefixLength + 5),
+    promptAt(header, assertDefined(keys[0]), prefixLength + 5),
   );
   expect(omittedKey.hasSensitiveBoundary()).toBe(false);
   const laterPairAtSuffixBoundary = buildNamingRequestContext(
     [],
-    promptAt(multiplePairs, keys[1]!, suffixStart - 11),
+    promptAt(multiplePairs, assertDefined(keys[1]), suffixStart - 11),
   );
   expect(hasSensitiveNamingContext(laterPairAtSuffixBoundary.text)).toBe(false);
   expect(laterPairAtSuffixBoundary.hasSensitiveBoundary()).toBe(true);
 
   const nearMisses = [
-    `X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${"a".repeat(19)}`,
-    `X-Goog-Drive-Resource-Keys: ${fileIds[0]}/${"a".repeat(129)}`,
-    `X-Goog-Drive-Resource-Keys: /${keys[0]}`,
-    `X-Goog-Drive-Resource-Key: ${fileIds[0]}/${keys[0]}`,
-    `X-Other-Resource-Keys: ${fileIds[0]}/${keys[0]}`,
-    `resourcekey=${keys[0]}`,
+    `X-Goog-Drive-Resource-Keys: ${String(fileIds[0])}/${"a".repeat(19)}`,
+    `X-Goog-Drive-Resource-Keys: ${String(fileIds[0])}/${"a".repeat(129)}`,
+    `X-Goog-Drive-Resource-Keys: /${String(keys[0])}`,
+    `X-Goog-Drive-Resource-Key: ${String(fileIds[0])}/${String(keys[0])}`,
+    `X-Other-Resource-Keys: ${String(fileIds[0])}/${String(keys[0])}`,
+    `resourcekey=${String(keys[0])}`,
   ];
   for (const value of nearMisses) {
     expect(hasSensitiveNamingContext(value)).toBe(false);
@@ -6030,7 +6071,7 @@ test("screens Google Drive resource-key API headers across retained-context boun
       expect(
         buildNamingRequestContext(
           [],
-          promptAt(value, keys[0]!, tokenStart),
+          promptAt(value, assertDefined(keys[0]), tokenStart),
         ).hasSensitiveBoundary(),
       ).toBe(false);
     }
@@ -6070,7 +6111,7 @@ test("screens Google Cloud CDN signed URLs across retained-context boundaries", 
 
   const omittedSignature = buildNamingRequestContext(
     [],
-    promptAt(values[0]!, signature, prefixLength + 5),
+    promptAt(assertDefined(values[0]), signature, prefixLength + 5),
   );
   expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
 
@@ -6161,7 +6202,7 @@ test("screens Akamai EdgeAuth tokens across retained-context boundaries", () => 
 
   const omittedSignature = buildNamingRequestContext(
     [],
-    promptAt(values[0]!.value, md5Signature, prefixLength + 5),
+    promptAt(assertDefined(values[0]).value, md5Signature, prefixLength + 5),
   );
   expect(omittedSignature.hasSensitiveBoundary()).toBe(false);
 
@@ -6986,7 +7027,7 @@ test("screens short labeled passwords and passphrases across retained-context tr
     const suffixValueStart = suffixStart - 3;
     const suffixPrompt =
       `${"x".repeat(suffixValueStart - label.length)}${label}${value}` +
-      `${"y".repeat(promptLength - suffixValueStart - value.length)}`;
+      "y".repeat(promptLength - suffixValueStart - value.length);
     const suffixContext = buildNamingRequestContext([], suffixPrompt);
     expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
     expect(suffixContext.hasSensitiveBoundary()).toBe(true);
@@ -7026,7 +7067,7 @@ test("screens short labeled passwords and passphrases across retained-context tr
   const encodedPlaceholder = Buffer.from("example").toString("base64");
   const npmPlaceholderStart = prefixLength - 3;
   const npmPlaceholderPrompt =
-    `${"x".repeat(npmPlaceholderStart - npmPasswordLabel.length)}` +
+    "x".repeat(npmPlaceholderStart - npmPasswordLabel.length) +
     `${npmPasswordLabel}${encodedPlaceholder}; ${"y".repeat(1_200)}`;
   expect(
     buildNamingRequestContext([], npmPlaceholderPrompt).hasSensitiveBoundary(),
@@ -7603,7 +7644,7 @@ test("screens Australian TFNs only with an explicit label and valid checksum", (
   const suffixValueStart = suffixStart - value.length + 5;
   const suffixPrompt =
     `${"x".repeat(suffixValueStart - label.length)}${label}${value} ` +
-    `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+    "y".repeat(promptLength - suffixValueStart - value.length - 1);
   const suffixContext = buildNamingRequestContext([], suffixPrompt);
   expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
   expect(suffixContext.hasSensitiveBoundary()).toBe(true);
@@ -7683,7 +7724,7 @@ test("screens checksum-valid Australian Medicare numbers only with an explicit l
   const suffixValueStart = suffixStart - value.length + 5;
   const suffixPrompt =
     `${"x".repeat(suffixValueStart - label.length)}${label}${value} ` +
-    `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+    "y".repeat(promptLength - suffixValueStart - value.length - 1);
   const suffixContext = buildNamingRequestContext([], suffixPrompt);
   expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
   expect(suffixContext.hasSensitiveBoundary()).toBe(true);
@@ -7768,7 +7809,7 @@ test("screens valid New Zealand IRD numbers in the current range only with an ex
   const suffixValueStart = suffixStart - value.length + 4;
   const suffixPrompt =
     `${"x".repeat(suffixValueStart - label.length)}${label}${value} ` +
-    `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+    "y".repeat(promptLength - suffixValueStart - value.length - 1);
   const suffixContext = buildNamingRequestContext([], suffixPrompt);
   expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
   expect(suffixContext.hasSensitiveBoundary()).toBe(true);
@@ -8200,7 +8241,7 @@ test("Spanish DNI and NIE values crossing either retained prompt boundary are de
   for (const [label, value] of [
     [" Spanish DNI: ", "00000000T"],
     [" Número de identidad de extranjero: ", "X0000000T"],
-  ]) {
+  ] as const) {
     for (const valueStart of [
       prefixLength - 4,
       suffixStart - value.length + 4,
@@ -8329,7 +8370,7 @@ test("NHS numbers crossing either retained prompt boundary are detected", () => 
   for (const [label, value] of [
     [" NHS Number: ", "2468135792"],
     [" National Health Service number=", "2718281820"],
-  ]) {
+  ] as const) {
     for (const valueStart of [
       prefixLength - 4,
       suffixStart - value.length + 4,
@@ -8415,7 +8456,7 @@ test("screens check-digit-valid Brazilian CPF values only with an explicit label
   const suffixValueStart = suffixStart - value.length + 7;
   const suffixPrompt =
     `${"x".repeat(suffixValueStart - label.length)}${label}${value} ` +
-    `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+    "y".repeat(promptLength - suffixValueStart - value.length - 1);
   const suffixContext = buildNamingRequestContext([], suffixPrompt);
   expect(hasSensitiveNamingContext(suffixContext.text)).toBe(false);
   expect(suffixContext.hasSensitiveBoundary()).toBe(true);
@@ -8820,7 +8861,7 @@ test("screens Luhn-valid labeled payment cards written with Unicode decimal digi
   const suffixValueStart = suffixStart - 8;
   const suffixPrompt =
     `${"x".repeat(suffixValueStart - label.length)}${label}${value} ` +
-    `${"y".repeat(promptLength - suffixValueStart - value.length - 1)}`;
+    "y".repeat(promptLength - suffixValueStart - value.length - 1);
   const suffix = buildNamingRequestContext([], suffixPrompt);
   expect(hasSensitiveNamingContext(suffix.text)).toBe(false);
   expect(suffix.hasSensitiveBoundary()).toBe(true);
@@ -8984,7 +9025,7 @@ test("screens GitHub tokens across retained-context truncation boundaries", () =
     expect(suffixContext.hasSensitiveBoundary()).toBe(true);
   }
 
-  const omittedToken = tokens[0]!;
+  const omittedToken = assertDefined(tokens[0]);
   const omittedPrompt = `${"x".repeat(prefixLength + 20)}${omittedToken} ${"y".repeat(3_000)}`;
   expect(
     buildNamingRequestContext([], omittedPrompt).hasSensitiveBoundary(),
@@ -9008,9 +9049,12 @@ test("screens Azure AD client-secret formats without flagging near-misses", () =
     `AbC7Q~${body}${"x".repeat(2)}`,
   ];
   const obfuscatedSecrets = [
-    secrets[0]!.replace("Q~", "Q\u200b~"),
-    secrets[0]!.replace("AbC7", "Ab\u200bC7"),
-    secrets[0]!.replace(body.slice(0, 16), `${body.slice(0, 16)}\u200b`),
+    assertDefined(secrets[0]).replace("Q~", "Q\u200b~"),
+    assertDefined(secrets[0]).replace("AbC7", "Ab\u200bC7"),
+    assertDefined(secrets[0]).replace(
+      body.slice(0, 16),
+      `${body.slice(0, 16)}\u200b`,
+    ),
   ];
 
   for (const value of [...secrets, ...obfuscatedSecrets]) {
@@ -9024,9 +9068,9 @@ test("screens Azure AD client-secret formats without flagging near-misses", () =
     `AbC7Q~${body.slice(0, 30)}`,
     `AbC7Q~${body}${"x".repeat(3)}`,
     `AbC7R~${body}`,
-    secrets[0]!.replace("Aa", "A!"),
-    `prefix${secrets[0]}`,
-    `${secrets[0]}suffix`,
+    assertDefined(secrets[0]).replace("Aa", "A!"),
+    `prefix${String(secrets[0])}`,
+    `${String(secrets[0])}suffix`,
     "Azure AD application registration setup",
   ]) {
     expect(hasSensitiveNamingContext(nearMiss)).toBe(false);
@@ -9113,8 +9157,11 @@ test("screens Stripe secret API keys in supported modes without flagging near-mi
     ]),
   ];
   const obfuscatedKeys = [
-    keys[4]!.replace("prod", "pr\u200bod"),
-    keys[5]!.replace("C3d4".repeat(3), `${"C3d4".repeat(3)}\u200b`),
+    assertDefined(keys[4]).replace("prod", "pr\u200bod"),
+    assertDefined(keys[5]).replace(
+      "C3d4".repeat(3),
+      `${"C3d4".repeat(3)}\u200b`,
+    ),
   ];
 
   for (const value of [
@@ -9322,11 +9369,18 @@ test("screens synthetic EasyPost API keys without flagging near-misses", () => {
     `eztk${"E5f6".repeat(13)}E5`,
   ];
   const obfuscatedKeys = [
-    keys[0]!.replace("EZAK", "EZ\u200bAK"),
-    keys[1]!.replace("C3d4".repeat(3), `C3d4\u200b${"C3d4".repeat(2)}`),
+    assertDefined(keys[0]).replace("EZAK", "EZ\u200bAK"),
+    assertDefined(keys[1]).replace(
+      "C3d4".repeat(3),
+      `C3d4\u200b${"C3d4".repeat(2)}`,
+    ),
   ];
 
-  for (const key of [...keys, ...obfuscatedKeys, `${keys[0]}-production`]) {
+  for (const key of [
+    ...keys,
+    ...obfuscatedKeys,
+    `${String(keys[0])}-production`,
+  ]) {
     expect(hasSensitiveNamingContext(`rotate EasyPost API key ${key}`)).toBe(
       true,
     );
@@ -9571,7 +9625,7 @@ test("screens Google OAuth tokens across retained-context truncation boundaries"
     `GOCSPY-${"A".repeat(20)}`,
     `1//${"B".repeat(10)}!${"B".repeat(10)}`,
     `ya28.${"C".repeat(20)}`,
-    `x${tokens[0]}`,
+    `x${String(tokens[0])}`,
   ]) {
     const nearMissPrompt = `${"x".repeat(prefixTokenStart - 1)} ${nearMiss} ${"x".repeat(1_200)}`;
     expect(
@@ -9754,7 +9808,7 @@ test("screens additional AWS access-key ID prefixes without flagging near-misses
     `ABIA${"C".repeat(16)}`,
     `ACCA${"D".repeat(16)}`,
   ];
-  const obfuscatedKey = `${keys[0]!.slice(0, 10)}\u200b${keys[0]!.slice(10)}`;
+  const obfuscatedKey = `${assertDefined(keys[0]).slice(0, 10)}\u200b${assertDefined(keys[0]).slice(10)}`;
 
   for (const key of [...keys, obfuscatedKey]) {
     expect(hasSensitiveNamingContext(`review AWS access ${key}`)).toBe(true);
@@ -9934,14 +9988,18 @@ test("screens Sentry organization tokens across both retained prompt boundaries"
   }));
   // Exercise the longest accepted format, which must still fit the boundary scan window.
   tokens.push({
-    region: regionClaims[0]!,
-    token: tokenFor("a".repeat(200), regionClaims[0]!, "b".repeat(200)),
+    region: assertDefined(regionClaims[0]),
+    token: tokenFor(
+      "a".repeat(200),
+      assertDefined(regionClaims[0]),
+      "b".repeat(200),
+    ),
   });
   tokens.push({
-    region: regionClaims[1]!,
+    region: assertDefined(regionClaims[1]),
     token: tokenFor(
       "a".repeat(20),
-      regionClaims[1]!,
+      assertDefined(regionClaims[1]),
       "b".repeat(20),
       "C".repeat(43),
       "==",
@@ -9968,10 +10026,15 @@ test("screens Sentry organization tokens across both retained prompt boundaries"
   }
 
   const nearMisses = [
-    tokenFor("a".repeat(9), regionClaims[0]!, "b".repeat(20)),
-    tokenFor("a".repeat(20), regionClaims[0]!, "b".repeat(9)),
+    tokenFor("a".repeat(9), assertDefined(regionClaims[0]), "b".repeat(20)),
+    tokenFor("a".repeat(20), assertDefined(regionClaims[0]), "b".repeat(9)),
     tokenFor("a".repeat(20), "LCJyZWdpb25fdXls", "b".repeat(20)),
-    tokenFor("a".repeat(20), regionClaims[0]!, "b".repeat(20), "C".repeat(42)),
+    tokenFor(
+      "a".repeat(20),
+      assertDefined(regionClaims[0]),
+      "b".repeat(20),
+      "C".repeat(42),
+    ),
   ];
   for (const nearMiss of nearMisses) {
     for (const tokenStart of tokenStarts) {
@@ -9983,7 +10046,7 @@ test("screens Sentry organization tokens across both retained prompt boundaries"
     }
   }
 
-  const omittedToken = tokens[0]!.token;
+  const omittedToken = assertDefined(tokens[0]).token;
   const omittedTokenStart = prefixLength + 20;
   const omittedPrefix = `${"x".repeat(omittedTokenStart - 1)} `;
   const omittedPrompt = `${omittedPrefix}${omittedToken} ${"y".repeat(promptLength - omittedPrefix.length - omittedToken.length - 1)}`;
@@ -10007,7 +10070,7 @@ test("screens Fireworks AI tokens across both retained prompt boundaries", () =>
     token,
     token.replace(
       /^(?:fw[-_]|fpk_)/,
-      (prefix) => `${prefix[0]}\u200b${prefix.slice(1)}`,
+      (prefix) => `${String(prefix[0])}\u200b${prefix.slice(1)}`,
     ),
     `${token.slice(0, 10)}\u0000${token.slice(10)}`,
   ]);
@@ -10037,7 +10100,7 @@ test("screens Fireworks AI tokens across both retained prompt boundaries", () =>
   }
 
   const omittedTokenStart = prefixLength + 20;
-  const omittedToken = tokens[0]!;
+  const omittedToken = assertDefined(tokens[0]);
   const omittedPrefix = `${"x".repeat(omittedTokenStart - 1)} `;
   const omittedPrompt = `${omittedPrefix}${omittedToken} ${"y".repeat(promptLength - omittedPrefix.length - omittedToken.length - 1)}`;
   expect(
@@ -10063,7 +10126,7 @@ test("long variable-length tokens stay detectable when a retained suffix starts 
   const omittedTokenStart = 1_500;
   const omittedPrompt =
     `${"x".repeat(omittedTokenStart - 1)} ${token}` +
-    `${"x".repeat(promptLength - omittedTokenStart - token.length)}`;
+    "x".repeat(promptLength - omittedTokenStart - token.length);
   const omittedContext = buildNamingRequestContext([], omittedPrompt);
   expect(hasSensitiveNamingContext(omittedContext.text)).toBe(false);
   expect(omittedContext.hasSensitiveBoundary()).toBe(false);
@@ -10075,7 +10138,7 @@ test("requestNamingTitle screens sensitive context before model-registry access"
     "task: phone: ٠٠٠-٠٠٠-٠٠٠٠",
     "task: δοκιμή@παράδειγμα.δοκιμή",
     "task: 用户@example.test",
-    `${"A1b_".repeat(6)}.${"cD9_-Z"}.${"QwErTy9_-".repeat(3)}`,
+    `${"A1b_".repeat(6)}.cD9_-Z.${"QwErTy9_-".repeat(3)}`,
     `mfa.${"a1B_".repeat(21)}`,
   ];
   const context = {

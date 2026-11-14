@@ -25,11 +25,11 @@ export function buildQuitPaneWatcherCommand(
   }
   // run-shell expands formats once; double # so its shell passes #{pid} to display-message.
   return [
-    `pi_pid=${processId}`,
+    `pi_pid=${String(processId)}`,
     `pane='${pane}'`,
     `server_pid='${serverPid}'`,
     "attempt=0",
-    `while kill -0 "$pi_pid" 2>/dev/null; do if [ "$attempt" -ge ${QUIT_PANE_WAIT_ATTEMPTS} ]; then exit 0; fi; attempt=$((attempt + 1)); sleep 0.1; done`,
+    `while kill -0 "$pi_pid" 2>/dev/null; do if [ "$attempt" -ge ${String(QUIT_PANE_WAIT_ATTEMPTS)} ]; then exit 0; fi; attempt=$((attempt + 1)); sleep 0.1; done`,
     `current_server=$(tmux display-message -p -t "$pane" '##{pid}' 2>/dev/null) || exit 0`,
     `[ "$current_server" = "$server_pid" ] || exit 0`,
     `tmux kill-pane -t "$pane"`,

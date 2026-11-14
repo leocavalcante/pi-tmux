@@ -46,7 +46,9 @@ test.skipIf(!hasTmux)(
         throw new Error("Could not start watcher test process");
       const processExit = new Promise<void>((resolve, reject) => {
         piProcess.once("error", reject);
-        piProcess.once("exit", () => resolve());
+        piProcess.once("exit", () => {
+          resolve();
+        });
       });
       tmux(
         "run-shell",
