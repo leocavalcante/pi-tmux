@@ -1,0 +1,4 @@
+# Formatting-only commits for git blame --ignore-revs-file and GitHub blame.
+
+# style: format with Prettier (#1004)
+8be5eb7b08a2fa48936aa35f4675fb3648b89a34
