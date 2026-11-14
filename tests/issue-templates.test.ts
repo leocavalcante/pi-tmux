@@ -141,6 +141,32 @@ test("GitHub issue forms use parseable YAML and supported, uniquely identified f
       (field) => field.id === "operating-system" && field.type === "dropdown",
     ),
   ).toBe(true);
+  for (const form of [bug, feature]) {
+    for (const [fieldId, label] of [
+      ["extension-version", "pi-tmux version"],
+      ["pi-version", "Pi version"],
+      ["node-version", "Node.js version"],
+      ["tmux-version", "tmux version"],
+    ] as const) {
+      expect(
+        form.fields.some(
+          (field) =>
+            field.id === fieldId &&
+            field.type === "input" &&
+            requireRecord(
+              field.attributes,
+              `${form.name} ${fieldId} attributes`,
+            ).label === label,
+        ),
+      ).toBe(true);
+    }
+    expect(
+      form.fields.some(
+        (field) => field.id === "operating-system" && field.type === "dropdown",
+      ),
+    ).toBe(true);
+  }
+  // Bug reports keep the AI naming mode, which changes most behavior, without the model name.
   expect(
     bug.fields.some(
       (field) => field.id === "ai-naming" && field.type === "dropdown",
@@ -159,10 +185,17 @@ test("both issue forms give clear privacy reminders without promising comprehens
       "prompts",
       "conversation history",
       "private window/session titles",
+      "attachments",
+      "project files",
+      "raw logs",
+      "screenshots",
       "generated or redacted examples",
+      "synthetic",
     ]) {
       expect(notice).toContain(detail);
     }
+    expect(notice).toContain("best-effort");
+    expect(notice).toContain("security/advisories/new");
     for (const claim of [
       "comprehensive redaction",
       "comprehensive screening",

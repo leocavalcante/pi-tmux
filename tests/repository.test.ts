@@ -48,7 +48,7 @@ test("tmux fixture cleanup does not mask a test failure", () => {
   expect(observed).toBe(failure);
 });
 
-test("README table of contents links resolve to section headings", () => {
+test("README uses the shared section structure, resolves Contents anchors, and uses absolute links", () => {
   const readme = readFileSync(
     fileURLToPath(new URL("../README.md", import.meta.url)),
     "utf8",
@@ -58,6 +58,14 @@ test("README table of contents links resolve to section headings", () => {
     throw new Error(
       "README must include a Contents section before its main sections",
     );
+
+  expect(readme).toContain(
+    "Name tmux windows after your current Pi task and mark the ones waiting for your input.",
+  );
+  expect(readme).toContain(
+    "A prompt about fixing authentication tests might produce `fix auth tests`.",
+  );
+  expect(readme).toContain("| Pi has settled and is waiting for input");
 
   const occurrences = new Map<string, number>();
   const headingAnchors = new Set(
@@ -78,6 +86,41 @@ test("README table of contents links resolve to section headings", () => {
   );
   expect(anchors.length).toBeGreaterThan(0);
   expect(anchors.filter((anchor) => !headingAnchors.has(anchor))).toEqual([]);
+
+  expect(
+    [...readme.matchAll(/^## (.+?)\s*$/gm)].map(([, heading]) =>
+      assertDefined(heading),
+    ),
+  ).toEqual([
+    "Contents",
+    "Installation",
+    "Usage",
+    "How it works",
+    "Configuration",
+    "Compatibility",
+    "Privacy and security",
+    "Troubleshooting",
+    "Contributing",
+    "License",
+  ]);
+
+  const destinations = [...readme.matchAll(/\]\(([^)]+)\)/gu)].map(
+    ([, destination]) => assertDefined(destination),
+  );
+  expect(
+    destinations.filter(
+      (destination) =>
+        !destination.startsWith("#") && !/^https?:\/\//iu.test(destination),
+    ),
+  ).toEqual([]);
+  const referenceDestinations = [
+    ...readme.matchAll(/^\[[^\]]+\]:\s*(\S+)/gmu),
+  ].map(([, destination]) => assertDefined(destination));
+  expect(
+    referenceDestinations.filter(
+      (destination) => !/^https?:\/\//iu.test(destination),
+    ),
+  ).toEqual([]);
 });
 
 test("README tmux compatibility versions stay aligned with version-checked CI", () => {
@@ -98,7 +141,7 @@ test("README tmux compatibility versions stay aligned with version-checked CI", 
   expect(setup).toContain('tmux -V | grep -Fx "tmux 3.4"');
   expect(workflow).toContain('test "$(tmux -V)" = "tmux 3.7c"');
   expect(readme).toMatch(
-    /Linux CI exercises tmux 3\.4 and a pinned tmux 3\.7c\nbuild/u,
+    /Linux CI tests tmux 3\.4 and a pinned tmux 3\.7c build;\s*macOS CI uses Homebrew\s+tmux\./u,
   );
 });
 
@@ -117,6 +160,9 @@ test("README's tested Pi version matches the development SDK", () => {
   };
   expect(readme).toContain(
     `Tested with Pi ${String(manifest.devDependencies["@earendil-works/pi-coding-agent"])}`,
+  );
+  expect(readme.replace(/\s+/gu, " ")).toContain(
+    "It accepts any Pi version as its extension API peer (`*`), so it always uses the Pi that loads it.",
   );
 });
 
