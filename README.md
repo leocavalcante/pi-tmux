@@ -33,6 +33,7 @@ after `/reload` the title is unmarked until a later Pi event updates it.
 - [Compatibility](#compatibility)
 - [Privacy and security](#privacy-and-security)
 - [Troubleshooting](#troubleshooting)
+- [More Pi extensions](#more-pi-extensions)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -658,6 +659,19 @@ repository contains source and synthetic tests only.
   correct it and run `/reload` to reread Pi's environment. Restart Pi if you
   changed a parent shell's exports. Waiting markers continue to work. Use a
   bare `/tmux-title` to retry when the model and credentials are available.
+
+## More Pi extensions
+
+Each extension does one job, and all of them share the same conventions for code, tests, and releases. Combine the ones you need:
+
+| Extension                                                     | What it does                                                                              |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [pi-a2a](https://github.com/leocavalcante/pi-a2a)             | Talk to A2A agents from Pi, and serve Pi Durable agents over the A2A protocol.            |
+| [pi-otel](https://github.com/leocavalcante/pi-otel)           | Observe Pi sessions and Pi Durable agents with OpenTelemetry, exporting metadata only.    |
+| [pi-subagents](https://github.com/leocavalcante/pi-subagents) | Delegate tasks to isolated Pi subagents: single, parallel, chained, or in the background. |
+| [pi-tmux](https://github.com/leocavalcante/pi-tmux)           | Name tmux windows after your current Pi task and mark the ones waiting for your input.    |
+
+Install any of them with `pi install npm:@leocavalcante/<extension>`, then run `/reload`.
 
 ## Contributing
 
