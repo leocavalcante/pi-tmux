@@ -1,8 +1,20 @@
 # Standardization plan: pi-tmux
 
-Status: draft, 2026-11-10. Target: [Pi extension standard v1](pi-extension-standard.md). Delete this file once every step is done.
+Status: done except gallery media, 2026-11-14. Target: [Pi extension standard v1](pi-extension-standard.md). Delete this file once every step is done.
 
 pi-tmux becomes the reference implementation. New extensions copy their shared files from this repository (standard §15), so these steps produce the canonical versions of those files.
+
+## Progress
+
+- Step 0 is complete: identity, topics, website, merge settings, security features, labels, the `npm` environment, and `sha_pinning_required`. Tag `v0.1.0` and its release record that 0.1.0 was published by hand; its tarball matches commit `8749aea`.
+- Step 1 merged as #1000 with the ruleset cutover; CodeQL default setup replaced `codeql.yml`. `engines.pi` declares the minimum Pi for the shared `pi-min` job, and `.github/scripts/setup-test-tools.sh` installs tmux.
+- Step 2 merged as #1001. Its first CD runs failed in `verifyConditions` until the trusted publisher moved from `publish.yml` to `cd.yaml`; nothing was tagged or published in the meantime.
+- Step 3 merged as #1003 and released **0.1.8**, the first automated release, with provenance.
+- Steps 4–6 and 8 merged as #1004 (Prettier), #1007 (`.git-blame-ignore-revs`), and #1008 (typescript-eslint plus `noUncheckedIndexedAccess`). Review caught an early draft that made the naming screen throw on unchecked reads; the merged version keeps the exact runtime reads.
+- Step 7 merged as #1009 and released **0.1.9**.
+- Also merged: #1005 (shared-file sync) and #1006 (Pi 1.5.2 for development, replacing Dependabot's #1002).
+- npm: the trusted publisher is `cd.yaml` with environment `npm`, `0.0.0-stage` is deprecated, and publishing requires 2FA and disallows tokens.
+- **Remaining:** add `pi.image` and upload the matching social preview by hand. Then delete this file.
 
 ## Target identity
 
