@@ -100,6 +100,7 @@ test("README uses the shared section structure, resolves Contents anchors, and u
     "Compatibility",
     "Privacy and security",
     "Troubleshooting",
+    "More Pi extensions",
     "Contributing",
     "License",
   ]);
