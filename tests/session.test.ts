@@ -8,12 +8,13 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import piTmux, {
+import piTmux from "../src/extension.ts";
+import {
   SESSION_TITLE_FORMAT,
   WAITING_OPTION,
   ACTIVE_OPTION,
   type RunTmux,
-} from "../index.ts";
+} from "../src/tmux.ts";
 import {
   WINDOW_BASE_NAME_OPTION,
   WINDOW_TITLE_LITERAL_PREFIX_OPTION,

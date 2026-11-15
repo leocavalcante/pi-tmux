@@ -25,7 +25,7 @@ pi-tmux: name tmux windows after your current Pi task and mark the ones waiting 
 
 ### Layout
 
-- `src/extension.ts` is the Pi entry point, named by `package.json` `pi.extensions`. The root `index.ts` re-exports it with the title, naming, and tmux helpers that tests use.
+- `src/extension.ts` is the Pi entry point, named by `package.json` `pi.extensions`.
 - `src/extension.ts` registers `/tmux-title`, `/quit-pane`, and Pi lifecycle handlers.
 - `src/controller.ts` manages model requests, title state, waiting markers, shared panes, and location repair.
 - `src/naming.ts` builds bounded context, screens sensitive text, and requests task titles.

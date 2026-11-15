@@ -24,7 +24,6 @@ try {
   const packed = packages[0];
   const paths = packed.files.map((file) => file.path);
   for (const required of [
-    "index.ts",
     "src/extension.ts",
     "src/tmux.ts",
     "README.md",
