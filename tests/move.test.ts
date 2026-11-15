@@ -1701,7 +1701,6 @@ test("tracked session metadata stays bounded when former-session repairs keep fa
   const originalPane = process.env.TMUX_PANE;
   const originalModel = process.env.PI_TMUX_MODEL;
   // The wrapper invokes the original method with its runtime receiver via .call.
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- Preserve Set.prototype.has receiver semantics in this spy.
   const originalHas = Set.prototype.has;
   const handlers = new Map<string, Function>();
   const checkedSizes: number[] = [];
