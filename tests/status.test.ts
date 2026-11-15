@@ -8,7 +8,8 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import piTmux, { WAITING_OPTION, type RunTmux } from "../index.ts";
+import piTmux from "../src/extension.ts";
+import { WAITING_OPTION, type RunTmux } from "../src/tmux.ts";
 import { STATUS_SNAPSHOT_FORMAT } from "../src/tmux.ts";
 import { cleanupTmuxFixture, supportsUnixTmux } from "./tmux-support.ts";
 

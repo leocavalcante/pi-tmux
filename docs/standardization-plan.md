@@ -13,6 +13,7 @@ pi-tmux becomes the reference implementation. New extensions copy their shared f
 - Steps 4–6 and 8 merged as #1004 (Prettier), #1007 (`.git-blame-ignore-revs`), and #1008 (typescript-eslint plus `noUncheckedIndexedAccess`). Review caught an early draft that made the naming screen throw on unchecked reads; the merged version keeps the exact runtime reads.
 - Step 7 merged as #1009 and released **0.1.9**.
 - Also merged: #1005 (shared-file sync) and #1006 (Pi 1.5.2 for development, replacing Dependabot's #1002).
+- Consistency pass across the four extensions: #1011 shared the repository files and made `src/extension.ts` the Pi entry point. #1012 (**0.1.10**) linked the other extensions from the README, #1014 shared the test lint relaxations, and this change removes the root `index.ts`.
 - npm: the trusted publisher is `cd.yaml` with environment `npm`, `0.0.0-stage` is deprecated, and publishing requires 2FA and disallows tokens.
 - **Remaining:** add `pi.image` and upload the matching social preview by hand. Then delete this file.
 

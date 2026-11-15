@@ -11,24 +11,29 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import piTmux, {
+import piTmux from "../src/extension.ts";
+import {
   buildNamingContext,
-  buildWindowTitleFormat,
-  WINDOW_WAITING_FORMAT,
-  cleanTitle,
-  formatTitle,
   parseNamingModel,
   MAX_CONTEXT_LENGTH,
   MAX_HISTORY_MESSAGES,
   MAX_PROMPT_LENGTH,
+} from "../src/naming.ts";
+import {
+  cleanTitle,
+  formatTitle,
   MAX_TITLE_LENGTH,
   READY_PREFIX,
+} from "../src/title.ts";
+import {
+  buildWindowTitleFormat,
+  WINDOW_WAITING_FORMAT,
   SESSION_TITLE_FORMAT,
   WAITING_OPTION,
   ACTIVE_OPTION,
   QUIT_TITLE_FORMAT,
   type RunTmux,
-} from "../index.ts";
+} from "../src/tmux.ts";
 import {
   readWindowTitle,
   STATUS_SNAPSHOT_FORMAT,
@@ -13389,7 +13394,9 @@ test.serial.skipIf(process.platform === "win32")(
     const directory = mkdtempSync(join(tmpdir(), "pi-tmux-reload-"));
     const fakeTmux = join(directory, "tmux");
     const writeLog = join(directory, "writes.log");
-    const entrypoint = fileURLToPath(new URL("../index.ts", import.meta.url));
+    const entrypoint = fileURLToPath(
+      new URL("../src/extension.ts", import.meta.url),
+    );
     try {
       writeFileSync(
         fakeTmux,
