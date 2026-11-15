@@ -9,6 +9,8 @@ Follow-ups such as `continue` or `yes, do it` use recent dialogue to keep the
 task recognizable. Resuming a Pi session restores a task title without a new
 prompt. Naming runs in the background and does not delay Pi's answer.
 
+![pi-tmux preview: a tmux status bar with windows named after Pi tasks, and a waiting window marked with an asterisk](https://raw.githubusercontent.com/leocavalcante/pi-tmux/main/.github/media/preview.png)
+
 | State                                      | Window name                                               | tmux session name                                                       |
 | ------------------------------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------- |
 | Pi is working alone in its window          | `fix auth tests`                                          | Existing name                                                           |
