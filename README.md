@@ -282,10 +282,13 @@ warns and leaves Pi running.
   can include resulting dialogue.
 - Naming failures keep the existing task name; waiting status can still
   update. Shape-only rejections (multiple lines, title length, or word count)
-  are quiet and appear only as a fixed category in `/tmux-title status`. Other
-  failures can show at most one automatic warning per extension load. Identical
+  are quiet and appear only as a fixed category in `/tmux-title status`.
+  Timeouts, provider errors, and other unusable responses are often one-off, so
+  they stay quiet until three naming requests in a row fail; a successful title
+  resets the count. A missing naming model or missing credentials warns right
+  away. At most one automatic warning appears per extension load. Identical
   context is not retried automatically after a failed naming request.
-  `/tmux-title` allows another warning if the explicit retry fails.
+  `/tmux-title` reports a failed explicit retry right away.
 
 ### Shared panes and cleanup
 

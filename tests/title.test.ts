@@ -889,7 +889,11 @@ test("deadline settles pending naming even when the provider never settles", asy
     ).toHaveLength(0);
     await f.refresh("status");
     expect(f.notices.at(-1)).toContain("Naming request: idle");
-    expect(f.warnings).toHaveLength(1);
+    expect(f.notices.at(-1)).toContain(
+      "Last naming rejection: request failed or timed out;",
+    );
+    // One timeout is often transient, so it stays out of the warnings.
+    expect(f.warnings).toEqual([]);
     expect(f.state.title).toBe("existing task");
     await f.emit("agent_settled");
     expect(f.state.title).toBe("* existing task");
@@ -918,11 +922,11 @@ test("the original deadline also aborts a hanging title correction request", asy
     expect(cleared.has(assertDefined(timers[0]).handle)).toBe(true);
     expect(getEventListeners(signal, "abort")).toHaveLength(0);
     expect(f.state.title).toBe("existing task");
-    expect(f.warnings).toHaveLength(1);
+    expect(f.warnings).toEqual([]);
     retry.resolve(response("stale correction"));
     await settle();
     expect(f.state.title).toBe("existing task");
-    expect(f.warnings).toHaveLength(1);
+    expect(f.warnings).toEqual([]);
   });
 });
 
@@ -941,12 +945,13 @@ test.each(["resolve", "reject"])(
       await settle();
       assertDefined(timers[0]).fire();
       await settle();
-      expect(f.warnings).toHaveLength(1);
+      expect(f.warnings).toEqual([]);
       if (completion === "resolve") resolve(response("stale late title"));
       else reject(new Error("Synthetic private provider error"));
       await settle();
-      expect(f.warnings).toHaveLength(1);
-      expect(f.warnings.join("\n")).not.toContain(
+      expect(f.warnings).toEqual([]);
+      await f.refresh("status");
+      expect(f.notices.join("\n")).not.toContain(
         "Synthetic private provider error",
       );
       expect(f.state.title).toBe("existing task");
@@ -1049,7 +1054,8 @@ test.each([
       ).toHaveLength(0);
     await f.refresh("status");
     expect(f.notices.at(-1)).toContain("Naming request: idle");
-    expect(f.warnings).toHaveLength(completion === "success" ? 0 : 1);
+    // A missing model needs action now; one failed request may be transient.
+    expect(f.warnings).toHaveLength(completion === "unavailable" ? 1 : 0);
   });
 });
 
@@ -1092,12 +1098,45 @@ test("empty or failed responses never become window names", async () => {
     response("---"),
     response("Error details", "error"),
   ]) {
-    const f = fixture([Promise.resolve(result)]);
-    f.input("Task");
+    const f = fixture([
+      Promise.resolve(result),
+      Promise.resolve(result),
+      Promise.resolve(result),
+    ]);
+    f.input("First task");
+    await settle();
+    f.input("Second task");
     await settle();
     expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+    expect(f.warnings).toEqual([]);
+    f.input("Third task");
+    await settle();
+    expect(f.requests).toHaveLength(3);
+    expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
     expect(f.warnings).toHaveLength(1);
+    expect(f.warnings.join("\n")).not.toContain("Error details");
   }
+});
+
+test("isolated naming failures stay quiet and a success resets the count", async () => {
+  const f = fixture([
+    Promise.resolve(response("", "error")),
+    Promise.resolve(response("", "error")),
+    Promise.resolve(response("Fix auth tests")),
+    Promise.resolve(response("", "error")),
+    Promise.resolve(response("", "error")),
+  ]);
+  for (const task of ["First", "Second", "Third", "Fourth", "Fifth"]) {
+    f.input(`${task} task`);
+    await settle();
+  }
+  expect(f.requests).toHaveLength(5);
+  expect(f.state.title).toBe("fix auth tests");
+  expect(f.warnings).toEqual([]);
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain(
+    "Last naming rejection: request failed or timed out; current title kept.",
+  );
 });
 
 test("rejects excess naming response blocks before inspecting them", async () => {
@@ -1116,9 +1155,11 @@ test("rejects excess naming response blocks before inspecting them", async () =>
   expect(f.requests).toHaveLength(1);
   expect(f.state.title).toBe("existing task");
   expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-  expect(f.warnings).toEqual([
-    "The naming model returned too many content blocks; the current title was kept.",
-  ]);
+  expect(f.warnings).toEqual([]);
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain(
+    "Last naming rejection: too many content blocks;",
+  );
 });
 
 test.each(["one block", "combined final blocks"])(
@@ -1200,9 +1241,9 @@ test("treats an oversized phase signature as unrecognized metadata without parsi
   await settle();
   expect(f.state.title).toBe("existing task");
   expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-  expect(f.warnings).toEqual([
-    "The naming model did not return a final answer; the current title was kept.",
-  ]);
+  expect(f.warnings).toEqual([]);
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Last naming rejection: no final answer;");
 });
 
 test("a normal final answer remains selectable beside oversized unrecognized metadata", async () => {
@@ -1280,9 +1321,9 @@ test("does not use commentary text when no final_answer block is present", async
   await settle();
   expect(f.state.title).toBe("existing task");
   expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-  expect(f.warnings).toEqual([
-    "The naming model did not return a final answer; the current title was kept.",
-  ]);
+  expect(f.warnings).toEqual([]);
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Last naming rejection: no final answer;");
 });
 
 test("does not fall back to an unrecognized text phase", async () => {
@@ -1305,9 +1346,9 @@ test("does not fall back to an unrecognized text phase", async () => {
   await settle();
   expect(f.state.title).toBe("existing task");
   expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-  expect(f.warnings).toEqual([
-    "The naming model did not return a final answer; the current title was kept.",
-  ]);
+  expect(f.warnings).toEqual([]);
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Last naming rejection: no final answer;");
 });
 
 test("honors phase metadata from a newer textSignature version", async () => {
@@ -1330,9 +1371,9 @@ test("honors phase metadata from a newer textSignature version", async () => {
   await settle();
   expect(f.state.title).toBe("existing task");
   expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-  expect(f.warnings).toEqual([
-    "The naming model did not return a final answer; the current title was kept.",
-  ]);
+  expect(f.warnings).toEqual([]);
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain("Last naming rejection: no final answer;");
 });
 
 test("falls back to the last text block when phase metadata is absent", async () => {
@@ -1590,38 +1631,32 @@ test("accepts ordinary surrounding spaces in naming output", async () => {
 test.each([
   {
     output: "I'll inspect the conversation and choose a title.",
-    warning: undefined,
     retry: true,
     category: "title length",
   },
   {
     output: "one two three four five",
-    warning: undefined,
     retry: true,
     category: "word count",
   },
   {
     output: "fix ssh\nhelpers",
-    warning: undefined,
     retry: true,
     category: "multiple lines",
   },
   {
     output: "investigate authentication failures",
-    warning: undefined,
     retry: true,
     category: "title length",
   },
   {
     output: "---",
-    warning:
-      "The naming model returned no usable title; the current title was kept.",
     retry: false,
     category: "empty response",
   },
 ])(
   "rejects output that remains invalid after at most one retry: $output",
-  async ({ output, warning, retry, category }) => {
+  async ({ output, retry, category }) => {
     const results = [Promise.resolve(response(output))];
     if (retry) results.push(Promise.resolve(response(output)));
     const f = fixture(results);
@@ -1630,7 +1665,8 @@ test.each([
     expect(f.requests).toHaveLength(retry ? 2 : 1);
     expect(f.state.title).toBe("existing task");
     expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
-    expect(f.warnings).toEqual(warning ? [warning] : []);
+    // A single unusable response stays quiet; repeated failures warn.
+    expect(f.warnings).toEqual([]);
     await f.refresh("status");
     const status = f.notices.at(-1)!;
     expect(status).toContain(
@@ -1640,10 +1676,12 @@ test.each([
   },
 );
 
-test("shape-only rejections do not hide a later actionable naming warning", async () => {
+test("shape-only rejections neither hide nor count toward a later naming warning", async () => {
   const f = fixture([
     Promise.resolve(response("one two three four five")),
     Promise.resolve(response("one two three four five")),
+    Promise.resolve(response("", "error")),
+    Promise.resolve(response("", "error")),
     Promise.resolve(response("", "error")),
   ]);
   f.input("First task");
@@ -1651,8 +1689,13 @@ test("shape-only rejections do not hide a later actionable naming warning", asyn
   expect(f.warnings).toEqual([]);
   f.input("Second task");
   await settle();
+  f.input("Third task");
+  await settle();
+  expect(f.warnings).toEqual([]);
+  f.input("Fourth task");
+  await settle();
   expect(f.warnings).toEqual([
-    "tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.",
+    "The naming request failed, so the current title was kept. Check the configured naming model and its Pi credentials, then use /tmux-title to retry.",
   ]);
 });
 
@@ -1730,15 +1773,62 @@ test("does not apply checksum-valid Spanish DNI or NIE returned by the naming mo
 });
 
 test("does not apply a short-looking response truncated by the token limit", async () => {
-  const f = fixture([Promise.resolve(response("fix ssh", "length"))]);
+  const f = fixture([
+    Promise.resolve(response("fix ssh", "length")),
+    Promise.resolve(response("fix ssh", "length")),
+    Promise.resolve(response("fix ssh", "length")),
+  ]);
   f.input("Name a task");
   await settle();
   expect(f.state.title).toBe("existing task");
+  expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
+  expect(f.warnings).toEqual([]);
+  await f.refresh("status");
+  expect(f.notices.at(-1)).toContain(
+    "Last naming rejection: truncated response;",
+  );
+  f.input("Name another task");
+  await settle();
+  f.input("Name a third task");
+  await settle();
   expect(f.calls.filter((args) => args[0] === "rename-window")).toEqual([]);
   expect(f.warnings).toEqual([
     "The naming model hit its token limit before finishing a title; the current title was kept.",
   ]);
 });
+
+test.each([
+  {
+    name: "truncated",
+    result: response("fix ssh", "length"),
+    warning:
+      "The naming model hit its token limit before finishing a title; the current title was kept.",
+  },
+  {
+    name: "blank",
+    result: response("---"),
+    warning:
+      "The naming model returned no usable title; the current title was kept.",
+  },
+  {
+    name: "failed",
+    result: response("Synthetic provider detail", "error"),
+    warning:
+      "The naming request failed, so the current title was kept. Check the configured naming model and its Pi credentials, then use /tmux-title to retry.",
+  },
+])(
+  "an explicit retry warns right away about a $name naming response",
+  async ({ result, warning }) => {
+    const f = fixture([Promise.resolve(result)]);
+    f.messages.push({ role: "user", content: "Task" });
+    await f.refresh();
+    await settle();
+    expect(f.requests).toHaveLength(1);
+    expect(f.state.title).toBe("existing task");
+    expect(f.warnings).toEqual([warning]);
+    expect(f.warnings.join("\n")).not.toContain("Synthetic provider detail");
+  },
+);
 
 test("sensitive-looking prompts and recent history never reach the naming model", async () => {
   const token = ["ghp_", "A".repeat(20)].join("");
@@ -10702,24 +10792,48 @@ test("waiting status still works when the naming model is unavailable", async ()
   expect(f.requests).toHaveLength(0);
 });
 
-test("naming model failures show a generic warning without disclosing error details", async () => {
-  let rejectWork!: (error: Error) => void;
-  const work = new Promise<ReturnType<typeof response>>((_resolve, reject) => {
-    rejectWork = reject;
-  });
-  const f = fixture([work]);
-  f.input("Task");
-  rejectWork(new Error("Synthetic provider failure detail"));
-  await settle();
+test("repeated naming model failures show a generic warning without disclosing error details", async () => {
+  const rejections: ((error: Error) => void)[] = [];
+  const failure = () =>
+    new Promise<ReturnType<typeof response>>((_resolve, reject) => {
+      rejections.push(reject);
+    });
+  const f = fixture([failure(), failure(), failure()]);
+  for (const task of ["First", "Second", "Third"]) {
+    f.input(`${task} task`);
+    assertDefined(rejections.shift())(
+      new Error("Synthetic provider failure detail"),
+    );
+    await settle();
+  }
 
-  expect(f.requests).toHaveLength(1);
+  expect(f.requests).toHaveLength(3);
   expect(f.state.title).toBe("existing task");
   expect(f.warnings).toEqual([
-    "tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.",
+    "The naming request failed, so the current title was kept. Check the configured naming model and its Pi credentials, then use /tmux-title to retry.",
   ]);
   expect(f.warnings.join("\n")).not.toContain(
     "Synthetic provider failure detail",
   );
+});
+
+test("an unavailable naming model warns right away with a configuration hint", async () => {
+  for (const unavailable of ["missing model", "missing credentials"]) {
+    const f = fixture();
+    if (unavailable === "missing model")
+      (f.ctx.modelRegistry as any).find = () => undefined;
+    else (f.ctx.modelRegistry as any).hasConfiguredAuth = () => false;
+    f.input("Task");
+    await settle();
+    expect(f.requests).toEqual([]);
+    expect(f.warnings).toEqual([
+      "The naming model is unavailable. Check PI_TMUX_MODEL and its Pi credentials; waiting markers still work. Use /tmux-title to retry.",
+    ]);
+    await f.refresh("status");
+    expect(f.notices.at(-1)).toContain(
+      "Last naming rejection: naming model unavailable;",
+    );
+  }
 });
 
 test("an aborted run is settled and waiting, without implying task success", async () => {
@@ -12343,7 +12457,7 @@ test("manual refresh retries identical failed context and retains waiting status
   await settle();
   await f.emit("agent_settled");
   expect(f.requests).toHaveLength(1);
-  expect(f.warnings).toHaveLength(1);
+  expect(f.warnings).toEqual([]);
   await f.refresh();
   await settle();
   expect(f.requests).toHaveLength(2);

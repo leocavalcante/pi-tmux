@@ -46,6 +46,14 @@ export class UnsafeNamingContextError extends Error {
   }
 }
 
+// The configured model is missing from Pi's registry or has no credentials.
+export class NamingModelUnavailableError extends Error {
+  constructor() {
+    super("Naming model unavailable");
+    this.name = "NamingModelUnavailableError";
+  }
+}
+
 export type InvalidNamingTitleReason =
   | "truncated"
   | "no-final-answer"
@@ -5217,7 +5225,7 @@ export async function requestNamingTitle(
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- The signal can abort during the lookup.
   if (signal.aborted || !isCurrent()) return;
   if (!model || !ctx.modelRegistry.hasConfiguredAuth(model)) {
-    throw new Error("Naming model unavailable");
+    throw new NamingModelUnavailableError();
   }
   const systemPrompt = [
     "Create a short tmux window name describing the current task in this conversation.",
