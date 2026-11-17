@@ -483,14 +483,14 @@ test("local verify script runs the same validation gates as CI", () => {
       "bun run check",
       "bun run test",
       "bun run check:package",
-      "bun audit --audit-level=high",
+      "bun audit --audit-level=high --ignore=GHSA-fc5q-39xc-vjpf",
     ].join(" && "),
   );
   expect(runs("static")).toEqual(
     expect.arrayContaining([
       "bun run lint",
       "bun run check",
-      "bun audit --audit-level=high",
+      "bun audit --audit-level=high --ignore=GHSA-fc5q-39xc-vjpf",
     ]),
   );
   expect(runs("test")).toContain("bun run test");

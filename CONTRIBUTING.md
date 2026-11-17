@@ -39,6 +39,12 @@ package, subprocess, and protocol payloads. `bun run verify` stops at the first
 failure. It does not include Gitleaks; install
 it separately to run the secret scans under [Before submitting](#before-submitting).
 
+The audit ignores [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf),
+a picomatch ReDoS with no patched release. Only development tooling such as
+semantic-release and typescript-eslint uses picomatch; the published package
+has no dependencies. Remove the ignore from `verify`, CI, and
+`tests/repository.test.ts` once a fixed version ships.
+
 `src/extension.ts` is the Pi entry point, named by `package.json` `pi.extensions`. The implementation lives in focused modules: `src/title.ts` handles title formatting, `src/naming.ts` handles model configuration and context, `src/tmux.ts` owns tmux formats and command adapters, `src/controller.ts` owns per-instance state and updates, and `src/extension.ts` registers commands and lifecycle events. The window snapshot is tab-delimited and its last field can be empty; preserve its trailing tab and remove only tmux's line terminator. Injected `RunTmux` adapters retain flat command arrays by default; adapters that support the server-PID guard can opt in with `supportsServerPidGuard = true`.
 
 ### Tests
