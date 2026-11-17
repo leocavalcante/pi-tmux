@@ -243,7 +243,12 @@ warns and leaves Pi running.
   clear another pane's marker. Window renames choose the prefix and its length
   budget on the tmux server, even if another pane changed status after lookup.
   Session names are not summarized, lowercased, or clipped. A literal leading
-  `* ` is preserved, with the waiting marker added separately.
+  `* ` is preserved, with the waiting marker added separately. tmux refuses to
+  give two sessions the same name. If another session already uses the name a
+  marker update needs, for example a new session created with the unmarked
+  name, the session keeps its current name. Pane flags and the window title
+  still update, and a warning appears once. Rename one of the sessions to
+  restore the session marker.
   Control characters, backslashes, and other characters that tmux escapes in a
   formatted name may not round-trip through rename commands; the exact escaping
   can vary between tmux versions. If a custom session name's formatted value

@@ -362,20 +362,29 @@ export function writeOnServer(
   );
 }
 
-export function targetDisappeared(error: unknown, target: string) {
+function tmuxErrorText(error: unknown): string {
   const stderr =
     error && typeof error === "object" && "stderr" in error
       ? error.stderr
       : undefined;
-  const message = Buffer.isBuffer(stderr)
+  return Buffer.isBuffer(stderr)
     ? stderr.toString("utf8")
     : typeof stderr === "string"
       ? stderr
       : error instanceof Error
         ? error.message
         : "";
+}
+
+export function targetDisappeared(error: unknown, target: string) {
   return (
-    message.trim() ===
+    tmuxErrorText(error).trim() ===
     `can't find ${target.startsWith("@") ? "window" : "session"}: ${target}`
   );
+}
+
+// rename-session refuses a name that another session already uses, for example
+// when a new session took the unmarked name while this one carried the marker.
+export function sessionNameConflict(error: unknown) {
+  return /^duplicate session: /m.test(tmuxErrorText(error));
 }
