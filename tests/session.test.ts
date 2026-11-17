@@ -2705,3 +2705,189 @@ test.skipIf(!hasTmux).each([false, true])(
     }
   },
 );
+
+test.skipIf(!hasTmux).each([
+  { guarded: false, peerWaiting: false },
+  { guarded: true, peerWaiting: false },
+  { guarded: true, peerWaiting: true },
+])(
+  "quit cleanup repairs markers after tmux closes Pi's pane: %j",
+  async ({ guarded, peerWaiting }) => {
+    const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+    const socket = join(directory, "socket");
+    const originalPane = process.env.TMUX_PANE;
+    const originalModel = process.env.PI_TMUX_MODEL;
+    const tmux = (...args: string[]) =>
+      execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+        encoding: "utf8",
+        timeout: 2_000,
+        stdio: ["ignore", "pipe", "pipe"],
+      }).replace(/\r?\n$/, "");
+    try {
+      process.env.PI_TMUX_MODEL = "off";
+      const pane = tmux(
+        "new-session",
+        "-d",
+        "-P",
+        "-F",
+        "#{pane_id}",
+        "-s",
+        "Closed",
+        "-n",
+        "shared window",
+        "/bin/sleep 60",
+      );
+      const window = tmux("display-message", "-p", "-t", pane, "#{window_id}");
+      const session = tmux(
+        "display-message",
+        "-p",
+        "-t",
+        pane,
+        "#{session_id}",
+      );
+      const peer = tmux(
+        "split-window",
+        "-d",
+        "-P",
+        "-F",
+        "#{pane_id}",
+        "-t",
+        pane,
+        "/bin/sleep 60",
+      );
+      process.env.TMUX_PANE = pane;
+      const handlers = new Map<string, Function>();
+      const run: RunTmux = Object.assign(
+        async (args: string[]) => tmux(...args),
+        { supportsServerPidGuard: guarded },
+      );
+      piTmux(mockPi(handlers), run);
+      const warnings: string[] = [];
+      const ctx = {
+        mode: "tui",
+        sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+        ui: { notify: (text: string) => warnings.push(text) },
+      } as unknown as ExtensionContext;
+
+      await assertDefined(handlers.get("agent_settled"))(
+        { type: "agent_settled" },
+        ctx,
+      );
+      expect(
+        tmux("display-message", "-p", "-t", session, "#{session_name}"),
+      ).toBe("* Closed");
+      expect(
+        tmux("display-message", "-p", "-t", window, "#{window_name}"),
+      ).toBe("* shared window");
+      if (peerWaiting) {
+        tmux("set-option", "-p", "-t", peer, ACTIVE_OPTION, "1");
+        tmux("set-option", "-p", "-t", peer, WAITING_OPTION, "1");
+      }
+
+      // Closing a pane signals Pi only after tmux has destroyed the pane.
+      tmux("kill-pane", "-t", pane);
+      await assertDefined(handlers.get("session_shutdown"))(
+        { type: "session_shutdown", reason: "quit" },
+        ctx,
+      );
+
+      expect(
+        tmux("display-message", "-p", "-t", session, "#{session_name}"),
+      ).toBe(peerWaiting ? "* Closed" : "Closed");
+      expect(
+        tmux("display-message", "-p", "-t", window, "#{window_name}"),
+      ).toBe(peerWaiting ? "* shared window" : "shared window");
+      expect(warnings).toEqual([]);
+    } finally {
+      if (originalPane === undefined) delete process.env.TMUX_PANE;
+      else process.env.TMUX_PANE = originalPane;
+      if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+      else process.env.PI_TMUX_MODEL = originalModel;
+      cleanupTmuxFixture(() => tmux("kill-server"), directory);
+    }
+  },
+);
+
+test.skipIf(!hasTmux)(
+  "quit cleanup repairs the session after its closed pane took the window with it",
+  async () => {
+    const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+    const socket = join(directory, "socket");
+    const originalPane = process.env.TMUX_PANE;
+    const originalModel = process.env.PI_TMUX_MODEL;
+    const tmux = (...args: string[]) =>
+      execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+        encoding: "utf8",
+        timeout: 2_000,
+        stdio: ["ignore", "pipe", "pipe"],
+      }).replace(/\r?\n$/, "");
+    try {
+      process.env.PI_TMUX_MODEL = "off";
+      const session = tmux(
+        "new-session",
+        "-d",
+        "-P",
+        "-F",
+        "#{session_id}",
+        "-s",
+        "Survivor",
+        "-n",
+        "other window",
+        "/bin/sleep 60",
+      );
+      const pane = tmux(
+        "new-window",
+        "-d",
+        "-P",
+        "-F",
+        "#{pane_id}",
+        "-t",
+        session,
+        "-n",
+        "pi window",
+        "/bin/sleep 60",
+      );
+      process.env.TMUX_PANE = pane;
+      const handlers = new Map<string, Function>();
+      const run: RunTmux = Object.assign(
+        async (args: string[]) => tmux(...args),
+        { supportsServerPidGuard: true },
+      );
+      piTmux(mockPi(handlers), run);
+      const warnings: string[] = [];
+      const ctx = {
+        mode: "tui",
+        sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+        ui: { notify: (text: string) => warnings.push(text) },
+      } as unknown as ExtensionContext;
+
+      await assertDefined(handlers.get("agent_settled"))(
+        { type: "agent_settled" },
+        ctx,
+      );
+      expect(
+        tmux("display-message", "-p", "-t", session, "#{session_name}"),
+      ).toBe("* Survivor");
+
+      tmux("kill-pane", "-t", pane);
+      await assertDefined(handlers.get("session_shutdown"))(
+        { type: "session_shutdown", reason: "quit" },
+        ctx,
+      );
+
+      expect(
+        tmux("display-message", "-p", "-t", session, "#{session_name}"),
+      ).toBe("Survivor");
+      expect(tmux("list-windows", "-t", session, "-F", "#{window_name}")).toBe(
+        "other window",
+      );
+      expect(warnings).toEqual([]);
+    } finally {
+      if (originalPane === undefined) delete process.env.TMUX_PANE;
+      else process.env.TMUX_PANE = originalPane;
+      if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+      else process.env.PI_TMUX_MODEL = originalModel;
+      cleanupTmuxFixture(() => tmux("kill-server"), directory);
+    }
+  },
+);

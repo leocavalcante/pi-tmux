@@ -38,6 +38,8 @@ import {
   readWindowTitle,
   sessionNameConflict,
   STATUS_SNAPSHOT_FORMAT,
+  targetDisappeared,
+  TmuxTargetMissingError,
   WINDOW_INFO_INTERNAL_FORMAT,
 } from "../src/tmux.ts";
 import {
@@ -435,6 +437,64 @@ test("automatic server-change warnings stay deduplicated across extension reload
   }
 });
 
+test("a blank lookup from a replacement server is a server change, not a closed pane", async () => {
+  const warningKey = Symbol.for(
+    "@leocavalcante/pi-tmux/server-change-warning-shown",
+  );
+  const previousWarningDescriptor = Object.getOwnPropertyDescriptor(
+    process,
+    warningKey,
+  );
+  Reflect.deleteProperty(process, warningKey);
+  try {
+    process.env.PI_TMUX_MODEL = "off";
+    const warnings: string[] = [];
+    const ctx = {
+      mode: "tui",
+      ui: {
+        notify: (text: string, level: string) => {
+          if (level === "warning") warnings.push(text);
+        },
+      },
+    } as unknown as ExtensionContext;
+    let snapshot = "$0:1:123:0\t@2\t0\texisting task";
+    const writes: string[][] = [];
+    const handlers = new Map<string, Function>();
+    piTmux(
+      {
+        on: (event: string, handler: Function) => handlers.set(event, handler),
+        registerCommand: () => undefined,
+      } as unknown as ExtensionAPI,
+      async (args) => {
+        if (args[0] === "display-message") return snapshot;
+        writes.push(args);
+        return "";
+      },
+    );
+    await assertDefined(handlers.get("session_start"))(
+      { type: "session_start", reason: "startup" },
+      ctx,
+    );
+    await settle();
+    const initialWrites = writes.length;
+    // The replacement server has no pane with the inherited ID.
+    snapshot = ":1:456:0\t\t0\t";
+    await assertDefined(handlers.get("agent_start"))(
+      { type: "agent_start" },
+      ctx,
+    );
+    await settle();
+    expect(writes).toHaveLength(initialWrites);
+    expect(warnings).toEqual([
+      "The tmux server changed; restart Pi to resume title updates.",
+    ]);
+  } finally {
+    if (previousWarningDescriptor)
+      Object.defineProperty(process, warningKey, previousWarningDescriptor);
+    else Reflect.deleteProperty(process, warningKey);
+  }
+});
+
 const renameCommand = (title: string) => [
   "rename-window",
   "-t",
@@ -595,6 +655,44 @@ test.each([
     });
   },
 );
+
+test.each([
+  [":1:123:0\t\t0\t", "123"],
+  [":1::0\t\t0\t", undefined],
+])(
+  "readWindowTitle reports a closed pane from its blank snapshot: %j",
+  async (info, server) => {
+    // display-message keeps running with an empty target when its pane is gone.
+    let failure: unknown;
+    try {
+      await readWindowTitle(
+        async () => info,
+        "%1",
+        new AbortController().signal,
+      );
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(TmuxTargetMissingError);
+    expect((failure as TmuxTargetMissingError).server).toBe(server);
+  },
+);
+
+test.each([
+  ["can't find session: $3", "$3", true],
+  ["no such session: $3", "$3", true],
+  ["can't find window: @4", "@4", true],
+  ["no such window: @4", "@4", true],
+  ["can't find pane: %5", "%5", true],
+  ["no such pane: %5", "%5", true],
+  ["no such session: $30", "$3", false],
+  ["no such window: @4", "$4", false],
+  ["duplicate session: $3", "$3", false],
+])("targetDisappeared recognizes %j for %s", (stderr, target, expected) => {
+  expect(
+    targetDisappeared(Object.assign(new Error("failed"), { stderr }), target),
+  ).toBe(expected);
+});
 
 test.each([
   ["duplicate session: Work\n", true],

@@ -1774,3 +1774,56 @@ test("tracked session metadata stays bounded when former-session repairs keep fa
     else process.env.PI_TMUX_MODEL = originalModel;
   }
 });
+
+test.skipIf(!hasTmux)(
+  "a closed former session does not stay queued for repair",
+  async () => {
+    await withServer(async (f) => {
+      const pane = f.tmux(
+        "new-session",
+        "-d",
+        "-P",
+        "-F",
+        "#{pane_id}",
+        "-s",
+        "Source",
+        "/bin/sleep 60",
+      );
+      const source = f.tmux(
+        "display-message",
+        "-p",
+        "-t",
+        pane,
+        "#{session_id}",
+      );
+      f.tmux("new-window", "-d", "-t", source, "/bin/sleep 60");
+      const destination = f.tmux(
+        "new-session",
+        "-d",
+        "-P",
+        "-F",
+        "#{pane_id}",
+        "-s",
+        "Destination",
+        "/bin/sleep 60",
+      );
+      process.env.TMUX_PANE = pane;
+      await f.emit("agent_settled");
+      f.tmux("join-pane", "-d", "-s", pane, "-t", destination);
+      // tmux reports "no such session" when an option command targets it.
+      f.tmux("kill-session", "-t", source);
+
+      await f.emit("agent_settled");
+      expect(
+        f.tmux("display-message", "-p", "-t", pane, "#{session_name}"),
+      ).toBe("* Destination");
+      expect(await f.status()).toContain(
+        "Pending move repairs: windows 0, sessions 0",
+      );
+      expect(await f.sync()).toBe(
+        "tmux title and waiting markers synchronized.",
+      );
+      expect(f.warnings).toEqual([]);
+    });
+  },
+);

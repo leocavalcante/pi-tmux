@@ -291,9 +291,10 @@ warns and leaves Pi running.
   Timeouts, provider errors, and other unusable responses are often one-off, so
   they stay quiet until three naming requests in a row fail; a successful title
   resets the count. A missing naming model or missing credentials warns right
-  away. At most one automatic warning appears per extension load. Identical
-  context is not retried automatically after a failed naming request.
-  `/tmux-title` reports a failed explicit retry right away.
+  away. At most one automatic warning appears per extension load, and none
+  appear during quit cleanup. Identical context is not retried automatically
+  after a failed naming request. `/tmux-title` reports a failed explicit retry
+  right away.
 
 ### Shared panes and cleanup
 
@@ -305,7 +306,10 @@ replace it. Quitting one Pi keeps the current shared task title while another
 Pi remains in that window, whether it is busy or waiting. Cleanup chooses
 ownership and reads the latest shared title on the tmux server, protecting
 peers that start or rename after lookup. A peer in a different window does not
-prevent idle-title cleanup.
+prevent idle-title cleanup. If tmux closes Pi's pane before Pi quits, for
+example with `kill-pane` or by closing its window, quit cleanup repairs the
+waiting markers of the window and session the pane last occupied. The window
+keeps its current task title.
 The waiting marker aggregates all Pi panes in its window independently of
 which pane last named it. A waiting pane in a different window marks the
 session but not this window.
@@ -637,8 +641,10 @@ repository contains source and synthetic tests only.
 
 ## Troubleshooting
 
-- **A forced kill leaves stale flags.** A forced kill cannot run cleanup and
-  may leave task names, waiting flags, or ownership flags behind. If Pi has
+- **A forced kill leaves stale flags.** A forced kill, such as `SIGKILL`,
+  cannot run cleanup and may leave task names, waiting flags, or ownership
+  flags behind. Closing the pane in tmux is not a forced kill: Pi still quits
+  and repairs the markers it left. If Pi has
   stopped but its pane remains, run these commands from the shell in that pane
   to clear only its stale flags before relying on another Pi's next status
   update:
