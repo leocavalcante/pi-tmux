@@ -4,6 +4,7 @@ import {
   hasSensitiveNamingContext,
   hasSensitiveOutput,
   InvalidNamingTitleError,
+  NamingModelUnavailableError,
   UnsafeNamingContextError,
   UnsafeNamingOutputError,
   NAMING_REQUEST_TIMEOUT_MS,
@@ -54,8 +55,14 @@ import {
 
 const MAX_FORMER_TARGETS = 8;
 const MAX_LOCATION_PASSES = 4;
+// Isolated model failures are often transient; warn once they keep happening.
+const NAMING_FAILURE_WARNING_THRESHOLD = 3;
 const SERVER_CHANGED_WARNING =
   "The tmux server changed; restart Pi to resume title updates.";
+const NAMING_REQUEST_FAILED_WARNING =
+  "The naming request failed, so the current title was kept. Check the configured naming model and its Pi credentials, then use /tmux-title to retry.";
+const NAMING_MODEL_UNAVAILABLE_WARNING =
+  "The naming model is unavailable. Check PI_TMUX_MODEL and its Pi credentials; waiting markers still work. Use /tmux-title to retry.";
 const SERVER_CHANGE_WARNING_PROCESS_KEY = Symbol.for(
   "@leocavalcante/pi-tmux/server-change-warning-shown",
 );
@@ -171,7 +178,11 @@ type ShapeOnlyNamingRejection = Extract<
   InvalidNamingTitleReason,
   "multiple-lines" | "too-long" | "too-many-words"
 >;
-type NamingRejectionCategory = InvalidNamingTitleReason | "unsafe-output";
+type NamingRejectionCategory =
+  | InvalidNamingTitleReason
+  | "unsafe-output"
+  | "model-unavailable"
+  | "request-failed";
 
 const isShapeOnlyNamingRejection = (
   reason: InvalidNamingTitleReason,
@@ -203,6 +214,8 @@ const NAMING_REJECTION_CATEGORIES = {
   "too-long": "title length",
   "too-many-words": "word count",
   "unsafe-output": "sensitive-looking output",
+  "model-unavailable": "naming model unavailable",
+  "request-failed": "request failed or timed out",
 } satisfies Record<NamingRejectionCategory, string>;
 
 export function createController(tmux: RunTmux) {
@@ -223,6 +236,8 @@ export function createController(tmux: RunTmux) {
   let generation = 0;
   let warned = false;
   let lastNamingRejection: NamingRejectionCategory | undefined;
+  // Count consecutive unusable naming results so isolated failures stay quiet.
+  let namingFailures = 0;
   let baseTitle: string | undefined;
   let manualTitle = false;
   let candidateTitle: string | undefined;
@@ -1074,6 +1089,7 @@ export function createController(tmux: RunTmux) {
     controller: AbortController,
     requestGeneration: number,
     notifyOnServerChange: boolean,
+    explicit: boolean,
   ) => {
     const timeout = setTimeout(() => {
       controller.abort();
@@ -1093,6 +1109,7 @@ export function createController(tmux: RunTmux) {
       if (title === undefined || controller.signal.aborted || !isCurrent())
         return;
       lastNamingRejection = undefined;
+      namingFailures = 0;
       candidateTitle = title;
       // A late summary must retain the latest busy/waiting status.
       void refreshTitle(
@@ -1111,13 +1128,25 @@ export function createController(tmux: RunTmux) {
       } else if (error instanceof UnsafeNamingOutputError) {
         lastNamingRejection = "unsafe-output";
         warning = "Sensitive-looking naming output was not applied.";
-      } else if (error instanceof InvalidNamingTitleError) {
-        lastNamingRejection = error.reason;
-        if (isShapeOnlyNamingRejection(error.reason)) return;
-        warning = INVALID_NAMING_TITLE_WARNINGS[error.reason];
+      } else if (error instanceof NamingModelUnavailableError) {
+        lastNamingRejection = "model-unavailable";
+        warning = NAMING_MODEL_UNAVAILABLE_WARNING;
       } else {
-        warning =
-          "tmux title could not be updated. Check the configured naming model, its Pi credentials, and tmux. Use /tmux-title to retry.";
+        let repeatedFailureWarning: string;
+        if (error instanceof InvalidNamingTitleError) {
+          lastNamingRejection = error.reason;
+          if (isShapeOnlyNamingRejection(error.reason)) return;
+          repeatedFailureWarning = INVALID_NAMING_TITLE_WARNINGS[error.reason];
+        } else {
+          lastNamingRejection = "request-failed";
+          repeatedFailureWarning = NAMING_REQUEST_FAILED_WARNING;
+        }
+        // Timeouts, provider errors, and unusable responses are often one-off.
+        // Keep them in /tmux-title status, and warn once they keep happening.
+        namingFailures++;
+        if (!explicit && namingFailures < NAMING_FAILURE_WARNING_THRESHOLD)
+          return;
+        warning = repeatedFailureWarning;
       }
       warnOnce(ctx, warning);
     } finally {
@@ -1187,6 +1216,8 @@ export function createController(tmux: RunTmux) {
       controller,
       generation,
       notifyOnServerChange,
+      // Only /tmux-title forces a request; report its failures right away.
+      force,
     );
     return true;
   };
