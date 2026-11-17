@@ -257,6 +257,15 @@ function tmuxCommandArguments(args: string[]): string[] {
   });
 }
 
+// display-message falls back to an empty target when its pane is gone, so a
+// closed pane looks like a successful lookup with blank session and window IDs.
+export class TmuxTargetMissingError extends Error {
+  constructor(readonly server?: string) {
+    super("tmux target no longer exists");
+    this.name = "TmuxTargetMissingError";
+  }
+}
+
 export interface WindowSnapshot {
   session: string;
   window: string;
@@ -283,6 +292,11 @@ export async function readWindowTitle(
     windowWaiting === undefined
   ) {
     throw new Error("Invalid tmux target");
+  }
+  const missingTarget = /^:1(?::(\d*))?(?::[01])?$/.exec(sessionField);
+  if (missingTarget && window === "") {
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- An empty server PID means unavailable.
+    throw new TmuxTargetMissingError(missingTarget[1] || undefined);
   }
   // Keep an empty PID valid for older tmux servers and injected adapters.
   const sessionMetadata = /^(\$\d+):1(?::(\d*))?(?::([01]))?$/.exec(
@@ -377,9 +391,16 @@ function tmuxErrorText(error: unknown): string {
 }
 
 export function targetDisappeared(error: unknown, target: string) {
+  const message = tmuxErrorText(error).trim();
+  const kind = target.startsWith("@")
+    ? "window"
+    : target.startsWith("%")
+      ? "pane"
+      : "session";
+  // Target lookups say "can't find"; option commands say "no such".
   return (
-    tmuxErrorText(error).trim() ===
-    `can't find ${target.startsWith("@") ? "window" : "session"}: ${target}`
+    message === `can't find ${kind}: ${target}` ||
+    message === `no such ${kind}: ${target}`
   );
 }
 

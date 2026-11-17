@@ -41,6 +41,7 @@ import {
   TMUX_COMMAND_SEPARATOR,
   STATUS_SNAPSHOT_FORMAT,
   targetDisappeared,
+  TmuxTargetMissingError,
   WAITING_OPTION,
   WINDOW_BASE_NAME_OPTION,
   WINDOW_BASE_NAME_TITLE_FORMAT,
@@ -337,7 +338,8 @@ export function createController(tmux: RunTmux) {
   };
 
   const warnOnce = (ctx: ExtensionContext, message: string) => {
-    if (warned) return;
+    // Quit cleanup runs while Pi tears down its UI; a warning cannot help then.
+    if (warned || !active) return;
     warned = true;
     notifySafely(ctx, message, "warning");
   };
@@ -450,6 +452,29 @@ export function createController(tmux: RunTmux) {
     );
   };
 
+  const queueFormerWindow = (target: string) => {
+    formerWindows.add(target);
+    if (formerWindows.size > MAX_FORMER_TARGETS) {
+      const oldest = formerWindows.values().next().value;
+      if (oldest !== undefined) formerWindows.delete(oldest);
+    }
+  };
+  const queueFormerSession = (target: string, currentSession?: string) => {
+    formerSessions.add(target);
+    if (formerSessions.size > MAX_FORMER_TARGETS) {
+      const evicted = formerSessions.values().next().value;
+      if (evicted !== undefined) {
+        formerSessions.delete(evicted);
+        // Keep metadata for a session that has become current again.
+        if (evicted !== currentSession) {
+          trackedSessions.delete(evicted);
+          unsafeSessions.delete(evicted);
+          sessionNameSafetyAvailable.delete(evicted);
+        }
+      }
+    }
+  };
+
   const rememberLocation = (
     location: WindowSnapshot,
     ctx: ExtensionContext,
@@ -466,32 +491,10 @@ export function createController(tmux: RunTmux) {
         unsafeSessions.add(location.session);
       else unsafeSessions.delete(location.session);
     }
-    const queue = (targets: Set<string>, target: string) => {
-      targets.add(target);
-      if (targets.size > MAX_FORMER_TARGETS) {
-        const oldest = targets.values().next().value;
-        if (oldest !== undefined) targets.delete(oldest);
-      }
-    };
-    const queueFormerSession = (target: string) => {
-      formerSessions.add(target);
-      if (formerSessions.size > MAX_FORMER_TARGETS) {
-        const evicted = formerSessions.values().next().value;
-        if (evicted !== undefined) {
-          formerSessions.delete(evicted);
-          // Keep metadata for a session that has become current again.
-          if (evicted !== location.session) {
-            trackedSessions.delete(evicted);
-            unsafeSessions.delete(evicted);
-            sessionNameSafetyAvailable.delete(evicted);
-          }
-        }
-      }
-    };
     if (lastLocation && lastLocation.window !== location.window)
-      queue(formerWindows, lastLocation.window);
+      queueFormerWindow(lastLocation.window);
     if (lastLocation && lastLocation.session !== location.session)
-      queueFormerSession(lastLocation.session);
+      queueFormerSession(lastLocation.session, location.session);
     formerWindows.delete(location.window);
     formerSessions.delete(location.session);
     lastLocation = {
@@ -672,6 +675,19 @@ export function createController(tmux: RunTmux) {
     }
   };
 
+  const repairClosedPaneLocation = async (
+    ctx: ExtensionContext,
+    signal: AbortSignal,
+    isCurrent: () => boolean,
+  ) => {
+    const location = lastLocation;
+    if (!location) return;
+    queueFormerWindow(location.window);
+    queueFormerSession(location.session);
+    // Writes stay guarded by the server PID recorded with these IDs.
+    await repairFormerLocations(ctx, location.server, signal, isCurrent);
+  };
+
   const refreshTitle = (
     ctx: ExtensionContext,
     pane: string,
@@ -692,7 +708,7 @@ export function createController(tmux: RunTmux) {
       (requestGeneration === undefined || requestGeneration === generation);
     // Serialize writes so a slow rename cannot overwrite a newer status. Keep
     // only the latest pending refresh because every newer revision stales the rest.
-    const run = async () => {
+    const runUpdate = async () => {
       if (!isCurrent()) return;
       // Validate the pane's current window before updating its status.
       let current = await readWindowTitle(tmux, pane, signal);
@@ -1071,6 +1087,25 @@ export function createController(tmux: RunTmux) {
       recordAppliedTitleLocation();
       updated = stable;
       return updated;
+    };
+    // A closed pane cannot update its own flags, for example when tmux kills it
+    // before Pi's quit cleanup runs. Repair the window and session it last
+    // occupied by ID instead, so their markers do not stay stale.
+    const run = async () => {
+      try {
+        return await runUpdate();
+      } catch (error) {
+        const missing = error instanceof TmuxTargetMissingError;
+        if (!missing && !targetDisappeared(error, pane)) throw error;
+        // A blank lookup from a replacement server is a server change instead.
+        if (
+          missing &&
+          checkServerIdentity(error.server, ctx, notifyOnServerChange)
+        )
+          return undefined;
+        if (isCurrent()) await repairClosedPaneLocation(ctx, signal, isCurrent);
+        return undefined;
+      }
     };
     return enqueueTitleRefresh(run, () => {
       if (isCurrent()) {
