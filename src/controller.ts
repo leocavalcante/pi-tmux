@@ -36,6 +36,7 @@ import {
   SESSION_TITLE_FORMAT,
   SESSION_TITLE_MARKED_OPTION,
   SESSION_TITLE_MARKED_VALUE_FORMAT,
+  sessionNameConflict,
   SHARED_WINDOW_TITLE_FORMAT,
   TMUX_COMMAND_SEPARATOR,
   STATUS_SNAPSHOT_FORMAT,
@@ -59,6 +60,8 @@ const MAX_LOCATION_PASSES = 4;
 const NAMING_FAILURE_WARNING_THRESHOLD = 3;
 const SERVER_CHANGED_WARNING =
   "The tmux server changed; restart Pi to resume title updates.";
+const SESSION_NAME_CONFLICT_WARNING =
+  "Another tmux session already uses this session's name, so its waiting marker was skipped. Rename one of the sessions to restore it.";
 const NAMING_REQUEST_FAILED_WARNING =
   "The naming request failed, so the current title was kept. Check the configured naming model and its Pi credentials, then use /tmux-title to retry.";
 const NAMING_MODEL_UNAVAILABLE_WARNING =
@@ -498,6 +501,28 @@ export function createController(tmux: RunTmux) {
     };
   };
 
+  // tmux rejects a rename onto another session's name. Keep the current name
+  // rather than abandon the rest of the update, and tell the user once.
+  const renameSessionUnlessNameTaken = async (
+    ctx: ExtensionContext,
+    server: string | undefined,
+    target: string,
+    format: string,
+    signal: AbortSignal,
+  ) => {
+    try {
+      await writeOnServer(
+        tmux,
+        server,
+        ["rename-session", "-t", target, format],
+        signal,
+      );
+    } catch (error) {
+      if (!sessionNameConflict(error)) throw error;
+      warnOnce(ctx, SESSION_NAME_CONFLICT_WARNING);
+    }
+  };
+
   const repairFormerLocations = async (
     ctx: ExtensionContext,
     server: string | undefined,
@@ -607,10 +632,11 @@ export function createController(tmux: RunTmux) {
           );
           // Keep rename-session as its own command for existing RunTmux wrappers
           // that identify former-location repairs by the top-level command.
-          await writeOnServer(
-            tmux,
+          await renameSessionUnlessNameTaken(
+            ctx,
             server,
-            ["rename-session", "-t", session, SESSION_BASE_NAME_TITLE_FORMAT],
+            session,
+            SESSION_BASE_NAME_TITLE_FORMAT,
             signal,
           );
           await writeOnServer(
@@ -627,10 +653,11 @@ export function createController(tmux: RunTmux) {
             signal,
           );
         } else {
-          await writeOnServer(
-            tmux,
+          await renameSessionUnlessNameTaken(
+            ctx,
             server,
-            ["rename-session", "-t", session, SESSION_TITLE_FORMAT],
+            session,
+            SESSION_TITLE_FORMAT,
             signal,
           );
         }
@@ -723,77 +750,104 @@ export function createController(tmux: RunTmux) {
           trackedSessions.has(current.session)
         ) {
           trackedSessions.add(current.session);
-          await writeOnServer(
-            tmux,
-            current.server ?? lastLocation?.server,
-            [
-              "set-option",
-              "-F",
-              "-t",
-              pane,
-              SESSION_BASE_NAME_OPTION,
-              SESSION_BASE_NAME_UPDATE_FORMAT,
-              TMUX_COMMAND_SEPARATOR,
-              "set-option",
-              "-p",
-              "-t",
-              pane,
-              WAITING_OPTION,
-              waiting ? "1" : "0",
-              TMUX_COMMAND_SEPARATOR,
-              "set-option",
-              "-p",
-              "-t",
-              pane,
-              ACTIVE_OPTION,
-              active ? "1" : "0",
-              TMUX_COMMAND_SEPARATOR,
-              "set-option",
-              "-t",
-              pane,
-              SESSION_TITLE_MARKED_OPTION,
-              "transition",
-              TMUX_COMMAND_SEPARATOR,
-              "rename-session",
-              "-t",
-              pane,
-              SESSION_BASE_NAME_TITLE_FORMAT,
-              TMUX_COMMAND_SEPARATOR,
-              "set-option",
-              "-F",
-              "-t",
-              pane,
-              SESSION_TITLE_MARKED_OPTION,
-              SESSION_TITLE_MARKED_VALUE_FORMAT,
-            ],
-            signal,
-          );
+          const server = current.server ?? lastLocation?.server;
+          try {
+            await writeOnServer(
+              tmux,
+              server,
+              [
+                "set-option",
+                "-F",
+                "-t",
+                pane,
+                SESSION_BASE_NAME_OPTION,
+                SESSION_BASE_NAME_UPDATE_FORMAT,
+                TMUX_COMMAND_SEPARATOR,
+                "set-option",
+                "-p",
+                "-t",
+                pane,
+                WAITING_OPTION,
+                waiting ? "1" : "0",
+                TMUX_COMMAND_SEPARATOR,
+                "set-option",
+                "-p",
+                "-t",
+                pane,
+                ACTIVE_OPTION,
+                active ? "1" : "0",
+                TMUX_COMMAND_SEPARATOR,
+                "set-option",
+                "-t",
+                pane,
+                SESSION_TITLE_MARKED_OPTION,
+                "transition",
+                TMUX_COMMAND_SEPARATOR,
+                "rename-session",
+                "-t",
+                pane,
+                SESSION_BASE_NAME_TITLE_FORMAT,
+                TMUX_COMMAND_SEPARATOR,
+                "set-option",
+                "-F",
+                "-t",
+                pane,
+                SESSION_TITLE_MARKED_OPTION,
+                SESSION_TITLE_MARKED_VALUE_FORMAT,
+              ],
+              signal,
+            );
+          } catch (error) {
+            if (!sessionNameConflict(error)) throw error;
+            // tmux stops a batch at its first failure, so the pane flags before
+            // the rename are stored. Settle the marker state for the kept name.
+            await writeOnServer(
+              tmux,
+              server,
+              [
+                "set-option",
+                "-F",
+                "-t",
+                pane,
+                SESSION_TITLE_MARKED_OPTION,
+                SESSION_TITLE_MARKED_VALUE_FORMAT,
+              ],
+              signal,
+            );
+            warnOnce(ctx, SESSION_NAME_CONFLICT_WARNING);
+          }
         } else {
-          await writeOnServer(
-            tmux,
-            current.server ?? lastLocation?.server,
-            [
-              "set-option",
-              "-p",
-              "-t",
-              pane,
-              WAITING_OPTION,
-              waiting ? "1" : "0",
-              TMUX_COMMAND_SEPARATOR,
-              "set-option",
-              "-p",
-              "-t",
-              pane,
-              ACTIVE_OPTION,
-              active ? "1" : "0",
-              TMUX_COMMAND_SEPARATOR,
-              "rename-session",
-              "-t",
-              pane,
-              SESSION_TITLE_FORMAT,
-            ],
-            signal,
-          );
+          try {
+            await writeOnServer(
+              tmux,
+              current.server ?? lastLocation?.server,
+              [
+                "set-option",
+                "-p",
+                "-t",
+                pane,
+                WAITING_OPTION,
+                waiting ? "1" : "0",
+                TMUX_COMMAND_SEPARATOR,
+                "set-option",
+                "-p",
+                "-t",
+                pane,
+                ACTIVE_OPTION,
+                active ? "1" : "0",
+                TMUX_COMMAND_SEPARATOR,
+                "rename-session",
+                "-t",
+                pane,
+                SESSION_TITLE_FORMAT,
+              ],
+              signal,
+            );
+          } catch (error) {
+            // The rename is last, so the pane flags are already stored.
+            if (!sessionNameConflict(error)) throw error;
+            warnOnce(ctx, SESSION_NAME_CONFLICT_WARNING);
+          }
         }
         if (!isCurrent()) return;
         // Resolve the fallback title and destination after the marker write.

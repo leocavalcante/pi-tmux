@@ -2614,3 +2614,94 @@ test.skipIf(!hasTmux || !hasRoundTripUnsafeWindowNames)(
     }
   },
 );
+
+const SESSION_NAME_CONFLICT_WARNING =
+  "Another tmux session already uses this session's name, so its waiting marker was skipped. Rename one of the sessions to restore it.";
+
+test.skipIf(!hasTmux).each([false, true])(
+  "a session name taken by another session skips only that marker (server guard: %p)",
+  async (guarded) => {
+    const directory = mkdtempSync(join(tmpdir(), "pi-tmux-test-"));
+    const socket = join(directory, "socket");
+    const originalPane = process.env.TMUX_PANE;
+    const originalModel = process.env.PI_TMUX_MODEL;
+    const tmux = (...args: string[]) =>
+      execFileSync("tmux", ["-S", socket, "-f", "/dev/null", ...args], {
+        encoding: "utf8",
+        timeout: 2_000,
+        stdio: ["ignore", "pipe", "pipe"],
+      }).replace(/\r?\n$/, "");
+    try {
+      process.env.PI_TMUX_MODEL = "off";
+      const pane = tmux(
+        "new-session",
+        "-d",
+        "-P",
+        "-F",
+        "#{pane_id}",
+        "-s",
+        "Work",
+        "-n",
+        "task window",
+        "/bin/sleep 60",
+      );
+      process.env.TMUX_PANE = pane;
+      const handlers = new Map<string, Function>();
+      const run: RunTmux = Object.assign(
+        async (args: string[]) => tmux(...args),
+        { supportsServerPidGuard: guarded },
+      );
+      piTmux(mockPi(handlers), run);
+      const warnings: string[] = [];
+      const ctx = {
+        mode: "tui",
+        sessionManager: { buildSessionProjection: () => ({ messages: [] }) },
+        ui: { notify: (text: string) => warnings.push(text) },
+      } as unknown as ExtensionContext;
+      const emit = async (event: string) => {
+        await assertDefined(handlers.get(event))({ type: event }, ctx);
+        // agent_start schedules its status write without awaiting it.
+        await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      };
+      const sessionName = () =>
+        tmux("display-message", "-p", "-t", pane, "#{session_name}");
+      const windowName = () =>
+        tmux("display-message", "-p", "-t", pane, "#{window_name}");
+
+      await emit("agent_settled");
+      expect(sessionName()).toBe("* Work");
+      expect(windowName()).toBe("* task window");
+
+      // Another tool creates a session with the unmarked name meanwhile.
+      tmux("new-session", "-d", "-s", "Work", "/bin/sleep 60");
+      await emit("agent_start");
+      expect(sessionName()).toBe("* Work");
+      expect(windowName()).toBe("task window");
+      expect(tmux("show-options", "-p", "-v", "-t", pane, WAITING_OPTION)).toBe(
+        "0",
+      );
+      expect(
+        tmux("show-options", "-v", "-t", pane, "@pi-tmux-session-title-marked"),
+      ).toBe("marked");
+      expect(warnings).toEqual([SESSION_NAME_CONFLICT_WARNING]);
+
+      await emit("agent_settled");
+      expect(sessionName()).toBe("* Work");
+      expect(windowName()).toBe("* task window");
+      expect(warnings).toEqual([SESSION_NAME_CONFLICT_WARNING]);
+
+      // Session markers resume once the other session gives the name back.
+      tmux("kill-session", "-t", "=Work");
+      await emit("agent_start");
+      expect(sessionName()).toBe("Work");
+      expect(windowName()).toBe("task window");
+      expect(warnings).toEqual([SESSION_NAME_CONFLICT_WARNING]);
+    } finally {
+      if (originalPane === undefined) delete process.env.TMUX_PANE;
+      else process.env.TMUX_PANE = originalPane;
+      if (originalModel === undefined) delete process.env.PI_TMUX_MODEL;
+      else process.env.PI_TMUX_MODEL = originalModel;
+      cleanupTmuxFixture(() => tmux("kill-server"), directory);
+    }
+  },
+);

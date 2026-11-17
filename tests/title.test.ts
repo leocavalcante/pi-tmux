@@ -36,6 +36,7 @@ import {
 } from "../src/tmux.ts";
 import {
   readWindowTitle,
+  sessionNameConflict,
   STATUS_SNAPSHOT_FORMAT,
   WINDOW_INFO_INTERNAL_FORMAT,
 } from "../src/tmux.ts";
@@ -594,6 +595,15 @@ test.each([
     });
   },
 );
+
+test.each([
+  ["duplicate session: Work\n", true],
+  ["can't find session: Work\n", false],
+])("sessionNameConflict recognizes %j", (stderr, expected) => {
+  expect(
+    sessionNameConflict(Object.assign(new Error("failed"), { stderr })),
+  ).toBe(expected);
+});
 
 test.each(
   [
