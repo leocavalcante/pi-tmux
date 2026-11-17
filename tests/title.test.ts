@@ -1519,36 +1519,65 @@ test.each([
 test.each([
   ["line feed", "\n"],
   ["carriage return", "\r"],
+  ["carriage return and line feed", "\r\n"],
   ["vertical tab", "\v"],
   ["form feed", "\f"],
-  ["next line", "\u0085"],
   ["line separator", "\u2028"],
   ["paragraph separator", "\u2029"],
 ])(
-  "retries %s at either edge instead of trimming it into a title",
+  "accepts a single-line title with a %s at either edge",
   async (_name, separator) => {
+    // Models often end an otherwise valid title with a line break.
     for (const output of [
       `${separator}fix auth tests`,
       `fix auth tests${separator}`,
+      `${separator}fix auth tests${separator}`,
     ]) {
-      const f = fixture([
-        Promise.resolve(response(output)),
-        Promise.resolve(response("fix auth tests")),
-      ]);
+      const f = fixture([Promise.resolve(response(output))]);
       f.input("Name a task");
       await settle();
-      expect(f.requests).toHaveLength(2);
-      expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
-        "previous response was not a single-line title",
-      );
-      expect(assertDefined(f.requests[1]).context.systemPrompt).not.toContain(
-        output,
-      );
+      expect(f.requests).toHaveLength(1);
       expect(f.state.title).toBe("fix auth tests");
       expect(f.warnings).toEqual([]);
     }
   },
 );
+
+test("a corrected title that ends with a line break is applied", async () => {
+  const f = fixture([
+    Promise.resolve(response("fix typescript lint pipeline")),
+    Promise.resolve(response("fix lint pipeline\n")),
+  ]);
+  f.input("The CI pipeline fails on the lint step. Investigate and fix it.");
+  await settle();
+  expect(f.requests).toHaveLength(2);
+  expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
+    "previous candidate exceeded a title limit",
+  );
+  expect(f.state.title).toBe("fix lint pipeline");
+  expect(f.warnings).toEqual([]);
+});
+
+test("retries a next-line control character at either edge", async () => {
+  // String.prototype.trim does not treat NEL as whitespace, so it stays a break.
+  for (const output of ["\u0085fix auth tests", "fix auth tests\u0085"]) {
+    const f = fixture([
+      Promise.resolve(response(output)),
+      Promise.resolve(response("fix auth tests")),
+    ]);
+    f.input("Name a task");
+    await settle();
+    expect(f.requests).toHaveLength(2);
+    expect(assertDefined(f.requests[1]).context.systemPrompt).toContain(
+      "previous response was not a single-line title",
+    );
+    expect(assertDefined(f.requests[1]).context.systemPrompt).not.toContain(
+      output,
+    );
+    expect(f.state.title).toBe("fix auth tests");
+    expect(f.warnings).toEqual([]);
+  }
+});
 
 test("accepts ordinary surrounding spaces in naming output", async () => {
   const f = fixture([Promise.resolve(response("  fix auth tests  "))]);

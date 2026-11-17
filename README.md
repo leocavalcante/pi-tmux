@@ -214,8 +214,9 @@ warns and leaves Pi running.
   blocks are rejected; signatures over 4 Ki UTF-16 code units are treated as
   unrecognized metadata. If a provider ignores the requested
   96-token cap and selected output exceeds 64 Ki UTF-16 code units, it gets one
-  correction attempt and is not applied as-is. Other overlong, over-worded, or
-  multiline first candidates also get one correction request. A still-overlong
+  correction attempt and is not applied as-is. Line breaks at either end of the
+  output are trimmed. Other overlong, over-worded, or multiline first
+  candidates also get one correction request. A still-overlong
   candidate is clipped at a word boundary only when it remains a 2–4-word title;
   multiline, over-worded, and otherwise unusable retry output is rejected.
 - `* ` marks a fully settled run, after tool work, retries, and queued

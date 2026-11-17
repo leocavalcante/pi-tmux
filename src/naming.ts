@@ -5311,10 +5311,11 @@ export async function requestNamingTitle(
     ) {
       throw new UnsafeNamingOutputError();
     }
-    // Check before trimming so leading/trailing line breaks cannot masquerade as a single line.
-    if (/[\r\n\v\f\u0085\u2028\u2029]/u.test(output))
-      throw new InvalidNamingTitleError("multiple-lines");
+    // Models often end a title with a line break. Trim edge whitespace first,
+    // then reject only breaks that would split the title across lines.
     const singleLine = output.trim();
+    if (/[\r\n\v\f\u0085\u2028\u2029]/u.test(singleLine))
+      throw new InvalidNamingTitleError("multiple-lines");
     const title = cleanTitle(singleLine, Number.MAX_SAFE_INTEGER);
     if (!title) throw new InvalidNamingTitleError("empty");
     if (title.length > MAX_TITLE_LENGTH) {
